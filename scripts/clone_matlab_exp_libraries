@@ -1,0 +1,57 @@
+#!/bin/tcsh -f
+
+# Check for input argument
+if ($#argv != 1) then
+    echo "Usage: `basename $0` <device>"
+    exit 1
+endif
+
+set device = "$argv[1]"
+
+# Base folder
+set base_dir = "$SOLPSTOP/scripts.local"
+
+# Create scripts.local if it doesn't exist
+if (! -d "$base_dir") then
+    mkdir -p "$base_dir"
+endif
+
+# Target folder for this device
+set target_dir = "$base_dir/MATLAB_analysis_$device"
+
+# Check the validity of the device
+set valid_devices = (AUG)
+set valid = 0
+foreach d ($valid_devices)
+    if ("$device" == "$d") then
+        set valid = 1
+        break
+    endif
+end
+if ($valid == 0) then
+    echo "Error: unknown device '$device'."
+    echo "Valid devices are: $valid_devices"
+    exit 1
+endif
+
+# Decide repository URL based on device
+switch ($device)
+    case "AUG":
+        set repo_url = "https://github.com/antonellozito/MATLAB-analysis-AUG.git"
+        breaksw
+endsw
+# Clone the repository (fail if folder already exists)
+if (-d "$target_dir") then
+    echo "Error: local repository '$target_dir' already exists"
+    exit 1
+endif
+
+echo "Cloning repository $repo_url into $target_dir ..."
+git clone "$repo_url" "$target_dir"
+
+# Print instruction to set experimental data directories
+switch ($device)
+    case "AUG":
+        echo "MATLAB functions to read AUG experimental data now available"
+        echo "Set the environment variable SHOTFILES_BASEPATH in your .tcshrc to the directory where AUG shotfiles are stored and restart the session"
+endsw

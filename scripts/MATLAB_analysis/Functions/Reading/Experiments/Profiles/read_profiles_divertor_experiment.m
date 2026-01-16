@@ -19,160 +19,265 @@ profiles_chords_experiment = struct();
 
 if data_avail
 
-switch exp_data.DEVICE
+    switch exp_data.DEVICE
 
-case 'AUG'
+        case 'AUG'
 
-%% LOAD EXPERIMENTAL DATA FOR AUG
+            %% CHECK THAT THE AUG LIBRARY LOCALLY EXISTS
 
-    % Fields '*_SHOT' mean the discharge number
-    % Fields '*_EXPERIMENT(S)' mean the user experiment (default: 'augd')
-    % Fields '*_SOURCE(S)' mean the shotfile name
-    % Fields '*_SIGNAL(S)' mean the signal/signalgroup name
+            if ~isfolder(sprintf('%s/scripts.local/MATLAB_analysis_AUG',simulation.SOLPSTOP))
+                error(sprintf('Error: MATLAB library for reading AUG experimental data does not exist locally. Get it running the command ''clone_matlab_exp_libraries AUG'''));
+            end
+            addpath(genpath(sprintf('%s/scripts.local/MATLAB_analysis_AUG',simulation.SOLPSTOP)));
 
-    % Electron density data
+            %% LOAD EXPERIMENTAL DATA FOR AUG
 
-    for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES)
+            % Fields '*_SHOT' mean the discharge number
+            % Fields '*_EXPERIMENT(S)' mean the user experiment (default: 'augd')
+            % Fields '*_SOURCE(S)' mean the shotfile name
+            % Fields '*_SIGNAL(S)' mean the signal/signalgroup name
 
-        if strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i},'DTN')
+            % Electron density data
 
-            % Divertor Thomson scattering
+            for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES)
 
-            [~,TIMEBASES_ne_DATA{i},~,SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
-                exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i}, ...
-                exp_data.ELECTRON_DENSITY_DATA_CHORDS_SHOT,...
-                'signals',{'Ne_ld','R_ld','Z_ld'});
+                if strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i},'DTN')
 
-        end
+                    % Divertor Thomson scattering
+
+                    [~,TIMEBASES_ne_DATA{i},~,SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
+                        exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i}, ...
+                        exp_data.ELECTRON_DENSITY_DATA_CHORDS_SHOT,...
+                        'signals',{'Ne_ld','R_ld','Z_ld'});
+
+                end
+
+            end
+
+            % Electron temperature data
+
+            for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES)
+
+                if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i},'DTN')
+
+                    % Divertor Thomson scattering
+
+                    [~,TIMEBASES_Te_DATA{i},~,SIGNALS_Te_DATA{i}] = load_aug_shotfile(...
+                        exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i}, ...
+                        exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SHOT,...
+                        'signals',{'Te_ld','R_ld','Z_ld'});
+
+                end
+
+            end
+
+            % Ion temperature data
+
+            for i = 1:length(exp_data.ION_TEMPERATURE_DATA_CHORDS_SOURCES)
+
+            end
+
+            %% EXTRACT EXPERIMENTAL DATA FOR AUG
+
+            % Electron density data
+
+            for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES)
+
+                if strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SIGNALS{i},'Ne_ld')
+
+                    % Divertor Thomson scattering
+
+                    time_data_ne{i} = TIMEBASES_ne_DATA{i}.Time_ld.value;
+                    values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_ld.value);
+
+                end
+
+                profiles_chords_experiment.ne_data{i}.name = exp_data.ELECTRON_DENSITY_DATA_CHORDS_NAMES_DISPLAY{i};
+                [profiles_chords_experiment.ne_data{i}.times,profiles_chords_experiment.ne_data{i}.values] = ...
+                    extract_values(time_data_ne{i}, values_data_ne{i},...
+                    exp_data.ELECTRON_DENSITY_DATA_CHORDS_TIME_START,exp_data.ELECTRON_DENSITY_DATA_CHORDS_TIME_END,...
+                    exp_data.ELECTRON_DENSITY_DATA_CHORDS_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_CHORDS_REDUCED_SET_TIME_DELTA);
+
+            end
+
+            % Electron temperature data
+
+            for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES)
+
+                if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SIGNALS{i},'Te_ld')
+
+                    % Divertor Thomson scattering
+
+                    time_data_Te{i} = TIMEBASES_Te_DATA{i}.Time_ld.value;
+                    values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_ld.value);
+
+                end
+
+                profiles_chords_experiment.Te_data{i}.name = exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_NAMES_DISPLAY{i};
+                [profiles_chords_experiment.Te_data{i}.times,profiles_chords_experiment.Te_data{i}.values] = ...
+                    extract_values(time_data_Te{i}, values_data_Te{i},...
+                    exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_TIME_END,...
+                    exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_REDUCED_SET_TIME_DELTA);
+
+            end
+
+            % Ion temperature data
+
+            for i = 1:length(exp_data.ION_TEMPERATURE_DATA_CHORDS_SOURCES)
+
+            end
+
+            %% CALCULATE COORDINATES FOR AUG
+
+            % Electron density profile
+
+            for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES)
+
+                if strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SIGNALS{i},'Ne_ld')
+
+                    % Divertor Thomson scattering
+
+                    profiles_chords_experiment.ne_data{i}.R = SIGNALS_ne_DATA{i}.R_ld.value;
+                    profiles_chords_experiment.ne_data{i}.z = SIGNALS_ne_DATA{i}.Z_ld.value;
+
+                end
+
+            end
+
+            % Electron temperature data
+
+            for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES)
+
+                if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SIGNALS{i},'Te_ld')
+
+                    % Divertor Thomson scattering
+
+                    profiles_chords_experiment.Te_data{i}.R = SIGNALS_Te_DATA{i}.R_ld.value;
+                    profiles_chords_experiment.Te_data{i}.z = SIGNALS_Te_DATA{i}.Z_ld.value;
+
+                end
+
+            end
+
+            % Ion temperature data
+
+            for i = 1:length(exp_data.ION_TEMPERATURE_DATA_CHORDS_SOURCES)
+
+            end
+
+        case 'CMOD'
+
+            %% CHECK THAT THE CMOD LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading CMOD experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR CMOD
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR CMOD
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR CMOD
+
+            % TODO
+
+        case 'D3D'
+
+            %% CHECK THAT THE D3D LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading D3D experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR D3D
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR D3D
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR D3D
+
+            % TODO
+
+        case 'EAST'
+
+            %% CHECK THAT THE EAST LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading EAST experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR EAST
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR EAST
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR EAST
+
+            % TODO
+
+        case 'JET'
+
+            %% CHECK THAT THE JET LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading JET experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR JET
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR JET
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR JET
+
+            % TODO
+
+        case 'MASTU'
+
+            %% CHECK THAT THE MASTU LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading MASTU experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR MASTU
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR MASTU
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR MASTU
+
+            % TODO
+
+        case 'TCV'
+
+            %% CHECK THAT THE TCV LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading TCV experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR TCV
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR TCV
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR TCV
+
+            % TODO
+
+        otherwise
+
+            error(sprintf('Error: Device %s not existing'),exp_data.DEVICE);
 
     end
-
-    % Electron temperature data
-
-    for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES)
-
-        if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i},'DTN')
-
-            % Divertor Thomson scattering
-
-            [~,TIMEBASES_Te_DATA{i},~,SIGNALS_Te_DATA{i}] = load_aug_shotfile(...
-                exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i}, ...
-                exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SHOT,...
-                'signals',{'Te_ld','R_ld','Z_ld'});
-
-        end
-
-    end
-
-    % Ion temperature data
-
-    for i = 1:length(exp_data.ION_TEMPERATURE_DATA_CHORDS_SOURCES)
-
-    end
-
-%% EXTRACT EXPERIMENTAL DATA FOR AUG
-
-    % Electron density data
-
-    for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES)
-
-        if strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SIGNALS{i},'Ne_ld')
-
-            % Divertor Thomson scattering
-
-            time_data_ne{i} = TIMEBASES_ne_DATA{i}.Time_ld.value;
-            values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_ld.value);
-
-        end
-
-        profiles_chords_experiment.ne_data{i}.name = exp_data.ELECTRON_DENSITY_DATA_CHORDS_NAMES_DISPLAY{i};
-        [profiles_chords_experiment.ne_data{i}.times,profiles_chords_experiment.ne_data{i}.values] = ...
-            extract_values(time_data_ne{i}, values_data_ne{i},...
-            exp_data.ELECTRON_DENSITY_DATA_CHORDS_TIME_START,exp_data.ELECTRON_DENSITY_DATA_CHORDS_TIME_END,...
-            exp_data.ELECTRON_DENSITY_DATA_CHORDS_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_CHORDS_REDUCED_SET_TIME_DELTA);
-
-    end
-
-    % Electron temperature data
-
-    for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES)
-
-        if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SIGNALS{i},'Te_ld')
-
-            % Divertor Thomson scattering
-
-            time_data_Te{i} = TIMEBASES_Te_DATA{i}.Time_ld.value;
-            values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_ld.value);
-
-        end
-
-        profiles_chords_experiment.Te_data{i}.name = exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_NAMES_DISPLAY{i};
-        [profiles_chords_experiment.Te_data{i}.times,profiles_chords_experiment.Te_data{i}.values] = ...
-            extract_values(time_data_Te{i}, values_data_Te{i},...
-            exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_TIME_END,...
-            exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_REDUCED_SET_TIME_DELTA);
-
-    end
-
-    % Ion temperature data
-
-    for i = 1:length(exp_data.ION_TEMPERATURE_DATA_CHORDS_SOURCES)
-
-    end
-
-%% CALCULATE COORDINATES FOR AUG
-
-    % Electron density profile
-
-    for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES)
-
-        if strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_DENSITY_DATA_CHORDS_SIGNALS{i},'Ne_ld')
-
-            % Divertor Thomson scattering
-
-            profiles_chords_experiment.ne_data{i}.R = SIGNALS_ne_DATA{i}.R_ld.value;
-            profiles_chords_experiment.ne_data{i}.z = SIGNALS_ne_DATA{i}.Z_ld.value;
-
-        end
-
-    end
-
-    % Electron temperature data
-
-    for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES)
-
-        if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SOURCES{i},'DTN') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_CHORDS_SIGNALS{i},'Te_ld')
-
-            % Divertor Thomson scattering
-
-            profiles_chords_experiment.Te_data{i}.R = SIGNALS_Te_DATA{i}.R_ld.value;
-            profiles_chords_experiment.Te_data{i}.z = SIGNALS_Te_DATA{i}.Z_ld.value;
-
-        end
-
-    end
-
-    % Ion temperature data
-
-    for i = 1:length(exp_data.ION_TEMPERATURE_DATA_CHORDS_SOURCES)
-
-    end
-
-case 'JET'
-
-%% LOAD EXPERIMENTAL DATA FOR JET
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR JET
-
-% TODO
-
-%% CALCULATE COORDINATES FOR JET
-
-% TODO
-
-end
 
 end
 
@@ -219,4 +324,3 @@ else
 end
 
 end
-

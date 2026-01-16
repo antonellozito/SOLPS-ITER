@@ -20,684 +20,719 @@ profiles_midplane_experiment = struct();
 
 if data_avail
 
-switch exp_data.DEVICE
+    switch exp_data.DEVICE
 
-case 'AUG'
+        case 'AUG'
 
-%% LOAD EXPERIMENTAL DATA FOR AUG
+            %% CHECK THAT THE AUG LIBRARY LOCALLY EXISTS
 
-    % Fields '*_SHOT' mean the discharge number
-    % Fields '*_EXPERIMENT(S)' mean the user experiment (default: 'augd')
-    % Fields '*_SOURCE(S)' mean the shotfile name
-    % Fields '*_SIGNAL(S)' mean the signal/signalgroup name
+            if ~isfolder(sprintf('%s/scripts.local/MATLAB_analysis_AUG',simulation.SOLPSTOP))
+                error(sprintf('Error: MATLAB library for reading AUG experimental data does not exist locally. Get it running the command ''clone_matlab_exp_libraries AUG'''));
+            end
+            addpath(genpath(sprintf('%s/scripts.local/MATLAB_analysis_AUG',simulation.SOLPSTOP)));
 
-    % Load shotfiles containing profiles from statistical data analysis
+            %% LOAD EXPERIMENTAL DATA FOR AUG
 
-    SHOTFILES_BASEPATH_LOCAL = '';
+            % Fields '*_SHOT' mean the discharge number
+            % Fields '*_EXPERIMENT(S)' mean the user experiment (default: 'augd')
+            % Fields '*_SOURCE(S)' mean the shotfile name
+            % Fields '*_SIGNAL(S)' mean the signal/signalgroup name
 
-    for i = 1:numel(AUG_config().SHOTFILES_BASEPATH_LOCAL)
-        if isfolder(AUG_config().SHOTFILES_BASEPATH_LOCAL{i})
-            SHOTFILES_BASEPATH_LOCAL = AUG_config().SHOTFILES_BASEPATH_LOCAL{i};
-            break
-        end
-    end
+            % Load shotfiles containing profiles from statistical data analysis
 
-    if PLOT_EXP_PROFILES
+            SHOTFILES_BASEPATH_LOCAL = '';
 
-        % Electron density profile
+            for i = 1:numel(AUG_config().SHOTFILES_BASEPATH_LOCAL)
+                if isfolder(AUG_config().SHOTFILES_BASEPATH_LOCAL{i})
+                    SHOTFILES_BASEPATH_LOCAL = AUG_config().SHOTFILES_BASEPATH_LOCAL{i};
+                    break
+                end
+            end
 
-        [~,TIMEBASES_ne_PROFILES,AREABASES_ne_PROFILES,SIGNALS_ne_PROFILES] = load_aug_shotfile(...
-            exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SOURCE, ...
-            exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SHOT,...
-            'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
+            if PLOT_EXP_PROFILES
 
-        % Electron temperature profile
+                % Electron density profile
 
-        if strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SOURCE,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SOURCE) && ...
-            strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_EXPERIMENT,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_EXPERIMENT) && ...
-            exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SHOT==exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SHOT
+                [~,TIMEBASES_ne_PROFILES,AREABASES_ne_PROFILES,SIGNALS_ne_PROFILES] = load_aug_shotfile(...
+                    exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SOURCE, ...
+                    exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SHOT,...
+                    'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
 
-            TIMEBASES_Te_PROFILES = TIMEBASES_ne_PROFILES;
-            AREABASES_Te_PROFILES = AREABASES_ne_PROFILES;
-            SIGNALS_Te_PROFILES = SIGNALS_ne_PROFILES;
+                % Electron temperature profile
 
-        else
+                if strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SOURCE,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SOURCE) && ...
+                        strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_EXPERIMENT,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_EXPERIMENT) && ...
+                        exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SHOT==exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SHOT
 
-            [~,TIMEBASES_Te_PROFILES,AREABASES_Te_PROFILES,SIGNALS_Te_PROFILES] = load_aug_shotfile(...
-                exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SOURCE, ...
-                exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SHOT,...
-                'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
-
-        end
-
-    end
-
-    % Load shotfiles containing diagnostic data
-
-    if PLOT_EXP_DATA
-
-        % Electron density data
-
-        for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES)
-
-            if strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'LIN')
-
-                % Lithium beam emission spectroscopy
-
-                [~,TIMEBASES_ne_DATA{i},AREABASES_ne_DATA{i},SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}, ...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT,...
-                    'signals',{'ne'});
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA')
-
-                % Vertical Thomson scattering (raw data)
-
-                [~,TIMEBASES_ne_DATA{i},AREABASES_ne_DATA{i},SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}, ...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT,...
-                    'signals',{'Ne_c','Ne_e','Z_core','Z_edge','R_core','R_edge'});
-
-                % Vertical Thomson scattering (IDA)
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA')
-
-                if strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SOURCE,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}) && ...
-                    strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_EXPERIMENT,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_EXPERIMENTS{i}) && ...
-                    exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SHOT==exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT && ...
-                    PLOT_EXP_PROFILES
-        
-                    TIMEBASES_ne_DATA{i} = TIMEBASES_ne_PROFILES;
-                    AREABASES_ne_DATA{i} = AREABASES_ne_PROFILES;
-                    SIGNALS_ne_DATA{i} = SIGNALS_ne_PROFILES;
+                    TIMEBASES_Te_PROFILES = TIMEBASES_ne_PROFILES;
+                    AREABASES_Te_PROFILES = AREABASES_ne_PROFILES;
+                    SIGNALS_Te_PROFILES = SIGNALS_ne_PROFILES;
 
                 else
-        
-                    [~,TIMEBASES_ne_DATA{i},AREABASES_ne_DATA{i},SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
-                        exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}, ...
-                        exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT,...
+
+                    [~,TIMEBASES_Te_PROFILES,AREABASES_Te_PROFILES,SIGNALS_Te_PROFILES] = load_aug_shotfile(...
+                        exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SOURCE, ...
+                        exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SHOT,...
                         'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
-        
+
                 end
 
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
-
-                % ELM-synchronized data
-
-                SIGNALS_ne_DATA{i} = sprintf('%s/custom/ELM/%d.nc',...
-                    SHOTFILES_BASEPATH_LOCAL,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT);
-
             end
 
-        end
+            % Load shotfiles containing diagnostic data
 
-        % Electron temperature data
+            if PLOT_EXP_DATA
 
-        for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+                % Electron density data
 
-            if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA')
+                for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES)
 
-                % Vertical Thomson scattering (raw data)
+                    if strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'LIN')
 
-                [~,TIMEBASES_Te_DATA{i},AREABASES_Te_DATA{i},SIGNALS_Te_DATA{i}] = load_aug_shotfile(...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT,...
-                    'signals',{'Te_c','Te_e','Z_core','Z_edge','R_core','R_edge'});
+                        % Lithium beam emission spectroscopy
 
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA')
+                        [~,TIMEBASES_ne_DATA{i},AREABASES_ne_DATA{i},SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}, ...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT,...
+                            'signals',{'ne'});
 
-                % Vertical Thomson scattering (IDA)
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA')
 
-                if strcmp(exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SOURCE,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}) && ...
-                    strcmp(exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_EXPERIMENT,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_EXPERIMENTS{i}) && ...
-                    exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SHOT==exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT && ...
-                    PLOT_EXP_PROFILES
-        
-                    TIMEBASES_Te_DATA{i} = TIMEBASES_Te_PROFILES;
-                    AREABASES_Te_DATA{i} = AREABASES_Te_PROFILES;
-                    SIGNALS_Te_DATA{i} = SIGNALS_Te_PROFILES;
-        
-                else
-        
-                    [~,TIMEBASES_Te_DATA{i},AREABASES_Te_DATA{i},SIGNALS_Te_DATA{i}] = load_aug_shotfile(...
-                        exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
-                        exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT,...
-                        'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
-        
-                end
+                        % Vertical Thomson scattering (raw data)
 
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
+                        [~,TIMEBASES_ne_DATA{i},AREABASES_ne_DATA{i},SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}, ...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT,...
+                            'signals',{'Ne_c','Ne_e','Z_core','Z_edge','R_core','R_edge'});
 
-                % ELM-synchronized data
+                        % Vertical Thomson scattering (IDA)
 
-                SIGNALS_Te_DATA{i} = sprintf('%s/custom/ELM/%d.nc',...
-                    SHOTFILES_BASEPATH_LOCAL,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT);
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA')
 
-            end
+                        if strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SOURCE,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}) && ...
+                                strcmp(exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_EXPERIMENT,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_EXPERIMENTS{i}) && ...
+                                exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SHOT==exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT && ...
+                                PLOT_EXP_PROFILES
 
-        end
+                            TIMEBASES_ne_DATA{i} = TIMEBASES_ne_PROFILES;
+                            AREABASES_ne_DATA{i} = AREABASES_ne_PROFILES;
+                            SIGNALS_ne_DATA{i} = SIGNALS_ne_PROFILES;
 
-        % Ion temperature data
+                        else
 
-        for i = 1:length(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+                            [~,TIMEBASES_ne_DATA{i},AREABASES_ne_DATA{i},SIGNALS_ne_DATA{i}] = load_aug_shotfile(...
+                                exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i}, ...
+                                exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT,...
+                                'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
 
-            if strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CEZ')
-
-                % Charge-exchange recombination spectroscopy (core system)
-
-                [~,TIMEBASES_Ti_DATA{i},AREABASES_Ti_DATA{i},SIGNALS_Ti_DATA{i}] = load_aug_shotfile(...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT,...
-                    'signals',{'Ti_c'});
-
-            elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CMZ')
-
-                % Charge-exchange recombination spectroscopy (edge system)
-
-                [~,TIMEBASES_Ti_DATA{i},AREABASES_Ti_DATA{i},SIGNALS_Ti_DATA{i}] = load_aug_shotfile(...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT,...
-                    'signals',{'Ti_c'});
-
-            elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
-
-                % ELM-synchronized data
-
-                SIGNALS_Ti_DATA{i} = sprintf('%s/custom/ELM/%d.nc',...
-                    SHOTFILES_BASEPATH_LOCAL,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT);
-
-            end
-
-        end
-
-    end
-
-%% EXTRACT EXPERIMENTAL DATA FOR AUG
-
-    % Extract profiles from statistical data analysis
-
-    if PLOT_EXP_PROFILES
-
-        % Electron density profile
-        
-        time_profiles_ne = TIMEBASES_ne_PROFILES.time.value;
-        values_profiles_ne = SIGNALS_ne_PROFILES.ne.value;
-        values_profiles_ne_uncertainty = SIGNALS_ne_PROFILES.ne_unc.value;
-
-        profiles_midplane_experiment.ne_profile.name = exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SIGNAL_NAME_DISPLAY;
-        [~,profiles_midplane_experiment.ne_profile.values] = ...
-            extract_values('profile',time_profiles_ne,values_profiles_ne,...
-            exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_END,false,0);
-        [~,profiles_midplane_experiment.ne_profile.values_unc] = ...
-            extract_values('profile',time_profiles_ne,values_profiles_ne_uncertainty,...
-            exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_END,false,0);
-
-        % Electron temperature profile
-
-        time_profiles_Te = TIMEBASES_Te_PROFILES.time.value;
-        values_profiles_Te = SIGNALS_Te_PROFILES.Te.value;
-        values_profiles_Te_uncertainty = SIGNALS_Te_PROFILES.Te_unc.value;
-  
-        profiles_midplane_experiment.Te_profile.name = exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SIGNAL_NAME_DISPLAY;
-        [~,profiles_midplane_experiment.Te_profile.values] = ...
-            extract_values('profile',time_profiles_Te,values_profiles_Te,...
-            exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_END,false,0);
-        [~,profiles_midplane_experiment.Te_profile.values_unc] = ...
-            extract_values('profile',time_profiles_Te,values_profiles_Te_uncertainty,...
-            exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_END,false,0);       
-    
-    end
-
-    % Extract diagnostic data
-
-    if PLOT_EXP_DATA
-
-        % Electron density data
-
-        for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES)
-
-            if strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'LIN')
-
-                % Lithium beam emission spectroscopy
-
-                time_data_ne{i} = TIMEBASES_ne_DATA{i}.time.value;
-                values_data_ne{i} = SIGNALS_ne_DATA{i}.ne.value;
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_c')
-
-                % Core Thomson scattering (raw data)
-
-                time_data_ne{i} = TIMEBASES_ne_DATA{i}.TIM_CORE.value;
-                values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_c.value);
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatcne')
-
-                % Core Thomson scattering (IDA)
-
-                time_data_ne{i} = TIMEBASES_ne_DATA{i}.time.value;
-                for j = 1:size(SIGNALS_ne_DATA{i}.tsdatcne.value,3)
-                    values_data_ne{i}(:,j) = SIGNALS_ne_DATA{i}.tsdatcne.value(:,SIGNALS_ne_DATA{i}.Ntscprof.value(j),j);
-                    for k = 1:size(values_data_ne{i}(:,j),1)
-                        if values_data_ne{i}(k,j) == 0 || values_data_ne{i}(k,j) < 0
-                            values_data_ne{i}(k,j) = NaN;
                         end
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        SIGNALS_ne_DATA{i} = sprintf('%s/custom/ELM/%d.nc',...
+                            SHOTFILES_BASEPATH_LOCAL,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT);
+
                     end
+
                 end
 
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_e')
+                % Electron temperature data
 
-                % Edge Thomson scattering (raw data)
+                for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES)
 
-                time_data_ne{i} = TIMEBASES_ne_DATA{i}.TIM_EDGE.value;
-                values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_e.value);
+                    if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA')
 
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatene')
+                        % Vertical Thomson scattering (raw data)
 
-                % Edge Thomson scattering (IDA)
+                        [~,TIMEBASES_Te_DATA{i},AREABASES_Te_DATA{i},SIGNALS_Te_DATA{i}] = load_aug_shotfile(...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT,...
+                            'signals',{'Te_c','Te_e','Z_core','Z_edge','R_core','R_edge'});
 
-                time_data_ne{i} = TIMEBASES_ne_DATA{i}.time.value;
-                for j = 1:size(SIGNALS_ne_DATA{i}.tsdatene.value,3)
-                    values_data_ne{i}(:,j) = SIGNALS_ne_DATA{i}.tsdatene.value(:,SIGNALS_ne_DATA{i}.Ntseprof.value(j),j);
-                    for k = 1:size(values_data_ne{i}(:,j),1)
-                        if values_data_ne{i}(k,j) == 0 || values_data_ne{i}(k,j) < 0
-                            values_data_ne{i}(k,j) = NaN;
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA')
+
+                        % Vertical Thomson scattering (IDA)
+
+                        if strcmp(exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SOURCE,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}) && ...
+                                strcmp(exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_EXPERIMENT,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_EXPERIMENTS{i}) && ...
+                                exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SHOT==exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT && ...
+                                PLOT_EXP_PROFILES
+
+                            TIMEBASES_Te_DATA{i} = TIMEBASES_Te_PROFILES;
+                            AREABASES_Te_DATA{i} = AREABASES_Te_PROFILES;
+                            SIGNALS_Te_DATA{i} = SIGNALS_Te_PROFILES;
+
+                        else
+
+                            [~,TIMEBASES_Te_DATA{i},AREABASES_Te_DATA{i},SIGNALS_Te_DATA{i}] = load_aug_shotfile(...
+                                exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
+                                exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT,...
+                                'signals',{'ne','ne_unc','Te','Te_unc','Ntscprof','Ntseprof','tsdatcne','tsdatene','Ntscprof','Ntseprof','tsdatcte','tsdatete'});
+
                         end
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        SIGNALS_Te_DATA{i} = sprintf('%s/custom/ELM/%d.nc',...
+                            SHOTFILES_BASEPATH_LOCAL,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT);
+
                     end
+
                 end
 
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
+                % Ion temperature data
 
-                % ELM-synchronized data
+                for i = 1:length(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES)
 
-                time_data_ne{i} = ncread(SIGNALS_ne_DATA{i},'IDA/time');
-                values_data_ne{i} = ncread(SIGNALS_ne_DATA{i},'IDA/ne');
+                    if strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CEZ')
+
+                        % Charge-exchange recombination spectroscopy (core system)
+
+                        [~,TIMEBASES_Ti_DATA{i},AREABASES_Ti_DATA{i},SIGNALS_Ti_DATA{i}] = load_aug_shotfile(...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT,...
+                            'signals',{'Ti_c'});
+
+                    elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CMZ')
+
+                        % Charge-exchange recombination spectroscopy (edge system)
+
+                        [~,TIMEBASES_Ti_DATA{i},AREABASES_Ti_DATA{i},SIGNALS_Ti_DATA{i}] = load_aug_shotfile(...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i}, ...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT,...
+                            'signals',{'Ti_c'});
+
+                    elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        SIGNALS_Ti_DATA{i} = sprintf('%s/custom/ELM/%d.nc',...
+                            SHOTFILES_BASEPATH_LOCAL,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT);
+
+                    end
+
+                end
 
             end
 
-            profiles_midplane_experiment.ne_data{i}.name = exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_NAMES_DISPLAY{i};
-            [profiles_midplane_experiment.ne_data{i}.times,profiles_midplane_experiment.ne_data{i}.values] = ...
-                extract_values('data',time_data_ne{i}, values_data_ne{i},...
-                exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
-                exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+            %% EXTRACT EXPERIMENTAL DATA FOR AUG
 
-        end
+            % Extract profiles from statistical data analysis
 
-        % Electron temperature data
+            if PLOT_EXP_PROFILES
 
-        for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+                % Electron density profile
 
-            if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_c')
+                time_profiles_ne = TIMEBASES_ne_PROFILES.time.value;
+                values_profiles_ne = SIGNALS_ne_PROFILES.ne.value;
+                values_profiles_ne_uncertainty = SIGNALS_ne_PROFILES.ne_unc.value;
 
-                % Core Thomson scattering (raw data)
+                profiles_midplane_experiment.ne_profile.name = exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SIGNAL_NAME_DISPLAY;
+                [~,profiles_midplane_experiment.ne_profile.values] = ...
+                    extract_values('profile',time_profiles_ne,values_profiles_ne,...
+                    exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_END,false,0);
+                [~,profiles_midplane_experiment.ne_profile.values_unc] = ...
+                    extract_values('profile',time_profiles_ne,values_profiles_ne_uncertainty,...
+                    exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_TIME_END,false,0);
 
-                time_data_Te{i} = TIMEBASES_Te_DATA{i}.TIM_CORE.value;
-                values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_c.value);
+                % Electron temperature profile
 
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatcte')
+                time_profiles_Te = TIMEBASES_Te_PROFILES.time.value;
+                values_profiles_Te = SIGNALS_Te_PROFILES.Te.value;
+                values_profiles_Te_uncertainty = SIGNALS_Te_PROFILES.Te_unc.value;
 
-                % Core Thomson scattering (IDA)
-
-                time_data_Te{i} = TIMEBASES_Te_DATA{i}.time.value;
-                for j = 1:size(SIGNALS_Te_DATA{i}.tsdatcte.value,3)
-                    values_data_Te{i}(:,j) = SIGNALS_Te_DATA{i}.tsdatcte.value(:,SIGNALS_Te_DATA{i}.Ntscprof.value(j),j);
-                    for k = 1:size(values_data_Te{i}(:,j),1)
-                        if values_data_Te{i}(k,j) == 0 || values_data_Te{i}(k,j) < 0
-                            values_data_Te{i}(k,j) = NaN;
-                        end
-                    end
-                end
-
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_e')
-
-                % Edge Thomson scattering (raw data)
-
-                time_data_Te{i} = TIMEBASES_Te_DATA{i}.TIM_EDGE.value;
-                values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_e.value);
-
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatete')
-
-                % Edge Thomson scattering (IDA)
-
-                time_data_Te{i} = TIMEBASES_Te_DATA{i}.time.value;
-                for j = 1:size(SIGNALS_Te_DATA{i}.tsdatete.value,3)
-                    values_data_Te{i}(:,j) = SIGNALS_Te_DATA{i}.tsdatete.value(:,SIGNALS_Te_DATA{i}.Ntseprof.value(j),j);
-                    for k = 1:size(values_data_Te{i}(:,j),1)
-                        if values_data_Te{i}(k,j) == 0 || values_data_Te{i}(k,j) < 0
-                            values_data_Te{i}(k,j) = NaN;
-                        end
-                    end
-                end
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
-
-                % ELM-synchronized data
-
-                time_data_Te{i} = ncread(SIGNALS_Te_DATA{i},'IDA/time');
-                values_data_Te{i} = ncread(SIGNALS_Te_DATA{i},'IDA/Te');
+                profiles_midplane_experiment.Te_profile.name = exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SIGNAL_NAME_DISPLAY;
+                [~,profiles_midplane_experiment.Te_profile.values] = ...
+                    extract_values('profile',time_profiles_Te,values_profiles_Te,...
+                    exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_END,false,0);
+                [~,profiles_midplane_experiment.Te_profile.values_unc] = ...
+                    extract_values('profile',time_profiles_Te,values_profiles_Te_uncertainty,...
+                    exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_TIME_END,false,0);
 
             end
 
-            profiles_midplane_experiment.Te_data{i}.name = exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
-            [profiles_midplane_experiment.Te_data{i}.times,profiles_midplane_experiment.Te_data{i}.values] = ...
-                extract_values('data',time_data_Te{i}, values_data_Te{i},...
-                exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+            % Extract diagnostic data
 
-        end
+            if PLOT_EXP_DATA
 
-        % Ion temperature data
+                % Electron density data
 
-        for i = 1:length(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+                for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES)
 
-            if strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CEZ') || strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CMZ')
+                    if strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'LIN')
 
-                % Core and edge charge-exchange recombination spectroscopy
-    
-                time_data_Ti{i} = TIMEBASES_Ti_DATA{i}.time.value;
-                values_data_Ti{i} = transpose(SIGNALS_Ti_DATA{i}.Ti_c.value);
-    
-                profiles_midplane_experiment.Ti_data{i}.name = exp_data.ION_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
-                [profiles_midplane_experiment.Ti_data{i}.times,profiles_midplane_experiment.Ti_data{i}.values] = ...
-                    extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+                        % Lithium beam emission spectroscopy
 
-            elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CMZ')
+                        time_data_ne{i} = TIMEBASES_ne_DATA{i}.time.value;
+                        values_data_ne{i} = SIGNALS_ne_DATA{i}.ne.value;
 
-                % ELM-synchronized data (CMZ)
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_c')
 
-                time_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CMZ/time');
-                values_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CMZ/Ti');
+                        % Core Thomson scattering (raw data)
 
-                profiles_midplane_experiment.Ti_data{i}.name = exp_data.ION_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
-                [profiles_midplane_experiment.Ti_data{i}.times,profiles_midplane_experiment.Ti_data{i}.values] = ...
-                    extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+                        time_data_ne{i} = TIMEBASES_ne_DATA{i}.TIM_CORE.value;
+                        values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_c.value);
 
-            elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CPZ')
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatcne')
 
-                % ELM-synchronized data (CPZ)
+                        % Core Thomson scattering (IDA)
 
-                time_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CPZ/time');
-                values_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CPZ/Ti');
+                        time_data_ne{i} = TIMEBASES_ne_DATA{i}.time.value;
+                        for j = 1:size(SIGNALS_ne_DATA{i}.tsdatcne.value,3)
+                            values_data_ne{i}(:,j) = SIGNALS_ne_DATA{i}.tsdatcne.value(:,SIGNALS_ne_DATA{i}.Ntscprof.value(j),j);
+                            for k = 1:size(values_data_ne{i}(:,j),1)
+                                if values_data_ne{i}(k,j) == 0 || values_data_ne{i}(k,j) < 0
+                                    values_data_ne{i}(k,j) = NaN;
+                                end
+                            end
+                        end
 
-                profiles_midplane_experiment.Ti_data{i}.name = exp_data.ION_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
-                [profiles_midplane_experiment.Ti_data{i}.times,profiles_midplane_experiment.Ti_data{i}.values] = ...
-                    extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_e')
+
+                        % Edge Thomson scattering (raw data)
+
+                        time_data_ne{i} = TIMEBASES_ne_DATA{i}.TIM_EDGE.value;
+                        values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_e.value);
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatene')
+
+                        % Edge Thomson scattering (IDA)
+
+                        time_data_ne{i} = TIMEBASES_ne_DATA{i}.time.value;
+                        for j = 1:size(SIGNALS_ne_DATA{i}.tsdatene.value,3)
+                            values_data_ne{i}(:,j) = SIGNALS_ne_DATA{i}.tsdatene.value(:,SIGNALS_ne_DATA{i}.Ntseprof.value(j),j);
+                            for k = 1:size(values_data_ne{i}(:,j),1)
+                                if values_data_ne{i}(k,j) == 0 || values_data_ne{i}(k,j) < 0
+                                    values_data_ne{i}(k,j) = NaN;
+                                end
+                            end
+                        end
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        time_data_ne{i} = ncread(SIGNALS_ne_DATA{i},'IDA/time');
+                        values_data_ne{i} = ncread(SIGNALS_ne_DATA{i},'IDA/ne');
+
+                    end
+
+                    profiles_midplane_experiment.ne_data{i}.name = exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_NAMES_DISPLAY{i};
+                    [profiles_midplane_experiment.ne_data{i}.times,profiles_midplane_experiment.ne_data{i}.values] = ...
+                        extract_values('data',time_data_ne{i}, values_data_ne{i},...
+                        exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
+                        exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                end
+
+                % Electron temperature data
+
+                for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+
+                    if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_c')
+
+                        % Core Thomson scattering (raw data)
+
+                        time_data_Te{i} = TIMEBASES_Te_DATA{i}.TIM_CORE.value;
+                        values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_c.value);
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatcte')
+
+                        % Core Thomson scattering (IDA)
+
+                        time_data_Te{i} = TIMEBASES_Te_DATA{i}.time.value;
+                        for j = 1:size(SIGNALS_Te_DATA{i}.tsdatcte.value,3)
+                            values_data_Te{i}(:,j) = SIGNALS_Te_DATA{i}.tsdatcte.value(:,SIGNALS_Te_DATA{i}.Ntscprof.value(j),j);
+                            for k = 1:size(values_data_Te{i}(:,j),1)
+                                if values_data_Te{i}(k,j) == 0 || values_data_Te{i}(k,j) < 0
+                                    values_data_Te{i}(k,j) = NaN;
+                                end
+                            end
+                        end
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_e')
+
+                        % Edge Thomson scattering (raw data)
+
+                        time_data_Te{i} = TIMEBASES_Te_DATA{i}.TIM_EDGE.value;
+                        values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_e.value);
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatete')
+
+                        % Edge Thomson scattering (IDA)
+
+                        time_data_Te{i} = TIMEBASES_Te_DATA{i}.time.value;
+                        for j = 1:size(SIGNALS_Te_DATA{i}.tsdatete.value,3)
+                            values_data_Te{i}(:,j) = SIGNALS_Te_DATA{i}.tsdatete.value(:,SIGNALS_Te_DATA{i}.Ntseprof.value(j),j);
+                            for k = 1:size(values_data_Te{i}(:,j),1)
+                                if values_data_Te{i}(k,j) == 0 || values_data_Te{i}(k,j) < 0
+                                    values_data_Te{i}(k,j) = NaN;
+                                end
+                            end
+                        end
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        time_data_Te{i} = ncread(SIGNALS_Te_DATA{i},'IDA/time');
+                        values_data_Te{i} = ncread(SIGNALS_Te_DATA{i},'IDA/Te');
+
+                    end
+
+                    profiles_midplane_experiment.Te_data{i}.name = exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
+                    [profiles_midplane_experiment.Te_data{i}.times,profiles_midplane_experiment.Te_data{i}.values] = ...
+                        extract_values('data',time_data_Te{i}, values_data_Te{i},...
+                        exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                        exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                end
+
+                % Ion temperature data
+
+                for i = 1:length(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+
+                    if strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CEZ') || strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CMZ')
+
+                        % Core and edge charge-exchange recombination spectroscopy
+
+                        time_data_Ti{i} = TIMEBASES_Ti_DATA{i}.time.value;
+                        values_data_Ti{i} = transpose(SIGNALS_Ti_DATA{i}.Ti_c.value);
+
+                        profiles_midplane_experiment.Ti_data{i}.name = exp_data.ION_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
+                        [profiles_midplane_experiment.Ti_data{i}.times,profiles_midplane_experiment.Ti_data{i}.values] = ...
+                            extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CMZ')
+
+                        % ELM-synchronized data (CMZ)
+
+                        time_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CMZ/time');
+                        values_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CMZ/Ti');
+
+                        profiles_midplane_experiment.Ti_data{i}.name = exp_data.ION_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
+                        [profiles_midplane_experiment.Ti_data{i}.times,profiles_midplane_experiment.Ti_data{i}.values] = ...
+                            extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CPZ')
+
+                        % ELM-synchronized data (CPZ)
+
+                        time_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CPZ/time');
+                        values_data_Ti{i} = ncread(SIGNALS_Ti_DATA{i},'CPZ/Ti');
+
+                        profiles_midplane_experiment.Ti_data{i}.name = exp_data.ION_TEMPERATURE_DATA_MIDPLANE_NAMES_DISPLAY{i};
+                        [profiles_midplane_experiment.Ti_data{i}.times,profiles_midplane_experiment.Ti_data{i}.values] = ...
+                            extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    end
+
+                end
 
             end
 
-        end
+            %% CALCULATE COORDINATES FOR AUG
+
+            % Calculate coordinates for profiles from statistical dana analysis
+
+            if PLOT_EXP_PROFILES
+
+                % Electron density profile
+
+                profiles_midplane_experiment.ne_profile.rho = mean(AREABASES_ne_PROFILES.rhop.value,2) + exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SEPARATRIX_SHIFT;
+
+                % Electron temperature profile
+
+                profiles_midplane_experiment.Te_profile.rho = mean(AREABASES_Te_PROFILES.rhop.value,2) + exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SEPARATRIX_SHIFT;
+
+            end
+
+            % Calculate coordinates for diagnostic data
+
+            if PLOT_EXP_DATA
+
+                % Electron density profile
+
+                for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES)
+
+                    if strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'LIN')
+
+                        % Lithium beam emission spectroscopy
+
+                        profiles_midplane_experiment.ne_data{i}.rho = ...
+                            extract_coordinates(time_data_ne{i},AREABASES_ne_DATA{i}.rhop.value,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_c')
+
+                        % Core Thomson scattering (raw data)
+
+                        [profiles_midplane_experiment.ne_data{i}.rho,profiles_midplane_experiment.ne_data{i}.values] = Rz_to_rho(...
+                            mean(SIGNALS_ne_DATA{i}.R_core.value)*ones(length(SIGNALS_ne_DATA{i}.Z_core.value),1),...
+                            SIGNALS_ne_DATA{i}.Z_core.value',...
+                            profiles_midplane_experiment.ne_data{i}.values,profiles_midplane_experiment.ne_data{i}.times,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT);
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatcne')
+
+                        % Core Thomson scattering (IDA)
+
+                        profiles_midplane_experiment.ne_data{i}.rho = ...
+                            extract_coordinates(time_data_ne{i},AREABASES_ne_DATA{i}.x_ts_co.value,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_e')
+
+                        % Edge Thomson scattering (raw data)
+
+                        [profiles_midplane_experiment.ne_data{i}.rho,profiles_midplane_experiment.ne_data{i}.values] = Rz_to_rho(...
+                            mean(SIGNALS_ne_DATA{i}.R_edge.value)*ones(length(SIGNALS_ne_DATA{i}.Z_edge.value),1),...
+                            SIGNALS_ne_DATA{i}.Z_edge.value',...
+                            profiles_midplane_experiment.ne_data{i}.values,profiles_midplane_experiment.ne_data{i}.times,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT);
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatene')
+
+                        % Edge Thomson scattering (IDA)
+
+                        profiles_midplane_experiment.ne_data{i}.rho = ...
+                            extract_coordinates(time_data_ne{i},AREABASES_ne_DATA{i}.x_ts_ed.value,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        profiles_midplane_experiment.ne_data{i}.rho = ...
+                            extract_coordinates(time_data_ne{i},ncread(SIGNALS_ne_DATA{i},'IDA/rho'),...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    end
+
+                    profiles_midplane_experiment.ne_data{i}.rho = profiles_midplane_experiment.ne_data{i}.rho...
+                        + exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SEPARATRIX_SHIFT;
+
+                end
+
+                % Electron temperature data
+
+                for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+
+                    if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_c')
+
+                        % Core Thomson scattering (raw data)
+
+                        [profiles_midplane_experiment.Te_data{i}.rho,profiles_midplane_experiment.Te_data{i}.values] = Rz_to_rho(...
+                            mean(SIGNALS_Te_DATA{i}.R_core.value)*ones(length(SIGNALS_Te_DATA{i}.Z_core.value),1),...
+                            SIGNALS_Te_DATA{i}.Z_core.value',...
+                            profiles_midplane_experiment.Te_data{i}.values,profiles_midplane_experiment.Te_data{i}.times,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT);
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatcte')
+
+                        % Core Thomson scattering (IDA)
+
+                        profiles_midplane_experiment.Te_data{i}.rho = ...
+                            extract_coordinates(time_data_Te{i},AREABASES_Te_DATA{i}.x_ts_co.value,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_e')
+
+                        % Edge Thomson scattering (raw data)
+
+                        [profiles_midplane_experiment.Te_data{i}.rho,profiles_midplane_experiment.Te_data{i}.values] = Rz_to_rho(...
+                            mean(SIGNALS_Te_DATA{i}.R_edge.value)*ones(length(SIGNALS_Te_DATA{i}.Z_edge.value),1),...
+                            SIGNALS_Te_DATA{i}.Z_edge.value',...
+                            profiles_midplane_experiment.Te_data{i}.values,profiles_midplane_experiment.Te_data{i}.times,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT);
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatete')
+
+                        % Edge Thomson scattering (IDA)
+
+                        profiles_midplane_experiment.Te_data{i}.rho = ...
+                            extract_coordinates(time_data_Te{i},AREABASES_ne_DATA{i}.x_ts_ed.value,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
+
+                        % ELM-synchronized data
+
+                        profiles_midplane_experiment.Te_data{i}.rho = ...
+                            extract_coordinates(time_data_Te{i},ncread(SIGNALS_Te_DATA{i},'IDA/rho'),...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    end
+
+                    profiles_midplane_experiment.Te_data{i}.rho = profiles_midplane_experiment.Te_data{i}.rho...
+                        + exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SEPARATRIX_SHIFT;
+
+                end
+
+                % Ion temperature data
+
+                for i = 1:length(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES)
+
+                    if strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CEZ') || strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CMZ')
+
+                        [profiles_midplane_experiment.Ti_data{i}.rho,profiles_midplane_experiment.Ti_data{i}.values] = ...
+                            Rz_to_rho(AREABASES_Ti_DATA{i}.R.value,AREABASES_Ti_DATA{i}.z.value,...
+                            profiles_midplane_experiment.Ti_data{i}.values,profiles_midplane_experiment.Ti_data{i}.times,...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT);
+
+                        profiles_midplane_experiment.Ti_data{i}.rho = profiles_midplane_experiment.Ti_data{i}.rho...
+                            + exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SEPARATRIX_SHIFT;
+
+                    elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CMZ')
+
+                        profiles_midplane_experiment.Ti_data{i}.rho = ...
+                            extract_coordinates(time_data_Ti{i},ncread(SIGNALS_Ti_DATA{i},'CMZ/rho'),...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CPZ')
+
+                        profiles_midplane_experiment.Ti_data{i}.rho = ...
+                            extract_coordinates(time_data_Ti{i},ncread(SIGNALS_Ti_DATA{i},'CPZ/rho'),...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
+                            exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
+
+                    end
+
+                end
+
+            end
+
+        case 'CMOD'
+
+            %% CHECK THAT THE CMOD LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading CMOD experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR CMOD
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR CMOD
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR CMOD
+
+            % TODO
+
+        case 'D3D'
+
+            %% CHECK THAT THE D3D LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading D3D experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR D3D
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR D3D
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR D3D
+
+            % TODO
+
+        case 'EAST'
+
+            %% CHECK THAT THE EAST LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading EAST experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR EAST
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR EAST
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR EAST
+
+            % TODO
+
+        case 'JET'
+
+            %% CHECK THAT THE JET LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading JET experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR JET
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR JET
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR JET
+
+            % TODO
+
+        case 'MASTU'
+
+            %% CHECK THAT THE MASTU LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading MASTU experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR MASTU
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR MASTU
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR MASTU
+
+            % TODO
+
+        case 'TCV'
+
+            %% CHECK THAT THE TCV LIBRARY LOCALLY EXISTS
+
+            error(sprintf('Error: Methods for reading TCV experimental data not yet implemented'));
+
+            %% LOAD EXPERIMENTAL DATA FOR TCV
+
+            % TODO
+
+            %% EXTRACT EXPERIMENTAL DATA FOR TCV
+
+            % TODO
+
+            %% CALCULATE COORDINATES FOR TCV
+
+            % TODO
+
+        otherwise
+
+            error(sprintf('Error: Device %s not existing'),exp_data.DEVICE);
 
     end
-
-%% CALCULATE COORDINATES FOR AUG
-
-    % Calculate coordinates for profiles from statistical dana analysis
-
-    if PLOT_EXP_PROFILES
-
-        % Electron density profile
-
-        profiles_midplane_experiment.ne_profile.rho = mean(AREABASES_ne_PROFILES.rhop.value,2) + exp_data.ELECTRON_DENSITY_PROFILE_MIDPLANE_SEPARATRIX_SHIFT;
-
-        % Electron temperature profile
-
-        profiles_midplane_experiment.Te_profile.rho = mean(AREABASES_Te_PROFILES.rhop.value,2) + exp_data.ELECTRON_TEMPERATURE_PROFILE_MIDPLANE_SEPARATRIX_SHIFT;
-
-    end
-
-    % Calculate coordinates for diagnostic data
-
-    if PLOT_EXP_DATA
-
-        % Electron density profile
-
-        for i = 1:length(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES)
-
-            if strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'LIN')
-
-                % Lithium beam emission spectroscopy
-
-                profiles_midplane_experiment.ne_data{i}.rho = ...
-                    extract_coordinates(time_data_ne{i},AREABASES_ne_DATA{i}.rhop.value,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_c')
-
-                % Core Thomson scattering (raw data)
-
-                [profiles_midplane_experiment.ne_data{i}.rho,profiles_midplane_experiment.ne_data{i}.values] = Rz_to_rho(...
-                    mean(SIGNALS_ne_DATA{i}.R_core.value)*ones(length(SIGNALS_ne_DATA{i}.Z_core.value),1),...
-                    SIGNALS_ne_DATA{i}.Z_core.value',...
-                    profiles_midplane_experiment.ne_data{i}.values,profiles_midplane_experiment.ne_data{i}.times,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT);
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatcne')
-
-                % Core Thomson scattering (IDA)
-
-                profiles_midplane_experiment.ne_data{i}.rho = ...
-                    extract_coordinates(time_data_ne{i},AREABASES_ne_DATA{i}.x_ts_co.value,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'Ne_e')
-
-                % Edge Thomson scattering (raw data)
-
-                [profiles_midplane_experiment.ne_data{i}.rho,profiles_midplane_experiment.ne_data{i}.values] = Rz_to_rho(...
-                    mean(SIGNALS_ne_DATA{i}.R_edge.value)*ones(length(SIGNALS_ne_DATA{i}.Z_edge.value),1),...
-                    SIGNALS_ne_DATA{i}.Z_edge.value',...
-                    profiles_midplane_experiment.ne_data{i}.values,profiles_midplane_experiment.ne_data{i}.times,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SHOT);
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SIGNALS{i},'tsdatene')
-
-                % Edge Thomson scattering (IDA)
-
-                profiles_midplane_experiment.ne_data{i}.rho = ...
-                    extract_coordinates(time_data_ne{i},AREABASES_ne_DATA{i}.x_ts_ed.value,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
-
-                % ELM-synchronized data
-
-                profiles_midplane_experiment.ne_data{i}.rho = ...
-                    extract_coordinates(time_data_ne{i},ncread(SIGNALS_ne_DATA{i},'IDA/rho'),...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            end
-
-            profiles_midplane_experiment.ne_data{i}.rho = profiles_midplane_experiment.ne_data{i}.rho...
-                + exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SEPARATRIX_SHIFT;
-
-        end
-
-        % Electron temperature data
-
-        for i = 1:length(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES)
-
-            if strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_c')
-
-                % Core Thomson scattering (raw data)
-
-                [profiles_midplane_experiment.Te_data{i}.rho,profiles_midplane_experiment.Te_data{i}.values] = Rz_to_rho(...
-                    mean(SIGNALS_Te_DATA{i}.R_core.value)*ones(length(SIGNALS_Te_DATA{i}.Z_core.value),1),...
-                    SIGNALS_Te_DATA{i}.Z_core.value',...
-                    profiles_midplane_experiment.Te_data{i}.values,profiles_midplane_experiment.Te_data{i}.times,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT);
-
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatcte')
-
-                % Core Thomson scattering (IDA)
-
-                profiles_midplane_experiment.Te_data{i}.rho = ...
-                    extract_coordinates(time_data_Te{i},AREABASES_Te_DATA{i}.x_ts_co.value,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'VTA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Te_e')
-
-                % Edge Thomson scattering (raw data)
-
-                [profiles_midplane_experiment.Te_data{i}.rho,profiles_midplane_experiment.Te_data{i}.values] = Rz_to_rho(...
-                    mean(SIGNALS_Te_DATA{i}.R_edge.value)*ones(length(SIGNALS_Te_DATA{i}.Z_edge.value),1),...
-                    SIGNALS_Te_DATA{i}.Z_edge.value',...
-                    profiles_midplane_experiment.Te_data{i}.values,profiles_midplane_experiment.Te_data{i}.times,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SHOT);
-
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'IDA') && strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'tsdatete')
-
-                % Edge Thomson scattering (IDA)
-
-                profiles_midplane_experiment.Te_data{i}.rho = ...
-                    extract_coordinates(time_data_Te{i},AREABASES_ne_DATA{i}.x_ts_ed.value,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
-
-                % ELM-synchronized data
-
-                profiles_midplane_experiment.Te_data{i}.rho = ...
-                    extract_coordinates(time_data_Te{i},ncread(SIGNALS_Te_DATA{i},'IDA/rho'),...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            end
-
-            profiles_midplane_experiment.Te_data{i}.rho = profiles_midplane_experiment.Te_data{i}.rho...
-                + exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SEPARATRIX_SHIFT;
-
-        end
-
-        % Ion temperature data
-
-        for i = 1:length(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES)
-
-            if strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CEZ') || strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'CMZ')
-
-                [profiles_midplane_experiment.Ti_data{i}.rho,profiles_midplane_experiment.Ti_data{i}.values] = ...
-                    Rz_to_rho(AREABASES_Ti_DATA{i}.R.value,AREABASES_Ti_DATA{i}.z.value,...
-                    profiles_midplane_experiment.Ti_data{i}.values,profiles_midplane_experiment.Ti_data{i}.times,...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SHOT);
-    
-                profiles_midplane_experiment.Ti_data{i}.rho = profiles_midplane_experiment.Ti_data{i}.rho...
-                    + exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SEPARATRIX_SHIFT;
-
-            elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CMZ')
-
-                profiles_midplane_experiment.Ti_data{i}.rho = ...
-                    extract_coordinates(time_data_Ti{i},ncread(SIGNALS_Ti_DATA{i},'CMZ/rho'),...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            elseif strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM') && strcmp(exp_data.ION_TEMPERATURE_DATA_MIDPLANE_SIGNALS{i},'Ti_CPZ')
-
-                profiles_midplane_experiment.Ti_data{i}.rho = ...
-                    extract_coordinates(time_data_Ti{i},ncread(SIGNALS_Ti_DATA{i},'CPZ/rho'),...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_START,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_TIME_END,...
-                    exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET,exp_data.ION_TEMPERATURE_DATA_MIDPLANE_REDUCED_SET_TIME_DELTA);
-
-            end
-
-        end
-
-    end
-
-case 'CMOD'
-
-%% LOAD EXPERIMENTAL DATA FOR CMOD
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR CMOD
-
-% TODO
-
-%% CALCULATE COORDINATES FOR CMOD
-
-% TODO
-
-case 'D3D'
-
-%% LOAD EXPERIMENTAL DATA FOR D3D
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR D3D
-
-% TODO
-
-%% CALCULATE COORDINATES FOR D3D
-
-% TODO
-
-case 'EAST'
-
-%% LOAD EXPERIMENTAL DATA FOR EAST
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR EAST
-
-% TODO
-
-%% CALCULATE COORDINATES FOR EAST
-
-% TODO
-
-case 'JET'
-
-%% LOAD EXPERIMENTAL DATA FOR JET
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR JET
-
-% TODO
-
-%% CALCULATE COORDINATES FOR JET
-
-% TODO
-
-case 'MASTU'
-
-%% LOAD EXPERIMENTAL DATA FOR MASTU
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR MASTU
-
-% TODO
-
-%% CALCULATE COORDINATES FOR MASTU
-
-% TODO
-
-case 'TCV'
-
-%% LOAD EXPERIMENTAL DATA FOR TCV
-
-% TODO
-
-%% EXTRACT EXPERIMENTAL DATA FOR TCV
-
-% TODO
-
-%% CALCULATE COORDINATES FOR TCV
-
-% TODO
-
-end
 
 end
 
@@ -806,25 +841,25 @@ end
 
 function [rho_output,data_output] = Rz_to_rho(R,z,data,time,shot)
 
-    temp = find(data(1,:)==0, 1, 'first');
-    if not(isempty(temp))
-        data(:,temp:end) = [];
-        R(temp:end) = [];
-        z(temp:end) = [];
-    end
+temp = find(data(1,:)==0, 1, 'first');
+if not(isempty(temp))
+    data(:,temp:end) = [];
+    R(temp:end) = [];
+    z(temp:end) = [];
+end
 
-    Rz_cell = {}; time_cell = {};
+Rz_cell = {}; time_cell = {};
 
-    for i = 1:(length(time)-1)
-        Rz_cell{end+1} = [R';z'];
-        time_cell{end+1} = [time(i) time(i+1)];
-    end
-    [~,rho_temp] = map_equilibrium('rzPF',Rz_cell,'H',shot,time_cell);
-    for i = 1:(length(time)-1)
-          rho(:,i) = rho_temp{i};
-    end
+for i = 1:(length(time)-1)
+    Rz_cell{end+1} = [R';z'];
+    time_cell{end+1} = [time(i) time(i+1)];
+end
+[~,rho_temp] = map_equilibrium('rzPF',Rz_cell,'H',shot,time_cell);
+for i = 1:(length(time)-1)
+    rho(:,i) = rho_temp{i};
+end
 
-    data_output = data;
-    rho_output = rho';
+data_output = data;
+rho_output = rho';
 
 end
