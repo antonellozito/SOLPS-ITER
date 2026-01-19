@@ -41,6 +41,7 @@
 \fi
 \usepackage{color}
 \usepackage{alltt}
+\usepackage{xcolor}
 \input{Old_packages}
 
 \def\topfraction{.9}
@@ -66,6 +67,20 @@
 \definecolor{Red}{rgb}{1.0,0.0,0.0}
 
 \newcommand{\exb}{{\bf E}\times{\bf B}}
+
+\lstdefinestyle{matlab}{
+    language=Matlab,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black}\bfseries,
+    stringstyle=\color{magenta},
+    frame=single,
+    framesep=3pt,
+    backgroundcolor=\color{gray!5},
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=4,
+}
 
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
@@ -99,6 +114,7 @@ This is the combined work of many authors. Started by D.P.~Coster, it includes c
 \item X.~Bonnin, for many contributions and the \SOLPSITER updates
 \item S.~Voskoboynikov, E.~Kaveeva, and I.~Senichenkov, for the \SOLPSITER model equations (Appendix~\ref{cha:equations}) and output quantities information (Appendix~\ref{cha:b2wdat_iout_4})
 \item S.~Makarov, for the Zhdanov-Grad closure description
+\item A.~Zito, for the MATLAB post-processing library description
 \end{itemize}
 All errors, omissions {\it etc.} should be e-mailed to {\tt Xavier.Bonnin@iter.org}.
 
@@ -775,6 +791,7 @@ SOLPSTOP
 |   +---Balance
 |   +---commands
 |   +---matlab
+|   +---MATLAB_analysis
 |   +---MatlabPostProcessing
 |   +---Matlab_SPb
 |   +---nc2text_simple
@@ -20668,6 +20685,455 @@ scaling is done on all of the data.
 \fi
   \caption{Line plots of fluxes and other quantities.}\label{fig:fluxes}
 \end{figure}
+
+\clearpage
+
+\chapter{Post-processing tools with MATLAB}
+\label{cha:MATLABPostProcessing}\index{MATLAB post-processing tools}
+
+A comprehensive set of analysis, inspection, manipulation and plotting tools for \SOLPSITER simulations
+written in MATLAB are provided alongside the code repository, specifically within the
+{\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis} directory.
+
+Its subdirectory {\tt /Scripts} contains MATLAB scripts which, after the provision of user input, can
+\begin{itemize}
+  \item automatically open simulation data within MATLAB structures,
+  \item display run-related inputs and outputs in the command line,
+  \item perform user-controlled modifications to the run-related files,
+  \item generate high-quality plots and print them as figure files.
+\end{itemize}  
+
+Its subdirectory {\tt /Functions} contains, instead, MATLAB functions which are routinely called by the scripts.
+The functions are based on those originally contained in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MatlabPostProcessing}
+directory and mainly written by W.~Dekeyser and improved by A.~Piras. The expansion of the functions to their
+current form, the scripts and the MATLAB-shell interface have been provided by A.~Zito.
+
+All the functions and scripts have been thoroughly tested, but errors and bugs might still be present.
+In case an error or a bug is spotted, users are encouraged to report them to A.~Zito ({\tt antonello.zito@ipp.mpg.de}),
+especially for general problems with the MATLAB interface or for errors/bugs within the scripts, or to W.~Dekeyser
+({\tt wouter.dekeyser@kuleuven.be}), especially for errors/bugs within the I/O and calculations-related functions.
+
+Effort has been devoted to make the use of these post-processing tools as general as possible. Whenever possible,
+scripts and function are able to automatically recognize the type of simulation (either made the structured grid
+code version with 5-point stencil or 9-point stencil, or with the unstructured grid code version) and the type of
+magnetic topology. The different structures are hence consequently handled, so to give an uniform type of output.
+
+Whereas functions are written in such a way to be able to read even previous version of the standard \SOLPSITER
+output files (e.g.\ {\tt b2fstate}, {\tt fort.44}, {\tt fort.46}...) whenever possible, the compatibility of the
+scripts with outdates files version is not guaranteed. For an optimal use of these tools, it is therefore
+recommended to update the code to its latest version, regardless of the particular branch.
+
+\section{Modes of operation}
+\index{MATLAB post-processing tools, modes of operation}
+
+There are two possible ways of operation of the MATLAB tools: either via the command line within a run directory,
+or in an interactive way within the MATLAB GUI.
+
+\subsection{Command line operation}
+
+Within the \SOLPSITER environment, scripts made to display run-related inputs/outputs and generate/print
+plots can be directly executed within a run directory, showing results from one specific simulation.
+The only requirement is the need for the command line to be able to locate a valid MATLAB executable
+(as the result of the \texttt{which matlab} command). This can be achieved either loading a version of
+MATLAB as a module, or by manually adding the path to a MATLAB executable to the environment variable \texttt{PATH}.
+
+The interface between the command line and MATLAB is provided by the \texttt{run\_matlab} shell script.
+This locates the MATLAB script which is to be executed, launches the command line version of MATLAB and
+executes the script.
+
+The input variables for the MATLAB scripts can either have a default value which is used in case of any
+further user-given specification, or mandatorily require the user to provide a value.
+
+If no input variables are to be specified, MATLAB scripts can then be executed by typing
+\begin{verbatim}
+  run_matlab <script_name>
+\end{verbatim}
+
+User-specified input variables controlling the execution of the script can be instead transferred to MATLAB,
+and used by the script, parsing the arguments of the \texttt{run\_matlab} command, as
+\begin{verbatim}
+  run_matlab <script_name> [--ARG1 value1] [--ARG2 value2]
+\end{verbatim}
+
+The argument types can be:
+\begin{itemize}
+  \item Boolean, to be expressed in the format \texttt{--ARGUMENT True}, so to be transferred to MATLAB as a logical variable.
+  \item A string, to be expressed in the format \texttt{--ARGUMENT 'text'}, so to be transferred to MATLAB as a char variable.
+  \item A single number, to be expressed in the format \texttt{--ARGUMENT 1000}, or a comma-separated numerical array,
+  to be expressed in the format \texttt{--ARGUMENT 2.5,6,3.2} so to be transferred to MATLAB as a double-precision numeric variable.
+  \item A comma-separated list of any of the above mentioned types, to be expressed in the format \texttt{--ARGUMENT 7,False,'text',3.5"},
+  so to be transferred to MATLAB as a cell array.
+\end{itemize}  
+
+Running the command as
+\begin{verbatim}
+  run_matlab <script_name> --h
+\end{verbatim}
+will print a description of the script and a list of the available argument, together with their types, and whether they are
+required or optional (and, in the latter case, their default values used if they are not user-provided).
+
+Finally, running
+\begin{verbatim}
+  run_matlab --h
+\end{verbatim}
+will print a general help message with the same above described content, and a list of the avaible scripts which can be executed
+in this way.
+
+When running a MATLAB script via \texttt{run\_matlab} command for the first time within a \SOLPSITER session, MATLAB is launched
+and its process remains active in the background, for a quicker execution when a script is executed again within the same session.
+The background MATLAB process will only close after exiting the shell or the terminal.
+
+The scripts made to display run-related inputs/outputs (e.g.\ description and input variables of switches and of namelist parameters,
+or values/profiles of physical fields from the plasma solution) will produce their output directly in the terminal. The scripts made
+to generate figures will instead open them within a MATLAB Figure window, which will be by default also printed as .pdf file within
+the run directory upon the script execution. While the MATLAB Figure window is open, users will still be able to manipulate the figure
+(e.g.\ changing figure size, colors and characteristics of graphical elements, axes limits, labels...), and eventually print them also
+in a customized way.
+
+\subsection{Interactive usage within MATLAB GUI}
+
+The same scripts mentioned in the previous section can be also executed interactively within the MATLAB GUI.
+For this, it is recommended to create a local copy of the entire {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis} directory,
+so to not trigger undesired local changes of the \SOLPSITER repository. Once this is done, scripts can be opened within the
+MATLAB editor, the input variables can be modified directly within the section "{\tt USER INPUT} of the scripts files,
+and these can be run within the GUI. In this way, additional features such as Profiler, Debugger and partial script
+execution can be used.
+
+When using the MATLAB GUI, the user will need to manually define the absolute paths of the \SOLPSITER top directory and
+of the run directory of the simulation to be analyzed, by assigning the appropriate values to the variables {\tt SOLPSTOP}
+and {\tt SIMULATION} later in the script.
+
+All scripts which could be executed via the command line can also be executed within the MATLAB GUI. Additionally to these,
+further scripts can only be executed within the MATLAB GUI. These include scripts which can create and/or manipulate
+input/output files for \SOLPSITER simulations, scripts which generate plots from outputs from different runs, and scripts
+which simply open the run-related data within MATLAB structures, e.g.\ for numerical/graphical inspection.
+
+Users can also create their own custom scripts based on the available MATLAB functions. Effort has been devoted to
+provide the functions with informative error messages e.g.\ when undergoing improper execution or in presence of invalid
+or mismatched inputs, so to facilitate their usage.
+
+\section{Interface for experimental data handling}
+\index{MATLAB post-processing tools, experimental data interface}
+
+Among the available scripts, some of them automatically provide useful comparisons between simulations results and
+experimental data. This is possible using a simple, yet generalized interface based on storing the all the specifications
+related to the experimental data to be used (e.g.\ device name, shot number/label/ID, time within shot, diagnostic source
+of any specific data...) within a file calling {\tt exp\_data} and stored within the run directory. By reading this file,
+MATLAB will be informed about which experimental data to fetch and use to compare with the simulation results.
+
+The relevant functions used to read the {\tt exp\_data} file and to fetch experimental data in a machine-specific way and
+convert them to a standardized MATLAB structures readable by the plotting scripts are stored within the
+{\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Functions/\allowbreak Reading/\allowbreak Experiments}
+directory. In the same directory, a template of a correct {\tt exp\_data} file is stored.
+
+The name of the experimental device to be considered is stored in the variable {\tt DEVICE} within {\tt exp\_data}.
+
+Data structures resembling experimental measurements which are supported for being fetched and directly compared
+with \SOLPSITER simulations are:
+\begin{itemize}
+\item Radial plasma state measurements at the outer plasma midplane (e.g.\ from Thomson scattering and CXRS), namely:
+\begin{itemize}
+\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_MIDPLANE}).
+\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_MIDPLANE}).
+\item Ion temperature (variable name: {\tt ION\_TEMPERATURE\_MIDPLANE}).
+\item Ion species density (variable name: {\tt ION\_SPECIES\_DENSITY\_MIDPLANE}).
+\end{itemize}
+\item Space-dependent measurements along chords (e.g.\ from Thomson scattering and spectroscopy), namely:
+\begin{itemize}
+\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_CHORDS}).
+\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_CHORDS}).
+\item Ion temperature (variable name: {\tt ION\_TEMPERATURE\_CHORDS}).
+\item Ion species density (variable name: {\tt ION\_SPECIES\_DENSITY\_CHORDS}).
+\end{itemize}
+\item Line-integrated measurements along chords (e.g.\ from spectroscopy and bolometry), namely:
+\begin{itemize}
+\item Photon emission (variable name: {\tt PHOTON\_EMISSION\_CHORDS}).
+\item Radiated power (variable name: {\tt RADIATED\_POWER\_CHORDS}).
+\end{itemize}
+\item Plasma state and fluxes measurements on the inner divertor target (e.g.\ from Langmuir probes), namely:
+\begin{itemize}
+\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_INNER\_TARGET}).
+\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_INNER\_TARGET}).
+\item Particle flux density (variable name: {\tt PARTICLE\_FLUX\_DENSITY\_INNER\_TARGET}).
+\item Energy flux density (variable name: {\tt ENERGY\_FLUX\_DENSITY\_INNER\_TARGET}).
+\end{itemize}
+\item Plasma state and fluxes measurements on the outer divertor target (e.g.\ from Langmuir probes), namely:
+\begin{itemize}
+\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_OUTER\_TARGET}).
+\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_OUTER\_TARGET}).
+\item Particle flux density (variable name: {\tt PARTICLE\_FLUX\_DENSITY\_OUTER\_TARGET}).
+\item Energy flux density (variable name: {\tt ENERGY\_FLUX\_DENSITY\_OUTER\_TARGET}).
+\end{itemize}
+\end{itemize}
+
+Each category of data can have the following attributes:
+\begin{itemize}
+\item {\tt SHOT}: shot number/label/ID of the experiment to be considered.
+\item {\tt SOURCE}: name of the specific diagnostic.
+\item {\tt EXPERIMENT}: a possible subset of the experimental database to be fetched, if appliable.
+\item {\tt VERSION}: version of the data to be fetched (in terms of version control), if appliable.
+\item {\tt SIGNAL}: name of the data field representing the experimental data within the diagnostic specified in {\tt SOURCE}.
+\item {\tt SIGNAL\_UNCERTAINTY}: name of the data field representing the uncertainty referred to experimental data {\tt SIGNAL}
+within the diagnostic specified in {\tt SOURCE}.
+\item {\tt SPECIES}: name of the fluid species (in the same \SOLPSITER format, e.g. {\tt D0}, {\tt D1}, {\tt He0}, {\tt He1}, {\tt He2}...)
+to which the experimental data {\tt SIGNAL} is referred (only for {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_MIDPLANE},
+{\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_CHORDS} and {\tt PHOTON\allowbreak\_EMISSION\allowbreak\_CHORDS}).
+\item {\tt EMISSION\_LINE}: wavelenght of the spectroscopic emission line, in $nm$, to which the experimental data {\tt SIGNAL} is referred
+(only for {\tt PHOTON\_EMISSION\_CHORDS}).
+\item {\tt SIGNAL\_NAME\_DISPLAY}: name of the diagnostic to be shown in the figures, when the experimental quantity is plotted.
+\item {\tt COORDINATE\_TYPE}: type of coordinate employed for space-dependent measurements
+(could be the normalized poloidal flux coordinate {\tt rhop}, the radial distance from the separatrix {\tt dssep} or
+the major plasma radius {\tt R}).
+\item {\tt SHIFT}: possible shift to apply to the space coordinate as present in the original data source.
+\item {\tt CHORDS}: name(s)/label(s) of the line(s) of sight on which all the considered data are measured, if appliable.
+\item {\tt TIME\_START}: start of the time window from which to extract the experimental data.
+For the case of the category "{\tt DATA}", this refers to the 
+\item {\tt TIME\_END}: end of the time window from which to extract the experimental data.
+\item {\tt REDUCED\_SET\_TIME\_DELTA}: time duration of sub-intervals within which to average individual data within the
+entire time interval bounded by {\tt TIME\_START} and {\tt TIME\_END}.
+\end{itemize}
+
+Radial measurements at the outer midplane, space-dependent measurements along chords and measurements along
+the divertor targets are categorized either as:
+\begin{itemize}
+\item {\tt DATA}: in this case, the extracted data consist in a set of multiple space-dependent vectors,
+i.e.\ a two-dimensional array function of space and time, meant to consist in direct measurements within a
+given time interval. When these data are plotted, by default all such multiple space-dependent vectors are
+displayed together in the form of scatter points. The {\tt TIME\_START} and {\tt TIME\_END} attributes represent
+then the start and the end time of the time window from which to extract all the data to be plotted.
+In this case, the attribute {\tt REDUCED\_SET\_TIME\_DELTA} can be used to decide whether to plot not all individual
+data present within the time window bounded by {\tt TIME\_START} and {\tt TIME\_END}, but rather only averages over
+sub-intervals with duration {\tt REDUCED\_SET\_TIME\_DELTA}.
+\item {\tt PROFILES}: in this case, the extracted data consist in one single space-dependent vector, i.e.\ a one-dimensional
+array function of space, meant to be calculated with tools such as statistical analysis from direct experimental data.
+When these data are plotted, by default the single space-dependent vector is displayed in the form of a line plot.
+The {\tt TIME\_START} and {\tt TIME\_END} attributes represent then the start and the end time of the time window
+within which to average all the data present herein and to build one single profile to be plotted. In this case,
+the attribute {\tt REDUCED\_SET\_TIME\_DELTA} is meaningless.
+\end{itemize}
+
+Available external MATLAB libraries/interfaces to read experimental data can be achieved running the command
+\begin{verbatim}
+  clone_matlab_exp_libraries <device>
+\end{verbatim}
+which will be cloned in the {\tt \$\{SOLPSTOP\}\allowbreak /scripts.local} directory.
+
+Currently, only automatic data fetching from ASDEX Upgrade has been implemented. Whereas the current logic of
+the implemented data structure to handle and store experimental data was originally developed with ASDEX Upgrade
+in mind, it was attempted to make it as generic as possible so to be able to handle, in the same way, experimental
+data from other devices. User contributions towards supporting additional devices is welcome.
+
+\subsection{Fetching experimental data from individual devices}
+
+In the following details for all supported experimental devices are listed.
+
+\subsubsection{Plug-in library to read and handle ASDEX Upgrade data}
+
+For the case of ASDEX Upgrade (located at IPP Garching), the variable {\tt DEVICE} within the {\tt exp\_data} file
+should be set to {\tt 'AUG'}.
+
+Experimental data are organized in the so-called \textit{shotfiles}. The experimental data fields are contained within
+the "signals" or "signal groups". Space coordinates and time coordinates to which signals and signal groups are referred
+are called "areabases" and "timebases" respectively.
+
+For a more detailed description of the shotfiles system in use at ASDEX Upgrade, the user is referred to the
+\href{https://www.aug.ipp.mpg.de/wwwaug/guidelines/shotfiles.shtml}{ASDEX Upgrade intranet} (only accessible with
+IPP credentials).
+
+The meaning of the general attributes is the following:
+
+\begin{itemize}
+\item {\tt SHOT}: shot number of the experiment to be considered.
+\item {\tt SOURCE}: name of the shotfile. Currently supported shotfiles are:
+\begin{itemize}
+\item {\tt IDA} (Integrated Data Analysis): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_MIDPLANE} and {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_MIDPLANE}.
+The radial coordinate to which data are referred is {\tt rhop}.
+\item {\tt VTA} (Vertical Thomson scattering): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_MIDPLANE} and {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_MIDPLANE}.
+The radial coordinate to which data are referred is {\tt R}.
+\item {\tt LIN} (Lithium beam emission spectroscopy): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_MIDPLANE}.
+The radial coordinate to which data are referred is {\tt rhop}.
+\item {\tt CEZ}/{\tt CMZ}/{\tt CPZ} (Charge-exchange recombination spectroscopy): for {\tt ION\allowbreak\_TEMPERATURE\allowbreak\_MIDPLANE}.
+The radial coordinate to which data are referred is {\tt R}.
+\item {\tt CAS}/{\tt CES}/{\tt COS} (Charge-exchange recombination spectroscopy): for {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_MIDPLANE}.
+The radial coordinate to which data are referred is {\tt R}.
+\item {\tt DTN} (Divertor Thomson scattering): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_CHORDS} and {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_CHORDS}.
+The radial coordinate to which data are referred is {\tt R}.
+\item {\tt EVL}/{\tt FVL}/{\tt GVL} (Visible divertor spectroscopy): for {\tt PHOTON\allowbreak\_EMISSION\allowbreak\_CHORDS}.
+\item {\tt BLB} (Bolometry): for {\tt RADIATED\allowbreak\_POWER\allowbreak\_CHORDS}.
+\item {\tt LSD} (Divertor Langmuir probes): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_INNER\allowbreak\_TARGET}, {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_INNER\allowbreak\_TARGET},
+{\tt PARTICLE\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_INNER\allowbreak\_TARGET}, {\tt ENERGY\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_INNER\allowbreak\_TARGET},
+{\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_OUTER\allowbreak\_TARGET}, {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_OUTER\allowbreak\_TARGET},
+{\tt PARTICLE\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_OUTER\allowbreak\_TARGET}, {\tt ENERGY\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_OUTER\allowbreak\_TARGET}
+The radial coordinate to which data are referred is {\tt dssep}.
+\end{itemize}
+\item {\tt EXPERIMENT}: the "user name" under which the shotfile to be fetched is written (default: {\tt 'augd'}).
+\item {\tt VERSION}: the edition of the shotfile (default: 0 for most recent available edition).
+\item {\tt SIGNAL}: name of the signal or the signal group within the shotfile defined by {\tt SOURCE} representing the experimental data.
+\item {\tt SIGNAL\_UNCERTAINTY}: name of the signal or the signal group within the shotfile defined by {\tt SOURCE} representing the
+uncertainty on the experimental data.
+\end{itemize}
+
+MATLAB functions to fetch and read ASDEX Upgrade experimental data can be achieved, by executing 
+\begin{verbatim}
+  clone_matlab_exp_libraries AUG
+\end{verbatim}
+The source code is located at \href{https://github.com/antonellozito/MATLAB-analysis-AUG}{https://github.com/antonellozito/MATLAB-analysis-AUG}.
+The repository will be cloned within the {\tt \$\{SOLPSTOP\}\allowbreak /scripts.local \allowbreak /MATLAB\_analysis\_AUG} directory.
+
+Currently, this allows to read AUG shotfiles (by means of the auxiliary {\tt load\_aug\_shotfile} MATLAB function) using alternatively three possible libraries:
+\begin{itemize}
+\item A native MATLAB library (default), located directly within the cloned repository in the directory
+{\tt \$\{SOLPSTOP\}\allowbreak /scripts.local \allowbreak /MATLAB\_analysis\_AUG \allowbreak /libraries \allowbreak /sfutils}.
+It consists of the MATLAB translation, provided by A.~Zito, of the \href{https://pypi.org/project/aug-sfutils/}{{\tt aug\_sfutils} Python package}, originally written by G.~Tardini.
+This library is OS-agnostic, as it does not require calling any compiled binaries, and for its use it only requires ther user to set the environment variable
+{\tt SHOTFILES\_BASEPATH} to the main directory in which the AUG shotfiles database is stored, to allow it to correctly locate the shotfiles within the
+\SOLPSITER environment, provided that in the file system in use the main directory for the AUG shotfiles database is available or locally mounted.
+For example, if the IPP shares are locally mounted, it will be sufficient to do
+\begin{verbatim}
+  setenv SHOTFILES_BASEPATH /shares/experiments/aug-shotfiles
+\end{verbatim}
+In this way, shotfiles fields and metadata can be loaded via MATLAB by executing the MATLAB function
+\begin{verbatim}
+  [PARAMETERS,TIMEBASES,AREABASES,SIGNALS] = ...
+  load_aug_shotfile(<SHOTFILE>,<SHOT_NUMBER>);
+\end{verbatim}
+or
+\begin{verbatim}
+  [PARAMETERS,TIMEBASES,AREABASES,SIGNALS] = ...
+  load_aug_shotfile(<SHOTFILE>,<SHOT_NUMBER>,'library','sfutils_matlab');
+\end{verbatim}
+\item The original {\tt aug\_sfutils} Python library, by calling directly a Python executable via MATLAB using the native MATLAB capabilities. For this,
+the user will need to set the environment variables {\tt PYTHON\_EXECUTABLE} to a valid Python interpreter, living within a Python environment which includes
+its most-common scientific and data handling libraries (such as Numpy, Scipy and Pandas), and {\tt AUG\_SFUTILS\_LIBRARY} to a directory
+containing a clone of the {\tt aug\_sfutils} package. The main directory of the AUG shotfiles can be set, in this case, directly within the {\tt aug\_sfutils} config file.
+In this way, shotfiles fields and metadata can be loaded via MATLAB by executing the MATLAB function
+\begin{verbatim}
+  [PARAMETERS,TIMEBASES,AREABASES,SIGNALS] = ...
+  load_aug_shotfile(<SHOTFILE>,<SHOT_NUMBER>,'library','sfutils_python');
+\end{verbatim}
+\item The {\tt sflib} MATLAB library. This consist in a compiled MATLAB wrapper, in form of .mex files, of the original {\tt libddww} C library used by natively
+reading and writing AUG shotfiles. Its use is only possible within the a IPP Garching environment, where the {\tt libddww} binary is located and can be found, such 
+as the IPP computing cluster. For this, the user will need to set the environment variable {\tt AUG\_SFMEXLIB\_LIBRARY} to the directory where the compiled library
+is located, namely
+\begin{verbatim}
+  setenv AUG_SFMEXLIB_LIBRARY ...
+  /shares/software/aug-dv/moduledata/Matlab/augtools/auglib/sf
+\end{verbatim}
+In this way, shotfiles fields and metadata can be loaded via MATLAB by executing the MATLAB function
+\begin{verbatim}
+  [PARAMETERS,TIMEBASES,AREABASES,SIGNALS] = ...
+  load_aug_shotfile(<SHOTFILE>,<SHOT_NUMBER>,'library','sflib');
+\end{verbatim}
+
+\end{itemize}
+
+The {\tt load\_aug\_shotfile} MATLAB function is a wrapper which call several auxiliary fetching functions, used to automatically read all objects and metadata
+within all types of individual shotfiles containing experimental data which are relevant for comparison with \SOLPSITER simulations, with name {\tt fetch\_<shotfile>}.
+Such functions are also provided with the cloned repository.
+
+\subsection{Structure of functions directory}
+
+This is the general structure of the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Functions} directory:
+
+\begin{verbatim}
+$SOLPSTOP/scripts/MATLAB_analysis/Functions
++---Calculations
+|   +---Balances
+|   +---Coefficients
+|   +---Geometry
+|   +---Output
++---Plotting
+|   +---Balances
+|   +---Geometry
+|   +---Plots
++---Reading
+|   +---Atomic
+|   +---Auxiliary_routines
+|   +---Balances
+|   +---Coefficients
+|   +---Experiments
+|   +---Geometry
+|   +---Input
+|   +---Output
+|   +---Structure
+|   +---Tracing
++---Tools
+|   +---Graphic_tools
+|   +---Loading_tools
+|   +---Printing_tools
++---Writing
+|   +---Atomic
+|   +---Auxiliary_routines
+|   +---Geometry
+|   +---Input
+|   +---Output
+\end{verbatim}
+
+\subsection{Available scripts}
+
+Here follows a list of all the scripts available within the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts}
+directory, organized by subfolder. For each script, a description and the available input arguments (together with their default values,
+if existing) is provided.
+
+\subsubsection{Tracing}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Tracing} allow to produce series of plots to monitor the status of a simulation run in real-time, as well to print the time traces of several relevant quantities, profiles evolution, surface and volume tallies and particle and energy balances.
+
+\newcommand{\ListTracingScripts}[2]{%
+    {\section*{\texttt{#1}:}}%
+    \lstinputlisting[
+        style=matlab,
+        linerange=SCRIPT\ DESCRIPTION-END\ OF\ USER\ INPUT,
+        rangeprefix=\%\%\ ,
+        includerangemarker=true
+    ]{../../scripts/MATLAB_analysis/Scripts/Tracing/#2.m}%
+}
+
+\ListTracingScripts{run\_time\_traces}{run_time_traces}
+
+\subsubsection{Profiles}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Profiles} directory allow to produce 1D profiles of the plasma solution for state variables, fluxes, sources and residuals.
+
+\subsubsection{Distributions}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Distributions} directory allow to produce 2D distributions of the plasma solution for state variables (as patch plots or contour plots), of the fluxes (as quiver plots or streamline plots), and of sources and residuals (as patch plots or contour plots).
+
+\subsubsection{Evolutions}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Evolutions} directory allow to plot the time evolution of plasma quantities during a run, through 1D profiles and 2D distributions, within movies.
+
+\subsubsection{Balances}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Balances} directory allow to perform useful calculation directly applying poloidal or radial balances to the equation solved by \SOLPSITER, as well to calculate distributions of pressure and energy losses.
+
+\subsubsection{Geometry}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Geometry} directory allow to produce plots of the grid geometries, as well of magnetic/equilibrium-related quantites.
+
+\subsubsection{Simulations}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Simulations} directory allow to print and display several information regarding the run, such as values and profiles and plasma quantities and description and default values of switches and input parameters, as well to perform manipulations on the input and output files.
+
+\subsubsection{Coefficients}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Coefficients} directory allow to produce plots of atomic, neutrals and surface coefficients, as given within the ADAS, AMJUEL, HYDHEL, AMMONX and TRIM databases available within \SOLPSITER and {\tt Eirene}, in particular ionization, recombination and charge-exchange coefficients, line, continuum and charge-exchange radiation coefficients, and photon emission coefficients, showing e.g.\ their density and temperature dependence.
+
+\subsubsection{Atomic}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Atomic} directory allow to plot the values of atomic and neutrals coefficients, as given within the ADAS, AMJUEL and HYDHEL databases available within \SOLPSITER and {\tt Eirene}, in particular ionization, recombination and charge-exchange coefficients, line, continuum and charge-exchange radiation coefficients, and photon emission coefficients, and the corresponding reaction rates, on a given plasma solution as line integrals, 1D profiles or 2D distributions (as patch plots or contour plots).
+
+\subsubsection{Neutrals}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Neutrals} directory allow to plot the {\tt Eirene} trajetories and the values of neutral transport coefficients, as given within the AMMONX databases available within {\tt Eirene}, in particular neutrals-neutrals collisions, and the corresponding reaction rates, on a given neutral gas distribution.
+
+\subsubsection{Surface}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Surface} directory allow to plot the values of surface coefficients, as given within the TRIM database available within \SOLPSITER and {\tt B2.5}, in particular reflection, sputtering and range coefficients, on the wall contours of the computational grid.
+
+\subsubsection{Experiments}
+
+The scripts located in the {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Scripts/\allowbreak Experiments} directory allow to produce plots showing the comparison between standard data from plasma solutions as experimental data.
 
 \clearpage
 

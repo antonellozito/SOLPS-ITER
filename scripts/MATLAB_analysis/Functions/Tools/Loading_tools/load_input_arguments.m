@@ -10,9 +10,9 @@ function load_input_arguments(RUN, args)
         func_name = caller_name(1).name;
         func_path = which(func_name);
         
-        fprintf('\n==========================================================================================================\n');
+        fprintf('\n==================================================================================================================\n');
         fprintf('HELP: %s\n', func_name);
-        fprintf('==========================================================================================================\n\n');
+        fprintf('==================================================================================================================\n\n');
         
         % Read the caller's file
         fid = fopen(func_path, 'r');
@@ -48,7 +48,12 @@ function load_input_arguments(RUN, args)
                 in_description = true;
                 % Remove the leading % and any following space
                 comment_text = regexprep(trimmed, '^%\s?', '');
-                description_lines{end+1} = comment_text;
+                % Skip section markers like "SCRIPT DESCRIPTION" but add empty line
+                if contains(comment_text, 'SCRIPT DESCRIPTION')
+                    description_lines{end+1} = '';
+                else
+                    description_lines{end+1} = comment_text;
+                end
             elseif in_description && ~isempty(trimmed)
                 % Stop at first non-comment, non-empty line after comments started
                 break;
@@ -102,7 +107,7 @@ function load_input_arguments(RUN, args)
                         type_hint = 'cell (REQUIRED)';
                     elseif strcmp(var_value, '''''')
                         is_required = true;
-                        type_hint = 'string/char (REQUIRED)';
+                        type_hint = 'char (REQUIRED)';
                     elseif strcmp(var_value, 'true') || strcmp(var_value, 'false')
                         type_hint = 'logical (OPTIONAL)';
                         var_value_print = [upper(var_value(1)), var_value(2:end)];
@@ -113,7 +118,7 @@ function load_input_arguments(RUN, args)
                         type_hint = 'numeric (OPTIONAL)';
                         var_value_print = var_value;
                     elseif startsWith(var_value, '''') || startsWith(var_value, '"')
-                        type_hint = 'string/char (OPTIONAL)';
+                        type_hint = 'char (OPTIONAL)';
                         var_value_print = var_value;
                     elseif startsWith(var_value, '{')
                         type_hint = 'cell (OPTIONAL)';
@@ -135,14 +140,14 @@ function load_input_arguments(RUN, args)
         
         fclose(fid);
         
-        fprintf('\n==========================================================================================================\n');
+        fprintf('\n==================================================================================================================\n');
         fprintf('USAGE:\n');
         fprintf('  run_matlab %s [arguments]\n\n', func_name);
         fprintf('EXAMPLE:\n');
-        fprintf('  run_matlab %s --FLAG True --NAME text --SIZE 1000 --VECTOR 2.5,6,3.2 --CELL 7,False,text,3.5\n', func_name);
+        fprintf('  run_matlab %s --FLAG True --NAME ''text'' --SIZE 1000 --VECTOR 2.5,6,3.2 --CELL 7,False,''text'',3.5\n', func_name);
         fprintf('For more details, read the script:\n');
         fprintf('  %s\n', func_path);
-        fprintf('==========================================================================================================\n\n');
+        fprintf('==================================================================================================================\n\n');
         return;
     end
     
@@ -153,7 +158,7 @@ function load_input_arguments(RUN, args)
         func_name = caller_name(1).name;
         func_path = which(func_name);
         
-        required_vars = struct('logical_numeric', {{}}, 'cell', {{}}, 'string', {{}});
+        required_vars = struct('logical_numeric', {{}}, 'cell', {{}}, 'char', {{}});
         
         % Read the function file to find required variables
         fid = fopen(func_path, 'r');
@@ -175,14 +180,14 @@ function load_input_arguments(RUN, args)
                     % Check for empty initializations
                     tokens_empty_bracket = regexp(line, '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\[\];', 'tokens');
                     tokens_empty_cell = regexp(line, '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\{\};', 'tokens');
-                    tokens_empty_string = regexp(line, '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*'''';', 'tokens');
+                    tokens_empty_char = regexp(line, '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*'''';', 'tokens');
                     
                     if ~isempty(tokens_empty_bracket)
                         required_vars.logical_numeric{end+1} = tokens_empty_bracket{1}{1};
                     elseif ~isempty(tokens_empty_cell)
                         required_vars.cell{end+1} = tokens_empty_cell{1}{1};
-                    elseif ~isempty(tokens_empty_string)
-                        required_vars.string{end+1} = tokens_empty_string{1}{1};
+                    elseif ~isempty(tokens_empty_char)
+                        required_vars.char{end+1} = tokens_empty_char{1}{1};
                     end
                 end
             end
@@ -203,16 +208,16 @@ function load_input_arguments(RUN, args)
         for i = 1:numel(required_vars.cell)
             var_name = required_vars.cell{i};
             if ~isfield(args, var_name)
-                missing_required{end+1} = sprintf('  - required argument "%s" which should be a cell (e.g., --%s 7,False,text,3.5)', ...
+                missing_required{end+1} = sprintf('  - required argument "%s" which should be a cell (e.g., --%s 7,False,''text'',3.5)', ...
                     var_name, var_name);
             end
         end
         
-        for i = 1:numel(required_vars.string)
-            var_name = required_vars.string{i};
+        for i = 1:numel(required_vars.char)
+            var_name = required_vars.char{i};
             if ~isfield(args, var_name)
-                missing_required{end+1} = sprintf('  - required argument "%s" which should be a string/char (e.g., --%s "text" or --%s word)', ...
-                    var_name, var_name, var_name);
+                missing_required{end+1} = sprintf('  - required argument "%s" which should be a char (e.g., --%s ''text'')', ...
+                    var_name, var_name);
             end
         end
         
@@ -246,12 +251,12 @@ function load_input_arguments(RUN, args)
                 end
             elseif ischar(original_val)
                 if ~ischar(new_val)
-                    error_msgs{end+1} = sprintf('argument "%s" should be a string/char (e.g., --%s "text" or --%s word)', ...
-                          arg_name, arg_name, arg_name);
+                    error_msgs{end+1} = sprintf('argument "%s" should be a char (e.g., --%s ''text'')', ...
+                          arg_name, arg_name);
                 end
             elseif iscell(original_val)
                 if ~iscell(new_val)
-                    error_msgs{end+1} = sprintf('argument "%s" should be a cell (e.g., --%s 7,False,text,3.5)', ...
+                    error_msgs{end+1} = sprintf('argument "%s" should be a cell (e.g., --%s 7,False,''text'',3.5)', ...
                           arg_name, arg_name);
                 end
             end

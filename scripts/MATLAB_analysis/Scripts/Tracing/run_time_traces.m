@@ -2,14 +2,24 @@ function run_time_traces(RUN,args)
 
 figs = [];
 
+%% SCRIPT DESCRIPTION
+
 % RUN_TIME_TRACES plots the main time traces of the current run
-% (state variables and species densities at the outer midplane
-% and at the divertor targets, poloidal and radial fluxes, integral
-% quantities), extracted from b2time.nc.
+%    (state variables and species densities at the outer midplane
+%    and at the divertor targets, poloidal and radial fluxes, integral
+%    quantities), extracted from b2time.nc.
+% It can be used both while a simulation is running, to monitor its
+%    status, and after the run has stopped.
+% The plots are shown grouped in a multi-tab full-window figure.
+% Various time-averaging schemes can also be applied to the time traces.
+% Can be executed both from the command line, inside one specific run
+%    directory, or as an interactive script within the MATLAB GUI,
+%    in the last case requiring the manual definition of $SOLPSTOP
+%    and of the run directory of the simulation to be shown
 
 %% USER INPUT
 
-% Select the traces to plot
+% Select which groups of time traces to plot
 PLOT_MIDPLANE_STATE_VARIABLES = true;
 PLOT_MIDPLANE_SPECIES_DENSITIES = false;
 PLOT_DIVERTOR_STATE_VARIABLES = true;
@@ -19,33 +29,44 @@ PLOT_RADIAL_FLUXES = true;
 PLOT_INTEGRAL_QUANTITIES = false;
 
 % Select the number of steps for rolling average of the time traces
+% (0 for no rolling average)
 ROLLING_AVERAGE_STEPS = 0;
 
 % Select the number of steps for batch average of the time traces
+% (0 for no batch average)
 BATCH_AVERAGE_STEPS = 0;
 
 % Select the number of steps for phase average of the time traces
+% (0 for no phase average)
 PHASE_AVERAGE_STEPS = 0;
 
-% Plot options
+% Specify the plot options
+% (linewidths, time range to show in the plots and style of y-axis range)
+LINEWIDTH = 1.5;
 TMIN = nan;
 TMAX = nan;
 YLIM_STYLE = 'tickaligned';
+
+% Specify the size of the figure(s) (in pixels)
 FIGURE_WIDTH = 1400;
 FIGURE_HEIGHT = 800;
 
-% Show the name of the simulation
+% Select whether to show name of the simulation in the plot(s)
 SHOW_NAME = false;
 
-% Show the plot
-SHOW_PLOT = true;
+% Select whether to show the figure(s)
+SHOW_FIGURE = true;
 
-% Print the plot
-PRINT_PLOT = true;
+% Select whether to print the the figure(s), and the file format
+% ('pdf', 'eps', 'ps', 'png', or 'jpg') alongside with the resolution
+% (in the format e.g. 'r600' or 'vector' for vector formats)
+PRINT_FIGURE = true;
 FILE_FORMAT = 'pdf';
 FILE_RESOLUTION = 'vector';
 
-if nargin == 0   % Define SOLPSTOP and run directory if called as script
+%% END OF USER INPUT
+
+if nargin == 0   % Define SOLPSTOP and run directory if called as interactive script
 
     SOLPSTOP = '/Users/azito/Work/Codes/solps-iter/solps-iter_matlab';
     SIMULATION = 'AUG_LSN/run';
@@ -72,9 +93,9 @@ logicals_selection = {'PLOT_MIDPLANE_STATE_VARIABLES'
                       'PLOT_POLOIDAL_FLUXES'
                       'PLOT_RADIAL_FLUXES'
                       'PLOT_INTEGRAL_QUANTITIES'
-                      'SHOW_PLOT'
+                      'SHOW_FIGURE'
                       'SHOW_NAME'
-                      'PRINT_PLOT'};
+                      'PRINT_FIGURE'};
 
 check_vars(logicals_selection, 'logical');
 
@@ -85,6 +106,7 @@ numbers_selection = {'ROLLING_AVERAGE_STEPS'
                      'PHASE_AVERAGE_STEPS'
                      'TMIN'
                      'TMAX'
+                     'LINEWIDTH'
                      'FIGURE_WIDTH'
                      'FIGURE_HEIGHT'};
 
@@ -114,8 +136,8 @@ if not(strcmp(YLIM_STYLE,'tickaligned') || strcmp(YLIM_STYLE,'tight') || strcmp(
     error('Error: YLIM_STYLE should be ''tickaligned'' or ''tight'' or ''padded''');
 end
 
-if ~SHOW_PLOT && ~PRINT_PLOT
-    error('Error: ''SHOW_PLOT'' and ''PRINT_PLOT'' cannot be both false');
+if ~SHOW_FIGURE && ~PRINT_FIGURE
+    error('Error: ''SHOW_FIGURE'' and ''PRINT_FIGURE'' cannot be both false');
 end
 
 %% LOAD SIMULATION
@@ -199,10 +221,10 @@ end
 
 figs = [];
 
-if SHOW_PLOT
-    show_plot_status = 'on';
+if SHOW_FIGURE
+    SHOW_FIGURE_status = 'on';
 else
-    show_plot_status = 'off';
+    SHOW_FIGURE_status = 'off';
 end
 
 COLORS = load_colors('default',7,'rgb');
@@ -281,10 +303,10 @@ if PLOT_MIDPLANE_STATE_VARIABLES
     
     for i = 1:ncut
 
-        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_midplane_state_variables{i},'Visible',show_plot_status); figs = [figs, fig];
+        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_midplane_state_variables{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
     
         subplot('position',[0.08 0.25 0.42 0.5]);
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepm.value(i,:),'linewidth',1.5,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepm.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -299,7 +321,7 @@ if PLOT_MIDPLANE_STATE_VARIABLES
         end
     
         subplot('position',[0.57 0.55 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepm.value(i,:),'linewidth',1.5,'DisplayName',labels_midplane{i},'color',COLORS{2}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepm.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLORS{2}); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -314,7 +336,7 @@ if PLOT_MIDPLANE_STATE_VARIABLES
         end
     
         subplot('position',[0.57 0.06 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepm.value(i,:),'linewidth',1.5,'DisplayName',labels_midplane{i},'color',COLORS{2}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepm.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLORS{2}); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -360,22 +382,22 @@ if PLOT_MIDPLANE_SPECIES_DENSITIES
         while is <= ns
     
             if mod(is-1,8) == 0
-                fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_midplane_species_densities{i},'Visible',show_plot_status); figs = [figs, fig];
+                fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_midplane_species_densities{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
             end
     
             subplot('position',positions{mod(is-1,8)+1});
             if charge_state(is)==0
                 try
                     temp(:) = TIME_TRACES.dabsepm.value(i,iatm,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
                 catch
                     temp(:) = TIME_TRACES.nasepm.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
                 end
                 iatm = iatm+1;
             else
                 temp(:) = TIME_TRACES.nasepm.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
+                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLORS{1}); hold on;
             end
             xl = xlim; 
             if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
@@ -412,13 +434,13 @@ if PLOT_DIVERTOR_STATE_VARIABLES
 
     for i = 1:ncut
 
-        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_divertor_state_variables{i},'Visible',show_plot_status); figs = [figs, fig];
+        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_divertor_state_variables{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
     
         subplot('position',[0.08 0.25 0.42 0.5]);
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepi.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nemxip.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{1},'linestyle',':'); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepa.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nemxap.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{1},'linestyle',':'); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepi.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.nemxip.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{1},'linestyle',':'); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepa.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.nemxap.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{1},'linestyle',':'); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -433,10 +455,10 @@ if PLOT_DIVERTOR_STATE_VARIABLES
         end
     
         subplot('position',[0.57 0.55 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepi.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{2}); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.temxip.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{2},'linestyle',':'); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepa.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{2}); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.temxap.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{2},'linestyle',':'); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepi.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{2}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.temxip.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{2},'linestyle',':'); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepa.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{2}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.temxap.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{2},'linestyle',':'); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -451,10 +473,10 @@ if PLOT_DIVERTOR_STATE_VARIABLES
         end
     
         subplot('position',[0.57 0.06 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepi.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{2}); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.timxip.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{2},'linestyle',':'); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepa.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{2}); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.timxap.value(i,:),'linewidth',1.5,'DisplayName',labels_divertor{i}{4}','color',COLORS_DARK{2},'linestyle',':'); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepi.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{2}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.timxip.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{2},'linestyle',':'); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepa.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{2}); hold on;
+        plot(TIME_TRACES.timesa.value,TIME_TRACES.timxap.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4}','color',COLORS_DARK{2},'linestyle',':'); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -500,36 +522,36 @@ if PLOT_DIVERTOR_SPECIES_DENSITIES
         while is <= ns
     
             if mod(is-1,8) == 0
-                fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_divertor_species_densities{i},'Visible',show_plot_status); figs = [figs, fig];
+                fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_divertor_species_densities{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
             end
     
             subplot('position',positions{mod(is-1,8)+1});
             if charge_state(is)==0
                 try
                     temp(:) = TIME_TRACES.dabsepi.value(i,iatm,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
                     temp(:) = TIME_TRACES.dabsepa.value(i,iatm,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
                 catch
                     temp(:) = TIME_TRACES.nasepi.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
                     temp(:) = TIME_TRACES.namxip.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{1},'linestyle',':'); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLORS_LIGHT{1},'linestyle',':'); hold on;
                     temp(:) = TIME_TRACES.nesepa.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
                     temp(:) = TIME_TRACES.namxap.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{1},'linestyle',':'); hold on;
+                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{1},'linestyle',':'); hold on;
                 end
                 iatm = iatm+1;
             else
                 temp(:) = TIME_TRACES.nasepi.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
+                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLORS_LIGHT{1}); hold on;
                 temp(:) = TIME_TRACES.namxip.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{2}','color',COLORS_LIGHT{1},'linestyle',':'); hold on;
+                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2}','color',COLORS_LIGHT{1},'linestyle',':'); hold on;
                 temp(:) = TIME_TRACES.nasepa.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
+                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLORS_DARK{1}); hold on;
                 temp(:) = TIME_TRACES.namxap.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',1.5,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{1},'linestyle',':'); hold on;
+                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLORS_DARK{1},'linestyle',':'); hold on;
             end
             xl = xlim; 
             if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
@@ -566,11 +588,11 @@ if PLOT_POLOIDAL_FLUXES
 
     for i = 1:ncut
     
-        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_poloidal_fluxes{i},'Visible',show_plot_status); figs = [figs, fig];
+        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_poloidal_fluxes{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
     
         subplot('position',[0.08 0.25 0.42 0.5]);
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fnixip.value(i,:)),'linewidth',1.5,'DisplayName',labels_poloidal_fluxes{i}{1},'color',COLORS_LIGHT{1}); hold on;
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fnixap.value(i,:)),'linewidth',1.5,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLORS_DARK{1}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fnixip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{1},'color',COLORS_LIGHT{1}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fnixap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLORS_DARK{1}); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -585,8 +607,8 @@ if PLOT_POLOIDAL_FLUXES
         end
     
         subplot('position',[0.57 0.55 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feexip.value(i,:)),'linewidth',1.5,'DisplayName',labels_poloidal_fluxes{i}{1}','color',COLORS_LIGHT{2}); hold on;
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feexap.value(i,:)),'linewidth',1.5,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feexip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{1}','color',COLORS_LIGHT{2}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feexap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -601,8 +623,8 @@ if PLOT_POLOIDAL_FLUXES
         end
     
         subplot('position',[0.57 0.06 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feixip.value(i,:)),'linewidth',1.5,'DisplayName',labels_poloidal_fluxes{i}{1},'color',COLORS_LIGHT{2}); hold on;
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feixap.value(i,:)),'linewidth',1.5,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feixip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{1},'color',COLORS_LIGHT{2}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feixap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
         if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -628,12 +650,12 @@ if PLOT_RADIAL_FLUXES
 
     for i = 1:ncut
 
-        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_radial_fluxes{i},'Visible',show_plot_status); figs = [figs, fig];
+        fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_radial_fluxes{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
     
         subplot('position',[0.08 0.25 0.42 0.5]);
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fniyip.value(i,:)),'linewidth',1.5,'DisplayName',labels_radial_fluxes{i}{1},'color',COLORS_LIGHT{1}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fniyip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{1},'color',COLORS_LIGHT{1}); hold on;
         if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fniyap.value(i,:)),'linewidth',1.5,'DisplayName',labels_radial_fluxes{i}{2},'color',COLORS_DARK{1}); hold on;
+            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fniyap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{2},'color',COLORS_DARK{1}); hold on;
         end
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
@@ -649,9 +671,9 @@ if PLOT_RADIAL_FLUXES
         end
     
         subplot('position',[0.57 0.55 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feeyip.value(i,:)),'linewidth',1.5,'DisplayName',labels_radial_fluxes{i}{1},'color',COLORS_LIGHT{2}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feeyip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{1},'color',COLORS_LIGHT{2}); hold on;
         if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feeyap.value(i,:)),'linewidth',1.5,'DisplayName',labels_radial_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
+            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feeyap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
         end
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
@@ -667,9 +689,9 @@ if PLOT_RADIAL_FLUXES
         end
     
         subplot('position',[0.57 0.06 0.32 0.38]);
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feiyip.value(i,:)),'linewidth',1.5,'DisplayName',labels_radial_fluxes{i}{1},'color',COLORS_LIGHT{2}); hold on;
+        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feiyip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{1},'color',COLORS_LIGHT{2}); hold on;
         if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feiyap.value(i,:)),'linewidth',1.5,'DisplayName',labels_radial_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
+            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feiyap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{2},'color',COLORS_DARK{2}); hold on;
         end
         xl = xlim; 
         if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
@@ -694,10 +716,10 @@ end
 
 if PLOT_INTEGRAL_QUANTITIES
 
-    fig = figure('windowstyle','docked','NumberTitle','off','Name','Integral quantities','Visible',show_plot_status); figs = [figs, fig];
+    fig = figure('windowstyle','docked','NumberTitle','off','Name','Integral quantities','Visible',SHOW_FIGURE_status); figs = [figs, fig];
 
     subplot('position',[0.05 0.25 0.42 0.5]);
-    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmne(1,:).value,'linewidth',1.5,'color',COLORS{1});
+    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmne(1,:).value,'linewidth',LINEWIDTH,'color',COLORS{1});
     xl = xlim; 
     if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
     if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -710,8 +732,8 @@ if PLOT_INTEGRAL_QUANTITIES
     end
 
     subplot('position',[0.53 0.25 0.42 0.5]);
-    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmte(1,:).value,'linewidth',1.5,'DisplayName','Electron energy','color',COLORS_LIGHT{2}); hold on;
-    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmti(1,:).value,'linewidth',1.5,'DisplayName','Ion energy','color',COLORS_DARK{2}); hold on;
+    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmte(1,:).value,'linewidth',LINEWIDTH,'DisplayName','Electron energy','color',COLORS_LIGHT{2}); hold on;
+    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmti(1,:).value,'linewidth',LINEWIDTH,'DisplayName','Ion energy','color',COLORS_DARK{2}); hold on;
     xl = xlim; 
     if exist('TMIN','var') && ~isnan(TMIN), xl(1) = TMIN; end
     if exist('TMAX','var') && ~isnan(TMAX), xl(2) = TMAX; end
@@ -731,8 +753,8 @@ end
 
 %% PRINT THE PLOTS
 
-if PRINT_PLOT
-    print_plot(figs, [FIGURE_WIDTH FIGURE_HEIGHT], 'run_time_traces', FILE_FORMAT, FILE_RESOLUTION);
+if PRINT_FIGURE
+    PRINT_FIGURE(figs, [FIGURE_WIDTH FIGURE_HEIGHT], 'run_time_traces', FILE_FORMAT, FILE_RESOLUTION);
 end
 
 set(groot, 'defaultAxesYLimitMethod', originalYLimitMethod);
