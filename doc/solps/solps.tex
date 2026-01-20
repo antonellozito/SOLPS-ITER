@@ -20761,7 +20761,7 @@ The argument types can be:
   \item A string, to be expressed in the format \texttt{--ARGUMENT 'text'}, so to be transferred to MATLAB as a char variable.
   \item A single number, to be expressed in the format \texttt{--ARGUMENT 1000}, or a comma-separated numerical array,
   to be expressed in the format \texttt{--ARGUMENT 2.5,6,3.2} so to be transferred to MATLAB as a double-precision numeric variable.
-  \item A comma-separated list of any of the above mentioned types, to be expressed in the format \texttt{--ARGUMENT 7,False,'text',3.5"},
+  \item A comma-separated list of any of the above mentioned types, to be expressed in the format \texttt{--ARGUMENT 7,False,'text',3.5},
   so to be transferred to MATLAB as a cell array.
 \end{itemize}  
 
@@ -20818,55 +20818,51 @@ or mismatched inputs, so to facilitate their usage.
 Among the available scripts, some of them automatically provide useful comparisons between simulations results and
 experimental data. This is possible using a simple, yet generalized interface based on storing the all the specifications
 related to the experimental data to be used (e.g.\ device name, shot number/label/ID, time within shot, diagnostic source
-of any specific data...) within a file calling {\tt exp\_data} and stored within the run directory. By reading this file,
+of any specific data...) within a JSON file called {\tt exp\_data.json} and stored within the run directory. By reading this file,
 MATLAB will be informed about which experimental data to fetch and use to compare with the simulation results.
 
-The relevant functions used to read the {\tt exp\_data} file and to fetch experimental data in a machine-specific way and
+The relevant functions used to read the {\tt exp\_data.json} file and to fetch experimental data in a machine-specific way and
 convert them to a standardized MATLAB structures readable by the plotting scripts are stored within the
 {\tt \$\{SOLPSTOP\}/\allowbreak scripts/\allowbreak MATLAB\_analysis/\allowbreak Functions/\allowbreak Reading/\allowbreak Experiments}
-directory. In the same directory, a template of a correct {\tt exp\_data} file is stored.
+directory. In the same directory, a template of a correct {\tt exp\_data.json} file is stored.
 
-The name of the experimental device to be considered is stored in the variable {\tt DEVICE} within {\tt exp\_data}.
+The name of the experimental device to be considered is stored in the variable {\tt DEVICE} within {\tt exp\_data.json}.
 
-Data structures resembling experimental measurements which are supported for being fetched and directly compared
-with \SOLPSITER simulations are:
+The hierarchical tree structure defining the experimental measurements to be fetched and to be compared with \SOLPSITER simulations is here described:
 \begin{itemize}
-\item Radial plasma state measurements at the outer plasma midplane (e.g.\ from Thomson scattering and CXRS), namely:
+\item Category {\tt MIDPLANE}: radial plasma state measurements at the outer plasma midplane. Has subcategories {\tt DATA} and {\tt PROFILES} and, for each subcategory, the subsubcategories:
 \begin{itemize}
-\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_MIDPLANE}).
-\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_MIDPLANE}).
-\item Ion temperature (variable name: {\tt ION\_TEMPERATURE\_MIDPLANE}).
-\item Ion species density (variable name: {\tt ION\_SPECIES\_DENSITY\_MIDPLANE}).
+\item {\tt ELECTRON\_DENSITY\_MIDPLANE}
+\item {\tt ELECTRON\_TEMPERATURE\_MIDPLANE}
+\item {\tt ION\_TEMPERATURE\_MIDPLANE}
+\item {\tt ION\_SPECIES\_DENSITY\_MIDPLANE}
 \end{itemize}
-\item Space-dependent measurements along chords (e.g.\ from Thomson scattering and spectroscopy), namely:
+\item Category {\tt CHORDS}: space-dependent or line-integrated measurements along chords. Has subcategory {\tt DATA}, with subsubcategories
 \begin{itemize}
-\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_CHORDS}).
-\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_CHORDS}).
-\item Ion temperature (variable name: {\tt ION\_TEMPERATURE\_CHORDS}).
-\item Ion species density (variable name: {\tt ION\_SPECIES\_DENSITY\_CHORDS}).
+\item {\tt ELECTRON\_DENSITY\_CHORDS}
+\item {\tt ELECTRON\_TEMPERATURE\_CHORDS}
+\item {\tt ION\_TEMPERATURE\_CHORDS}
+\item {\tt ION\_SPECIES\_DENSITY\_CHORDS}
+\item {\tt PHOTON\_EMISSION\_CHORDS}
+\item {\tt RADIATED\_POWER\_CHORDS}
 \end{itemize}
-\item Line-integrated measurements along chords (e.g.\ from spectroscopy and bolometry), namely:
+\item Category {\tt INNER\_TARGET}: plasma state and fluxes measurements on the outer divertor target. Has subcategories {\tt DATA} and {\tt PROFILES} and, for each subcategory, the subsubcategories:
 \begin{itemize}
-\item Photon emission (variable name: {\tt PHOTON\_EMISSION\_CHORDS}).
-\item Radiated power (variable name: {\tt RADIATED\_POWER\_CHORDS}).
+\item {\tt ELECTRON\_DENSITY\_INNER\_TARGET}
+\item {\tt ELECTRON\_TEMPERATURE\_INNER\_TARGET}
+\item {\tt PARTICLE\_FLUX\_DENSITY\_INNER\_TARGET}
+\item {\tt ENERGY\_FLUX\_DENSITY\_INNER\_TARGET}
 \end{itemize}
-\item Plasma state and fluxes measurements on the inner divertor target (e.g.\ from Langmuir probes), namely:
+\item Category {\tt OUTER\_TARGET}: plasma state and fluxes measurements on the inner divertor target. Has subcategories {\tt DATA} and {\tt PROFILES} and, for each subcategory, the subsubcategories:
 \begin{itemize}
-\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_INNER\_TARGET}).
-\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_INNER\_TARGET}).
-\item Particle flux density (variable name: {\tt PARTICLE\_FLUX\_DENSITY\_INNER\_TARGET}).
-\item Energy flux density (variable name: {\tt ENERGY\_FLUX\_DENSITY\_INNER\_TARGET}).
-\end{itemize}
-\item Plasma state and fluxes measurements on the outer divertor target (e.g.\ from Langmuir probes), namely:
-\begin{itemize}
-\item Electron density (variable name: {\tt ELECTRON\_DENSITY\_OUTER\_TARGET}).
-\item Electron temperature (variable name: {\tt ELECTRON\_TEMPERATURE\_OUTER\_TARGET}).
-\item Particle flux density (variable name: {\tt PARTICLE\_FLUX\_DENSITY\_OUTER\_TARGET}).
-\item Energy flux density (variable name: {\tt ENERGY\_FLUX\_DENSITY\_OUTER\_TARGET}).
+\item {\tt ELECTRON\_DENSITY\_OUTER\_TARGET}
+\item {\tt ELECTRON\_TEMPERATURE\_OUTER\_TARGET}
+\item {\tt PARTICLE\_FLUX\_DENSITY\_OUTER\_TARGET}
+\item {\tt ENERGY\_FLUX\_DENSITY\_OUTER\_TARGET}
 \end{itemize}
 \end{itemize}
 
-Each category of data can have the following attributes:
+Each subsubcategory of data can have the following attributes:
 \begin{itemize}
 \item {\tt SHOT}: shot number/label/ID of the experiment to be considered.
 \item {\tt SOURCE}: name of the specific diagnostic.
@@ -20876,27 +20872,30 @@ Each category of data can have the following attributes:
 \item {\tt SIGNAL\_UNCERTAINTY}: name of the data field representing the uncertainty referred to experimental data {\tt SIGNAL}
 within the diagnostic specified in {\tt SOURCE}.
 \item {\tt SPECIES}: name of the fluid species (in the same \SOLPSITER format, e.g. {\tt D0}, {\tt D1}, {\tt He0}, {\tt He1}, {\tt He2}...)
-to which the experimental data {\tt SIGNAL} is referred (only for {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_MIDPLANE},
+to which the experimental data {\tt SIGNAL} is referred (only relevant for {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_MIDPLANE},
 {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_CHORDS} and {\tt PHOTON\allowbreak\_EMISSION\allowbreak\_CHORDS}).
 \item {\tt EMISSION\_LINE}: wavelenght of the spectroscopic emission line, in $nm$, to which the experimental data {\tt SIGNAL} is referred
-(only for {\tt PHOTON\_EMISSION\_CHORDS}).
-\item {\tt SIGNAL\_NAME\_DISPLAY}: name of the diagnostic to be shown in the figures, when the experimental quantity is plotted.
-\item {\tt COORDINATE\_TYPE}: type of coordinate employed for space-dependent measurements
-(could be the normalized poloidal flux coordinate {\tt rhop}, the radial distance from the separatrix {\tt dssep} or
-the major plasma radius {\tt R}).
-\item {\tt SHIFT}: possible shift to apply to the space coordinate as present in the original data source.
-\item {\tt CHORDS}: name(s)/label(s) of the line(s) of sight on which all the considered data are measured, if appliable.
+(only relevant for {\tt PHOTON\_EMISSION\_CHORDS}).
+\item {\tt SHIFT\_R}: possible shift to apply to the space coordinate given by the major plasma radius.
+\item {\tt SHIFT\_DSSEP}: possible shift to apply to the space coordinate given by the radial distance from the separatrix.
+\item {\tt SHIFT\_RHOP}: possible shift to apply to the space coordinate given by the normalized poloidal flux coordinate.
+\item {\tt CHORDS}: name(s)/label(s) of the line(s) of sight on which all the considered data are measured (only relevant for the {\tt CHORDS} category; there could be one or more chord per {\tt SIGNAL}).
 \item {\tt TIME\_START}: start of the time window from which to extract the experimental data.
-For the case of the category "{\tt DATA}", this refers to the 
 \item {\tt TIME\_END}: end of the time window from which to extract the experimental data.
 \item {\tt REDUCED\_SET\_TIME\_DELTA}: time duration of sub-intervals within which to average individual data within the
 entire time interval bounded by {\tt TIME\_START} and {\tt TIME\_END}.
+\item {\tt NAME\_DISPLAY}: name of the diagnostic to be shown in the figures, when the experimental quantity is plotted.
 \end{itemize}
 
 Radial measurements at the outer midplane, space-dependent measurements along chords and measurements along
 the divertor targets are categorized either as:
 \begin{itemize}
-\item {\tt DATA}: in this case, the extracted data consist in a set of multiple space-dependent vectors,
+\item {\tt DATA}:
+
+
+For radial measurements at the outer midplane, space-dependent measurements along chords and measurements along
+the divertor targets, for subsubcategories belonging to a subcategory {\tt DATA}, the extracted data consist
+in a set of multiple space-dependent vectors,
 i.e.\ a two-dimensional array function of space and time, meant to consist in direct measurements within a
 given time interval. When these data are plotted, by default all such multiple space-dependent vectors are
 displayed together in the form of scatter points. The {\tt TIME\_START} and {\tt TIME\_END} attributes represent
@@ -20904,7 +20903,9 @@ then the start and the end time of the time window from which to extract all the
 In this case, the attribute {\tt REDUCED\_SET\_TIME\_DELTA} can be used to decide whether to plot not all individual
 data present within the time window bounded by {\tt TIME\_START} and {\tt TIME\_END}, but rather only averages over
 sub-intervals with duration {\tt REDUCED\_SET\_TIME\_DELTA}.
-\item {\tt PROFILES}: in this case, the extracted data consist in one single space-dependent vector, i.e.\ a one-dimensional
+
+Instead, for subsubcategories belonging to a subcategory {\tt PROFILES}, the extracted data consist in
+one single space-dependent vector, i.e.\ a one-dimensional
 array function of space, meant to be calculated with tools such as statistical analysis from direct experimental data.
 When these data are plotted, by default the single space-dependent vector is displayed in the form of a line plot.
 The {\tt TIME\_START} and {\tt TIME\_END} attributes represent then the start and the end time of the time window
