@@ -68,10 +68,14 @@ FILE_RESOLUTION = 'vector';
 
 if nargin == 0   % Define SOLPSTOP and run directory if called as interactive script
 
-    SOLPSTOP = '/Users/azito/Work/Codes/solps-iter/solps-iter_matlab';
-    SIMULATION = 'AUG_LSN/run';
+    SOLPSTOP = '';
+    SIMULATION = '';
     setenv('SOLPSTOP',SOLPSTOP);
     RUN = sprintf('%s/runs/%s',SOLPSTOP,SIMULATION);
+
+    if isempty(SOLPSTOP) || isempty(SIMULATION)
+        error('Error: specify the variables ''SOLPSTOP'' and ''SIMULATION'' when running run_time_traces as an interactive script');
+    end
 
 else   % Override variables with the ones present in input args if called as function
 
@@ -754,7 +758,7 @@ end
 %% PRINT THE PLOTS
 
 if PRINT_FIGURE
-    PRINT_FIGURE(figs, [FIGURE_WIDTH FIGURE_HEIGHT], 'run_time_traces', FILE_FORMAT, FILE_RESOLUTION);
+    print_plot(figs, [FIGURE_WIDTH FIGURE_HEIGHT], 'run_time_traces', FILE_FORMAT, FILE_RESOLUTION);
 end
 
 set(groot, 'defaultAxesYLimitMethod', originalYLimitMethod);
