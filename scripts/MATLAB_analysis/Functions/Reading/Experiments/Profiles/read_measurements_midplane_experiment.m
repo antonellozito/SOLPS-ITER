@@ -37,7 +37,7 @@ if exp_data_avail
                 old_store_data_found = true;
                 measurements_midplane_experiment = ...
                     measurements_midplane_experiment_file(i).exp_data_measurements;
-                fprintf('Requested experimental data found in exp_data_midplane.mat, version %d\n',i);
+                fprintf('Requested midplane experimental data found in exp_data_midplane.mat, version %d\n',i);
                 break;
             end
             i = i + 1;
@@ -47,7 +47,7 @@ if exp_data_avail
 
     if not(old_store_data_found)
 
-        fprintf('Requested experimental not stored in any edition of exp_data_midplane.mat: fetching them now\n');
+        fprintf('Requested midplane experimental not stored in any edition of exp_data_midplane.mat: fetching them now\n');
 
         switch exp_data.DEVICE
 
@@ -90,11 +90,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.VERSION{i},...
                                 'signals',{'ne'});
 
-                            fprintf('LiBES electron density data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for LiBES electron density data correctly fetched\n');
 
                             READ_ne_DATA{i} = true;
 
@@ -124,11 +120,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.VERSION{i},...
                                 'signals',{'Ne_c','Ne_e','Z_core','Z_edge','R_core','R_edge'});
 
-                            fprintf('TS electron density data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for TS electron density data correctly fetched\n');
 
                             READ_ne_DATA{i} = true;
 
@@ -158,11 +150,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.VERSION{i},...
                                 'signals',{'Ntscprof','Ntseprof','tsdatcne','tsdatene'});
 
-                            fprintf('TS electron density data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for TS electron density data correctly fetched\n');
 
                             READ_ne_DATA{i} = true;
 
@@ -192,8 +180,7 @@ if exp_data_avail
                                 error();
                             end
 
-                            fprintf('ELM-synchronized electron density data from AUG (shot %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i});
+                            fprintf('NetCDF file for ELM-synchronized electron density data correctly fetched\n');
 
                             READ_ne_DATA{i} = true;
 
@@ -228,11 +215,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.VERSION{i},...
                                 'signals',{'Te_c','Te_e','Z_core','Z_edge','R_core','R_edge'});
 
-                            fprintf('TS electron temperature data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for TS electron temperature data correctly fetched\n');
 
                             READ_Te_DATA{i} = true;
 
@@ -262,11 +245,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.VERSION{i},...
                                 'signals',{'Ntscprof','Ntseprof','tsdatcte','tsdatete'});
 
-                            fprintf('TS electron temperature data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for TS electron temperature data correctly fetched\n');
 
                             READ_Te_DATA{i} = true;
 
@@ -296,8 +275,7 @@ if exp_data_avail
                                 error();
                             end
 
-                            fprintf('ELM-synchronized electron temperature data from AUG (shot %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i});
+                            fprintf('NetCDF file for ELM-synchronized electron temperature data correctly fetched\n');
 
                             READ_Te_DATA{i} = true;
 
@@ -332,11 +310,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.VERSION{i},...
                                 'signals',{'Ti_c'});
 
-                            fprintf('CXRS core ion temperature data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for CXRS core ion temperature data correctly fetched\n');
 
                             READ_Ti_DATA{i} = true;
 
@@ -366,11 +340,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.VERSION{i},...
                                 'signals',{'Ti_c'});
 
-                            fprintf('CXRS edge ion temperature data from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for CXRS edge ion temperature data correctly fetched\n');
 
                             READ_Ti_DATA{i} = true;
 
@@ -400,8 +370,7 @@ if exp_data_avail
                                 error();
                             end
 
-                            fprintf('ELM-synchronized ion temperature data from AUG (shot %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i});
+                            fprintf('NetCDF file for ELM-synchronized ion temperature data correctly fetched\n');
 
                             READ_Ti_DATA{i} = true;
 
@@ -438,11 +407,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.VERSION{i},...
                                 'signals',{'ne','ne_unc'});
 
-                            fprintf('IDA electron density profiles from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for IDA electron density profiles correctly fetched\n');
 
                             READ_ne_PROFILES{i} = true;
 
@@ -480,11 +445,7 @@ if exp_data_avail
                                 'edition',exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.VERSION{i},...
                                 'signals',{'Te','Te_unc'});
 
-                            fprintf('IDA electron temperature profiles from AUG (shot %d, shotfile %s, experiment %s, edition %d) correctly fetched\n',...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.EXPERIMENT{i},...
-                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.VERSION{i});
+                            fprintf('AUG shotfile for IDA electron temperature profiles correctly fetched\n');
 
                             READ_Te_PROFILES{i} = true;
 
@@ -523,6 +484,11 @@ if exp_data_avail
                             values_data_ne{i} = SIGNALS_ne_DATA{i}.ne.value;
                             unit_data_ne{i} = SIGNALS_ne_DATA{i}.ne.unit;
 
+                            fprintf('LiBES electron density data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'VTA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'Ne_c')
 
                             % Core Thomson scattering (raw data)
@@ -530,6 +496,11 @@ if exp_data_avail
                             time_data_ne{i} = TIMEBASES_ne_DATA{i}.TIM_CORE.value;
                             values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_c.value);
                             unit_data_ne{i} = SIGNALS_ne_DATA{i}.Ne_c.unit;
+
+                            fprintf('Core TS electron density data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'tsdatcne')
 
@@ -546,6 +517,11 @@ if exp_data_avail
                             end
                             unit_data_ne{i} = SIGNALS_ne_DATA{i}.tsdatcne.unit;
 
+                            fprintf('Core TS electron density data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'VTA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'Ne_e')
 
                             % Edge Thomson scattering (raw data)
@@ -553,6 +529,11 @@ if exp_data_avail
                             time_data_ne{i} = TIMEBASES_ne_DATA{i}.TIM_EDGE.value;
                             values_data_ne{i} = transpose(SIGNALS_ne_DATA{i}.Ne_e.value);
                             unit_data_ne{i} = SIGNALS_ne_DATA{i}.Ne_e.unit;
+
+                            fprintf('Edge TS electron density data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'tsdatene')
 
@@ -569,6 +550,11 @@ if exp_data_avail
                             end
                             unit_data_ne{i} = SIGNALS_ne_DATA{i}.tsdatene.unit;
 
+                            fprintf('Edge TS electron density data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'ELM')
 
                             % ELM-synchronized data (from custom .nc file)
@@ -576,6 +562,11 @@ if exp_data_avail
                             time_data_ne{i} = ncread(SIGNALS_ne_DATA{i},'IDA/time');
                             values_data_ne{i} = ncread(SIGNALS_ne_DATA{i},'IDA/ne');
                             unit_data_ne{i} = 'm^-3';
+
+                            fprintf('ELM-synchronized electron density data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
 
                         end
 
@@ -604,6 +595,11 @@ if exp_data_avail
                             values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_c.value);
                             unit_data_Te{i} = SIGNALS_Te_DATA{i}.Te_c.unit;
 
+                            fprintf('Core TS electron temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SIGNAL{i},'tsdatcte')
 
                             % Core Thomson scattering (from IDA shotfile)
@@ -619,6 +615,11 @@ if exp_data_avail
                             end
                             unit_data_Te{i} = SIGNALS_Te_DATA{i}.tsdatcte.unit;
 
+                            fprintf('Core TS electron temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'VTA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SIGNAL{i},'Te_e')
 
                             % Edge Thomson scattering (raw data)
@@ -626,6 +627,11 @@ if exp_data_avail
                             time_data_Te{i} = TIMEBASES_Te_DATA{i}.TIM_EDGE.value;
                             values_data_Te{i} = transpose(SIGNALS_Te_DATA{i}.Te_e.value);
                             unit_data_Te{i} = SIGNALS_Te_DATA{i}.Te_e.unit;
+
+                            fprintf('Edge TS electron temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i});
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SIGNAL{i},'tsdatete')
 
@@ -642,6 +648,11 @@ if exp_data_avail
                             end
                             unit_data_Te{i} = SIGNALS_Te_DATA{i}.tsdatete.unit;
 
+                            fprintf('Edge TS electron temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'ELM')
 
                             % ELM-synchronized data (from custom .nc file)
@@ -649,6 +660,11 @@ if exp_data_avail
                             time_data_Te{i} = ncread(SIGNALS_Te_DATA{i},'IDA/time');
                             values_data_Te{i} = ncread(SIGNALS_Te_DATA{i},'IDA/Te');
                             unit_data_Te{i} = 'eV';
+
+                            fprintf('ELM-synchronized electron temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i});
 
                         end
 
@@ -669,9 +685,9 @@ if exp_data_avail
 
                     if READ_Ti_DATA{i}
 
-                        if strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CEZ') || strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CMZ')
+                        if strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CEZ')
 
-                            % Core and edge charge-exchange recombination spectroscopy
+                            % Core charge-exchange recombination spectroscopy
 
                             time_data_Ti{i} = TIMEBASES_Ti_DATA{i}.time.value;
                             values_data_Ti{i} = transpose(SIGNALS_Ti_DATA{i}.Ti_c.value);
@@ -683,6 +699,31 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.REDUCED_SET_TIME_DELTA{i});
                             measurements_midplane_experiment.Ti_data{i}.unit = unit_data_Ti{i};
+
+                            fprintf('Core CXRS ion temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i});
+
+                        elseif strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CMZ')
+
+                            % Edge charge-exchange recombination spectroscopy
+
+                            time_data_Ti{i} = TIMEBASES_Ti_DATA{i}.time.value;
+                            values_data_Ti{i} = transpose(SIGNALS_Ti_DATA{i}.Ti_c.value);
+                            unit_data_Ti{i} = SIGNALS_Ti_DATA{i}.Ti_c.unit;
+
+                            measurements_midplane_experiment.Ti_data{i}.name = exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.NAME_DISPLAY{i};
+                            [measurements_midplane_experiment.Ti_data{i}.times,measurements_midplane_experiment.Ti_data{i}.values] = ...
+                                extract_values('data',time_data_Ti{i}, values_data_Ti{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.REDUCED_SET_TIME_DELTA{i});
+                            measurements_midplane_experiment.Ti_data{i}.unit = unit_data_Ti{i};
+
+                            fprintf('Edge CXRS ion temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i});
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'ELM') && strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SIGNAL{i},'Ti_CMZ')
 
@@ -699,6 +740,11 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.REDUCED_SET_TIME_DELTA{i});
                             measurements_midplane_experiment.Ti_data{i}.unit = unit_data_Ti{i};
 
+                            fprintf('ELM-synchronized ion temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i});
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'ELM') && strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SIGNAL{i},'Ti_CPZ')
 
                             % ELM-synchronized data (CPZ, from custom .nc file)
@@ -713,6 +759,11 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.REDUCED_SET_TIME_DELTA{i});
                             measurements_midplane_experiment.Ti_data{i}.unit = unit_data_Ti{i};
+
+                            fprintf('ELM-synchronized ion temperature data from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.TIME_END{i});
 
                         end
 
@@ -746,6 +797,11 @@ if exp_data_avail
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.TIME_END{i},[]);
                             measurements_midplane_experiment.ne_profile{i}.unit = unit_profiles_ne{i};
 
+                            fprintf('IDA electron density profiles from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.TIME_END{i});
+
                         end
 
                     end
@@ -775,6 +831,11 @@ if exp_data_avail
                                 extract_values('profile',time_profiles_Te{i},values_profiles_Te_uncertainty{i},...
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i},[]);
                             measurements_midplane_experiment.Te_profile{i}.unit = unit_profiles_Te{i};
+
+                            fprintf('IDA electron temperature profiles from AUG (shot %d, time window [%.2f,%.2f] s) correctly extracted\n',...
+                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},...
+                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.TIME_START{i},...
+                                exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.TIME_END{i});
 
                         end
 
@@ -822,6 +883,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for LiBES electron density data correctly converted\n');
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'VTA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'Ne_c')
 
                             % Core Thomson scattering (raw data)
@@ -829,26 +892,30 @@ if exp_data_avail
                             coordinate_shotfile = mean(SIGNALS_ne_DATA{i}.R_core.value)*ones(length(SIGNALS_ne_DATA{i}.Z_core.value),1);
                             z_coordinate_shotfile = SIGNALS_ne_DATA{i}.Z_core.value';
 
+                            values_original = measurements_midplane_experiment.ne_data{i}.values;
+
                             [measurements_midplane_experiment.ne_data{i}.rhop,measurements_midplane_experiment.ne_data{i}.values] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,measurements_midplane_experiment.ne_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','rhop',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.ne_data{i}.dssep,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,measurements_midplane_experiment.ne_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','dssep',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.ne_data{i}.R,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,measurements_midplane_experiment.ne_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','R',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for Core TS electron density data correctly converted\n');
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'tsdatcne')
 
@@ -880,6 +947,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for Core TS electron density data correctly converted\n');
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'VTA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'Ne_e')
 
                             % Edge Thomson scattering (raw data)
@@ -887,26 +956,30 @@ if exp_data_avail
                             coordinate_shotfile = mean(SIGNALS_ne_DATA{i}.R_edge.value)*ones(length(SIGNALS_ne_DATA{i}.Z_edge.value),1);
                             z_coordinate_shotfile = SIGNALS_ne_DATA{i}.Z_edge.value';
 
+                            values_original = measurements_midplane_experiment.ne_data{i}.values;
+
                             [measurements_midplane_experiment.ne_data{i}.rhop,measurements_midplane_experiment.ne_data{i}.values] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,measurements_midplane_experiment.ne_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','rhop',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.ne_data{i}.dssep,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,measurements_midplane_experiment.ne_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','dssep',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.ne_data{i}.R,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,measurements_midplane_experiment.ne_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.ne_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','R',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for Edge TS electron density data correctly converted\n');
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SIGNAL{i},'tsdatene')
 
@@ -938,6 +1011,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
+                             fprintf('Radial coordinates for Edge TS electron density data correctly converted\n');
+
                         elseif strcmp(exp_data.ELECTRON_DENSITY_DATA_MIDPLANE_SOURCES{i},'ELM')
 
                             % ELM-synchronized data (from custom .nc file)
@@ -968,6 +1043,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for ELM-synchronized electron density data correctly converted\n');
+
                         end
 
                     end
@@ -987,26 +1064,30 @@ if exp_data_avail
                             coordinate_shotfile = mean(SIGNALS_Te_DATA{i}.R_core.value)*ones(length(SIGNALS_Te_DATA{i}.Z_core.value),1);
                             z_coordinate_shotfile = SIGNALS_Te_DATA{i}.Z_core.value;
 
+                            values_original = measurements_midplane_experiment.Te_data{i}.values;
+
                             [measurements_midplane_experiment.Te_data{i}.rhop,measurements_midplane_experiment.Te_data{i}.values] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,measurements_midplane_experiment.Te_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','rhop',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.Te_data{i}.dssep,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,measurements_midplane_experiment.Te_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','dssep',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.Te_data{i}.R,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,measurements_midplane_experiment.Te_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','R',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for Core TS electron temperature data correctly converted\n');
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SIGNAL{i},'tsdatcte')
 
@@ -1038,6 +1119,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for Core TS electron temperature data correctly converted\n');
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'VTA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SIGNAL{i},'Te_e')
 
                             % Edge Thomson scattering (raw data)
@@ -1045,26 +1128,30 @@ if exp_data_avail
                             coordinate_shotfile = mean(SIGNALS_Te_DATA{i}.R_edge.value)*ones(length(SIGNALS_Te_DATA{i}.Z_edge.value),1);
                             z_coordinate_shotfile = SIGNALS_Te_DATA{i}.Z_edge.value';
 
+                            values_original = measurements_midplane_experiment.Te_data{i}.values;
+
                             [measurements_midplane_experiment.Te_data{i}.rhop,measurements_midplane_experiment.Te_data{i}.values] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,measurements_midplane_experiment.Te_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','rhop',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.Te_data{i}.dssep,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,measurements_midplane_experiment.Te_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','dssep',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.Te_data{i}.R,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,measurements_midplane_experiment.Te_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Te_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','R',...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for Edge TS electron temperature data correctly converted\n');
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SOURCE{i},'IDA') && strcmp(exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SIGNAL{i},'tsdatete')
 
@@ -1096,6 +1183,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for Edge TS electron temperature data correctly converted\n');
+
                         elseif strcmp(exp_data.ELECTRON_TEMPERATURE_DATA_MIDPLANE_SOURCES{i},'ELM')
 
                             % ELM-synchronized data (from custom .nc file)
@@ -1126,6 +1215,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for ELM-synchronized electron temperature data correctly converted\n');
+
                         end
 
                     end
@@ -1138,33 +1229,75 @@ if exp_data_avail
 
                     if READ_Ti_DATA{i}
 
-                        if strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CEZ') || strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CMZ')
+                        if strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CEZ')
 
                             % Core and edge charge-exchange recombination spectroscopy
 
-                            coordinate_shotfile = AREABASES_Ti_DATA{i}.R.value;
-                            z_coordinate_shotfile = AREABASES_Ti_DATA{i}.z.value;
+                            coordinate_shotfile = AREABASES_Ti_DATA{i}.R.value';
+                            z_coordinate_shotfile = AREABASES_Ti_DATA{i}.z.value';
+
+                            coordinate_shotfile = repmat(coordinate_shotfile,length(measurements_midplane_experiment.Ti_data{i}.times),1);
+                            z_coordinate_shotfile = repmat(z_coordinate_shotfile,length(measurements_midplane_experiment.Ti_data{i}.times),1);
+
+                            values_original = measurements_midplane_experiment.Ti_data{i}.values;
 
                             [measurements_midplane_experiment.Ti_data{i}.rhop,measurements_midplane_experiment.Ti_data{i}.values] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,measurements_midplane_experiment.Ti_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','rhop',...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.Ti_data{i}.dssep,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,measurements_midplane_experiment.Ti_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','dssep',...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
                             [measurements_midplane_experiment.Ti_data{i}.R,~] = shift_convert_coordinate(...
-                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,measurements_midplane_experiment.Ti_data{i}.values,...
+                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,values_original,...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','R',...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for Core CXRS ion temperature data correctly converted\n');
+                        
+                        elseif strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'CMZ')
+
+                            % Edge charge-exchange recombination spectroscopy
+
+                            coordinate_shotfile = AREABASES_Ti_DATA{i}.R.value';
+                            z_coordinate_shotfile = AREABASES_Ti_DATA{i}.z.value';
+
+                            coordinate_shotfile = repmat(coordinate_shotfile,length(measurements_midplane_experiment.Ti_data{i}.times),1);
+                            z_coordinate_shotfile = repmat(z_coordinate_shotfile,length(measurements_midplane_experiment.Ti_data{i}.times),1);
+
+                            values_original = measurements_midplane_experiment.Ti_data{i}.values;
+
+                            [measurements_midplane_experiment.Ti_data{i}.rhop,measurements_midplane_experiment.Ti_data{i}.values] = shift_convert_coordinate(...
+                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,values_original,...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','rhop',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            [measurements_midplane_experiment.Ti_data{i}.dssep,~] = shift_convert_coordinate(...
+                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,values_original,...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','dssep',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            [measurements_midplane_experiment.Ti_data{i}.R,~] = shift_convert_coordinate(...
+                                exp_data.DEVICE,measurements_midplane_experiment.Ti_data{i}.times,values_original,...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHOT{i},coordinate_shotfile,z_coordinate_shotfile,'R','R',...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
+                                exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for Edge CXRS ion temperature data correctly converted\n');
 
                         elseif strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'ELM') && strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SIGNAL{i},'Ti_CMZ')
 
@@ -1196,6 +1329,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for ELM-synchronized ion temperature data correctly converted\n');
+
                         elseif strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SOURCE{i},'ELM') && strcmp(exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SIGNAL{i},'Ti_CPZ')
 
                             % ELM-synchronized data (CPZ, from custom .nc file)
@@ -1225,6 +1360,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.DATA.ION_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for ELM-synchronized ion temperature data correctly converted\n');
 
                         end
 
@@ -1267,6 +1404,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_DENSITY_MIDPLANE.SHIFT_R{i});
 
+                            fprintf('Radial coordinates for IDA electron density profiles correctly converted\n');
+
                         end
 
                     end
@@ -1305,6 +1444,8 @@ if exp_data_avail
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_RHOP{i},...
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_DSSEP{i},...
                                 exp_data.MIDPLANE.PROFILES.ELECTRON_TEMPERATURE_MIDPLANE.SHIFT_R{i});
+
+                            fprintf('Radial coordinates for IDA electron temperature profiles correctly converted\n');
 
                         end
 
@@ -1434,7 +1575,7 @@ if exp_data_avail
             measurements_midplane_experiment_file(mat_file_name_old_editions+1).exp_data_namelist = exp_data;
             measurements_midplane_experiment_file(mat_file_name_old_editions+1).exp_data_measurements = measurements_midplane_experiment;
             save(mat_file_name,'measurements_midplane_experiment_file');
-            fprintf('Requested experimental data saved in exp_data_midplane.mat, version %d, for future usage\n',mat_file_name_old_editions+1);
+            fprintf('Requested midplane experimental data saved in exp_data_midplane.mat, version %d, for future usage\n',mat_file_name_old_editions+1);
 
         else
     
@@ -1443,7 +1584,7 @@ if exp_data_avail
             measurements_midplane_experiment_file(1).exp_data_namelist = exp_data;
             measurements_midplane_experiment_file(1).exp_data_measurements = measurements_midplane_experiment;
             save(mat_file_name,'measurements_midplane_experiment_file');
-            fprintf('Requested experimental data saved in exp_data_midplane.mat, version 1, for future usage\n');
+            fprintf('Requested midplane experimental data saved in exp_data_midplane.mat, version 1, for future usage\n');
 
         end
 
@@ -1564,6 +1705,15 @@ if strcmp(type_input,type_output)
 
        case 'rhop'
 
+            if not(isempty(data_values))
+                temp = find(data_values(1,:)==0, 1, 'first');
+                if not(isempty(temp))
+                    data_values(:,temp:end) = [];
+                    coordinate_input(:,temp:end) = [];
+                end
+                data_output = data_values;
+            end
+
             if not(isempty(rhop_shift))
                 coordinate_output = coordinate_input + rhop_shift;
             else
@@ -1579,6 +1729,15 @@ if strcmp(type_input,type_output)
             end
 
        case 'R'
+            
+            if not(isempty(data_values))
+                temp = find(data_values(1,:)==0, 1, 'first');
+                if not(isempty(temp))
+                    data_values(:,temp:end) = [];
+                    coordinate_input(:,temp:end) = [];
+                end
+                data_output = data_values;
+            end
 
             if not(isempty(R_shift))
                 coordinate_output = coordinate_input + R_shift;
@@ -1695,7 +1854,7 @@ function [rhop_output,data_output] = Rz_to_rhop(device,R,z,data,time,shot)
             
             data_output = data;
             
-            equ = EQU(shot, 'diag', 'EQI',  'tbeg', time(1), 'tend', time(end));
+            equ = EQU(shot, 'diag', 'EQH',  'tbeg', time(1), 'tend', time(end));
             rhop_output = equ.rz2rho(R, z, 't_in', time, 'coord_out', 'rho_pol', 'extrapolate', 'true');
     
     end
@@ -1717,13 +1876,13 @@ function [dssep_output,data_output] = Rz_to_dssep(device,R,z,data,time,shot)
             
             data_output = data;
 
-            equ = EQU(shot, 'diag', 'EQI',  'tbeg', time(1), 'tend', time(end));
+            equ = EQU(shot, 'diag', 'EQH',  'tbeg', time(1), 'tend', time(end));
             
             for i = 1:length(time)
                 [R_sep(i), z] = equ.rhoTheta2rz(1, 0, 't_in', time(i), 'coord_in', 'rho_pol');
             end
 
-            dssep_output = (R - R_sep)';
+            dssep_output = (R - R_sep');
     
     end
 
@@ -1735,7 +1894,7 @@ function R_output = rhop_to_Rz(device,rhop,time,shot)
     
         case 'AUG'
         
-            equ = EQU(shot, 'diag', 'EQI',  'tbeg', time(1), 'tend', time(end));
+            equ = EQU(shot, 'diag', 'EQH',  'tbeg', time(1), 'tend', time(end));
             
             if size(rhop,1) == 1
                 [R_output(1,:), z] = equ.rhoTheta2rz(rhop(1,:), 0, 't_in', (time(1)+time(end))/2, 'coord_in', 'rho_pol');
@@ -1755,7 +1914,7 @@ function R_output = rhop_to_dssep(device,rhop,time,shot)
     
         case 'AUG'
         
-            equ = EQU(shot, 'diag', 'EQI',  'tbeg', time(1), 'tend', time(end));
+            equ = EQU(shot, 'diag', 'EQH',  'tbeg', time(1), 'tend', time(end));
 
             if size(rhop,1) == 1
                 [R_sep, z] = equ.rhoTheta2rz(1, 0, 't_in', (time(1)+time(end))/2, 'coord_in', 'rho_pol');

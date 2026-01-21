@@ -20887,12 +20887,6 @@ entire time interval bounded by {\tt TIME\_START} and {\tt TIME\_END}.
 \item {\tt NAME\_DISPLAY}: name of the diagnostic to be shown in the figures, when the experimental quantity is plotted.
 \end{itemize}
 
-Radial measurements at the outer midplane, space-dependent measurements along chords and measurements along
-the divertor targets are categorized either as:
-\begin{itemize}
-\item {\tt DATA}:
-
-
 For radial measurements at the outer midplane, space-dependent measurements along chords and measurements along
 the divertor targets, for subsubcategories belonging to a subcategory {\tt DATA}, the extracted data consist
 in a set of multiple space-dependent vectors,
@@ -20911,7 +20905,6 @@ When these data are plotted, by default the single space-dependent vector is dis
 The {\tt TIME\_START} and {\tt TIME\_END} attributes represent then the start and the end time of the time window
 within which to average all the data present herein and to build one single profile to be plotted. In this case,
 the attribute {\tt REDUCED\_SET\_TIME\_DELTA} is meaningless.
-\end{itemize}
 
 Available external MATLAB libraries/interfaces to read experimental data can be achieved running the command
 \begin{verbatim}
@@ -21069,6 +21062,16 @@ $SOLPSTOP/scripts/MATLAB_analysis/Functions
 |   +---Input
 |   +---Output
 \end{verbatim}
+
+The main overarching function used to make MATLAB aware of the properties of a single \SOLPSITER simulation is the {\tt load\_SOLPS\_simulation} function,
+located in the {\tt Functions/\allowbreak Tools/\allowbreak Loading\_tools} directory. It takes, as only input, a char defining the absolute path to the
+run directory of the considered simulation, and returns, as output, a MATLAB structure containing the absolute paths of several useful directories
+(i.e.\ the full paths of the most relevant input/output run files, {\tt \$\{SOLPSTOP\}}, the {\tt Baserun} directory, the paths to the various datafiles
+for atomic, neutrals and surface data, and several information about the simulation itself, like species, magnetic topology, whether the grid is structured
+or unstructured, volume regions and surface regions).
+
+All functions use to read input/output files of a simulation run and various datafiles, contained in the {\tt Functions/\allowbreak Reading} directory,
+will use such MATLAB structure as sole input to work.
 
 \subsection{Available scripts}
 
