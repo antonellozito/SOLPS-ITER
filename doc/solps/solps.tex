@@ -20830,35 +20830,31 @@ The name of the experimental device to be considered is stored in the variable {
 
 The hierarchical tree structure defining the experimental measurements to be fetched and to be compared with \SOLPSITER simulations is here described:
 \begin{itemize}
-\item Category {\tt MIDPLANE}: radial plasma state measurements at the outer plasma midplane. Has subcategories {\tt DATA} and {\tt PROFILES} and, for each subcategory, the subsubcategories:
+\item Category {\tt MIDPLANE}: radial plasma state measurements at the inner and outer plasma midplanes. Has subcategories {\tt INNER} and {\tt OUTER} and, for each subcategory, the subsubcategories:
 \begin{itemize}
-\item {\tt ELECTRON\_DENSITY\_MIDPLANE}
-\item {\tt ELECTRON\_TEMPERATURE\_MIDPLANE}
-\item {\tt ION\_TEMPERATURE\_MIDPLANE}
-\item {\tt ION\_SPECIES\_DENSITY\_MIDPLANE}
+\item {\tt ELECTRON\_DENSITY}
+\item {\tt ELECTRON\_TEMPERATURE}
+\item {\tt ION\_TEMPERATURE}
+\item {\tt ION\_SPECIES\_DENSITY}
 \end{itemize}
-\item Category {\tt CHORDS}: space-dependent or line-integrated measurements along chords. Has subcategory {\tt DATA}, with subsubcategories
+\item Category {\tt CHORDS}: space-dependent or line-integrated measurements along chords. Has a subcategory {\tt PROFILES}, with subsubcategories
 \begin{itemize}
-\item {\tt ELECTRON\_DENSITY\_CHORDS}
-\item {\tt ELECTRON\_TEMPERATURE\_CHORDS}
-\item {\tt ION\_TEMPERATURE\_CHORDS}
-\item {\tt ION\_SPECIES\_DENSITY\_CHORDS}
-\item {\tt PHOTON\_EMISSION\_CHORDS}
-\item {\tt RADIATED\_POWER\_CHORDS}
+\item {\tt ELECTRON\_DENSITY}
+\item {\tt ELECTRON\_TEMPERATURE}
+\item {\tt ION\_TEMPERATURE}
+\item {\tt ION\_SPECIES\_DENSITY}
 \end{itemize}
-\item Category {\tt INNER\_TARGET}: plasma state and fluxes measurements on the outer divertor target. Has subcategories {\tt DATA} and {\tt PROFILES} and, for each subcategory, the subsubcategories:
+and a subcategory {\tt INTEGRALS}, with subsubcategories
 \begin{itemize}
-\item {\tt ELECTRON\_DENSITY\_INNER\_TARGET}
-\item {\tt ELECTRON\_TEMPERATURE\_INNER\_TARGET}
-\item {\tt PARTICLE\_FLUX\_DENSITY\_INNER\_TARGET}
-\item {\tt ENERGY\_FLUX\_DENSITY\_INNER\_TARGET}
+\item {\tt PHOTON\_EMISSION}
+\item {\tt RADIATED\_POWER}
 \end{itemize}
-\item Category {\tt OUTER\_TARGET}: plasma state and fluxes measurements on the inner divertor target. Has subcategories {\tt DATA} and {\tt PROFILES} and, for each subcategory, the subsubcategories:
+\item Category {\tt TARGETS}: plasma state and fluxes measurements on the various possible divertor targets. Has subcategories {\tt LOWER\_INNER}, {\tt LOWER\_OUTER}, {\tt UPPER\_INNER} and {\tt UPPER\_OUTER} and, for each subcategory, the subsubcategories:
 \begin{itemize}
-\item {\tt ELECTRON\_DENSITY\_OUTER\_TARGET}
-\item {\tt ELECTRON\_TEMPERATURE\_OUTER\_TARGET}
-\item {\tt PARTICLE\_FLUX\_DENSITY\_OUTER\_TARGET}
-\item {\tt ENERGY\_FLUX\_DENSITY\_OUTER\_TARGET}
+\item {\tt ELECTRON\_DENSITY}
+\item {\tt ELECTRON\_TEMPERATURE}
+\item {\tt PARTICLE\_FLUX\_DENSITY}
+\item {\tt ENERGY\_FLUX\_DENSITY}
 \end{itemize}
 \end{itemize}
 
@@ -20876,9 +20872,7 @@ to which the experimental data {\tt SIGNAL} is referred (only relevant for {\tt 
 {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_CHORDS} and {\tt PHOTON\allowbreak\_EMISSION\allowbreak\_CHORDS}).
 \item {\tt EMISSION\_LINE}: wavelenght of the spectroscopic emission line, in $nm$, to which the experimental data {\tt SIGNAL} is referred
 (only relevant for {\tt PHOTON\_EMISSION\_CHORDS}).
-\item {\tt SHIFT\_R}: possible shift to apply to the space coordinate given by the major plasma radius.
-\item {\tt SHIFT\_DSSEP}: possible shift to apply to the space coordinate given by the radial distance from the separatrix.
-\item {\tt SHIFT\_RHOP}: possible shift to apply to the space coordinate given by the normalized poloidal flux coordinate.
+\item {\tt SHIFT}: possible shift to apply to the radial space coordinate to which the original experimental data are referred (which may be either the major radius, or the radial distance from the separatrix, or the normalized poloidal flux coordinate).
 \item {\tt CHORDS}: name(s)/label(s) of the line(s) of sight on which all the considered data are measured (only relevant for the {\tt CHORDS} category; there could be one or more chord per {\tt SIGNAL}).
 \item {\tt TIME\_START}: start of the time window from which to extract the experimental data.
 \item {\tt TIME\_END}: end of the time window from which to extract the experimental data.
@@ -20886,25 +20880,6 @@ to which the experimental data {\tt SIGNAL} is referred (only relevant for {\tt 
 entire time interval bounded by {\tt TIME\_START} and {\tt TIME\_END}.
 \item {\tt NAME\_DISPLAY}: name of the diagnostic to be shown in the figures, when the experimental quantity is plotted.
 \end{itemize}
-
-For radial measurements at the outer midplane, space-dependent measurements along chords and measurements along
-the divertor targets, for subsubcategories belonging to a subcategory {\tt DATA}, the extracted data consist
-in a set of multiple space-dependent vectors,
-i.e.\ a two-dimensional array function of space and time, meant to consist in direct measurements within a
-given time interval. When these data are plotted, by default all such multiple space-dependent vectors are
-displayed together in the form of scatter points. The {\tt TIME\_START} and {\tt TIME\_END} attributes represent
-then the start and the end time of the time window from which to extract all the data to be plotted.
-In this case, the attribute {\tt REDUCED\_SET\_TIME\_DELTA} can be used to decide whether to plot not all individual
-data present within the time window bounded by {\tt TIME\_START} and {\tt TIME\_END}, but rather only averages over
-sub-intervals with duration {\tt REDUCED\_SET\_TIME\_DELTA}.
-
-Instead, for subsubcategories belonging to a subcategory {\tt PROFILES}, the extracted data consist in
-one single space-dependent vector, i.e.\ a one-dimensional
-array function of space, meant to be calculated with tools such as statistical analysis from direct experimental data.
-When these data are plotted, by default the single space-dependent vector is displayed in the form of a line plot.
-The {\tt TIME\_START} and {\tt TIME\_END} attributes represent then the start and the end time of the time window
-within which to average all the data present herein and to build one single profile to be plotted. In this case,
-the attribute {\tt REDUCED\_SET\_TIME\_DELTA} is meaningless.
 
 Available external MATLAB libraries/interfaces to read experimental data can be achieved running the command
 \begin{verbatim}

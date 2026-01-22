@@ -1,54 +1,32 @@
 {
   "DEVICE": "AUG",
   "MIDPLANE": {
-    "PROFILES": {
-      "ELECTRON_DENSITY_MIDPLANE": {
-        "SHOT": 39409,
-        "EXPERIMENT": "augd",
-        "SOURCE": "IDA",
-        "SIGNAL": "ne",
-        "SIGNAL_UNCERTAINTY": "ne_unc",
-        "NAME_DISPLAY": "IDA fit",
-        "TIME_START": 2.5,
-        "TIME_END": 4.5,
-        "SHIFT_RHOP": 0.002
+    "OUTER": {
+      "ELECTRON_DENSITY": {
+        "SHOT": [39409, 39409, 39409, 39409],
+        "EXPERIMENT": ["augd", "augd", "augd", "augd"],
+        "SOURCE": ["IDA", "IDA", "IDA", "LIN"],
+        "SIGNAL": ["ne", "tsdatcne", "tsdatene", "ne"],
+        "SIGNAL_UNCERTAINTY": ["ne_unc", "", "", ""],
+        "NAME_DISPLAY": ["IDA fit", "Core TS", "Edge TS", "LiBES"],
+        "TIME_START": [2.5, 2.9, 2.9, 2.9],
+        "TIME_END": [4.5, 3.3, 3.3, 3.3],
+        "REDUCED_SET_TIME_DELTA": [0.1, 0.01, 0.01, 0.01],
+        "SHIFT": [0.002, 0.002, 0.002, 0.002]
       },
-      "ELECTRON_TEMPERATURE_MIDPLANE": {
-        "SHOT": 39409,
-        "EXPERIMENT": "augd",
-        "SOURCE": "IDA",
-        "SIGNAL": "Te",
-        "SIGNAL_UNCERTAINTY": "Te_unc",
-        "NAME_DISPLAY": "IDA fit",
-        "TIME_START": 2.5,
-        "TIME_END": 4.5,
-        "SHIFT_RHOP": 0.002
-      }
-    },
-    "DATA": {
-      "ELECTRON_DENSITY_MIDPLANE": {
+      "ELECTRON_TEMPERATURE": {
         "SHOT": [39409, 39409, 39409],
         "EXPERIMENT": ["augd", "augd", "augd"],
-        "SOURCE": ["IDA", "IDA", "LIN"],
-        "SIGNAL": ["tsdatcne", "tsdatene", "ne"],
-        "NAME_DISPLAY": ["Core TS", "Edge TS", "LiBES"],
-        "TIME_START": [2.9, 2.9, 2.9],
-        "TIME_END": [3.3, 3.3, 3.3],
-        "REDUCED_SET_TIME_DELTA": [0.01, 0.01, 0.01],
-        "SHIFT_RHOP": [0.002, 0.002, 0.002]
+        "SOURCE": ["IDA", "IDA", "IDA"],
+        "SIGNAL": ["Te", "tsdatcte", "tsdatete"],
+        "SIGNAL_UNCERTAINTY": ["Te_unc", "", ""],
+        "NAME_DISPLAY": ["IDA fit", "Core TS", "Edge TS"],
+        "TIME_START": [2.5, 2.9, 2.9],
+        "TIME_END": [4.5, 3.3, 3.3],
+        "REDUCED_SET_TIME_DELTA": [0.1, 0.01, 0.01],
+        "SHIFT": [0.002, 0.002, 0.002]
       },
-      "ELECTRON_TEMPERATURE_MIDPLANE": {
-        "SHOT": [39409, 39409],
-        "EXPERIMENT": ["augd", "augd"],
-        "SOURCE": ["IDA", "IDA"],
-        "SIGNAL": ["tsdatcte", "tsdatete"],
-        "NAME_DISPLAY": ["Core TS", "Edge TS"],
-        "TIME_START": [2.9, 2.9],
-        "TIME_END": [3.3, 3.3],
-        "REDUCED_SET_TIME_DELTA": [0.01, 0.01],
-        "SHIFT_RHOP": [0.002, 0.002]
-      },
-      "ION_TEMPERATURE_MIDPLANE": {
+      "ION_TEMPERATURE": {
         "SHOT": [39409, 39409],
         "EXPERIMENT": ["augd", "augd"],
         "SOURCE": ["CEZ", "CMZ"],
@@ -57,13 +35,13 @@
         "TIME_START": [2.9, 2.9],
         "TIME_END": [3.3, 3.3],
         "REDUCED_SET_TIME_DELTA": [0.1, 0.1],
-        "SHIFT_RHOP": [0.0, 0.0]
+        "SHIFT": [0.0, 0.0]
       }
     }
   },
   "CHORDS": {
-    "DATA": {
-      "ELECTRON_DENSITY_CHORDS": {
+    "PROFILES": {
+      "ELECTRON_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "DTN",
@@ -74,7 +52,7 @@
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.1
       },
-      "ELECTRON_TEMPERATURE_CHORDS": {
+      "ELECTRON_TEMPERATURE": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "DTN",
@@ -84,8 +62,10 @@
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.1
-      },
-      "PHOTON_EMISSION_CHORDS": {
+      }
+    },
+    "INTEGRALS": {
+      "PHOTON_EMISSION": {
         "SHOT": [39409, 39409],
         "EXPERIMENT": ["augd", "augd"],
         "SOURCE": ["EVL", "FVL"],
@@ -100,9 +80,9 @@
       }
     }
   },
-  "INNER_TARGET": {
-    "DATA": {
-      "ELECTRON_DENSITY_INNER_TARGET": {
+  "TARGETS": {
+    "LOWER_INNER": {
+      "ELECTRON_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
@@ -111,9 +91,9 @@
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.005
       },
-      "ELECTRON_TEMPERATURE_INNER_TARGET": {
+      "ELECTRON_TEMPERATURE": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
@@ -122,35 +102,33 @@
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.005
       },
-      "PARTICLE_FLUX_DENSITY_INNER_TARGET": {
+      "PARTICLE_FLUX_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
-        "SIGNAL": "particle_flux",
+        "SIGNAL": "gamma",
         "NAME_DISPLAY": "LP",
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.005
       },
-      "ENERGY_FLUX_DENSITY_INNER_TARGET": {
+      "ENERGY_FLUX_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
-        "SIGNAL": "energy_flux",
+        "SIGNAL": "q",
         "NAME_DISPLAY": "LP",
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.005
       }
-    }
-  },
-  "OUTER_TARGET": {
-    "DATA": {
-      "ELECTRON_DENSITY_OUTER_TARGET": {
+    },
+    "LOWER_OUTER": {
+      "ELECTRON_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
@@ -159,9 +137,9 @@
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.010
       },
-      "ELECTRON_TEMPERATURE_OUTER_TARGET": {
+      "ELECTRON_TEMPERATURE": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
@@ -170,29 +148,29 @@
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.010
       },
-      "PARTICLE_FLUX_DENSITY_OUTER_TARGET": {
+      "PARTICLE_FLUX_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
-        "SIGNAL": "particle_flux",
+        "SIGNAL": "gamma",
         "NAME_DISPLAY": "LP",
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.010
       },
-      "ENERGY_FLUX_DENSITY_OUTER_TARGET": {
+      "ENERGY_FLUX_DENSITY": {
         "SHOT": 39409,
         "EXPERIMENT": "augd",
         "SOURCE": "LSD",
-        "SIGNAL": "energy_flux",
+        "SIGNAL": "q",
         "NAME_DISPLAY": "LP",
         "TIME_START": 2.9,
         "TIME_END": 3.3,
         "REDUCED_SET_TIME_DELTA": 0.04,
-        "SHIFT_RHOP": 0.005
+        "SHIFT": 0.010
       }
     }
   }
