@@ -9,22 +9,70 @@ function SIMULATION = load_solps_simulation(RUN)
 
 warning('off');
 
-SOLPSTOP = getenv('SOLPSTOP');
+% Retrieve environment variable with one or more SOLPSTOP directories set
 
-if not(isfolder(SOLPSTOP))
-    error('Error: The $SOLPSTOP folder %s does not exists.',SOLPSTOP);
+SOLPSTOP_FULL = getenv('SOLPSTOP');
+
+if isempty(SOLPSTOP_FULL)
+    error('Error: The environment variable ''SOLPSTOP'' is not defined. Set it to your SOLPSTOP directory/directories');
 end
 
-RUN_DIRECTORY = RUN;
+% Split into the separate possible SOLPSTOP directories
+
+SOLPSTOP_FOLDERS = strsplit(SOLPSTOP_FULL,':');
+
+% Check the existence of the declared SOLPSTOP(s)
+
+if strcmp(SOLPSTOP_FOLDERS,SOLPSTOP_FULL) 
+    if not(isfolder(SOLPSTOP_FULL))
+        error('Error: The folder ''%s'' does not exists. Set the environment variable ''SOLPSTOP'' to an existing folder',SOLPSTOP_FULL);
+    end
+else
+    if ~any(isfolder(SOLPSTOP_FOLDERS))
+        error( ...
+            'Error: None of the folders below exists:\n%s\n\nSet the environment variable ''SOLPSTOP'' to an existing folder', ...
+            strjoin(SOLPSTOP_FOLDERS,newline) ...
+        );
+    end
+end
+
+% Recursively search until a SOLPSTOP with the requested simulation is found
+
+RUN_DIRECTORY = '';
+SOLPSTOP_EXISTING = {};
+
+for i = 1:numel(SOLPSTOP_FOLDERS)
+
+    % Check if SOLPSTOP exists
+
+    SOLPSTOP = SOLPSTOP_FOLDERS{i};
+    if ~isfolder(SOLPSTOP)
+        continue;
+    end
+    SOLPSTOP_EXISTING{end+1} = SOLPSTOP;
+    
+    % Check if simulation exists within existing SOLPSTOP
+
+    if isfolder(sprintf('%s/runs/%s',SOLPSTOP,RUN))
+        RUN_DIRECTORY = sprintf('%s/runs/%s',SOLPSTOP,RUN);
+        break
+    end
+
+end
+
+if isempty(RUN_DIRECTORY)
+    if strcmp(SOLPSTOP,SOLPSTOP_FULL) 
+        error('Error: The simulation ''%s'' does not exists within the SOLPSTOP folder ''%s''',RUN,SOLPSTOP);    
+    else
+        error('Error: The simulation ''%s'' does not exists within any of the SOLPSTOP folders below:\n%s',RUN,strjoin(SOLPSTOP_EXISTING,newline));        
+    end
+end
+
 [parent_dir, ~, ~] = fileparts(RUN_DIRECTORY);
 BASERUN_DIRECTORY = fullfile(parent_dir, 'baserun');
 
-if not(isfolder(RUN_DIRECTORY))
-    error('Error: The simulation %s does not exists.',RUN_DIRECTORY);
-end
-
-RUN_NAME = extractAfter(RUN_DIRECTORY,'/runs/');
-fprintf('Simulation: %s\n',RUN_NAME);
+fprintf('SOLPSTOP: ''%s''\n',SOLPSTOP);
+fprintf('Simulation: ''%s''\n',RUN);
 
 %% NAMELISTS OF SIMULATION FILES
 

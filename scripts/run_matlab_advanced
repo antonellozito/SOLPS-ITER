@@ -1,0 +1,414 @@
+#!/bin/tcsh -f
+
+set show_help = 0
+if ($#argv == 0) then
+    set show_help = 1
+else
+    if ("$argv[1]" == "--h" || "$argv[1]" == "-h" || "$argv[1]" == "--help") then
+        set show_help = 1
+    endif
+endif
+
+# Directory containing the MATLAB analysis scripts
+set script_dir = "$SOLPSTOP/scripts/MATLAB_analysis"
+
+# Show help message
+if ($show_help == 1) then
+    echo ""
+    echo "============================================================================================================="
+    echo "                                         run_matlab - MATLAB Runner"
+    echo "============================================================================================================="
+    echo ""
+    echo "DESCRIPTION:"
+    echo "    This script runs the MATLAB scripts present in "'$SOLPSTOP/scripts/MATLAB_analysis'""
+    echo "    directly from the command line with automatic argument parsing"
+    echo ""
+    echo "USAGE:"
+    echo "    run_matlab <script_name> [--ARG1 value1] [--ARG2 value2] ...   (for running the script <script_name>)"
+    echo "    run_matlab <script_name> --h                                   (for script-specific help)"
+    echo "    run_matlab --h                                                 (this help message)"
+    echo ""
+    echo "ARGUMENT TYPES:"
+    echo "    --FLAG True                 Logical (MATLAB format: true/false)"
+    echo "    --NAME 'text'               Char (MATLAB format: 'text')"
+    echo "    --SIZE 1000                 Double-precision single number (MATLAB format: 1000)"
+    echo "    --VECTOR 2.5,6,3.2          Double-precision numerical array (MATLAB format: [2.5,6,3.2])"
+    echo "    --CELL 7,False,'text',3.5   Cell array (MATLAB format: {7,false,'text',3.5})"
+    echo ""
+    echo "EXAMPLES:"
+    echo "    run_matlab my_function --FLAG True --NAME 'text' --SIZE 1000 --VECTOR 2.5,6,3.2 --CELL 7,False,'text',3.5"
+    echo ""
+    echo "============================================================================================================="
+    echo " Available Tracing Scripts"
+    echo "============================================================================================================="
+    echo ""
+    set tracing_dir = "$script_dir/Scripts/Tracing"
+    if (-d "$tracing_dir") then
+        foreach mfile ("$tracing_dir"/*.m)
+            if (-f "$mfile") then
+                set basename = `basename "$mfile" .m`
+                echo " $basename"
+            endif
+        end
+    endif
+    echo ""
+    exit 0
+endif
+
+# Check if MATLAB executable is found
+which matlab >& /dev/null
+if ($status != 0) then
+    echo "Error: MATLAB not found."
+    echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module"
+    exit 1
+endif
+
+set os = `uname -s`
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! DARWIN VERSION OF THE SCRIPT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+if ("$os" == "Darwin") then
+
+set curr_dir = `pwd`
+
+# Use parent shell PID to create session-specific files
+set session_id = `ps -o ppid= -p $$ | tr -d ' '`
+set matlab_cmd_file = "/tmp/matlab_session_${session_id}_cmd.m"
+set matlab_status_file = "/tmp/matlab_session_${session_id}_status"
+set matlab_pid_file = "/tmp/matlab_session_${session_id}_pid"
+set matlab_output_file = "/tmp/matlab_session_${session_id}_output"
+set matlab_ready_file = "/tmp/matlab_session_${session_id}_ready"
+set matlab_server_file = "/tmp/matlab_session_${session_id}_server.m"
+set matlab_log_file = "/tmp/matlab_session_${session_id}_log"
+
+set func = "$1"
+
+# Build the MATLAB command for arguments
+set matlab_cmd = "args = struct(); "
+set is_help = 0
+if ($#argv >= 2) then
+    if ("$argv[2]" == "--h" || "$argv[2]" == "-h" || "$argv[2]" == "--help") then
+        set matlab_cmd = ""
+        set func_call = "feval('$func', '$curr_dir', 'help');"
+        set is_help = 1
+    endif
+endif
+
+# Parse the input arguments and convert them to a MATLAB variable
+if ($is_help == 0) then
+    if ($#argv >= 2) then
+        set i = 2
+        while ($i <= $#argv)
+            set current = "$argv[$i]"
+            
+            if ("$current" =~ --*) then
+                set vname = `echo "$current" | sed 's/^--//'`
+                @ i++
+                
+                if ($i > $#argv) then
+                    echo "Error: $current requires a value"
+                    exit 1
+                endif
+                
+                set tmpval = "$argv[$i]"
+                
+                if ("$tmpval" == "True" || "$tmpval" == "true") then
+                    set matlab_cmd = "$matlab_cmd""args.$vname = true; "
+                else if ("$tmpval" == "False" || "$tmpval" == "false") then
+                    set matlab_cmd = "$matlab_cmd""args.$vname = false; "
+                else
+                    set has_comma = `echo "$tmpval" | grep -E -c ','`
+                    if ($has_comma == 1) then
+                        set is_pure_numeric = `echo "$tmpval" | grep -E -c '^[0-9.,+-]+$'`
+                        if ($is_pure_numeric == 1) then
+                            set matlab_cmd = "$matlab_cmd""args.$vname = [$tmpval]; "
+                        else
+                            set cell_elements = ""
+                            set tmplist = `echo "$tmpval" | tr ',' ' '`
+                            foreach elem ($tmplist)
+                                if ("$elem" == "True" || "$elem" == "true") then
+                                    set cell_elements = "$cell_elements, true"
+                                else if ("$elem" == "False" || "$elem" == "false") then
+                                    set cell_elements = "$cell_elements, false"
+                                else
+                                    set elem_is_num = `echo "$elem" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
+                                    if ($elem_is_num == 1) then
+                                        set cell_elements = "$cell_elements, $elem"
+                                    else
+                                        set cell_elements = "$cell_elements, '$elem'"
+                                    endif
+                                endif
+                            end
+                            set cell_elements = `echo "$cell_elements" | sed 's/^, //'`
+                            set matlab_cmd = "$matlab_cmd""args.$vname = {$cell_elements}; "
+                        endif
+                    else
+                        set is_numeric = `echo "$tmpval" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
+                        if ($is_numeric == 1) then
+                            set matlab_cmd = "$matlab_cmd""args.$vname = $tmpval; "
+                        else
+                            set matlab_cmd = "$matlab_cmd""args.$vname = '$tmpval'; "
+                        endif
+                    endif
+                endif
+            endif
+            
+            @ i++
+        end
+    endif
+
+    set func_call = "feval('$func', '$curr_dir', args);"
+endif
+
+# Check if a MATLAB session is already running for this shell
+set matlab_running = 0
+if (-f "$matlab_pid_file") then
+    set stored_pid = `cat "$matlab_pid_file"`
+    kill -0 "$stored_pid" >& /dev/null
+    if ($status == 0) then
+        set matlab_running = 1
+    else
+        rm -f "$matlab_pid_file" "$matlab_cmd_file" "$matlab_status_file" "$matlab_output_file" "$matlab_ready_file" "$matlab_log_file"
+    endif
+endif
+
+if ($matlab_running == 0) then
+    rm -f "$matlab_status_file" "$matlab_output_file" "$matlab_ready_file" "$matlab_cmd_file" "$matlab_log_file"
+    touch "$matlab_log_file"
+    
+    # Write MATLAB server file
+    echo "% MATLAB persistent session server" > "$matlab_server_file"
+    echo "cmd_file = '$matlab_cmd_file';" >> "$matlab_server_file"
+    echo "status_file = '$matlab_status_file';" >> "$matlab_server_file"
+    echo "ready_file = '$matlab_ready_file';" >> "$matlab_server_file"
+    echo "script_dir = '$script_dir';" >> "$matlab_server_file"
+    echo "parent_pid = $session_id;" >> "$matlab_server_file"
+    echo "" >> "$matlab_server_file"
+    echo "addpath(genpath(script_dir));" >> "$matlab_server_file"
+    echo "" >> "$matlab_server_file"
+    echo "% Signal ready" >> "$matlab_server_file"
+    echo "fid = fopen(ready_file, 'w'); fprintf(fid, 'ready'); fclose(fid);" >> "$matlab_server_file"
+    echo "" >> "$matlab_server_file"
+    echo "while true" >> "$matlab_server_file"
+    echo "    [st, ~] = system(sprintf('kill -0 %d 2>/dev/null', parent_pid));" >> "$matlab_server_file"
+    echo "    if st ~= 0" >> "$matlab_server_file"
+    echo "        if exist(ready_file, 'file'), delete(ready_file); end" >> "$matlab_server_file"
+    echo "        exit;" >> "$matlab_server_file"
+    echo "    end" >> "$matlab_server_file"
+    echo "    if exist(cmd_file, 'file')" >> "$matlab_server_file"
+    echo "        pause(0.05);" >> "$matlab_server_file"
+    echo "        svars = {'cmd_file','status_file','ready_file','script_dir','parent_pid','st','fid','svars','av','cv','exit_status'};" >> "$matlab_server_file"
+    echo "        av = who;" >> "$matlab_server_file"
+    echo "        cv = setdiff(av, svars);" >> "$matlab_server_file"
+    echo "        if ~isempty(cv), clear(cv{:}); end" >> "$matlab_server_file"
+    echo "        exit_status = 0;" >> "$matlab_server_file"
+    echo "        try" >> "$matlab_server_file"
+    echo "            run(cmd_file);" >> "$matlab_server_file"
+    echo "            delete(cmd_file);" >> "$matlab_server_file"
+    echo "        catch ME" >> "$matlab_server_file"
+    echo "            if exist(cmd_file, 'file'), delete(cmd_file); end" >> "$matlab_server_file"
+    echo "            fprintf('Error: %s\\n', ME.message);" >> "$matlab_server_file"
+    echo "            exit_status = 1;" >> "$matlab_server_file"
+    echo "        end" >> "$matlab_server_file"
+    echo "        fid = fopen(status_file, 'w'); fprintf(fid, '%d', exit_status); fclose(fid);" >> "$matlab_server_file"
+    echo "    else" >> "$matlab_server_file"
+    echo "        pause(0.1);" >> "$matlab_server_file"
+    echo "    end" >> "$matlab_server_file"
+    echo "end" >> "$matlab_server_file"
+
+    # Launch MATLAB in background, redirecting startup messages
+    set old_notify = $?notify
+    unset notify
+    
+    # Actual MATLAB run command
+    matlab -nodesktop -nosplash -r "run('$matlab_server_file')" >>& "$matlab_log_file" &
+    set matlab_pid = $!
+    echo "$matlab_pid" > "$matlab_pid_file"
+    
+    if ($old_notify) set notify
+    
+    # Wait for MATLAB to be ready
+    set wait_count = 0
+    while (! -f "$matlab_ready_file")
+        sleep 1
+        @ wait_count++
+        if ($wait_count >= 90) then
+            echo "Error: MATLAB startup timed out"
+            kill "$matlab_pid" >& /dev/null
+            rm -f "$matlab_pid_file" "$matlab_server_file"
+            exit 1
+        endif
+        kill -0 "$matlab_pid" >& /dev/null
+        if ($status != 0) then
+            echo "Error: MATLAB failed to start"
+            cat "$matlab_log_file"
+            rm -f "$matlab_pid_file" "$matlab_server_file"
+            exit 1
+        endif
+    end
+endif
+
+# Mark current position in log file before command execution
+set log_start = `wc -c < "$matlab_log_file" | tr -d ' '`
+
+# Write command file
+echo "cd('$curr_dir');" > "$matlab_cmd_file"
+echo "$matlab_cmd" >> "$matlab_cmd_file"
+echo "try" >> "$matlab_cmd_file"
+echo "    $func_call" >> "$matlab_cmd_file"
+echo "catch ME" >> "$matlab_cmd_file"
+echo "    fprintf('Error: %s\\n', ME.message);" >> "$matlab_cmd_file"
+echo "    rethrow(ME);" >> "$matlab_cmd_file"
+echo "end" >> "$matlab_cmd_file"
+
+# Stream output from log file
+tail -f -c +$log_start "$matlab_log_file" &
+set tail_pid = $!
+
+# Wait for MATLAB to complete
+set wait_count = 0
+while (! -f "$matlab_status_file")
+    sleep 0.5
+    @ wait_count++
+    if ($wait_count > 1200) then
+        kill -9 "$tail_pid" >& /dev/null
+        echo "Error: MATLAB execution timed out"
+        exit 1
+    endif
+    if (-f "$matlab_pid_file") then
+        set stored_pid = `cat "$matlab_pid_file"`
+        kill -0 "$stored_pid" >& /dev/null
+        if ($status != 0) then
+            kill -9 "$tail_pid" >& /dev/null
+            echo "Error: MATLAB session died unexpectedly"
+            rm -f "$matlab_pid_file" "$matlab_cmd_file" "$matlab_status_file"
+            exit 1
+        endif
+    endif
+end
+
+# Give tail a moment to catch up with final output
+sleep 0.2
+
+# Kill tail forcefully and suppress all output
+kill -9 "$tail_pid" >& /dev/null
+
+# Get exit status
+set matlab_exit_status = `cat "$matlab_status_file"`
+
+# Clean up status file for the next call
+rm -f "$matlab_status_file"
+
+exit $matlab_exit_status
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! LINUX VERSION OF THE SCRIPT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+else
+
+set func = "$1"
+set curr_dir = `pwd`
+set tmpfile = "/tmp/matlab_cmd_$$.m"
+
+# Create the MATLAB command as a file
+if ($#argv >= 2) then
+    if ("$argv[2]" == "--h" || "$argv[2]" == "-h" || "$argv[2]" == "--help") then
+        cat > $tmpfile << EOF
+cd('$curr_dir');
+addpath(genpath('$script_dir'));
+try
+    feval('$func', '$curr_dir', 'help');
+catch ME
+    disp(ME.message);
+end
+exit
+EOF
+        matlab -nodesktop -nosplash -r "run('$tmpfile')" </dev/null |& tail -n +11
+        rm -f $tmpfile
+        exit $status
+    endif
+endif
+
+set matlab_cmd = "args = struct(); "
+
+# Parse the input arguments and convert them to a MATLAB variable
+set arglist = ($argv[2-])
+set i = 1
+while ($i <= $#arglist)
+    set current = "$arglist[$i]"
+    
+    if ("$current" =~ --*) then
+        set vname = `echo "$current" | sed 's/^--//'`
+        @ i++
+        
+        if ($i > $#arglist) then
+            echo "Error: $current requires a value"
+            exit 1
+        endif
+        
+        set tmpval = "$arglist[$i]"
+        
+        if ("$tmpval" == "True" || "$tmpval" == "true") then
+            set matlab_cmd = "$matlab_cmd""args.$vname = true; "
+        else if ("$tmpval" == "False" || "$tmpval" == "false") then
+            set matlab_cmd = "$matlab_cmd""args.$vname = false; "
+        else
+            set has_comma = `echo "$tmpval" | grep -E -c ','`
+            if ($has_comma == 1) then
+                set is_pure_numeric = `echo "$tmpval" | grep -E -c '^[0-9.,+-]+$'`
+                if ($is_pure_numeric == 1) then
+                    set matlab_cmd = "$matlab_cmd""args.$vname = [$tmpval]; "
+                else
+                    set cell_elements = ""
+                    set tmplist = `echo "$tmpval" | tr ',' ' '`
+                    foreach elem ($tmplist)
+                        if ("$elem" == "True" || "$elem" == "true") then
+                            set cell_elements = "$cell_elements, true"
+                        else if ("$elem" == "False" || "$elem" == "false") then
+                            set cell_elements = "$cell_elements, false"
+                        else
+                            set elem_is_num = `echo "$elem" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
+                            if ($elem_is_num == 1) then
+                                set cell_elements = "$cell_elements, $elem"
+                            else
+                                set cell_elements = "$cell_elements, '$elem'"
+                            endif
+                        endif
+                    end
+                    set cell_elements = `echo "$cell_elements" | sed 's/^, //'`
+                    set matlab_cmd = "$matlab_cmd""args.$vname = {$cell_elements}; "
+                endif
+            else
+                set is_numeric = `echo "$tmpval" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
+                if ($is_numeric == 1) then
+                    set matlab_cmd = "$matlab_cmd""args.$vname = $tmpval; "
+                else
+                    set matlab_cmd = "$matlab_cmd""args.$vname = '$tmpval'; "
+                endif
+            endif
+        endif
+    endif
+    
+    @ i++
+end
+
+cat > $tmpfile << EOF
+cd('$curr_dir');
+addpath(genpath('$script_dir'));
+$matlab_cmd
+try
+    feval('$func', '$curr_dir', args);
+catch ME
+    disp(ME.message);
+end
+exit
+EOF
+
+# Actual MATLAB run command
+matlab -nodesktop -nosplash -r "run('$tmpfile')" </dev/null |& tail -n +11
+
+# Clean up status file for the next call
+rm -f $tmpfile
+
+exit $status
+
+endif

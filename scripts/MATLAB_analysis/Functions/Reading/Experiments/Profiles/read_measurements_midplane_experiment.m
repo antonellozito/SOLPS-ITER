@@ -66,11 +66,8 @@ if exp_data_avail
 
                 SHOTFILES_BASEPATH_LOCAL = '';
 
-                for i = 1:numel(AUG_config().SHOTFILES_BASEPATH_LOCAL)
-                    if isfolder(AUG_config().SHOTFILES_BASEPATH_LOCAL{i})
-                        SHOTFILES_BASEPATH_LOCAL = AUG_config().SHOTFILES_BASEPATH_LOCAL{i};
-                        break
-                    end
+                if isfolder(getenv('SHOTFILES_BASEPATH_LOCAL'))
+                    SHOTFILES_BASEPATH_LOCAL = getenv('SHOTFILES_BASEPATH_LOCAL');
                 end
 
                 % INNER MIDPLANE

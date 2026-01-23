@@ -1,6 +1,8 @@
-function run_time_traces(RUN,args)
+function run_time_traces(RUN_DIRECTORY,args)
 
-figs = [];
+%% SELECT THE SIMULATION
+
+RUN = '';
 
 %% SCRIPT DESCRIPTION
 
@@ -14,8 +16,8 @@ figs = [];
 % Various time-averaging schemes can also be applied to the time traces.
 % Can be executed both from the command line, inside one specific run
 %    directory, or as an interactive script within the MATLAB GUI,
-%    in the last case requiring the manual definition of $SOLPSTOP
-%    and of the run directory of the simulation to be shown
+%    in the last case requiring the manual definition of the
+%    run directory of the simulation to be shown
 
 %% USER INPUT
 
@@ -66,23 +68,20 @@ FILE_RESOLUTION = 'vector';
 
 %% END OF USER INPUT
 
-if nargin == 0   % Define SOLPSTOP and run directory if called as interactive script
+if nargin == 0   % Need to define RUN if called as interactive script
 
-    SOLPSTOP = '';
-    SIMULATION = '';
-    setenv('SOLPSTOP',SOLPSTOP);
-    RUN = sprintf('%s/runs/%s',SOLPSTOP,SIMULATION);
-
-    if isempty(SOLPSTOP) || isempty(SIMULATION)
-        error('Error: specify the variables ''SOLPSTOP'' and ''SIMULATION'' when running run_time_traces as an interactive script');
+    if isempty(RUN)
+        error('Error: specify a simulation with the variable ''RUN'' when using run_time_traces as an interactive script');
     end
 
 else   % Override variables with the ones present in input args if called as function
 
-    load_input_arguments(RUN, args);
+    load_input_arguments(RUN_DIRECTORY,args);
     if nargin >= 2 && ischar(args) && strcmp(args, 'help')
         return
     end
+
+    RUN = extractAfter(RUN_DIRECTORY,sprintf('%s/runs/',getenv('SOLPSTOP')));
 
 end
 
@@ -147,8 +146,6 @@ end
 %% LOAD SIMULATION
 
 SIMULATION = load_solps_simulation(RUN);
-
-RUN_NAME = extractAfter(SIMULATION.RUN_DIRECTORY,'/runs/');
 
 %% READ DATA
 
@@ -320,7 +317,7 @@ if PLOT_MIDPLANE_STATE_VARIABLES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Midplane electron density','interpreter','latex','fontsize',20);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -335,7 +332,7 @@ if PLOT_MIDPLANE_STATE_VARIABLES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Midplane electron temperature','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -350,7 +347,7 @@ if PLOT_MIDPLANE_STATE_VARIABLES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Midplane ion temperature','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
 
@@ -416,7 +413,7 @@ if PLOT_MIDPLANE_SPECIES_DENSITIES
                 title(sprintf('Midplane %s ion density',species_label{is}),'interpreter','latex','fontsize',20);
             end
             if SHOW_NAME
-                text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+                text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                     'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
             end
     
@@ -454,7 +451,7 @@ if PLOT_DIVERTOR_STATE_VARIABLES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Divertor electron density','interpreter','latex','fontsize',20);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -472,7 +469,7 @@ if PLOT_DIVERTOR_STATE_VARIABLES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Divertor electron temperature','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -490,7 +487,7 @@ if PLOT_DIVERTOR_STATE_VARIABLES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Divertor ion temperature','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
         
@@ -570,7 +567,7 @@ if PLOT_DIVERTOR_SPECIES_DENSITIES
                 title(sprintf('Divertor %s ion density',species_label{is}),'interpreter','latex','fontsize',20);
             end
             if SHOW_NAME
-                text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+                text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                     'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
             end
     
@@ -606,7 +603,7 @@ if PLOT_POLOIDAL_FLUXES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Poloidal particle fluxes','interpreter','latex','fontsize',20);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -622,7 +619,7 @@ if PLOT_POLOIDAL_FLUXES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Poloidal electron energy fluxes','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -638,7 +635,7 @@ if PLOT_POLOIDAL_FLUXES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Poloidal ion energy fluxes','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
 
@@ -670,7 +667,7 @@ if PLOT_RADIAL_FLUXES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Radial particle fluxes','interpreter','latex','fontsize',20);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -688,7 +685,7 @@ if PLOT_RADIAL_FLUXES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Radial electron energy fluxes','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
     
@@ -706,7 +703,7 @@ if PLOT_RADIAL_FLUXES
         lgd = legend('interpreter','latex','fontsize',15);
         title('Radial ion energy fluxes','interpreter','latex','fontsize',18);
         if SHOW_NAME
-            text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
                 'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
         end
 
@@ -731,7 +728,7 @@ if PLOT_INTEGRAL_QUANTITIES
     xlabel('Time [s]','interpreter','latex','fontsize',18);
     title('Total number of particles','interpreter','latex','fontsize',20);
     if SHOW_NAME
-        text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+        text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
             'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
     end
 
@@ -747,7 +744,7 @@ if PLOT_INTEGRAL_QUANTITIES
     lgd = legend('interpreter','latex','fontsize',15);
     title('Total energy','interpreter','latex','fontsize',20);
     if SHOW_NAME
-        text(0.98,0.04,RUN_NAME,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
+        text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
             'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
     end
 

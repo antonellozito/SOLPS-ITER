@@ -20779,10 +20779,6 @@ Finally, running
 will print a general help message with the same above described content, and a list of the avaible scripts which can be executed
 in this way.
 
-When running a MATLAB script via \texttt{run\_matlab} command for the first time within a \SOLPSITER session, MATLAB is launched
-and its process remains active in the background, for a quicker execution when a script is executed again within the same session.
-The background MATLAB process will only close after exiting the shell or the terminal.
-
 The scripts made to display run-related inputs/outputs (e.g.\ description and input variables of switches and of namelist parameters,
 or values/profiles of physical fields from the plasma solution) will produce their output directly in the terminal. The scripts made
 to generate figures will instead open them within a MATLAB Figure window, which will be by default also printed as .pdf file within
@@ -20799,9 +20795,20 @@ MATLAB editor, the input variables can be modified directly within the section "
 and these can be run within the GUI. In this way, additional features such as Profiler, Debugger and partial script
 execution can be used.
 
-When using the MATLAB GUI, the user will need to manually define the absolute paths of the \SOLPSITER top directory and
-of the run directory of the simulation to be analyzed, by assigning the appropriate values to the variables {\tt SOLPSTOP}
-and {\tt SIMULATION} later in the script.
+When using the MATLAB GUI, the user will need to manually define the name of the simulation to be analyzed, within the input
+variable {\tt RUN} to be declared at the beginning of the script (which is empty by default). The absolute path of the 
+\SOLPSITER top directory needs to be instead recognized by MATLAB as an environment variable. For this to be possible, it is
+sufficient to define it in a MATLAB startup file as
+\begin{verbatim}
+    setenv('SOLPSTOP','/path/to/your/SOLPSTOP');
+\end{verbatim}
+Here it is also possible to define multiple possible \SOLPSITER top directories (e.g.\ for cases in which multiple \SOLPSITER
+installation on the same file system are present), as
+\begin{verbatim}
+    setenv('SOLPSTOP','/path/to/your/SOLPSTOP_1:/path/to/your/SOLPSTOP_2');
+\end{verbatim}
+In this way, MATLAB recursively search for a simulation with name {\tt RUN} within all possible declared \SOLPSITER top
+directories, in order, until it finds one.
 
 All scripts which could be executed via the command line can also be executed within the MATLAB GUI. Additionally to these,
 further scripts can only be executed within the MATLAB GUI. These include scripts which can create and/or manipulate
@@ -20915,25 +20922,23 @@ The meaning of the general attributes is the following:
 \item {\tt SHOT}: shot number of the experiment to be considered.
 \item {\tt SOURCE}: name of the shotfile. Currently supported shotfiles are:
 \begin{itemize}
-\item {\tt IDA} (Integrated Data Analysis): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_MIDPLANE} and {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_MIDPLANE}.
-The radial coordinate to which data are referred is {\tt rhop}.
-\item {\tt VTA} (Vertical Thomson scattering): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_MIDPLANE} and {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_MIDPLANE}.
-The radial coordinate to which data are referred is {\tt R}.
-\item {\tt LIN} (Lithium beam emission spectroscopy): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_MIDPLANE}.
-The radial coordinate to which data are referred is {\tt rhop}.
-\item {\tt CEZ}/{\tt CMZ}/{\tt CPZ} (Charge-exchange recombination spectroscopy): for {\tt ION\allowbreak\_TEMPERATURE\allowbreak\_MIDPLANE}.
-The radial coordinate to which data are referred is {\tt R}.
-\item {\tt CAS}/{\tt CES}/{\tt COS} (Charge-exchange recombination spectroscopy): for {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY\allowbreak\_MIDPLANE}.
-The radial coordinate to which data are referred is {\tt R}.
-\item {\tt DTN} (Divertor Thomson scattering): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_CHORDS} and {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_CHORDS}.
-The radial coordinate to which data are referred is {\tt R}.
-\item {\tt EVL}/{\tt FVL}/{\tt GVL} (Visible divertor spectroscopy): for {\tt PHOTON\allowbreak\_EMISSION\allowbreak\_CHORDS}.
-\item {\tt BLB} (Bolometry): for {\tt RADIATED\allowbreak\_POWER\allowbreak\_CHORDS}.
-\item {\tt LSD} (Divertor Langmuir probes): for {\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_INNER\allowbreak\_TARGET}, {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_INNER\allowbreak\_TARGET},
-{\tt PARTICLE\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_INNER\allowbreak\_TARGET}, {\tt ENERGY\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_INNER\allowbreak\_TARGET},
-{\tt ELECTRON\allowbreak\_DENSITY\allowbreak\_OUTER\allowbreak\_TARGET}, {\tt ELECTRON\allowbreak\_TEMPERATURE\allowbreak\_OUTER\allowbreak\_TARGET},
-{\tt PARTICLE\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_OUTER\allowbreak\_TARGET}, {\tt ENERGY\allowbreak\_FLUX\allowbreak\_DENSITY\allowbreak\_OUTER\allowbreak\_TARGET}
-The radial coordinate to which data are referred is {\tt dssep}.
+\item {\tt IDA} (Integrated Data Analysis): for {\tt ELECTRON\allowbreak\_DENSITY} and {\tt ELECTRON\allowbreak\_TEMPERATURE} at the outer midplane.
+The radial coordinate to which the original data are referred is {\tt rhop}.
+\item {\tt VTA} (Vertical Thomson scattering): for {\tt ELECTRON\allowbreak\_DENSITY} and {\tt ELECTRON\allowbreak\_TEMPERATURE} at the outer midplane.
+The radial coordinate to which the original data are referred is {\tt R,z}.
+\item {\tt LIN} (Lithium beam emission spectroscopy): for {\tt ELECTRON\allowbreak\_DENSITY} at the outer midplane.
+The radial coordinate to which the original data are referred is {\tt rhop}.
+\item {\tt CEZ}/{\tt CMZ}/{\tt CPZ} (Charge-exchange recombination spectroscopy): for {\tt ION\allowbreak\_TEMPERATURE} at the outer midplane.
+The radial coordinate to which the original data are referred is {\tt R,z}.
+\item {\tt CAS}/{\tt CES}/{\tt COS} (Charge-exchange recombination spectroscopy): for {\tt ION\allowbreak\_SPECIES\allowbreak\_DENSITY} at the outer midplane.
+The radial coordinate to which the original data are referred is {\tt R,z}.
+\item {\tt DTN} (Divertor Thomson scattering): for {\tt ELECTRON\allowbreak\_DENSITY} and {\tt ELECTRON\allowbreak\_TEMPERATURE} along chords.
+The radial coordinate to which the original data are referred is {\tt R,z}.
+\item {\tt EVL}/{\tt FVL}/{\tt GVL} (Visible divertor spectroscopy): for {\tt PHOTON\allowbreak\_EMISSION} along chords.
+\item {\tt BLB} (Bolometry): for {\tt RADIATED\allowbreak\_POWER} along chords.
+\item {\tt LSD} (Divertor Langmuir probes): for {\tt ELECTRON\allowbreak\_DENSITY}, {\tt ELECTRON\allowbreak\_TEMPERATURE},
+{\tt PARTICLE\allowbreak\_FLUX\allowbreak\_DENSITY} and {\tt ENERGY\allowbreak\_FLUX\allowbreak\_DENSITY} at the divertor targets.
+The radial coordinate to which the original data are referred is {\tt R,z}.
 \end{itemize}
 \item {\tt EXPERIMENT}: the "user name" under which the shotfile to be fetched is written (default: {\tt 'augd'}).
 \item {\tt VERSION}: the edition of the shotfile (default: 0 for most recent available edition).
