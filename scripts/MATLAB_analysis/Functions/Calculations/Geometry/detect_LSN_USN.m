@@ -1,11 +1,11 @@
 function SN_type = detect_LSN_USN(simulation)
 
 try
-    [NREG,~,~] = find_nreg_species(simulation);
-catch
     experiment_directory = regexprep(simulation.RUN_DIRECTORY, '/[^/]*$', '');
     NREG = strtrim(fileread(sprintf('%s/NREG',experiment_directory)));
     NREG = str2double(NREG);
+catch
+    [NREG,~,~] = find_nreg_species(simulation);
 end
 
 if NREG(1) == 4

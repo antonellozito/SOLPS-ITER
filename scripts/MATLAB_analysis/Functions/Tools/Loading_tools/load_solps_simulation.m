@@ -243,8 +243,6 @@ end
 %% READ SPECIES AND TYPE OF GEOMETRY
 
 try
-    [NREG,species,isonuclear_species] = find_nreg_species(SIMULATION);
-catch
     experiment_directory = regexprep(RUN_DIRECTORY, '/[^/]*$', '');
     temp = strtrim(fileread(sprintf('%s/NREG',experiment_directory)));
     NREG = str2double(temp);
@@ -252,6 +250,8 @@ catch
     species = strsplit(temp);
     temp = cellfun(@(s) regexp(s, '^[A-Za-z]+', 'match'), species, 'UniformOutput', false);
     isonuclear_species = unique([temp{:}]);
+catch
+    [NREG,species,isonuclear_species] = find_nreg_species(SIMULATION);
 end
 
 species = cellfun(@(s) strrep(s, '+', ''), species, 'UniformOutput', false);
