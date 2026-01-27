@@ -1,5 +1,72 @@
 #!/bin/tcsh -f
 
+# Directory containing the MATLAB analysis scripts (function mode)
+set script_dir = "$SOLPSTOP/scripts/MATLAB_analysis"
+
+# Directory containing compiled executables and runtime
+set compiled_dir = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis"
+set runtime_dir = "$compiled_dir/MATLAB_Runtime"
+
+# =============================================================================
+# Determine if we should use compiled mode or function mode
+# =============================================================================
+set use_runtime = 0
+set found_runtime = 0
+set runtime_version = ""
+
+if (-d "$runtime_dir") then
+    # Find the version directory (R20XXa, R20XXb, or vXXX)
+    # Check each subdirectory to find a valid runtime
+    foreach subdir ("$runtime_dir"/*)
+        if (-d "$subdir") then
+            set dirname = "$subdir:t"
+            # Check if it matches R20XXa/R20XXb pattern
+            echo "$dirname" | grep -q '^R[0-9][0-9][0-9][0-9][ab]$'
+            if ($status == 0) then
+                set runtime_version = "$dirname"
+                set use_runtime = 1
+                set found_runtime = 1
+                break
+            endif
+            # Check if it matches vXXX pattern (e.g., v912, v241)
+            echo "$dirname" | grep -q '^v[0-9][0-9]*$'
+            if ($status == 0) then
+                set runtime_version = "$dirname"
+                set use_runtime = 1
+                set found_runtime = 1
+                break
+            endif
+        endif
+    end
+endif
+
+# Detect platform for runtime binary path
+set platform = ""
+set uname_s = `uname -s`
+set uname_m = `uname -m`
+
+if ("$uname_s" == "Darwin") then
+    if ("$uname_m" == "arm64") then
+        set platform = "maca64"
+    else
+        set platform = "maci64"
+    endif
+else if ("$uname_s" == "Linux") then
+    set platform = "glnxa64"
+endif
+
+# Verify runtime actually exists for this platform
+if ($use_runtime == 1) then
+    if (! -d "$runtime_dir/$runtime_version/bin/$platform") then
+        set use_runtime = 0
+        set found_runtime = 0
+        set runtime_version = ""
+    endif
+endif
+
+# =============================================================================
+# Show help message if no arguments or --h/-h/--help
+# =============================================================================
 set show_help = 0
 if ($#argv == 0) then
     set show_help = 1
@@ -9,10 +76,6 @@ else
     endif
 endif
 
-# Directory containing the MATLAB analysis scripts
-set script_dir = "$SOLPSTOP/scripts/MATLAB_analysis"
-
-# Show help message
 if ($show_help == 1) then
     echo ""
     echo "============================================================================================================="
@@ -21,12 +84,21 @@ if ($show_help == 1) then
     echo ""
     echo "DESCRIPTION:"
     echo "    This script runs the MATLAB scripts present in "'$SOLPSTOP/scripts/MATLAB_analysis'""
-    echo "    directly from the command line with automatic argument parsing"
+    echo "    directly from the command line with automatic argument parsing."
+    echo "    If MATLAB is found in the system, then the scripts can be run either as functions,"
+    echo "    using the MATLAB Interpreter, or as compiled binaries, using the free MATLAB Runtime."
+    echo "    If MATLAB is not found, then only the use of MATLAB Runtime is possible."
+    echo "    The compiled binaries can be achieved by running compile_matlab_scripts, which locally compiles"
+    echo "    the MATLAB scripts if MATLAB is found in the system, otherwise downloads precompiled binaries."
+    echo "    If the compiled versions of the MATLAB scripts are detected in the system, then MATLAB Runtime"
+    echo "    is automatically used for the execution. For forcing the use of the MATLAB Interpreter"
+    echo "    (only if MATLAB is present) this script must be called as run_matlab --f." 
     echo ""
     echo "USAGE:"
     echo "    run_matlab <script_name> [--ARG1 value1] [--ARG2 value2] ...   (for running the script <script_name>)"
+    echo "    run_matlab --f <script_name> ...                               (for forcing run using MATLAB interpreter)"
     echo "    run_matlab <script_name> --h                                   (for script-specific help)"
-    echo "    run_matlab --h                                                 (this help message)"
+    echo "    run_matlab --h                                                 (prints this help message)"
     echo ""
     echo "ARGUMENT TYPES:"
     echo "    --FLAG True                 Logical (MATLAB format: true/false)"
@@ -55,22 +127,102 @@ if ($show_help == 1) then
     exit 0
 endif
 
-# Check if MATLAB executable is found
-which matlab >& /dev/null
-if ($status != 0) then
-    echo "Error: MATLAB not found."
-    echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module"
-    exit 1
+# =============================================================================
+# Determine run mode
+# =============================================================================
+
+set func = ""
+
+# Make a local copy of argv
+set args = ( $argv )
+
+if ($#args >= 1) then
+    if ("$args[1]" == "--f") then
+        set use_runtime = 0
+        if ($#args >= 2) then
+            set func = "$args[2]"
+            # shift args so options start at $argv[2]
+            set argv = ( $args[2-] )   # $argv[1] = func, $argv[2..] = flags
+        else
+            echo "Error: script name required after --f"
+            exit 1
+        endif
+    else
+        # default: first arg is function
+        set func = "$args[1]"
+        set argv = ( $args )          # no change
+    endif
 endif
 
+# =============================================================================
+# Get function name and current directory
+# =============================================================================
 set func = "$1"
 set curr_dir = `pwd`
-set tmpfile = "/tmp/matlab_cmd_$$.m"
 
-# Create the MATLAB command as a file
+# =============================================================================
+# Find the compiled executable (if using runtime)
+# =============================================================================
+set func_subdir = ""
+
+if ($use_runtime == 1) then
+    set found_func = 0
+    
+    foreach subdir ("$compiled_dir"/*)
+        if (-d "$subdir" && "$subdir:t" != "MATLAB_Runtime") then
+            if (-d "$subdir/$func" && -f "$subdir/$func/run_$func.sh") then
+                set found_func = 1
+                set func_subdir = "$subdir:t"
+                break
+            endif
+        endif
+    end
+    
+    if ($found_func == 0) then
+        echo "Error: Compiled function '$func' not found in $compiled_dir"
+        exit 1
+    endif
+endif
+
+# =============================================================================
+# Handle help request for specific function
+# =============================================================================
 if ($#argv >= 2) then
     if ("$argv[2]" == "--h" || "$argv[2]" == "-h" || "$argv[2]" == "--help") then
-        cat > $tmpfile << EOF
+        if ($use_runtime == 1) then
+            set exec_dir = "$compiled_dir/$func_subdir/$func"
+            set exec_script = "$exec_dir/run_$func.sh"
+            set runtime_path = "$runtime_dir/$runtime_version"
+            
+            "$exec_script" "$runtime_path" "$curr_dir" "help" |& tail -n +5
+            exit $status
+        else
+            which matlab >& /dev/null
+            if ($status != 0) then
+                if ($use_runtime = 0) then
+                    if ($found_runtime != 0) then
+                        echo "Error: MATLAB not found."
+                        echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module, if available"
+                        echo "If MATLAB is not available in your system, then use the MATLAB runtime (don't run with run_matlab --f)"
+                        exit 1
+                    else       
+                        echo "Error: MATLAB not found."
+                        echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module, if available"
+                        echo "If MATLAB is not available in your system, then download the compiled MATLAB functions running download_compiled_matlab_functions"
+                        exit 1
+                    endif
+                else
+                    if ($found_runtime = 0) then
+                        echo "Error: MATLAB not found."
+                        echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module, if available"
+                        echo "If MATLAB is not available in your system, then download the compiled MATLAB functions running download_compiled_matlab_functions"
+                        exit 1
+                    endif
+                endif 
+            endif
+            
+            set tmpfile = "/tmp/matlab_cmd_$$.m"
+            cat > $tmpfile << EOF
 cd('$curr_dir');
 addpath(genpath('$script_dir'));
 try
@@ -80,76 +232,139 @@ catch ME
 end
 exit
 EOF
-        matlab -nodesktop -nosplash -r "run('$tmpfile')" </dev/null |& tail -n +11
-        rm -f $tmpfile
-        exit $status
+            matlab -nodesktop -nosplash -r "run('$tmpfile')" </dev/null |& tail -n +11
+            rm -f $tmpfile
+            exit $status
+        endif
     endif
 endif
 
-set matlab_cmd = "args = struct(); "
-
-# Parse the input arguments and convert them to a MATLAB variable
+# =============================================================================
+# Execute function (with or without arguments)
+# =============================================================================
 set arglist = ($argv[2-])
 set i = 1
-while ($i <= $#arglist)
-    set current = "$arglist[$i]"
+
+if ($use_runtime == 1) then
+    echo lol runtime
+    # ==========================================================================
+    # COMPILED MODE
+    # ==========================================================================
+    set exec_dir = "$compiled_dir/$func_subdir/$func"
+    set exec_script = "$exec_dir/run_$func.sh"
+    set runtime_path = "$runtime_dir/$runtime_version"
     
-    if ("$current" =~ --*) then
-        set vname = `echo "$current" | sed 's/^--//'`
-        @ i++
+    set compiled_args = ()
+    
+    while ($i <= $#arglist)
+        set current = "$arglist[$i]"
         
-        if ($i > $#arglist) then
-            echo "Error: $current requires a value"
-            exit 1
+        if ("$current" =~ --*) then
+            set vname = `echo "$current" | sed 's/^--//'`
+            @ i++
+            
+            if ($i > $#arglist) then
+                echo "Error: $current requires a value"
+                exit 1
+            endif
+            
+            set tmpval = "$arglist[$i]"
+            set compiled_args = ($compiled_args "$vname" "$tmpval")
         endif
         
-        set tmpval = "$arglist[$i]"
-        
-        if ("$tmpval" == "True" || "$tmpval" == "true") then
-            set matlab_cmd = "$matlab_cmd""args.$vname = true; "
-        else if ("$tmpval" == "False" || "$tmpval" == "false") then
-            set matlab_cmd = "$matlab_cmd""args.$vname = false; "
-        else
-            set has_comma = `echo "$tmpval" | grep -E -c ','`
-            if ($has_comma == 1) then
-                set is_pure_numeric = `echo "$tmpval" | grep -E -c '^[0-9.,+-]+$'`
-                if ($is_pure_numeric == 1) then
-                    set matlab_cmd = "$matlab_cmd""args.$vname = [$tmpval]; "
-                else
-                    set cell_elements = ""
-                    set tmplist = `echo "$tmpval" | tr ',' ' '`
-                    foreach elem ($tmplist)
-                        if ("$elem" == "True" || "$elem" == "true") then
-                            set cell_elements = "$cell_elements, true"
-                        else if ("$elem" == "False" || "$elem" == "false") then
-                            set cell_elements = "$cell_elements, false"
-                        else
-                            set elem_is_num = `echo "$elem" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
-                            if ($elem_is_num == 1) then
-                                set cell_elements = "$cell_elements, $elem"
-                            else
-                                set cell_elements = "$cell_elements, '$elem'"
-                            endif
-                        endif
-                    end
-                    set cell_elements = `echo "$cell_elements" | sed 's/^, //'`
-                    set matlab_cmd = "$matlab_cmd""args.$vname = {$cell_elements}; "
-                endif
-            else
-                set is_numeric = `echo "$tmpval" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
-                if ($is_numeric == 1) then
-                    set matlab_cmd = "$matlab_cmd""args.$vname = $tmpval; "
-                else
-                    set matlab_cmd = "$matlab_cmd""args.$vname = '$tmpval'; "
-                endif
-            endif
+        @ i++
+    end
+    
+    if ($#compiled_args == 0) then
+        "$exec_script" "$runtime_path" "$curr_dir" |& tail -n +5
+    else
+        "$exec_script" "$runtime_path" "$curr_dir" $compiled_args |& tail -n +5
+    endif
+    
+    exit $status
+    
+else
+    echo lol function
+    # ==========================================================================
+    # FUNCTION MODE
+    # ==========================================================================
+    which matlab >& /dev/null
+    if ($status != 0) then
+        if ($found_runtime != 0) then
+            echo "Error: MATLAB not found."
+            echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module, if available"
+            echo "If MATLAB is not available in your system, then use the MATLAB runtime (don't run with run_matlab --f)"
+            exit 1
+        else       
+            echo "Error: MATLAB not found."
+            echo "Please add the MATLAB bin directory to your PATH (setenv PATH "'"'"/your/MATLAB/bin/directory:"'$PATH'""'"'"), or load it as a module, if available"
+            echo "If MATLAB is not available in your system, then download the compiled MATLAB functions running download_compiled_matlab_functions"
+            exit 1
         endif
     endif
     
-    @ i++
-end
-
-cat > $tmpfile << EOF
+    set tmpfile = "/tmp/matlab_cmd_$$.m"
+    set matlab_cmd = "args = struct(); "
+    
+    while ($i <= $#arglist)
+        set current = "$arglist[$i]"
+        
+        if ("$current" =~ --*) then
+            set vname = `echo "$current" | sed 's/^--//'`
+            @ i++
+            
+            if ($i > $#arglist) then
+                echo "Error: $current requires a value"
+                exit 1
+            endif
+            
+            set tmpval = "$arglist[$i]"
+            
+            if ("$tmpval" == "True" || "$tmpval" == "true") then
+                set matlab_cmd = "$matlab_cmd""args.$vname = true; "
+            else if ("$tmpval" == "False" || "$tmpval" == "false") then
+                set matlab_cmd = "$matlab_cmd""args.$vname = false; "
+            else
+                set has_comma = `echo "$tmpval" | grep -E -c ','`
+                if ($has_comma == 1) then
+                    set is_pure_numeric = `echo "$tmpval" | grep -E -c '^[0-9.,+-]+$'`
+                    if ($is_pure_numeric == 1) then
+                        set matlab_cmd = "$matlab_cmd""args.$vname = [$tmpval]; "
+                    else
+                        set cell_elements = ""
+                        set tmplist = `echo "$tmpval" | tr ',' ' '`
+                        foreach elem ($tmplist)
+                            if ("$elem" == "True" || "$elem" == "true") then
+                                set cell_elements = "$cell_elements, true"
+                            else if ("$elem" == "False" || "$elem" == "false") then
+                                set cell_elements = "$cell_elements, false"
+                            else
+                                set elem_is_num = `echo "$elem" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
+                                if ($elem_is_num == 1) then
+                                    set cell_elements = "$cell_elements, $elem"
+                                else
+                                    set cell_elements = "$cell_elements, '$elem'"
+                                endif
+                            endif
+                        end
+                        set cell_elements = `echo "$cell_elements" | sed 's/^, //'`
+                        set matlab_cmd = "$matlab_cmd""args.$vname = {$cell_elements}; "
+                    endif
+                else
+                    set is_numeric = `echo "$tmpval" | grep -E -c '^[+-]?[0-9]+(\.[0-9]+)?$'`
+                    if ($is_numeric == 1) then
+                        set matlab_cmd = "$matlab_cmd""args.$vname = $tmpval; "
+                    else
+                        set matlab_cmd = "$matlab_cmd""args.$vname = '$tmpval'; "
+                    endif
+                endif
+            endif
+        endif
+        
+        @ i++
+    end
+    
+    cat > $tmpfile << EOF
 cd('$curr_dir');
 addpath(genpath('$script_dir'));
 $matlab_cmd
@@ -160,11 +375,9 @@ catch ME
 end
 exit
 EOF
-
-# Actual MATLAB run command
-matlab -nodesktop -nosplash -r "run('$tmpfile')" </dev/null |& tail -n +11
-
-# Clean up status file for the next call
-rm -f $tmpfile
-
-exit $status
+    
+    matlab -nodesktop -nosplash -r "run('$tmpfile')" </dev/null |& tail -n +11
+    rm -f $tmpfile
+    
+    exit $status
+endif
