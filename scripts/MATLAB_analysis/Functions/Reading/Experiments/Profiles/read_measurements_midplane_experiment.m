@@ -57,10 +57,12 @@ if exp_data_avail
 
                 %% CHECK THAT THE AUG LIBRARY LOCALLY EXISTS
 
-                if ~isfolder(sprintf('%s/scripts.local/MATLAB_analysis_AUG',simulation.SOLPSTOP))
+                if ~isfolder(sprintf('%s/scripts.local/MATLAB_analysis/AUG',simulation.SOLPSTOP))
                     error(sprintf('Error: MATLAB library for reading AUG experimental data does not exist locally. Get it running the command ''clone_matlab_exp_libraries AUG'''));
                 end
-                addpath(genpath(sprintf('%s/scripts.local/MATLAB_analysis_AUG',simulation.SOLPSTOP)));
+                if ~isdeployed
+                    addpath(genpath(sprintf('%s/scripts.local/MATLAB_analysis/AUG',simulation.SOLPSTOP)));
+                end
 
                 %% LOAD EXPERIMENTAL DATA FOR AUG
 

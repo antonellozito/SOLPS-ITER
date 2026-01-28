@@ -16,8 +16,13 @@ if (! -d "$base_dir") then
     mkdir -p "$base_dir"
 endif
 
+# Create scripts.local/MATLAB_analysis if it doesn't exist
+if (! -d "$base_dir/MATLAB_analysis") then
+    mkdir -p "$base_dir/MATLAB_analysis"
+endif
+
 # Target folder for this device
-set target_dir = "$base_dir/MATLAB_analysis_$device"
+set target_dir = "$base_dir/MATLAB_analysis/$device"
 
 # Check the validity of the device
 set valid_devices = (AUG)
@@ -37,7 +42,7 @@ endif
 # Decide repository URL based on device
 switch ($device)
     case "AUG":
-        set repo_url = "https://github.com/antonellozito/MATLAB-analysis-AUG.git"
+        set repo_url = "https://gitlab.mpcdf.mpg.de/azito/aug_matlab_tools.git"
         breaksw
 endsw
 # Clone the repository (fail if folder already exists)

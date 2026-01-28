@@ -20733,9 +20733,22 @@ or in an interactive way within the MATLAB GUI.
 
 Within the \SOLPSITER environment, scripts made to display run-related inputs/outputs and generate/print
 plots can be directly executed within a run directory, showing results from one specific simulation.
-The only requirement is the need for the command line to be able to locate a valid MATLAB executable
-(as the result of the \texttt{which matlab} command). This can be achieved either loading a version of
-MATLAB as a module, or by manually adding the path to a MATLAB executable to the environment variable \texttt{PATH}.
+In order to do this, it is not necessary to have a full MATLAB installation: it is sufficient to have a
+local installation of MATLAB Runtime, which is available for free. This requires the various MATLAB scripts
+to exist in the form of compiled executables.
+
+By running the shell script
+\begin{verbatim}
+  compile_matlab_scripts
+\end{verbatim}
+the executables for all available MATLAB scripts are achieved fully automatically. For systems in which
+a full MATLAB installation is available (which can be achieved either loading a version of MATLAB as a
+module, or by manually adding the path to a MATLAB executable to the environment variable \texttt{PATH}),
+the executable are locally built by means of the built-in MATLAB compiler. If, alongside the main repository,
+also any of the MATLAB scripts or functions are updated, by running again \texttt{compile\_matlab\_scripts}
+shell script this will be recognized and the MATLAB scripts will be recompiled.
+For systems without a full MATLAB installation, the prebuilt binaries, dependent on OS and CPU architecture,
+are fetched from an auxiliary repository which is kept up-to-date with the main \SOLPSITER repository.
 
 The interface between the command line and MATLAB is provided by the \texttt{run\_matlab} shell script.
 This locates the MATLAB script which is to be executed, launches the command line version of MATLAB and
