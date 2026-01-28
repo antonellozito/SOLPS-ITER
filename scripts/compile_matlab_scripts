@@ -20,13 +20,13 @@ endif
 
 # Set up paths
 set SOURCE_DIR = "$SOLPSTOP/scripts/MATLAB_analysis/Scripts"
-set OUTPUT_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/Matlab_analysis/Scripts"
+set OUTPUT_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/Scripts"
 set INCLUDE_DIR1 = "$SOLPSTOP/scripts/MATLAB_analysis"
 set INCLUDE_DIR2 = "$SOLPSTOP/scripts.local/MATLAB_analysis"
 set STARTUP_FILE = "$SOLPSTOP/scripts/MATLAB_analysis/startup.m"
 set STARTUP_BACKUP = "$SOLPSTOP/scripts/MATLAB_analysis/startup.m.compile_backup"
 set FUNCTIONS_SRC = "$SOLPSTOP/scripts/MATLAB_analysis/Functions"
-set FUNCTIONS_DST = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/Matlab_analysis/Functions"
+set FUNCTIONS_DST = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/Functions"
 
 if (! -d "$INCLUDE_DIR2") then
     mkdir -p "$INCLUDE_DIR2"
@@ -43,8 +43,8 @@ endif
 if (! -d "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER") then
     mkdir -p "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER"
 endif
-if (! -d "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/Matlab_analysis") then
-    mkdir -p "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/Matlab_analysis"
+if (! -d "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis") then
+    mkdir -p "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis"
 endif
 if (! -d "$OUTPUT_DIR") then
     mkdir -p "$OUTPUT_DIR"
@@ -215,10 +215,29 @@ foreach m_file ($m_files)
             if (-f "$temp_deps_list") then
                 cp "$temp_deps_list" "$target_deps_file"
             endif
-            
-            echo "---> Success: $func_name compiled"
-            set any_compilation = 1
-            @ compiled_count++
+
+            # Check if compiled binary exists
+            if (`uname` == "Darwin") then
+                if ( -e "$target_dir/$func_name.app" && -f "$target_dir/run_$func_name.sh" ) then
+                    echo "---> Success: $func_name compiled"
+                    set any_compilation = 1
+                    @ compiled_count++
+                else
+                    echo "---> Failed: $func_name compilation failed"
+                    # Remove the failed target directory
+                    rm -rf "$target_dir"
+                endif
+            else if (`uname` == "Linux") then
+                if ( -f "$target_dir/$func_name" && -f "$target_dir/run_$func_name.sh" ) then
+                    echo "---> Success: $func_name compiled"
+                    set any_compilation = 1
+                    @ compiled_count++
+                else
+                    echo "---> Failed: $func_name compilation failed"
+                    # Remove the failed target directory
+                    rm -rf "$target_dir"
+                endif
+            endif
         else
             echo "---> Failed: $func_name compilation failed"
             # Remove the failed target directory
@@ -299,9 +318,13 @@ echo "==========================================================================
 # Runtime installer management
 # =============================================================================
 
-set RUNTIME_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/Matlab_analysis/MATLAB_Runtime_installer"
+if (! -d "$HOME/.local/share") then
+    mkdir -p "$HOME/.local/share"
+endif
+
+set RUNTIME_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_Runtime_installer"
 set DEPS_FILE = "$RUNTIME_DIR/dependencies.txt"
-set MATLAB_RUNTIME_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/Matlab_analysis/MATLAB_Runtime_application"
+set MATLAB_RUNTIME_DIR = "$HOME/.local/share/MATLAB_Runtime"
 
 # Collect all dependencies from buildresult.json files
 set buildresult_files = `find "$OUTPUT_DIR" -name "buildresult.json" -type f`
@@ -538,9 +561,36 @@ if ($needs_installer == 1) then
             # Check if installation was successful
             set runtime_version = `ls "$MATLAB_RUNTIME_DIR" | grep -E '^R[0-9]{4}[ab]$|^v[0-9]+$' | head -1`
             if ("$runtime_version" != "") then
-                echo "---> Success: MATLAB Runtime application installed"
-                echo -n "---> Location"
-                echo ": $MATLAB_RUNTIME_DIR"
+
+                # Check the local installation of MATLAB Runtime is good
+                if (`uname -s` == "Darwin") then
+                    if (`uname -m` == "arm64") then
+                        set platform = "maca64"
+                    else
+                        set platform = "maci64"
+                    endif
+                    set libext = "dylib"
+                else
+                    set platform = "glnxa64"
+                    set libext = "so"
+                endif
+
+                set runtime_valid = 1
+
+                if (! -f "$MATLAB_RUNTIME_DIR/$runtime_version/bin/$platform/libmwmclmcr.$libext") then
+                    set runtime_valid = 0
+                else if (! -f "$MATLAB_RUNTIME_DIR/$runtime_version/bin/$platform/libmwmcr.$libext") then
+                    set runtime_valid = 0
+                endif
+
+                if ($runtime_valid == 1) then
+                    echo "---> Success: MATLAB Runtime application installed"
+                    echo -n "---> Location"
+                    echo ": $MATLAB_RUNTIME_DIR"
+                else
+                    echo "---> Failed: MATLAB Runtime installation is incomplete or corrupted"
+                    exit 1
+                endif
                 
                 # Add setup lines if they don't already exist
                 set setup_file = "${SOLPSTOP}/SETUP/setup.csh.${HOST_NAME}.${COMPILER}.local"
@@ -558,27 +608,27 @@ if ($needs_installer == 1) then
                     endif
 
                     # Check if lines already exist
-                    grep -q "Matlab_analysis/MATLAB_Runtime/${runtime_version}/runtime" "$setup_file"
+                    grep -q "MATLAB_analysis/MATLAB_Runtime/${runtime_version}/runtime" "$setup_file"
                     if ($status == 0) then
                         echo "-> Setup lines already exist in $setup_file"
                     else
                         echo "" >> "$setup_file"
                         echo "# MATLAB Runtime paths" >> "$setup_file"
-                        echo setenv DYLD_LIBRARY_PATH \$\{SOLPSTOP\}/scripts/${HOST_NAME}.${COMPILER}/Matlab_analysis/MATLAB_Runtime/${runtime_version}/runtime/${mac_arch}:\$\{DYLD_LIBRARY_PATH\} >> "$setup_file"
-                        echo setenv DYLD_LIBRARY_PATH \$\{SOLPSTOP\}/scripts/${HOST_NAME}.${COMPILER}/Matlab_analysis/MATLAB_Runtime/${runtime_version}/bin/${mac_arch}:\$\{DYLD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv DYLD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}/${runtime_version}/runtime/${mac_arch}:\$\{DYLD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv DYLD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}/${runtime_version}/bin/${mac_arch}:\$\{DYLD_LIBRARY_PATH\} >> "$setup_file"
                         echo "---> Added runtime paths to $setup_file"
                     endif
 
                 else if (`uname` == "Linux") then
                     # Check if lines already exist
-                    grep -q "Matlab_analysis/MATLAB_Runtime/${runtime_version}/runtime" "$setup_file"
+                    grep -q "MATLAB_analysis/MATLAB_Runtime/${runtime_version}/runtime" "$setup_file"
                     if ($status == 0) then
                         echo "---> Setup lines already exist in $setup_file"
                     else
                         echo "" >> "$setup_file"
                         echo "# MATLAB Runtime paths" >> "$setup_file"
-                        echo setenv LD_LIBRARY_PATH \$\{SOLPSTOP\}/scripts/${HOST_NAME}.${COMPILER}/Matlab_analysis/MATLAB_Runtime/${runtime_version}/runtime/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
-                        echo setenv LD_LIBRARY_PATH \$\{SOLPSTOP\}/scripts/${HOST_NAME}.${COMPILER}/Matlab_analysis/MATLAB_Runtime/${runtime_version}/bin/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}//${runtime_version}/runtime/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}//${runtime_version}/bin/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
                         echo "---> Added runtime paths to $setup_file"
                     endif
                 endif
