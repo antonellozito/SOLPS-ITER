@@ -5,7 +5,11 @@ set script_dir = "$SOLPSTOP/scripts/MATLAB_analysis"
 
 # Directory containing compiled executables and runtime
 set compiled_dir = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/Scripts"
-set runtime_dir = "$HOME/.local/share/MATLAB_Runtime"
+if ("$HOST_NAME" == "LINUX" || "$HOST_NAME" == "DARWIN") then
+    set runtime_dir = "$HOME/.local/share/MATLAB_Runtime"
+else
+    set runtime_dir = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_Runtime"
+endif
 
 # =============================================================================
 # Determine if we should use compiled mode or function mode

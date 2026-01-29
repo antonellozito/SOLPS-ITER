@@ -18,6 +18,36 @@ if ($status != 0) then
     exit 1
 endif
 
+# Check MATLAB version (requires at least R2025a)
+set temp_matlab_script = "/tmp/matlab_version_$$.m"
+set temp_matlab_output = "/tmp/matlab_version_out_$$.txt"
+printf "v = version('-release'); fprintf('%%s', v);\n" > "$temp_matlab_script"
+matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')" >& "$temp_matlab_output"
+set matlab_version = `tail -1 "$temp_matlab_output"`
+rm -f "$temp_matlab_script" "$temp_matlab_output"
+
+set matlab_year = `echo "$matlab_version" | sed 's/[ab]$//'`
+set matlab_release = `echo "$matlab_version" | sed 's/.*\([ab]\)$/\1/'`
+
+# Check if year is at least 2025
+if ("$matlab_year" == "") then
+    echo "Error: Could not determine MATLAB version."
+    exit 1
+endif
+
+@ min_year = 2025
+@ current_year = $matlab_year
+
+if ($current_year < $min_year) then
+    echo "Error: MATLAB R2025a or later is required for compilation."
+    echo "Current version: R$matlab_version"
+    echo "Please use a more recent of MATLAB to locally compile the scripts"
+    # Or download the precompiled binaries... add option here
+    exit 1
+endif
+
+echo "MATLAB version: R$matlab_version (OK)"
+
 # Set up paths
 set SOURCE_DIR = "$SOLPSTOP/scripts/MATLAB_analysis/Scripts"
 set OUTPUT_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/Scripts"
@@ -181,7 +211,7 @@ foreach m_file ($m_files)
             else
                 # Files are identical - skip
                 echo -n "[$current_num/$total_files] $func_name"
-                echo ": compilation up to date, skipping"
+                echo ": compilation already up to date, skipping"
                 @ skipped_count++
             endif
         endif
@@ -201,11 +231,16 @@ foreach m_file ($m_files)
         
         # First, get the list of dependencies and save it
         set temp_deps_list = "/tmp/func_deps_$$.txt"
-        matlab -nodisplay -nosplash -nodesktop -batch "addpath(genpath('$INCLUDE_DIR1/Functions')); addpath(genpath('$INCLUDE_DIR2')); [fList, ~] = matlab.codetools.requiredFilesAndProducts('$m_file'); fid = fopen('$temp_deps_list', 'w'); for i = 1:numel(fList), if contains(fList{i}, '$FUNCTIONS_SRC'), fprintf(fid, '%s\n', fList{i}); end; end; fclose(fid);"
+        set temp_matlab_script = "/tmp/matlab_cmd_deps_$$.m"
+        printf "addpath(genpath('%s/Functions')); addpath(genpath('%s')); [fList, ~] = matlab.codetools.requiredFilesAndProducts('%s'); fid = fopen('%s', 'w'); for i = 1:numel(fList), if contains(fList{i}, '%s'), fprintf(fid, '%%s\\n', fList{i}); end; end; fclose(fid);\n" "$INCLUDE_DIR1" "$INCLUDE_DIR2" "$m_file" "$temp_deps_list" "$FUNCTIONS_SRC" > "$temp_matlab_script"
+        matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')"
+        rm -f "$temp_matlab_script"
 
         # Run MATLAB compiler in batch mode
-        matlab -nodisplay -nosplash -nodesktop -batch \
-            "try; mcc -m -v -w off -o $func_name -d $target_dir -a $INCLUDE_DIR1/Functions -a $INCLUDE_DIR2 $m_file; exit(0); catch ME; disp(ME.message); exit(1); end" >& /dev/null
+        set temp_matlab_script = "/tmp/matlab_cmd_mcc_$$.m"
+        printf "try; mcc -m -v -w off -o %s -d %s -a %s/Functions -a %s %s; exit(0); catch ME; disp(ME.message); exit(1); end\n" "$func_name" "$target_dir" "$INCLUDE_DIR1" "$INCLUDE_DIR2" "$m_file" > "$temp_matlab_script"
+        matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')" >& /dev/null
+        rm -f "$temp_matlab_script"
         
         if ($status == 0) then
             # Copy the original .m file to the target directory
@@ -311,20 +346,24 @@ endif
 echo ""
 
 echo "============================================================================================================="
-echo "Compilation completed: $compiled_count compiled, $skipped_count skipped (up to date)"
+echo "Compilation completed: $compiled_count compiled, $skipped_count skipped (already up to date)"
 echo "============================================================================================================="
 
 # =============================================================================
 # Runtime installer management
 # =============================================================================
 
-if (! -d "$HOME/.local/share") then
-    mkdir -p "$HOME/.local/share"
+if ("$HOST_NAME" == "LINUX" || "$HOST_NAME" == "DARWIN") then
+    if (! -d "$HOME/.local/share") then
+        mkdir -p "$HOME/.local/share"
+    endif
+    set MATLAB_RUNTIME_DIR = "$HOME/.local/share/MATLAB_Runtime"
+else
+    set MATLAB_RUNTIME_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_Runtime"
 endif
 
 set RUNTIME_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_Runtime_installer"
 set DEPS_FILE = "$RUNTIME_DIR/dependencies.txt"
-set MATLAB_RUNTIME_DIR = "$HOME/.local/share/MATLAB_Runtime"
 
 # Collect all dependencies from buildresult.json files
 set buildresult_files = `find "$OUTPUT_DIR" -name "buildresult.json" -type f`
@@ -352,9 +391,11 @@ foreach br_file ($buildresult_files)
     echo "$br_file" >> "$temp_file_list"
 end
 
-# Use MATLAB to extract dependencies (single line command)
-matlab -nodisplay -nosplash -nodesktop -batch "fid = fopen('$temp_file_list', 'r'); files = textscan(fid, '%s'); fclose(fid); files = files{1}; all_deps = []; for i = 1:numel(files), data = jsondecode(fileread(files{i})); if isfield(data, 'RuntimeDependencies'), deps = data.RuntimeDependencies; if isstruct(deps), all_deps = [all_deps; [deps.ID]']; end; end; end; all_deps = unique(all_deps); fid = fopen('$temp_deps_new', 'w'); for i = 1:numel(all_deps), fprintf(fid, '%d\n', all_deps(i)); end; fclose(fid);"
-
+# Use MATLAB to extract dependencies
+set temp_matlab_script = "/tmp/matlab_cmd_rtdeps_$$.m"
+printf "fid = fopen('%s', 'r'); files = textscan(fid, '%%s'); fclose(fid); files = files{1}; all_deps = []; for i = 1:numel(files), data = jsondecode(fileread(files{i})); if isfield(data, 'RuntimeDependencies'), deps = data.RuntimeDependencies; if isstruct(deps), all_deps = [all_deps; [deps.ID]']; end; end; end; all_deps = unique(all_deps); fid = fopen('%s', 'w'); for i = 1:numel(all_deps), fprintf(fid, '%%d\\n', all_deps(i)); end; fclose(fid);\n" "$temp_file_list" "$temp_deps_new" > "$temp_matlab_script"
+matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')"
+rm -f "$temp_matlab_script"
 rm -f "$temp_file_list"
 
 if ($status != 0) then
@@ -411,8 +452,6 @@ else if ($any_compilation == 1) then
 endif
 
 if ($needs_installer == 1) then
-    echo ""
-    echo "Creating custom MATLAB Runtime installer:"
     
     # Remove old installer and runtime if they exist
     if (-d "$RUNTIME_DIR") then
@@ -425,65 +464,150 @@ if ($needs_installer == 1) then
     endif
     
     mkdir -p "$RUNTIME_DIR"
-    
-    # Write buildresult files to a temporary file
-    set temp_file_list = "/tmp/buildresult_list_$$.txt"
-    rm -f "$temp_file_list"
-    foreach br_file ($buildresult_files)
-        echo "$br_file" >> "$temp_file_list"
-    end  
-    
-    # Create MATLAB script to read the file list and call customInstaller
-    matlab -nodisplay -nosplash -nodesktop -batch \
-        "try; fid = fopen('$temp_file_list', 'r'); files = textscan(fid, '%s'); fclose(fid); files = files{1}; compiler.runtime.customInstaller('SOLPS_MATLAB_Runtime', files, 'OutputDir', '$RUNTIME_DIR'); exit(0); catch ME; disp(ME.message); exit(1); end"
-    
-    if ($status == 0) then
-        echo "---> Success: Custom MATLAB Runtime installer created"
-        echo -n "---> Location"
-        echo ": $RUNTIME_DIR"
+
+    if ("$HOST_NAME" == "LINUX" || "$HOST_NAME" == "DARWIN") then
+
+        echo ""
+        echo "Creating custom MATLAB Runtime installer:" 
         
-        # Save the dependencies list
-        cp "$temp_deps_new" "$DEPS_FILE"
-        echo "---> Dependencies list saved"
+        # Write buildresult files to a temporary file
+        set temp_file_list = "/tmp/buildresult_list_$$.txt"
+        rm -f "$temp_file_list"
+        foreach br_file ($buildresult_files)
+            echo "$br_file" >> "$temp_file_list"
+        end  
         
-    else
-        echo "---> Failer: Custom MATLAB Runtime installer creation failed"
-        rm -f "$temp_file_list" "$temp_deps_new"
-        if ($had_startup == 1) then
-            mv "$STARTUP_BACKUP" "$STARTUP_FILE"
+        # Create MATLAB script to read the file list and call customInstaller
+        set temp_matlab_script = "/tmp/matlab_cmd_installer_$$.m"
+        printf "try; fid = fopen('%s', 'r'); files = textscan(fid, '%%s'); fclose(fid); files = files{1}; compiler.runtime.customInstaller('SOLPS_MATLAB_Runtime', files, 'OutputDir', '%s'); exit(0); catch ME; disp(ME.message); exit(1); end\n" "$temp_file_list" "$RUNTIME_DIR" > "$temp_matlab_script"
+        matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')" >& /dev/null
+        rm -f "$temp_matlab_script"
+
+        if ($status == 0) then
+            echo "---> Success: Custom MATLAB Runtime installer created"
+            echo -n "---> Location"
+            echo ": $RUNTIME_DIR"
+            
+            # Save the dependencies list
+            cp "$temp_deps_new" "$DEPS_FILE"
+            echo "---> Dependencies list saved"
+            
+        else
+            echo "---> Failed: Custom MATLAB Runtime installer creation failed"
+            rm -f "$temp_file_list" "$temp_deps_new"
+            if ($had_startup == 1) then
+                mv "$STARTUP_BACKUP" "$STARTUP_FILE"
+            endif
+            exit 1
         endif
-        exit 1
+        
+        rm -f "$temp_file_list"
+
     endif
     
-    rm -f "$temp_file_list"
-    
     # =============================================================================
-    # Install the MATLAB Runtime (only if installer was just created)
+    # Install the MATLAB Runtime (only if installer was just created or downloaded)
     # =============================================================================
     
     echo ""
     echo "Installing MATLAB Runtime application:"
     
-    # Find the installer executable
-    set installer_exe = ""
-    if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe") then
-        set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe"
-    else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime") then
-        set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime"
-    else if (-d "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.app") then
-        set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.app/Contents/MacOS/setup"
-    else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.zip") then
-        echo "Extracting runtime installer..."
-        unzip -o "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.zip" -d "$RUNTIME_DIR"
-        if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime") then
-            set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime"
-        else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe") then
+    # Determine if we use custom installer or full installer
+    if ("$HOST_NAME" == "LINUX" || "$HOST_NAME" == "DARWIN") then
+        # Local computer: use custom installer (downloads only required components)
+        set use_full_installer = 0
+        
+        # Find the installer executable
+        set installer_exe = ""
+        if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe") then
             set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe"
+        else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.install") then
+            set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.install"
+        else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime") then
+            set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime"
         else if (-d "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.app") then
             set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.app/Contents/MacOS/setup"
+        else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.zip") then
+            echo "Extracting runtime installer..."
+            unzip -o "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.zip" -d "$RUNTIME_DIR"
+            if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime") then
+                set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime"
+            else if (-f "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe") then
+                set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.exe"
+            else if (-d "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.app") then
+                set installer_exe = "$RUNTIME_DIR/SOLPS_MATLAB_Runtime.app/Contents/MacOS/setup"
+            endif
+        endif
+    else
+        # Use full installer for HPC systems
+        set use_full_installer = 1
+        
+        # Get MATLAB version for download URL
+        set runtime_release = "$matlab_version"
+        
+        set platform_str = "glnxa64"
+        
+        # Download URL for full MATLAB Runtime
+        set download_url = "https://ssd.mathworks.com/supportfiles/downloads/R${runtime_release}/Release/0/deployment_files/installer/complete/${platform_str}/MATLAB_Runtime_R${runtime_release}_${platform_str}.zip"
+        
+        set full_installer_zip = "$RUNTIME_DIR/MATLAB_Runtime_R${runtime_release}_${platform_str}.zip"
+        set full_installer_dir = "$RUNTIME_DIR/MATLAB_Runtime_R${runtime_release}_${platform_str}"
+        
+        # Download the full installer if not already present
+        if (! -f "$full_installer_zip" && ! -d "$full_installer_dir") then
+            echo "---> Downloading full MATLAB Runtime installer (this may take a while)..."
+            echo "---> URL: $download_url"
+            
+            # Try wget first, then curl
+            which wget >& /dev/null
+            if ($status == 0) then
+                wget -q --show-progress -O "$full_installer_zip" "$download_url"
+            else
+                which curl >& /dev/null
+                if ($status == 0) then
+                    curl -L -o "$full_installer_zip" "$download_url"
+                else
+                    echo "---> Error: Neither wget nor curl found. Cannot download installer."
+                    exit 1
+                endif
+            endif
+            
+            if ($status != 0 || ! -f "$full_installer_zip") then
+                echo "---> Error: Failed to download MATLAB Runtime installer."
+                rm -f "$full_installer_zip"
+                exit 1
+            endif
+            
+            echo "---> Download complete."
+        endif
+        
+        # Extract the installer if needed
+        if (-f "$full_installer_zip" && ! -d "$full_installer_dir") then
+            echo "---> Extracting MATLAB Runtime installer..."
+            unzip -q -o "$full_installer_zip" -d "$RUNTIME_DIR"
+            
+            if ($status != 0) then
+                echo "---> Error: Failed to extract MATLAB Runtime installer."
+                exit 1
+            endif
+            
+            echo "---> Extraction complete."
+        endif
+        
+        # Find the installer executable in the extracted directory
+        set installer_exe = ""
+        if (-f "$RUNTIME_DIR/install") then
+            set installer_exe = "$RUNTIME_DIR/install"
+        else if (-f "$RUNTIME_DIR/Install") then
+            set installer_exe = "$RUNTIME_DIR/Install"
+        else
+            # Search for install script
+            set found_install = `find "$RUNTIME_DIR" -name "install" -type f | head -1`
+            if ("$found_install" != "") then
+                set installer_exe = "$found_install"
+            endif
         endif
     endif
-
 
     if ("$installer_exe" != "") then
         echo -n "---> Running installer"
@@ -583,14 +707,14 @@ if ($needs_installer == 1) then
                     set runtime_valid = 0
                 endif
 
-                if ($runtime_valid == 1) then
-                    echo "---> Success: MATLAB Runtime application installed"
-                    echo -n "---> Location"
-                    echo ": $MATLAB_RUNTIME_DIR"
-                else
-                    echo "---> Failed: MATLAB Runtime installation is incomplete or corrupted"
-                    exit 1
-                endif
+                #if ($runtime_valid == 1) then
+                #    echo "---> Success: MATLAB Runtime application installed"
+                #    echo -n "---> Location"
+                #    echo ": $MATLAB_RUNTIME_DIR"
+                #else
+                #    echo "---> Failed: MATLAB Runtime installation is incomplete or corrupted"
+                #    exit 1
+                #endif
                 
                 # Add setup lines if they don't already exist
                 set setup_file = "${SOLPSTOP}/SETUP/setup.csh.${HOST_NAME}.${COMPILER}.local"
@@ -627,8 +751,9 @@ if ($needs_installer == 1) then
                     else
                         echo "" >> "$setup_file"
                         echo "# MATLAB Runtime paths" >> "$setup_file"
-                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}//${runtime_version}/runtime/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
-                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}//${runtime_version}/bin/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}/${runtime_version}/runtime/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}/${runtime_version}/bin/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
+                        echo setenv LD_LIBRARY_PATH ${MATLAB_RUNTIME_DIR}/${runtime_version}/sys/os/glnxa64:\$\{LD_LIBRARY_PATH\} >> "$setup_file"
                         echo "---> Added runtime paths to $setup_file"
                     endif
                 endif
@@ -637,110 +762,115 @@ if ($needs_installer == 1) then
                 echo "============================================================================================================="
                 echo "Installation of MATLAB Runtime application completed"
                 echo "============================================================================================================="
-                echo ""
 
                 # =============================================================================
                 # Warm up the MATLAB Runtime by running dummy functions
                 # =============================================================================
                 
-                echo "Warming up MATLAB Runtime (first run initialization)"
-                echo ""
-                
-                # Create a temporary directory for warmup functions
-                set warmup_dir = "/tmp/matlab_warmup_$$"
-                mkdir -p "$warmup_dir"
-                
-                # Build warmup MATLAB code based on installed dependencies
-                set warmup_code = "disp('Warming up MATLAB Runtime...');"
-                
-                # Check each dependency and add appropriate test code
-                # 35010 - MATLAB Base Runtime (always present)
-                grep -q '^35010$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing Base Runtime...'); x = 1:10; y = x.^2; assert(y(3) == 9);"
-                endif
-                
-                # 35000 - MATLAB Extended Runtime Addon
-                grep -q '^35000$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing Extended Runtime...'); s = struct('a', 1, 'b', 2); assert(s.a == 1);"
-                endif
-                
-                # 35002 - MATLAB Graphics Runtime Addon
-                grep -q '^35002$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing Graphics Runtime...'); f = figure('Visible', 'off'); plot(1:10); close(f);"
-                endif
-                
-                # 35003 - MATLAB Standard Runtime Addon
-                grep -q '^35003$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing Standard Runtime...'); m = rand(10); [U,S,V] = svd(m);"
-                endif
-                
-                # 35106 - Optimization Toolbox Runtime Addon
-                grep -q '^35106$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing Optimization Toolbox...'); fun = @(x) x(1)^2 + x(2)^2; x0 = [1,1]; options = optimoptions('fminunc','Display','off'); fminunc(fun, x0, options);"
-                endif
-                
-                # 35131 - Partial Differential Equation Toolbox Runtime Addon
-                grep -q '^35131$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing PDE Toolbox...'); model = createpde(); R1 = [3,4,-1,1,1,-1,1,1,-1,-1]'; g = decsg(R1); geometryFromEdges(model,g);"
-                endif
-                
-                # 35160 - Curve Fitting Toolbox Runtime Addon
-                grep -q '^35160$' "$DEPS_FILE"
-                if ($status == 0) then
-                    set warmup_code = "${warmup_code} disp('---> Testing Curve Fitting Toolbox...'); xdata = (0:0.1:1)'; ydata = xdata.^2; f = fit(xdata, ydata, 'poly2');"
-                endif
-                
-                set warmup_code = "${warmup_code} disp('---> Warmup complete.');"
-                
-                # Create the warmup MATLAB file
-                set warmup_m_file = "$warmup_dir/warmup_runtime.m"
-                echo "function warmup_runtime()" > "$warmup_m_file"
-                echo "$warmup_code" >> "$warmup_m_file"
-                echo "end" >> "$warmup_m_file"
-                
-                # Compile the warmup function
-                echo "Compiling warmup function:"
-                matlab -nodisplay -nosplash -nodesktop -batch "mcc -m -w off -o warmup_runtime -d '$warmup_dir' '$warmup_m_file'" >& /dev/null
-                
-                if ($status == 0 && -f "$warmup_dir/run_warmup_runtime.sh") then
-                    echo "---> Success: warmup function compiled"
-                    echo ""
-                    echo "Running warmup function (this may take a while):"
-                    chmod +x "$warmup_dir/run_warmup_runtime.sh"
-                    "$warmup_dir/run_warmup_runtime.sh" "$MATLAB_RUNTIME_DIR/$runtime_version" < /dev/null |& tail -n +6
-                    
-                    if ($status == 0) then
-                        echo "---> Success: MATLAB Runtime warmed up"
-                    else
-                        echo ""
-                        echo "---> Warning: Warmup completed with errors (runtime may still work)"
-                    endif
-                else
-                    echo "---> Warning: Could not compile warmup function, skipping warmup"
-                endif
-                
-                # Clean up warmup directory
-                rm -rf "$warmup_dir"
+                if ("$HOST_NAME" == "LINUX" || "$HOST_NAME" == "DARWIN") then
 
-                echo ""
-                echo "============================================================================================================="
-                echo "Initialization of MATLAB Runtime application completed"
-                echo "============================================================================================================="
+                    echo ""
+                    echo "Warming up MATLAB Runtime (first run initialization)"
+                    echo ""
+                    
+                    # Create a temporary directory for warmup functions
+                    set warmup_dir = "/tmp/matlab_warmup_$$"
+                    mkdir -p "$warmup_dir"
+                    
+                    # Build warmup MATLAB code based on installed dependencies
+                    set warmup_code = "disp('Warming up MATLAB Runtime...');"
+                    
+                    # Check each dependency and add appropriate test code
+                    # 35010 - MATLAB Base Runtime (always present)
+                    grep -q '^35010$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing Base Runtime...'); x = 1:10; y = x.^2; assert(y(3) == 9);"
+                    endif
+                    
+                    # 35000 - MATLAB Extended Runtime Addon
+                    grep -q '^35000$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing Extended Runtime...'); s = struct('a', 1, 'b', 2); assert(s.a == 1);"
+                    endif
+                    
+                    # 35002 - MATLAB Graphics Runtime Addon
+                    grep -q '^35002$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing Graphics Runtime...'); f = figure('Visible', 'off'); plot(1:10); close(f);"
+                    endif
+                    
+                    # 35003 - MATLAB Standard Runtime Addon
+                    grep -q '^35003$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing Standard Runtime...'); m = rand(10); [U,S,V] = svd(m);"
+                    endif
+                    
+                    # 35106 - Optimization Toolbox Runtime Addon
+                    grep -q '^35106$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing Optimization Toolbox...'); fun = @(x) x(1)^2 + x(2)^2; x0 = [1,1]; options = optimoptions('fminunc','Display','off'); fminunc(fun, x0, options);"
+                    endif
+                    
+                    # 35131 - Partial Differential Equation Toolbox Runtime Addon
+                    grep -q '^35131$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing PDE Toolbox...'); model = createpde(); R1 = [3,4,-1,1,1,-1,1,1,-1,-1]'; g = decsg(R1); geometryFromEdges(model,g);"
+                    endif
+                    
+                    # 35160 - Curve Fitting Toolbox Runtime Addon
+                    grep -q '^35160$' "$DEPS_FILE"
+                    if ($status == 0) then
+                        set warmup_code = "${warmup_code} disp('---> Testing Curve Fitting Toolbox...'); xdata = (0:0.1:1)'; ydata = xdata.^2; f = fit(xdata, ydata, 'poly2');"
+                    endif
+                    
+                    set warmup_code = "${warmup_code} disp('---> Warmup complete.');"
+                    
+                    # Create the warmup MATLAB file
+                    set warmup_m_file = "$warmup_dir/warmup_runtime.m"
+                    echo "function warmup_runtime()" > "$warmup_m_file"
+                    echo "$warmup_code" >> "$warmup_m_file"
+                    echo "end" >> "$warmup_m_file"
+                    
+                    # Compile the warmup function
+                    echo "Compiling warmup function:"
+                    set temp_matlab_script = "/tmp/matlab_cmd_warmup_$$.m"
+                    printf "mcc -m -w off -o warmup_runtime -d '%s' '%s'\n" "$warmup_dir" "$warmup_m_file" > "$temp_matlab_script"
+                    matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')" >& /dev/null
+                    rm -f "$temp_matlab_script"
+                    
+                    if ($status == 0 && -f "$warmup_dir/run_warmup_runtime.sh") then
+                        echo "---> Success: warmup function compiled"
+                        echo ""
+                        echo "Running warmup function (this may take a while):"
+                        chmod +x "$warmup_dir/run_warmup_runtime.sh"
+                        "$warmup_dir/run_warmup_runtime.sh" "$MATLAB_RUNTIME_DIR/$runtime_version" < /dev/null |& tail -n +6
+                        
+                        if ($status == 0) then
+                            echo "---> Success: MATLAB Runtime warmed up"
+                        else
+                            echo ""
+                            echo "---> Warning: Warmup completed with errors (runtime may still work)"
+                        endif
+                    else
+                        echo "---> Warning: Could not compile warmup function, skipping warmup"
+                    endif
+                    
+                    # Clean up warmup directory
+                    rm -rf "$warmup_dir"
+
+                    echo ""
+                    echo "============================================================================================================="
+                    echo "Initialization of MATLAB Runtime application completed"
+                    echo "============================================================================================================="
+
+                endif
                 
             else
                 echo "---> Failed: MATLAB Runtime installation incomplete (no version directory found)"
-                ls -la "$MATLAB_RUNTIME_DIR"
             endif
         endif
     else
         echo "-> Warning: Could not find runtime installer executable in $RUNTIME_DIR"
-        ls -la "$RUNTIME_DIR"
     endif
     
 else
