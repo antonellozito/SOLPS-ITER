@@ -23,7 +23,8 @@ index = find(contains({simulation.run.name},'b2fplasmf'));
 if isempty(index)
    error('Error: b2fplasmf not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2fplasmf not found');
 end
@@ -45,7 +46,8 @@ if strcmp(version,'structured')
     if isempty(index_state)
        error('Error: b2fstate not found');
     end
-    fid_state = simulation.run(index_state).fid;
+    file_state = simulation.run(index_state).file;
+    fid_state = fopen(file_state);
     if (fid_state == -1)
        error('Error: b2fstate not found');
     end
@@ -56,6 +58,8 @@ if strcmp(version,'structured')
     ns  = dim(3);
     
     frewind(fid_state);
+
+    fclose(fid_state);
     
     qcdim = [nx+2,ny+2];
     fluxdim  = [nx+2,ny+2,2];
@@ -441,6 +445,8 @@ end
 fprintf('Structure RESIDUALS from b2fplasmf read.\n');
 
 frewind(fid);
+
+fclose(fid);
 
 end
 

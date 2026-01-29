@@ -13,7 +13,8 @@ index = find(contains({simulation.run.name},'b2.transport.inputfile'));
 if isempty(index)
    error('Error: b2.transport.inputfile not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2.transport.inputfile not found');
 end
@@ -86,6 +87,8 @@ i = i+1;
 end
 
 frewind(fid);
+
+fclose(fid);
 
 end
 

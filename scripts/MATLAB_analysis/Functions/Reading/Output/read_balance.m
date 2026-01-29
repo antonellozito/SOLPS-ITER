@@ -23,7 +23,7 @@ if isempty(index)
    error('Error: balance.nc not found');
 end
 file = simulation.run(index).file;
-fid = simulation.run(index).fid;
+fid = fopen(file);
 if (fid == -1)
    error('Error: balance.nc not found');
 end
@@ -343,5 +343,7 @@ residuals.reshi = ncread(file,'reshi'); % residuals of the ion energy balance eq
 fprintf('Structure RESIDUALS from balance.nc read.\n');
 
 end
+
+fclose(fid);
 
 end

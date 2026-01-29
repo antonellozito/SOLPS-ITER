@@ -14,13 +14,16 @@ index_stati = find(contains({simulation.run.name},'b2fstati'));
 if isempty(index_state) && isempty(index_stati)
     error('Error: b2fstate/b2fstati not found');
 end
-fid_state = simulation.run(index_state).fid;
-fid_stati = simulation.run(index_stati).fid;
+file_state = simulation.run(index_state).file;
+file_stati = simulation.run(index_stati).file;
+fid_state = fopen(file_state);
+fid_stati = fopen(file_stati);
 if (fid_state == -1) && (fid_stati == -1)
     error('Error: b2fstate/b2fstati not found');
 end
 if not(fid_state == -1)
     fid = fid_state;
+    fclose(fid_stati);
 elseif (fid_state == -1) && not(fid_stati == -1)
     fid = fid_stati;
 end
@@ -182,6 +185,8 @@ state.fch.unit = 'A';
 state.fch.dimensions = fluxdim_labels;
 
 frewind(fid);
+
+fclose(fid);
 
 if not(fid_state == -1)
     fprintf('Structure STATE from b2fstate read.\n');

@@ -18,14 +18,14 @@ if isempty(index_temp) && isempty (index_run)
    error('Error: b2ftrace not found');
 end
 
-if strcmp(simulation.run(index_temp).status,'read')
+if strcmp(simulation.run(index_temp).status,'found')
     index = index_temp;
-elseif strcmp(simulation.run(index_run).status,'read')
+elseif strcmp(simulation.run(index_run).status,'found')
     index = index_run;
 end
 
 file = simulation.run(index).file;
-fid = simulation.run(index).fid;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2ftrace not found');
 end
@@ -133,5 +133,7 @@ while traces.iteration(i) < 2
 end
 partial_time_step = 1/internal_iterations_number;
 traces.internal_iteration = linspace(partial_time_step, partial_time_step*length(traces.iteration),length(traces.iteration));
+
+fclose(fid);
 
 end

@@ -15,7 +15,7 @@ if isempty(index)
    error('Error: b2batch.nc not found');
 end
 file = simulation.run(index).file;
-fid = simulation.run(index).fid;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2batch.nc not found');
 end
@@ -45,5 +45,7 @@ time_traces_av.tisepa_av = ncread(file,'tisepa_av');
 time_traces_av.timxap_av = ncread(file,'timxap_av');
 
 fprintf('Structure TIME_TRACES_AV from b2batch.nc read.\n');
+
+fclose(fid);
 
 end

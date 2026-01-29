@@ -899,10 +899,6 @@ end
 
 set(groot, 'defaultAxesYLimitMethod', originalYLimitMethod);
 
-%% UNLOAD SIMULATIONS
-
-fclose('all');
-
 %% CLOSE SESSION AFTER CLOSING FIGURES IF CALLED AS FUNCTION
 
 if nargin ~= 0

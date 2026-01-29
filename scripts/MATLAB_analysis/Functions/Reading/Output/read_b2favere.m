@@ -15,7 +15,8 @@ index = find(contains({simulation.run.name},'b2favere'));
 if isempty(index)
    error('Error: b2favere not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2favere not found');
 end
@@ -50,5 +51,7 @@ avere.smo     = scan_b2_real(fid,'smo_mean'    ,[nx+2,ny+2,4,ns]);
 fprintf('Structure AVERE from b2favere read.\n');
 
 frewind(fid);
+
+fclose(fid);
 
 end

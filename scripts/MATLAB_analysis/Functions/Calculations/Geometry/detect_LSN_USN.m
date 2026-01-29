@@ -16,14 +16,15 @@ if NREG(1) == 4
        error('Error: b2fgmtry not found');
     end
     
-    if not(isempty(index_run)) && strcmp(simulation.run(index_run).status,'read')
+    if not(isempty(index_run)) && strcmp(simulation.run(index_run).status,'found')
         index = index_run;
-        fid = simulation.run(index).fid;
-    elseif not(isempty(index_baserun)) && strcmp(simulation.geometry(index_baserun).status,'read')
+        file = simulation.run(index).file;
+    elseif not(isempty(index_baserun)) && strcmp(simulation.geometry(index_baserun).status,'found')
         index = index_baserun;
-        fid = simulation.geometry(index).fid;
+        file = simulation.geometry(index).file;
     end
     
+    fid = fopen(file);
     if (fid == -1)
        error('Error: b2fgmtry not found');
     end
@@ -81,5 +82,7 @@ else
     SN_type = 'none';
 
 end
+
+fclose(fid);
 
 end

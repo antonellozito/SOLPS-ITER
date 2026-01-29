@@ -20,7 +20,8 @@ index = find(contains({simulation.run.name},'fort.44'));
 if isempty(index)
    error('Error: fort.44 not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: fort.44 not found');
 end
@@ -91,7 +92,8 @@ frewind(fid);
 if strcmp(version,'structured')
 
     temp = find(contains({simulation.run.name},'b2.neutrals.parameters'));
-    fid_neut_par = simulation.run(temp).fid;
+    file_neut_par = simulation.run(temp).file;
+    fid_neut_par = fopen(file_neut_par);
     line = fgetl(fid_neut_par);
     while ~contains(line,'crcstra')
         line = fgetl(fid_neut_par);
@@ -149,6 +151,8 @@ if strcmp(version,'structured')
     end
     
     frewind(fid_neut_par);
+
+    fclose(fid_neut_par);
 
 elseif strcmp(version,'unstructured')
 
@@ -660,6 +664,8 @@ wall.pump_ion.unit = 'A';
 wall.pump_ion.dimensions = {'nlim+nsts','nion'};
 
 frewind(fid);
+
+fclose(fid);
 
 fprintf('Structure WALL from fort.44 read.\n');
 

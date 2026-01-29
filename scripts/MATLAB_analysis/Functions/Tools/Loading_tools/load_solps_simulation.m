@@ -173,71 +173,71 @@ SIMULATION.EIRENE_DATABASE = sprintf('%s/modules/Eirene/Database',SOLPSTOP);
 
 i = 1;
 
-while i<=length(structure_files)
+while i <= length(structure_files)
     SIMULATION.structure(i).name = structure_files{i};
-    SIMULATION.structure(i).file = sprintf('%s/%s',BASERUN_DIRECTORY,structure_files{i});
-    SIMULATION.structure(i).fid = fopen(SIMULATION.structure(i).file);
-    if (SIMULATION.structure(i).fid == -1)
-        SIMULATION.structure(i).status = 'not read';
+    file_path = fullfile(BASERUN_DIRECTORY, structure_files{i});
+    SIMULATION.structure(i).file = file_path;
+    if exist(file_path, 'file')
+        SIMULATION.structure(i).status = 'found';
     else
-        SIMULATION.structure(i).status = 'read';
+        SIMULATION.structure(i).status = 'not found';
     end
-    i = i+1;
+    i = i + 1;
 end
 
 %% LOAD GEOMETRY FILES
 
 i = 1;
 
-while i<=length(geometry_files)
+while i <= length(geometry_files)
     SIMULATION.geometry(i).name = geometry_files{i};
-    SIMULATION.geometry(i).file = sprintf('%s/%s',BASERUN_DIRECTORY,geometry_files{i});
-    SIMULATION.geometry(i).fid = fopen(SIMULATION.geometry(i).file);
-    if (SIMULATION.geometry(i).fid == -1)
-        SIMULATION.geometry(i).name = geometry_files{i};
-        SIMULATION.geometry(i).file = sprintf('%s/%s',RUN_DIRECTORY,geometry_files{i});
-        SIMULATION.geometry(i).fid = fopen(SIMULATION.geometry(i).file);
-        if (SIMULATION.geometry(i).fid == -1)
-            SIMULATION.geometry(i).status = 'not read';
-        else
-            SIMULATION.geometry(i).status = 'read';
-        end
+    file_base = fullfile(BASERUN_DIRECTORY, geometry_files{i});
+    if exist(file_base, 'file')
+        SIMULATION.geometry(i).file = file_base;
+        SIMULATION.geometry(i).status = 'found';
     else
-        SIMULATION.geometry(i).status = 'read';
+        file_run = fullfile(RUN_DIRECTORY, geometry_files{i});
+        if exist(file_run, 'file')
+            SIMULATION.geometry(i).file = file_run;
+            SIMULATION.geometry(i).status = 'found';
+        else
+            SIMULATION.geometry(i).file = file_run;
+            SIMULATION.geometry(i).status = 'not found';
+        end
     end
-    i = i+1;
+    i = i + 1;
 end
 
 %% LOAD ATOMIC RATES FILES
 
 i = 1;
 
-while i<=length(atomic_rates_files)
+while i <= length(atomic_rates_files)
     SIMULATION.atomic_rates(i).name = atomic_rates_files{i};
-    SIMULATION.atomic_rates(i).file = sprintf('%s/%s',BASERUN_DIRECTORY,atomic_rates_files{i});
-    SIMULATION.atomic_rates(i).fid = fopen(SIMULATION.atomic_rates(i).file);
-    if (SIMULATION.atomic_rates(i).fid == -1)
-        SIMULATION.atomic_rates(i).status = 'not read';
+    file_path = fullfile(BASERUN_DIRECTORY, atomic_rates_files{i});
+    SIMULATION.atomic_rates(i).file = file_path;
+    if exist(file_path, 'file')
+        SIMULATION.atomic_rates(i).status = 'found';
     else
-        SIMULATION.atomic_rates(i).status = 'read';
+        SIMULATION.atomic_rates(i).status = 'not found';
     end
-    i = i+1;
+    i = i + 1;
 end
 
 %% LOAD RUN FILES
 
 i = 1;
 
-while i<=length(run_files)
+while i <= length(run_files)
     SIMULATION.run(i).name = run_files{i};
-    SIMULATION.run(i).file = sprintf('%s/%s',RUN_DIRECTORY,run_files{i});
-    SIMULATION.run(i).fid = fopen(SIMULATION.run(i).file);
-    if (SIMULATION.run(i).fid == -1)
-        SIMULATION.run(i).status = 'not read';
+    file_path = fullfile(RUN_DIRECTORY, run_files{i});
+    SIMULATION.run(i).file = file_path;
+    if exist(file_path, 'file')
+        SIMULATION.run(i).status = 'found';
     else
-        SIMULATION.run(i).status = 'read';
-    end
-    i = i+1;
+        SIMULATION.run(i).status = 'not found';
+    end  
+    i = i + 1;
 end
 
 %% READ SPECIES AND TYPE OF GEOMETRY

@@ -116,7 +116,8 @@ index = find(contains({simulation.run.name},'exp_data'));
 if isempty(index)
     error('Error: exp_data not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 
 exp_data = struct();
 
@@ -144,6 +145,8 @@ while ~feof(fid)
 end
 
 frewind(fid);
+
+fclose(fid);
 
 end
 

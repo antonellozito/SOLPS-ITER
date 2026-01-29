@@ -11,7 +11,8 @@ index = find(contains({simulation.structure.name},'structure.dat'));
 if isempty(index)
    error('Error: structure.dat not found');
 end
-fid = simulation.structure(index).fid;
+file = simulation.structure(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: structure.dat not found');
 end
@@ -53,6 +54,8 @@ for i = 1:nstr
 end
 
 frewind(fid);
+
+fclose(fid);
 
 fprintf('Structure STRUCTURE from structure.dat read.\n');
 

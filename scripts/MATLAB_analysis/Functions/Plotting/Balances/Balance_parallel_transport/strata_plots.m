@@ -43,7 +43,8 @@ text(0.5,0.5,titlestr{2},'horizontalalignment','center','fontsize',10);
 
 SIMULATION = evalin('base', 'SIMULATION');
 temp = find(contains({SIMULATION.run.name},'b2.neutrals.parameters'));
-fid = SIMULATION.run(temp).fid;
+file = SIMULATION.run(temp).file;
+fid = fopen(file);
 line = fgetl(fid);
 while ~contains(line,'crcstra')
     line = fgetl(fid);
@@ -99,6 +100,8 @@ for istra = 1:nstra
         stratum_name{istra} = append(stratum_name{istra},' (He)');
     end
 end
+
+fclose(fid);
 
 %% POLOIDALLY-INTEGRATED SOURCES ALONG THE RADIAL DIRECTION 
 

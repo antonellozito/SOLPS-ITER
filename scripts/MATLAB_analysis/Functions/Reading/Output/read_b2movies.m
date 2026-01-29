@@ -28,13 +28,16 @@ index_stati = find(contains({simulation.run.name},'b2fstati'));
 if isempty(index_state) && isempty(index_stati)
     error('Error: b2fstate/b2fstati not found');
 end
-fid_state = simulation.run(index_state).fid;
-fid_stati = simulation.run(index_stati).fid;
+file_state = simulation.run(index_state).file;
+file_stati = simulation.run(index_stati).file;
+fid_state = fopen(file_state);
+fid_stati = fopen(file_stati);
 if (fid_state == -1) && (fid_stati == -1)
     error('Error: b2fstate/b2fstati not found');
 end
 if not(fid_state == -1)
     fid = fid_state;
+    fclose(fid_stati);
 elseif (fid_state == -1) && not(fid_stati == -1)
     fid = fid_stati;
 end
@@ -84,7 +87,8 @@ if any(strcmp(varargin,'EIRENE_STATE_VARIABLES')) || any(strcmp(varargin,'EIRENE
     if isempty(index)
         error('Error: fort.44 not found');
     end
-    fid = simulation.run(index).fid;
+    file = simulation.run(index).file;
+    fid = fopen(file);
     if (fid == -1)
         error('Error: fort.44 not found');
     end
@@ -146,6 +150,8 @@ if any(strcmp(varargin,'EIRENE_STATE_VARIABLES')) || any(strcmp(varargin,'EIRENE
         fort_44_species_ion{i} = strtrim(line);
     end
 
+    fclose(fid);
+
 end
 
 % Load the file (b2movies.nc)
@@ -157,7 +163,7 @@ if isempty(index)
     error('Error: b2movies.nc not found');
 end
 file = simulation.run(index).file;
-fid = simulation.run(index).fid;
+fid = fopen(file);
 if (fid == -1)
     error('Error: b2movies.nc not found');
 end
@@ -671,5 +677,7 @@ if any(strcmp(varargin,'B25_SOURCES')) || any(strcmp(varargin,'EIRENE_SOURCES'))
     fprintf('Structure SOURCES_MOVIES from b2movies.nc read.\n');
 
 end
+
+fclose(fid);
 
 end

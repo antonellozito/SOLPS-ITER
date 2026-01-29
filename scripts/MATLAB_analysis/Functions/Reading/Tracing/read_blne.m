@@ -15,11 +15,11 @@ if isempty(index_temp) && isempty (index_final)
    error('Error: blne.trc not found');
 end
 
-if strcmp(simulation.run(index_temp).status,'read')
+if strcmp(simulation.run(index_temp).status,'found')
     index = index_temp;
-elseif strcmp(simulation.run(index_final).status,'read')
+elseif strcmp(simulation.run(index_final).status,'found')
     index = index_final;
-elseif strcmp(simulation.run(index_run).status,'read')
+elseif strcmp(simulation.run(index_run).status,'found')
     index = index_run;
 end
 

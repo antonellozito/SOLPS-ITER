@@ -11,7 +11,8 @@ index = find(contains({simulation.structure.name},'template'));
 if isempty(index)
    error('Error: template not found');
 end
-fid = simulation.structure(index).fid;
+file = simulation.structure(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: template not found');
 end
@@ -45,5 +46,7 @@ while line ~= -1
 end
 
 frewind(fid);
+
+fclose(fid);
 
 end

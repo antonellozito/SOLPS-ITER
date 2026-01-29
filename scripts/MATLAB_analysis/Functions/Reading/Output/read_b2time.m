@@ -22,7 +22,7 @@ if isempty(index)
    error('Error: b2time.nc not found');
 end
 file = simulation.run(index).file;
-fid = simulation.run(index).fid;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2time.nc not found');
 end
@@ -1017,5 +1017,7 @@ if READ_PROFILES
     fprintf('Profiles from b2time.nc read\n');
 
 end
+
+fclose(fid);
 
 end

@@ -19,7 +19,8 @@ index = find(contains({simulation.run.name},'fort.46'));
 if isempty(index)
     error('Error: fort.46 not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 if (fid == -1)
     error('Error: fort.46 not found');
 end
@@ -92,6 +93,8 @@ kB    = 1.3806e-23;
 
 frewind(fid);
 
+fclose(fid);
+
 % Load the file (eirenemovies.nc)
 
 index = find(contains({simulation.run.name},'eirenemovies.nc'));
@@ -99,7 +102,7 @@ if isempty(index)
     error('Error: eirenemovies.nc not found');
 end
 file = simulation.run(index).file;
-fid = simulation.run(index).fid;
+fid = fopen(file);
 if (fid == -1)
     error('Error: eirenemovies.nc not found');
 end
@@ -334,5 +337,7 @@ if strcmp(version,'unstructured')
 end
 
 fprintf('Structure EIRENE_MOVIES from eirenemovies.nc read.\n');
+
+fclose(fid);
 
 end

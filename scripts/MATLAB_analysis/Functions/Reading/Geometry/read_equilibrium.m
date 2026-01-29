@@ -11,7 +11,8 @@ index = find(contains({simulation.geometry.name},'rzpsi.dat'));
 if isempty(index)
    error('Error: rzpsi.dat not found');
 end
-fid = simulation.geometry(index).fid;
+file = simulation.geometry(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: rzpsi.dat not found');
 end
@@ -65,5 +66,7 @@ equilibrium.PF=PF./(2*pi);
 fprintf('Structure EQUILIBRIUM from rzpsi.dat read.\n');
 
 frewind(fid);
+
+fclose(fid);
 
 end

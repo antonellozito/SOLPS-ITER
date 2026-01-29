@@ -13,7 +13,8 @@ index = find(contains({simulation.run.name},'fort.46'));
 if isempty(index)
    error('Error: fort.46 not found');
 end
-fid = simulation.run(index).fid;
+file = simulation.run(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: fort.46 not found');
 end
@@ -395,6 +396,8 @@ elseif strcmp(version,'unstructured')
 end
 
 frewind(fid);
+
+fclose(fid);
 
 fprintf('Structure NEUTRALS_TRIANGLES from fort.46 read.\n');
 

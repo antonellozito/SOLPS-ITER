@@ -11,7 +11,8 @@ index = find(contains({simulation.atomic_rates.name},'b2frates'));
 if isempty(index)
    error('Error: b2frates not found');
 end
-fid = simulation.atomic_rates(index).fid;
+file = simulation.atomic_rates(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: b2frates not found');
 end
@@ -71,6 +72,8 @@ for i = 1:rates.rtns
 end
 
 frewind(fid);
+
+fclose(fid);
 
 fprintf('Structure RATES from b2frates read.\n');
 

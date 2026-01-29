@@ -11,7 +11,8 @@ index = find(contains({simulation.geometry.name},'fort.34'));
 if isempty(index)
    error('Error: fort.34 not found');
 end
-fid = simulation.geometry(index).fid;
+file = simulation.geometry(index).file;
+fid = fopen(file);
 if (fid == -1)
    error('Error: fort.34 not found');
 end
@@ -28,5 +29,7 @@ for i = 1:ntria
 end
 
 frewind(fid);
+
+fclose(fid);
 
 end
