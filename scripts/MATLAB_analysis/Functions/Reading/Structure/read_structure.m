@@ -57,6 +57,6 @@ frewind(fid);
 
 fclose(fid);
 
-fprintf('Structure STRUCTURE from structure.dat read.\n');
+fprintf('Device structure from structure.dat read\n');
 
 end

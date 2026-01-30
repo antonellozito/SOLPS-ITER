@@ -226,7 +226,7 @@ end
 
 end
 
-fprintf('ADAS adf15 datafile %s#%s%d.dat from the library ''pec%d'' read.\n',prefix,atom,ion_state,library);
+fprintf('ADAS adf15 datafile %s#%s%d.dat from the library ''pec%d'' read\n',prefix,atom,ion_state,library);
 
 %% CLOSE THE FILE
 

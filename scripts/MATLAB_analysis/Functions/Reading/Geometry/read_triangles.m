@@ -26,6 +26,6 @@ try
 catch
 end
 
-fprintf('Structure TRIANGLES from fort.33, fort.34 and fort.35 read.\n');
+fprintf('Eirene triangles from fort.33, fort.34 and fort.35 read\n');
 
 end

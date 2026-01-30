@@ -1,4 +1,4 @@
-function [state_variables_movies,fluxes_movies,sources_movies] = read_b2movies(varargin)
+function output = read_b2movies(varargin)
 %
 % read_b2movies reads the b2movies.nc file created by B2.5
 % Output is the structs "state_variables_movies", ""fluxes_movies
@@ -45,6 +45,43 @@ end
 line    = fgetl(fid);
 version = line(8:17);
 
+% Select which group of fields to read
+
+READ_B25_STATE_VARIABLES = false;
+READ_B25_FLUXES = false;
+READ_B25_SOURCES = false;
+READ_EIRENE_STATE_VARIABLES = false;
+READ_EIRENE_FLUXES = false;
+READ_EIRENE_SOURCES = false;
+
+if numel(varargin) == 1
+    READ_B25_STATE_VARIABLES = true;
+    READ_B25_FLUXES = true;
+    READ_B25_SOURCES = true;
+    READ_EIRENE_STATE_VARIABLES = true;
+    READ_EIRENE_FLUXES = true;
+    READ_EIRENE_SOURCES = true;
+else
+    if any(strcmp(varargin,'B25_STATE_VARIABLES'))
+        READ_B25_STATE_VARIABLES = true;
+    end
+    if any(strcmp(varargin,'B25_FLUXES'))
+        READ_B25_FLUXES = true;  
+    end
+    if any(strcmp(varargin,'B25_SOURCES'))
+        READ_B25_SOURCES = true;
+    end
+    if any(strcmp(varargin,'EIRENE_STATE_VARIABLES'))
+        READ_EIRENE_STATE_VARIABLES = true;  
+    end
+    if any(strcmp(varargin,'EIRENE_FLUXES'))
+        READ_EIRENE_FLUXES = true;
+    end
+    if any(strcmp(varargin,'EIRENE_SOURCES'))
+        READ_EIRENE_SOURCES = true;
+    end
+end
+
 % Read the dimensions
 
 if str2num(strrep(version,'.','')) >= str2num(strrep('03.002.000','.',''))
@@ -77,7 +114,7 @@ end
 
 frewind(fid);
 
-if any(strcmp(varargin,'EIRENE_STATE_VARIABLES')) || any(strcmp(varargin,'EIRENE_FLUXES')) || any(strcmp(varargin,'EIRENE_SOURCES'))
+if READ_EIRENE_STATE_VARIABLES || READ_EIRENE_FLUXES || READ_EIRENE_SOURCES
 
     % Load the file (fort.44)
 
@@ -170,128 +207,126 @@ end
 
 %% READ THE STATE VARIABLES
 
-state_variables_movies = [];
+if READ_B25_STATE_VARIABLES || READ_EIRENE_STATE_VARIABLES
 
-if any(strcmp(varargin,'B25_STATE_VARIABLES')) || any(strcmp(varargin,'EIRENE_STATE_VARIABLES'))
+    output.times = ncread(file,'times');
 
-    state_variables_movies.times = ncread(file,'times');
-
-    if any(strcmp(varargin,'B25_STATE_VARIABLES'))
+    if READ_B25_STATE_VARIABLES
 
         try
 
             if strcmp(version,'structured')
 
-                state_variables_movies.nx = b2fstate_nx;
-                state_variables_movies.ny = b2fstate_ny;
-                state_variables_movies.ns = b2fstate_ns;
+                output.nx = b2fstate_nx;
+                output.ny = b2fstate_ny;
+                output.ns = b2fstate_ns;
 
             elseif strcmp(version,'unstructured')
 
-                state_variables_movies.nCv = b2fstate_nCv;
-                state_variables_movies.nFc = b2fstate_nFc;
-                state_variables_movies.ns = b2fstate_ns;
+                output.nCv = b2fstate_nCv;
+                output.nFc = b2fstate_nFc;
+                output.ns = b2fstate_ns;
 
             end
 
-            [state_variables_movies.species,~,~] = read_species(simulation);
+            [output.species,~,~] = read_species(simulation);
 
-            state_variables_movies.na.value = ncread(file,'na');
+            output.na.value = ncread(file,'na');
             info = ncinfo(file,'na');
-            state_variables_movies.na.description = ncreadatt(file,'na','long_name');
-            state_variables_movies.na.unit = ncreadatt(file,'na','units');
-            state_variables_movies.na.dimensions = {info.Dimensions.Name};
+            output.na.description = ncreadatt(file,'na','long_name');
+            output.na.unit = ncreadatt(file,'na','units');
+            output.na.dimensions = {info.Dimensions.Name};
 
-            state_variables_movies.ne.value = ncread(file,'ne');
+            output.ne.value = ncread(file,'ne');
             info = ncinfo(file,'ne');
-            state_variables_movies.ne.description = ncreadatt(file,'ne','long_name');
-            state_variables_movies.ne.unit = ncreadatt(file,'ne','units');
-            state_variables_movies.ne.dimensions = {info.Dimensions.Name};
+            output.ne.description = ncreadatt(file,'ne','long_name');
+            output.ne.unit = ncreadatt(file,'ne','units');
+            output.ne.dimensions = {info.Dimensions.Name};
 
             try
-                state_variables_movies.ua.value = ncread(file,'ua');
+                output.ua.value = ncread(file,'ua');
                 info = ncinfo(file,'ua');
-                state_variables_movies.ua.description = ncreadatt(file,'ua','long_name');
-                state_variables_movies.ua.unit = ncreadatt(file,'ua','units');
-                state_variables_movies.ua.dimensions = {info.Dimensions.Name};
+                output.ua.description = ncreadatt(file,'ua','long_name');
+                output.ua.unit = ncreadatt(file,'ua','units');
+                output.ua.dimensions = {info.Dimensions.Name};
             catch
             end
 
-            state_variables_movies.Te.value = ncread(file,'te');
+            output.Te.value = ncread(file,'te');
             info = ncinfo(file,'te');
-            state_variables_movies.Te.description = ncreadatt(file,'te','long_name');
-            state_variables_movies.Te.unit = ncreadatt(file,'te','units');
-            state_variables_movies.Te.dimensions = {info.Dimensions.Name};
+            output.Te.description = ncreadatt(file,'te','long_name');
+            output.Te.unit = ncreadatt(file,'te','units');
+            output.Te.dimensions = {info.Dimensions.Name};
 
-            state_variables_movies.Ti.value = ncread(file,'ti');
+            output.Ti.value = ncread(file,'ti');
             info = ncinfo(file,'ti');
-            state_variables_movies.Ti.description = ncreadatt(file,'ti','long_name');
-            state_variables_movies.Ti.unit = ncreadatt(file,'ti','units');
-            state_variables_movies.Ti.dimensions = {info.Dimensions.Name};
+            output.Ti.description = ncreadatt(file,'ti','long_name');
+            output.Ti.unit = ncreadatt(file,'ti','units');
+            output.Ti.dimensions = {info.Dimensions.Name};
 
-            state_variables_movies.po.value = ncread(file,'po');
+            output.po.value = ncread(file,'po');
             info = ncinfo(file,'po');
-            state_variables_movies.po.description = ncreadatt(file,'po','long_name');
-            state_variables_movies.po.unit = ncreadatt(file,'po','units');
-            state_variables_movies.po.dimensions = {info.Dimensions.Name};
+            output.po.description = ncreadatt(file,'po','long_name');
+            output.po.unit = ncreadatt(file,'po','units');
+            output.po.dimensions = {info.Dimensions.Name};
 
         catch
         end
 
     end
 
-    if any(strcmp(varargin,'EIRENE_STATE_VARIABLES'))
+    if READ_EIRENE_STATE_VARIABLES
 
         try
 
             if strcmp(version,'structured')
 
-                state_variables_movies.nx = fort_44_nx;
-                state_variables_movies.ny = fort_44_ny;
+                output.nx = fort_44_nx;
+                output.ny = fort_44_ny;
 
             elseif strcmp(version,'unstructured')
 
-                state_variables_movies.nCv = fort_44_nCv;
+                output.nCv = fort_44_nCv;
 
             end
 
-            state_variables_movies.natm = fort_44_natm;
-            state_variables_movies.nmol = fort_44_nmol;
-            state_variables_movies.nion = fort_44_nion;
-            state_variables_movies.species_atm = fort_44_species_atm;
-            state_variables_movies.species_mol = fort_44_species_mol;
-            state_variables_movies.species_ion = fort_44_species_ion;
+            output.natm = fort_44_natm;
+            output.nmol = fort_44_nmol;
+            output.nion = fort_44_nion;
+            output.species_atm = fort_44_species_atm;
+            output.species_mol = fort_44_species_mol;
+            output.species_ion = fort_44_species_ion;
 
-            state_variables_movies.n_atm.value = ncread(file,'dab2');
+            output.n_atm.value = ncread(file,'dab2');
             info = ncinfo(file,'dab2');
-            state_variables_movies.n_atm.description = ncreadatt(file,'dab2','long_name');
-            state_variables_movies.n_atm.unit = ncreadatt(file,'dab2','units');
-            state_variables_movies.n_atm.dimensions = {info.Dimensions.Name};
+            output.n_atm.description = ncreadatt(file,'dab2','long_name');
+            output.n_atm.unit = ncreadatt(file,'dab2','units');
+            output.n_atm.dimensions = {info.Dimensions.Name};
 
-            state_variables_movies.T_atm.value = ncread(file,'tab2');
+            output.T_atm.value = ncread(file,'tab2');
             info = ncinfo(file,'tab2');
-            state_variables_movies.T_atm.description = ncreadatt(file,'tab2','long_name');
-            state_variables_movies.T_atm.unit = ncreadatt(file,'tab2','units');
-            state_variables_movies.T_atm.dimensions = {info.Dimensions.Name};
+            output.T_atm.description = ncreadatt(file,'tab2','long_name');
+            output.T_atm.unit = ncreadatt(file,'tab2','units');
+            output.T_atm.dimensions = {info.Dimensions.Name};
 
-            state_variables_movies.n_mol.value = ncread(file,'dmb2');
+            output.n_mol.value = ncread(file,'dmb2');
             info = ncinfo(file,'dmb2');
-            state_variables_movies.n_mol.description = ncreadatt(file,'dmb2','long_name');
-            state_variables_movies.n_mol.unit = ncreadatt(file,'dmb2','units');
-            state_variables_movies.n_mol.dimensions = {info.Dimensions.Name};
+            output.n_mol.description = ncreadatt(file,'dmb2','long_name');
+            output.n_mol.unit = ncreadatt(file,'dmb2','units');
+            output.n_mol.dimensions = {info.Dimensions.Name};
 
-            state_variables_movies.T_mol.value = ncread(file,'tmb2');
+            output.T_mol.value = ncread(file,'tmb2');
             info = ncinfo(file,'tmb2');
-            state_variables_movies.T_mol.description = ncreadatt(file,'tmb2','long_name');
-            state_variables_movies.T_mol.unit = ncreadatt(file,'tmb2','units');
-            state_variables_movies.T_mol.dimensions = {info.Dimensions.Name};
+            output.T_mol.description = ncreadatt(file,'tmb2','long_name');
+            output.T_mol.unit = ncreadatt(file,'tmb2','units');
+            output.T_mol.dimensions = {info.Dimensions.Name};
 
         catch
         end
 
     end
 
-    fprintf('Structure STATE_VARIABLES_MOVIES from b2movies.nc read.\n');
+    fprintf('Time-dependent state variables from b2movies.nc read\n');
 
 end
 
@@ -299,382 +334,380 @@ end
 
 fluxes_movies = [];
 
-if any(strcmp(varargin,'B25_FLUXES')) || any(strcmp(varargin,'EIRENE_FLUXES'))
+if READ_B25_FLUXES || READ_EIRENE_FLUXES
 
-    fluxes_movies.times = ncread(file,'times');
+    output.times = ncread(file,'times');
 
-    if any(strcmp(varargin,'B25_FLUXES'))
+    if READ_B25_FLUXES
 
         try
 
             if strcmp(version,'structured')
 
-                fluxes_movies.nx = b2fstate_nx;
-                fluxes_movies.ny = b2fstate_ny;
-                fluxes_movies.ns = b2fstate_ns;
+                output.nx = b2fstate_nx;
+                output.ny = b2fstate_ny;
+                output.ns = b2fstate_ns;
 
             elseif strcmp(version,'unstructured')
 
-                fluxes_movies.nCv = b2fstate_nCv;
-                fluxes_movies.nFc = b2fstate_nFc;
-                fluxes_movies.ns = b2fstate_ns;
+                output.nCv = b2fstate_nCv;
+                output.nFc = b2fstate_nFc;
+                output.ns = b2fstate_ns;
 
             end
 
-            [fluxes_movies.species,~,~] = read_species(simulation);
+            [output.species,~,~] = read_species(simulation);
 
-            fluxes_movies.fnax.value = ncread(file,'fnax');
+            output.fnax.value = ncread(file,'fnax');
             info = ncinfo(file,'fnax');
-            fluxes_movies.fnax.description = ncreadatt(file,'fnax','long_name');
-            fluxes_movies.fnax.unit = ncreadatt(file,'fnax','units');
-            fluxes_movies.fnax.dimensions = {info.Dimensions.Name};
+            output.fnax.description = ncreadatt(file,'fnax','long_name');
+            output.fnax.unit = ncreadatt(file,'fnax','units');
+            output.fnax.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fnay.value = ncread(file,'fnay');
+            output.fnay.value = ncread(file,'fnay');
             info = ncinfo(file,'fnay');
-            fluxes_movies.fnay.description = ncreadatt(file,'fnay','long_name');
-            fluxes_movies.fnay.unit = ncreadatt(file,'fnay','units');
-            fluxes_movies.fnay.dimensions = {info.Dimensions.Name};
+            output.fnay.description = ncreadatt(file,'fnay','long_name');
+            output.fnay.unit = ncreadatt(file,'fnay','units');
+            output.fnay.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fhex.value = ncread(file,'fhex');
+            output.fhex.value = ncread(file,'fhex');
             info = ncinfo(file,'fhex');
-            fluxes_movies.fhex.description = ncreadatt(file,'fhex','long_name');
-            fluxes_movies.fhex.unit = ncreadatt(file,'fhex','units');
-            fluxes_movies.fhex.dimensions = {info.Dimensions.Name};
+            output.fhex.description = ncreadatt(file,'fhex','long_name');
+            output.fhex.unit = ncreadatt(file,'fhex','units');
+            output.fhex.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fhey.value = ncread(file,'fhey');
+            output.fhey.value = ncread(file,'fhey');
             info = ncinfo(file,'fhey');
-            fluxes_movies.fhey.description = ncreadatt(file,'fhey','long_name');
-            fluxes_movies.fhey.unit = ncreadatt(file,'fhey','units');
-            fluxes_movies.fhey.dimensions = {info.Dimensions.Name};
+            output.fhey.description = ncreadatt(file,'fhey','long_name');
+            output.fhey.unit = ncreadatt(file,'fhey','units');
+            output.fhey.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fhix.value = ncread(file,'fhix');
+            output.fhix.value = ncread(file,'fhix');
             info = ncinfo(file,'fhix');
-            fluxes_movies.fhix.description = ncreadatt(file,'fhix','long_name');
-            fluxes_movies.fhix.unit = ncreadatt(file,'fhix','units');
-            fluxes_movies.fhix.dimensions = {info.Dimensions.Name};
+            output.fhix.description = ncreadatt(file,'fhix','long_name');
+            output.fhix.unit = ncreadatt(file,'fhix','units');
+            output.fhix.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fhiy.value = ncread(file,'fhiy');
+            output.fhiy.value = ncread(file,'fhiy');
             info = ncinfo(file,'fhiy');
-            fluxes_movies.fhiy.description = ncreadatt(file,'fhiy','long_name');
-            fluxes_movies.fhiy.unit = ncreadatt(file,'fhiy','units');
-            fluxes_movies.fhiy.dimensions = {info.Dimensions.Name};
+            output.fhiy.description = ncreadatt(file,'fhiy','long_name');
+            output.fhiy.unit = ncreadatt(file,'fhiy','units');
+            output.fhiy.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fchx.value = ncread(file,'fchx');
+            output.fchx.value = ncread(file,'fchx');
             info = ncinfo(file,'fchx');
-            fluxes_movies.fchx.description = ncreadatt(file,'fchx','long_name');
-            fluxes_movies.fchx.unit = ncreadatt(file,'fchx','units');
-            fluxes_movies.fchx.dimensions = {info.Dimensions.Name};
+            output.fchx.description = ncreadatt(file,'fchx','long_name');
+            output.fchx.unit = ncreadatt(file,'fchx','units');
+            output.fchx.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fchy.value = ncread(file,'fchy');
+            output.fchy.value = ncread(file,'fchy');
             info = ncinfo(file,'fchy');
-            fluxes_movies.fchy.description = ncreadatt(file,'fchy','long_name');
-            fluxes_movies.fchy.unit = ncreadatt(file,'fchy','units');
-            fluxes_movies.fchy.dimensions = {info.Dimensions.Name};
+            output.fchy.description = ncreadatt(file,'fchy','long_name');
+            output.fchy.unit = ncreadatt(file,'fchy','units');
+            output.fchy.dimensions = {info.Dimensions.Name};
 
         catch
         end
 
     end
 
-    if any(strcmp(varargin,'EIRENE_FLUXES'))
+    if READ_EIRENE_FLUXES
 
         try
 
             if strcmp(version,'structured')
 
-                fluxes_movies.nx = fort_44_nx;
-                fluxes_movies.ny = fort_44_ny;
+                output.nx = fort_44_nx;
+                output.ny = fort_44_ny;
 
             elseif strcmp(version,'unstructured')
 
-                fluxes_movies.nCv = fort_44_nCv;
+                output.nCv = fort_44_nCv;
 
             end
 
-            fluxes_movies.natm = fort_44_natm;
-            fluxes_movies.nmol = fort_44_nmol;
-            fluxes_movies.nion = fort_44_nion;
-            fluxes_movies.species_atm = fort_44_species_atm;
-            fluxes_movies.species_mol = fort_44_species_mol;
-            fluxes_movies.species_ion = fort_44_species_ion;
+            output.natm = fort_44_natm;
+            output.nmol = fort_44_nmol;
+            output.nion = fort_44_nion;
+            output.species_atm = fort_44_species_atm;
+            output.species_mol = fort_44_species_mol;
+            output.species_ion = fort_44_species_ion;
 
-            fluxes_movies.fn_atm_y.value = ncread(file,'rfluxa');
+            output.fn_atm_y.value = ncread(file,'rfluxa');
             info = ncinfo(file,'rfluxa');
-            fluxes_movies.fn_atm_y.description = ncreadatt(file,'rfluxa','long_name');
-            fluxes_movies.fn_atm_y.unit = ncreadatt(file,'rfluxa','units');
-            fluxes_movies.fn_atm_y.dimensions = {info.Dimensions.Name};
+            output.fn_atm_y.description = ncreadatt(file,'rfluxa','long_name');
+            output.fn_atm_y.unit = ncreadatt(file,'rfluxa','units');
+            output.fn_atm_y.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fn_atm_x.value = ncread(file,'pfluxa');
+            output.fn_atm_x.value = ncread(file,'pfluxa');
             info = ncinfo(file,'pfluxa');
-            fluxes_movies.fn_atm_x.description = ncreadatt(file,'pfluxa','long_name');
-            fluxes_movies.fn_atm_x.unit = ncreadatt(file,'pfluxa','units');
-            fluxes_movies.fn_atm_x.dimensions = {info.Dimensions.Name};
+            output.fn_atm_x.description = ncreadatt(file,'pfluxa','long_name');
+            output.fn_atm_x.unit = ncreadatt(file,'pfluxa','units');
+            output.fn_atm_x.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fe_atm_y.value = ncread(file,'refluxa');
+            output.fe_atm_y.value = ncread(file,'refluxa');
             info = ncinfo(file,'refluxa');
-            fluxes_movies.fe_atm_y.description = ncreadatt(file,'refluxa','long_name');
-            fluxes_movies.fe_atm_y.unit = ncreadatt(file,'refluxa','units');
-            fluxes_movies.fe_atm_y.dimensions = {info.Dimensions.Name};
+            output.fe_atm_y.description = ncreadatt(file,'refluxa','long_name');
+            output.fe_atm_y.unit = ncreadatt(file,'refluxa','units');
+            output.fe_atm_y.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fe_atm_x.value = ncread(file,'pefluxa');
+            output.fe_atm_x.value = ncread(file,'pefluxa');
             info = ncinfo(file,'pefluxa');
-            fluxes_movies.fe_atm_x.description = ncreadatt(file,'pefluxa','long_name');
-            fluxes_movies.fe_atm_x.unit = ncreadatt(file,'pefluxa','units');
-            fluxes_movies.fe_atm_x.dimensions = {info.Dimensions.Name};
+            output.fe_atm_x.description = ncreadatt(file,'pefluxa','long_name');
+            output.fe_atm_x.unit = ncreadatt(file,'pefluxa','units');
+            output.fe_atm_x.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fn_mol_y.value = ncread(file,'rfluxm');
+            output.fn_mol_y.value = ncread(file,'rfluxm');
             info = ncinfo(file,'rfluxm');
-            fluxes_movies.fn_mol_y.description = ncreadatt(file,'rfluxm','long_name');
-            fluxes_movies.fn_mol_y.unit = ncreadatt(file,'rfluxm','units');
-            fluxes_movies.fn_mol_y.dimensions = {info.Dimensions.Name};
+            output.fn_mol_y.description = ncreadatt(file,'rfluxm','long_name');
+            output.fn_mol_y.unit = ncreadatt(file,'rfluxm','units');
+            output.fn_mol_y.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fn_mol_x.value = ncread(file,'pfluxm');
+            output.fn_mol_x.value = ncread(file,'pfluxm');
             info = ncinfo(file,'pfluxm');
-            fluxes_movies.fn_mol_x.description = ncreadatt(file,'pfluxm','long_name');
-            fluxes_movies.fn_mol_x.unit = ncreadatt(file,'pfluxm','units');
-            fluxes_movies.fn_mol_x.dimensions = {info.Dimensions.Name};
+            output.fn_mol_x.description = ncreadatt(file,'pfluxm','long_name');
+            output.fn_mol_x.unit = ncreadatt(file,'pfluxm','units');
+            output.fn_mol_x.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fe_mol_y.value = ncread(file,'refluxm');
+            output.fe_mol_y.value = ncread(file,'refluxm');
             info = ncinfo(file,'refluxm');
-            fluxes_movies.fe_mol_y.description = ncreadatt(file,'refluxm','long_name');
-            fluxes_movies.fe_mol_y.unit = ncreadatt(file,'refluxm','units');
-            fluxes_movies.fe_mol_y.dimensions = {info.Dimensions.Name};
+            output.fe_mol_y.description = ncreadatt(file,'refluxm','long_name');
+            output.fe_mol_y.unit = ncreadatt(file,'refluxm','units');
+            output.fe_mol_y.dimensions = {info.Dimensions.Name};
 
-            fluxes_movies.fe_mol_x.value = ncread(file,'pefluxm');
+            output.fe_mol_x.value = ncread(file,'pefluxm');
             info = ncinfo(file,'pefluxm');
-            fluxes_movies.fe_mol_x.description = ncreadatt(file,'pefluxm','long_name');
-            fluxes_movies.fe_mol_x.unit = ncreadatt(file,'pefluxm','units');
-            fluxes_movies.fe_mol_x.dimensions = {info.Dimensions.Name};
+            output.fe_mol_x.description = ncreadatt(file,'pefluxm','long_name');
+            output.fe_mol_x.unit = ncreadatt(file,'pefluxm','units');
+            output.fe_mol_x.dimensions = {info.Dimensions.Name};
 
         catch
         end
 
     end
 
-    fprintf('Structure FLUXES_MOVIES from b2movies.nc read.\n');
+    fprintf('Time-dependent fluxes from b2movies.nc read\n');
 
 end
 
 %% READ THE SOURCES
 
-sources_movies = [];
+if READ_B25_SOURCES || READ_EIRENE_SOURCES
 
-if any(strcmp(varargin,'B25_SOURCES')) || any(strcmp(varargin,'EIRENE_SOURCES'))
+    output.times = ncread(file,'times');
 
-    sources_movies.times = ncread(file,'times');
-
-    if any(strcmp(varargin,'B25_SOURCES'))
+    if READ_B25_SOURCES
 
         try
 
             if strcmp(version,'structured')
 
-                sources_movies.nx = b2fstate_nx;
-                sources_movies.ny = b2fstate_ny;
-                sources_movies.ns = b2fstate_ns;
+                output.nx = b2fstate_nx;
+                output.ny = b2fstate_ny;
+                output.ns = b2fstate_ns;
 
             elseif strcmp(version,'unstructured')
 
-                sources_movies.nCv = b2fstate_nCv;
-                sources_movies.nFc = b2fstate_nFc;
-                sources_movies.ns = b2fstate_ns;
+                output.nCv = b2fstate_nCv;
+                output.nFc = b2fstate_nFc;
+                output.ns = b2fstate_ns;
 
             end
 
-            [sources_movies.species,~,~] = read_species(simulation);
+            [output.species,~,~] = read_species(simulation);
 
-            sources_movies.rsana.value = ncread(file,'rsana');
+            output.rsana.value = ncread(file,'rsana');
             info = ncinfo(file,'rsana');
-            sources_movies.rsana.description = ncreadatt(file,'rsana','long_name');
-            sources_movies.rsana.unit = ncreadatt(file,'rsana','units');
-            sources_movies.rsana.dimensions = {info.Dimensions.Name};
+            output.rsana.description = ncreadatt(file,'rsana','long_name');
+            output.rsana.unit = ncreadatt(file,'rsana','units');
+            output.rsana.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rsahi.value = ncread(file,'rsahi');
+            output.rsahi.value = ncread(file,'rsahi');
             info = ncinfo(file,'rsahi');
-            sources_movies.rsahi.description = ncreadatt(file,'rsahi','long_name');
-            sources_movies.rsahi.unit = ncreadatt(file,'rsahi','units');
-            sources_movies.rsahi.dimensions = {info.Dimensions.Name};
+            output.rsahi.description = ncreadatt(file,'rsahi','long_name');
+            output.rsahi.unit = ncreadatt(file,'rsahi','units');
+            output.rsahi.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rsahisum.value = ncread(file,'rsahisum');
+            output.rsahisum.value = ncread(file,'rsahisum');
             info = ncinfo(file,'rsahisum');
-            sources_movies.rsahisum.description = ncreadatt(file,'rsahisum','long_name');
-            sources_movies.rsahisum.unit = ncreadatt(file,'rsahisum','units');
-            sources_movies.rsahisum.dimensions = {info.Dimensions.Name};
+            output.rsahisum.description = ncreadatt(file,'rsahisum','long_name');
+            output.rsahisum.unit = ncreadatt(file,'rsahisum','units');
+            output.rsahisum.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rrana.value = ncread(file,'rrana');
+            output.rrana.value = ncread(file,'rrana');
             info = ncinfo(file,'rrana');
-            sources_movies.rrana.description = ncreadatt(file,'rrana','long_name');
-            sources_movies.rrana.unit = ncreadatt(file,'rrana','units');
-            sources_movies.rrana.dimensions = {info.Dimensions.Name};
+            output.rrana.description = ncreadatt(file,'rrana','long_name');
+            output.rrana.unit = ncreadatt(file,'rrana','units');
+            output.rrana.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rrahi.value = ncread(file,'rrahi');
+            output.rrahi.value = ncread(file,'rrahi');
             info = ncinfo(file,'rrahi');
-            sources_movies.rrahi.description = ncreadatt(file,'rrahi','long_name');
-            sources_movies.rrahi.unit = ncreadatt(file,'rrahi','units');
-            sources_movies.rrahi.dimensions = {info.Dimensions.Name};
+            output.rrahi.description = ncreadatt(file,'rrahi','long_name');
+            output.rrahi.unit = ncreadatt(file,'rrahi','units');
+            output.rrahi.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rrahisum.value = ncread(file,'rrahisum');
+            output.rrahisum.value = ncread(file,'rrahisum');
             info = ncinfo(file,'rrahisum');
-            sources_movies.rrahisum.description = ncreadatt(file,'rrahisum','long_name');
-            sources_movies.rrahisum.unit = ncreadatt(file,'rrahisum','units');
-            sources_movies.rrahisum.dimensions = {info.Dimensions.Name};
+            output.rrahisum.description = ncreadatt(file,'rrahisum','long_name');
+            output.rrahisum.unit = ncreadatt(file,'rrahisum','units');
+            output.rrahisum.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rcxna.value = ncread(file,'rcxna');
+            output.rcxna.value = ncread(file,'rcxna');
             info = ncinfo(file,'rcxna');
-            sources_movies.rcxna.description = ncreadatt(file,'rcxna','long_name');
-            sources_movies.rcxna.unit = ncreadatt(file,'rcxna','units');
-            sources_movies.rcxna.dimensions = {info.Dimensions.Name};
+            output.rcxna.description = ncreadatt(file,'rcxna','long_name');
+            output.rcxna.unit = ncreadatt(file,'rcxna','units');
+            output.rcxna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rcxhi.value = ncread(file,'rcxhi');
+            output.rcxhi.value = ncread(file,'rcxhi');
             info = ncinfo(file,'rcxhi');
-            sources_movies.rcxhi.description = ncreadatt(file,'rcxhi','long_name');
-            sources_movies.rcxhi.unit = ncreadatt(file,'rcxhi','units');
-            sources_movies.rcxhi.dimensions = {info.Dimensions.Name};
+            output.rcxhi.description = ncreadatt(file,'rcxhi','long_name');
+            output.rcxhi.unit = ncreadatt(file,'rcxhi','units');
+            output.rcxhi.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rcxhisum.value = ncread(file,'rcxhisum');
+            output.rcxhisum.value = ncread(file,'rcxhisum');
             info = ncinfo(file,'rcxhisum');
-            sources_movies.rcxhisum.description = ncreadatt(file,'rcxhisum','long_name');
-            sources_movies.rcxhisum.unit = ncreadatt(file,'rcxhisum','units');
-            sources_movies.rcxhisum.dimensions = {info.Dimensions.Name};
+            output.rcxhisum.description = ncreadatt(file,'rcxhisum','long_name');
+            output.rcxhisum.unit = ncreadatt(file,'rcxhisum','units');
+            output.rcxhisum.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rqahe.value = ncread(file,'rqahe');
+            output.rqahe.value = ncread(file,'rqahe');
             info = ncinfo(file,'rqahe');
-            sources_movies.rqahe.description = ncreadatt(file,'rqahe','long_name');
-            sources_movies.rqahe.unit = ncreadatt(file,'rqahe','units');
-            sources_movies.rqahe.dimensions = {info.Dimensions.Name};
+            output.rqahe.description = ncreadatt(file,'rqahe','long_name');
+            output.rqahe.unit = ncreadatt(file,'rqahe','units');
+            output.rqahe.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rqahesum.value = ncread(file,'rqahesum');
+            output.rqahesum.value = ncread(file,'rqahesum');
             info = ncinfo(file,'rqahesum');
-            sources_movies.rqahesum.description = ncreadatt(file,'rqahesum','long_name');
-            sources_movies.rqahesum.unit = ncreadatt(file,'rqahesum','units');
-            sources_movies.rqahesum.dimensions = {info.Dimensions.Name};
+            output.rqahesum.description = ncreadatt(file,'rqahesum','long_name');
+            output.rqahesum.unit = ncreadatt(file,'rqahesum','units');
+            output.rqahesum.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rqrad.value = ncread(file,'rqrad');
+            output.rqrad.value = ncread(file,'rqrad');
             info = ncinfo(file,'rqrad');
-            sources_movies.rqrad.description = ncreadatt(file,'rqrad','long_name');
-            sources_movies.rqrad.unit = ncreadatt(file,'rqrad','units');
-            sources_movies.rqrad.dimensions = {info.Dimensions.Name};
+            output.rqrad.description = ncreadatt(file,'rqrad','long_name');
+            output.rqrad.unit = ncreadatt(file,'rqrad','units');
+            output.rqrad.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rqradsum.value = ncread(file,'rqradsum');
+            output.rqradsum.value = ncread(file,'rqradsum');
             info = ncinfo(file,'rqradsum');
-            sources_movies.rqradsum.description = ncreadatt(file,'rqradsum','long_name');
-            sources_movies.rqradsum.unit = ncreadatt(file,'rqradsum','units');
-            sources_movies.rqradsum.dimensions = {info.Dimensions.Name};
+            output.rqradsum.description = ncreadatt(file,'rqradsum','long_name');
+            output.rqradsum.unit = ncreadatt(file,'rqradsum','units');
+            output.rqradsum.dimensions = {info.Dimensions.Name};
 
         catch
         end
 
     end
 
-    if any(strcmp(varargin,'EIRENE_SOURCES'))
+    if READ_EIRENE_SOURCES
 
         try
 
             if strcmp(version,'structured')
 
-                sources_movies.nx = b2fstate_nx;
-                sources_movies.ny = b2fstate_ny;
-                sources_movies.ns = b2fstate_ns;
+                output.nx = b2fstate_nx;
+                output.ny = b2fstate_ny;
+                output.ns = b2fstate_ns;
 
             elseif strcmp(version,'unstructured')
 
-                sources_movies.nCv = b2fstate_nCv;
-                sources_movies.nFc = b2fstate_nFc;
-                sources_movies.ns = b2fstate_ns;
+                output.nCv = b2fstate_nCv;
+                output.nFc = b2fstate_nFc;
+                output.ns = b2fstate_ns;
 
             end
 
-            sources_movies.natm = fort_44_natm;
-            sources_movies.nmol = fort_44_nmol;
-            sources_movies.nion = fort_44_nion;
-            sources_movies.species_atm = fort_44_species_atm;
-            sources_movies.species_mol = fort_44_species_mol;
-            sources_movies.species_ion = fort_44_species_ion;
+            output.natm = fort_44_natm;
+            output.nmol = fort_44_nmol;
+            output.nion = fort_44_nion;
+            output.species_atm = fort_44_species_atm;
+            output.species_mol = fort_44_species_mol;
+            output.species_ion = fort_44_species_ion;
 
-            sources_movies.eirene_papl_sna.value = ncread(file,'eirene_papl_sna');
+            output.eirene_papl_sna.value = ncread(file,'eirene_papl_sna');
             info = ncinfo(file,'eirene_papl_sna');
-            sources_movies.eirene_papl_sna.description = ncreadatt(file,'eirene_papl_sna','long_name');
-            sources_movies.eirene_papl_sna.unit = ncreadatt(file,'eirene_papl_sna','units');
-            sources_movies.eirene_papl_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_papl_sna.description = ncreadatt(file,'eirene_papl_sna','long_name');
+            output.eirene_papl_sna.unit = ncreadatt(file,'eirene_papl_sna','units');
+            output.eirene_papl_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_pmpl_sna.value = ncread(file,'eirene_pmpl_sna');
+            output.eirene_pmpl_sna.value = ncread(file,'eirene_pmpl_sna');
             info = ncinfo(file,'eirene_pmpl_sna');
-            sources_movies.eirene_pmpl_sna.description = ncreadatt(file,'eirene_pmpl_sna','long_name');
-            sources_movies.eirene_pmpl_sna.unit = ncreadatt(file,'eirene_pmpl_sna','units');
-            sources_movies.eirene_pmpl_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_pmpl_sna.description = ncreadatt(file,'eirene_pmpl_sna','long_name');
+            output.eirene_pmpl_sna.unit = ncreadatt(file,'eirene_pmpl_sna','units');
+            output.eirene_pmpl_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_pppl_sna.value = ncread(file,'eirene_pppl_sna');
+            output.eirene_pppl_sna.value = ncread(file,'eirene_pppl_sna');
             info = ncinfo(file,'eirene_pppl_sna');
-            sources_movies.eirene_pppl_sna.description = ncreadatt(file,'eirene_pppl_sna','long_name');
-            sources_movies.eirene_pppl_sna.unit = ncreadatt(file,'eirene_pppl_sna','units');
-            sources_movies.eirene_pppl_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_pppl_sna.description = ncreadatt(file,'eirene_pppl_sna','long_name');
+            output.eirene_pppl_sna.unit = ncreadatt(file,'eirene_pppl_sna','units');
+            output.eirene_pppl_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_eael_sna.value = ncread(file,'eirene_eael_she');
+            output.eirene_eael_sna.value = ncread(file,'eirene_eael_she');
             info = ncinfo(file,'eirene_eael_she');
-            sources_movies.eirene_eael_sna.description = ncreadatt(file,'eirene_eael_she','long_name');
-            sources_movies.eirene_eael_sna.unit = ncreadatt(file,'eirene_eael_she','units');
-            sources_movies.eirene_eael_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_eael_sna.description = ncreadatt(file,'eirene_eael_she','long_name');
+            output.eirene_eael_sna.unit = ncreadatt(file,'eirene_eael_she','units');
+            output.eirene_eael_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_emel_sna.value = ncread(file,'eirene_emel_she');
+            output.eirene_emel_sna.value = ncread(file,'eirene_emel_she');
             info = ncinfo(file,'eirene_emel_she');
-            sources_movies.eirene_emel_sna.description = ncreadatt(file,'eirene_emel_she','long_name');
-            sources_movies.eirene_emel_sna.unit = ncreadatt(file,'eirene_emel_she','units');
-            sources_movies.eirene_emel_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_emel_sna.description = ncreadatt(file,'eirene_emel_she','long_name');
+            output.eirene_emel_sna.unit = ncreadatt(file,'eirene_emel_she','units');
+            output.eirene_emel_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_epel_sna.value = ncread(file,'eirene_epel_she');
+            output.eirene_epel_sna.value = ncread(file,'eirene_epel_she');
             info = ncinfo(file,'eirene_epel_she');
-            sources_movies.eirene_epel_sna.description = ncreadatt(file,'eirene_epel_she','long_name');
-            sources_movies.eirene_epel_sna.unit = ncreadatt(file,'eirene_epel_she','units');
-            sources_movies.eirene_epel_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_epel_sna.description = ncreadatt(file,'eirene_epel_she','long_name');
+            output.eirene_epel_sna.unit = ncreadatt(file,'eirene_epel_she','units');
+            output.eirene_epel_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_eapl_sna.value = ncread(file,'eirene_eapl_shi');
+            output.eirene_eapl_sna.value = ncread(file,'eirene_eapl_shi');
             info = ncinfo(file,'eirene_eapl_shi');
-            sources_movies.eirene_eapl_sna.description = ncreadatt(file,'eirene_eapl_shi','long_name');
-            sources_movies.eirene_eapl_sna.unit = ncreadatt(file,'eirene_eapl_shi','units');
-            sources_movies.eirene_eapl_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_eapl_sna.description = ncreadatt(file,'eirene_eapl_shi','long_name');
+            output.eirene_eapl_sna.unit = ncreadatt(file,'eirene_eapl_shi','units');
+            output.eirene_eapl_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_empl_sna.value = ncread(file,'eirene_empl_shi');
+            output.eirene_empl_sna.value = ncread(file,'eirene_empl_shi');
             info = ncinfo(file,'eirene_empl_shi');
-            sources_movies.eirene_empl_sna.description = ncreadatt(file,'eirene_empl_shi','long_name');
-            sources_movies.eirene_empl_sna.unit = ncreadatt(file,'eirene_empl_shi','units');
-            sources_movies.eirene_empl_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_empl_sna.description = ncreadatt(file,'eirene_empl_shi','long_name');
+            output.eirene_empl_sna.unit = ncreadatt(file,'eirene_empl_shi','units');
+            output.eirene_empl_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.eirene_eppl_sna.value = ncread(file,'eirene_eppl_shi');
+            output.eirene_eppl_sna.value = ncread(file,'eirene_eppl_shi');
             info = ncinfo(file,'eirene_eppl_shi');
-            sources_movies.eirene_eppl_sna.description = ncreadatt(file,'eirene_eppl_shi','long_name');
-            sources_movies.eirene_eppl_sna.unit = ncreadatt(file,'eirene_eppl_shi','units');
-            sources_movies.eirene_eppl_sna.dimensions = {info.Dimensions.Name};
+            output.eirene_eppl_sna.description = ncreadatt(file,'eirene_eppl_shi','long_name');
+            output.eirene_eppl_sna.unit = ncreadatt(file,'eirene_eppl_shi','units');
+            output.eirene_eppl_sna.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rad_atm.value = ncread(file,'eneutrad');
+            output.rad_atm.value = ncread(file,'eneutrad');
             info = ncinfo(file,'eneutrad');
-            sources_movies.rad_atm.description = ncreadatt(file,'eneutrad','long_name');
-            sources_movies.rad_atm.unit = ncreadatt(file,'eneutrad','units');
-            sources_movies.rad_atm.dimensions = {info.Dimensions.Name};
+            output.rad_atm.description = ncreadatt(file,'eneutrad','long_name');
+            output.rad_atm.unit = ncreadatt(file,'eneutrad','units');
+            output.rad_atm.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rad_atm_sum.value = ncread(file,'eneutradsum');
+            output.rad_atm_sum.value = ncread(file,'eneutradsum');
             info = ncinfo(file,'eneutradsum');
-            sources_movies.rad_atm_sum.description = ncreadatt(file,'eneutradsum','long_name');
-            sources_movies.rad_atm_sum.unit = ncreadatt(file,'eneutradsum','units');
-            sources_movies.rad_atm_sum.dimensions = {info.Dimensions.Name};
+            output.rad_atm_sum.description = ncreadatt(file,'eneutradsum','long_name');
+            output.rad_atm_sum.unit = ncreadatt(file,'eneutradsum','units');
+            output.rad_atm_sum.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rad_mol.value = ncread(file,'emolrad');
+            output.rad_mol.value = ncread(file,'emolrad');
             info = ncinfo(file,'emolrad');
-            sources_movies.rad_mol.description = ncreadatt(file,'emolrad','long_name');
-            sources_movies.rad_mol.unit = ncreadatt(file,'emolrad','units');
-            sources_movies.rad_mol.dimensions = {info.Dimensions.Name};
+            output.rad_mol.description = ncreadatt(file,'emolrad','long_name');
+            output.rad_mol.unit = ncreadatt(file,'emolrad','units');
+            output.rad_mol.dimensions = {info.Dimensions.Name};
 
-            sources_movies.rad_mol_sum.value = ncread(file,'emolradsum');
+            output.rad_mol_sum.value = ncread(file,'emolradsum');
             info = ncinfo(file,'emolradsum');
-            sources_movies.rad_mol_sum.description = ncreadatt(file,'emolradsum','long_name');
-            sources_movies.rad_mol_sum.unit = ncreadatt(file,'emolradsum','units');
-            sources_movies.rad_mol_sum.dimensions = {info.Dimensions.Name};
+            output.rad_mol_sum.description = ncreadatt(file,'emolradsum','long_name');
+            output.rad_mol_sum.unit = ncreadatt(file,'emolradsum','units');
+            output.rad_mol_sum.dimensions = {info.Dimensions.Name};
 
         catch
         end
 
     end
 
-    fprintf('Structure SOURCES_MOVIES from b2movies.nc read.\n');
+    fprintf('Time-dependent sources from b2movies.nc read\n');
 
 end
 

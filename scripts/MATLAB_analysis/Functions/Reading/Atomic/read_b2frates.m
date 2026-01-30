@@ -75,6 +75,6 @@ frewind(fid);
 
 fclose(fid);
 
-fprintf('Structure RATES from b2frates read.\n');
+fprintf('Atomic rates from b2frates read\n');
 
 end

@@ -336,7 +336,7 @@ if strcmp(version,'unstructured')
 
 end
 
-fprintf('Structure EIRENE_MOVIES from eirenemovies.nc read.\n');
+fprintf('Time-dependent neutrals state variables from eirenemovies.nc read\n');
 
 fclose(fid);
 

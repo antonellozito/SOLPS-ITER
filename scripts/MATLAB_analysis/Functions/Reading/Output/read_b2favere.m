@@ -48,7 +48,7 @@ avere.shi     = scan_b2_real(fid,'shi_mean'    ,[nx+2,ny+2,4]);
 avere.sch     = scan_b2_real(fid,'sch_mean'    ,[nx+2,ny+2,4]);
 avere.smo     = scan_b2_real(fid,'smo_mean'    ,[nx+2,ny+2,4,ns]);
 
-fprintf('Structure AVERE from b2favere read.\n');
+fprintf('Run-averaged plasma solution from b2favere read\n');
 
 frewind(fid);
 

@@ -63,7 +63,7 @@ equilibrium.R=R;
 equilibrium.z=z;
 equilibrium.PF=PF./(2*pi);
 
-fprintf('Structure EQUILIBRIUM from rzpsi.dat read.\n');
+fprintf('Equilibrium from rzpsi.dat read\n');
 
 frewind(fid);
 

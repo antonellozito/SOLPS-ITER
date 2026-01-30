@@ -151,7 +151,7 @@ line = fgetl(fid);
 
 end
 
-fprintf('ADAS adf11 datafile %s%d_%s.dat from the library ''%s%d'' read.\n',prefix,library,atom,prefix,library);
+fprintf('ADAS adf11 datafile %s%d_%s.dat from the library ''%s%d'' read\n',prefix,library,atom,prefix,library);
 
 %% CLOSE THE FILE
 

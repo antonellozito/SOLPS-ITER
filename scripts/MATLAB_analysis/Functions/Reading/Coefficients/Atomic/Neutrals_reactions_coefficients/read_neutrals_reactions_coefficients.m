@@ -40,7 +40,7 @@ switch database
     case 'AMJUEL'
         % Parse database
         db = read_amjuel(amjuel_datafile);
-        fprintf('amjuel.tex datafile read.\n');
+        fprintf('amjuel.tex datafile read\n');
         
         % Compute coefficients
         if ~exist('E','var') || isempty(E)
@@ -52,7 +52,7 @@ switch database
     case 'HYDHEL'
         % Parse database
         db = read_hydhel(hydhel_datafile);
-        fprintf('hydhel.tex datafile read.\n');
+        fprintf('hydhel.tex datafile read\n');
         
         % Compute coefficients
         if ~exist('E','var') || isempty(E)
@@ -64,7 +64,7 @@ switch database
     case 'AMMONX'
         % Parse database
         db = read_ammonx(ammonx_datafile);
-        fprintf('AMMONX_Arrh-elast.tex datafile read.\n');
+        fprintf('AMMONX_Arrh-elast.tex datafile read\n');
         
         % Compute coefficients
         coeff = calc_coeff(db, reaction, n, T, [], database);

@@ -35,6 +35,6 @@ for i = 1:size(data,2)
     particle_balance.(name) = data(:,i);
 end
 
-fprintf('Structure PARTICLE_BALANCE from blnn.trc read.\n');
+fprintf('Particle balance time traces from blnn.trc read\n');
 
 end

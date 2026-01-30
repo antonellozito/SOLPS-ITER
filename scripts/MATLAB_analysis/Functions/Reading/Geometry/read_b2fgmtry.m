@@ -383,7 +383,7 @@ end
 
 end
 
-fprintf('Structure GEOMETRY from b2fgmtry read.\n');
+fprintf('B2.5 geometry from b2fgmtry read\n');
 
 frewind(fid);
 

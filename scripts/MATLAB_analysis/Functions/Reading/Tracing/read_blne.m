@@ -34,6 +34,6 @@ for i = 1:size(data,2)
     energy_balance.(name) = data(:,i);
 end
 
-fprintf('Structure ENERGY_BALANCE from blne.trc read.\n');
+fprintf('Energy balance time traces from blne.trc read\n');
 
 end

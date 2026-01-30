@@ -189,9 +189,9 @@ frewind(fid);
 fclose(fid);
 
 if not(fid_state == -1)
-    fprintf('Structure STATE from b2fstate read.\n');
+    fprintf('Plasma solution from b2fstate read\n');
 elseif (fid_state == -1) && not(fid_stati == -1)
-    fprintf('Structure STATE from b2fstati read (b2fstate not found).\n');
+    fprintf('Plasma solution from b2fstati read (b2fstate not found)\n');
 end
 
 end

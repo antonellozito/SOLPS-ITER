@@ -119,7 +119,7 @@ if str2num(strrep(version,'.','')) >= str2num(strrep('03.000.005','.',''))
     state.floi_noc  = scan_b2_real(fid,'floi_noc' ,fluxdim);
 end
 
-fprintf('FULL structure STATE from b2fstate read.\n');
+fprintf('Full plasma solution from b2fstate read\n');
 
 %% Close file
 

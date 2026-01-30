@@ -399,6 +399,6 @@ frewind(fid);
 
 fclose(fid);
 
-fprintf('Structure NEUTRALS_TRIANGLES from fort.46 read.\n');
+fprintf('Eirene neutrals state variables from fort.46 read\n');
 
 end

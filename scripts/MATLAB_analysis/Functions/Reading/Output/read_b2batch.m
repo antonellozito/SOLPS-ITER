@@ -44,7 +44,7 @@ time_traces_av.timxip_av = ncread(file,'timxip_av');
 time_traces_av.tisepa_av = ncread(file,'tisepa_av');
 time_traces_av.timxap_av = ncread(file,'timxap_av');
 
-fprintf('Structure TIME_TRACES_AV from b2batch.nc read.\n');
+fprintf('Batch-averaged time traces from b2batch.nc read\n');
 
 fclose(fid);
 
