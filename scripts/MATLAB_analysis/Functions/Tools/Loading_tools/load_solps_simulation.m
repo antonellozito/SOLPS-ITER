@@ -243,6 +243,8 @@ end
 %% READ SPECIES AND TYPE OF GEOMETRY
 
 try
+    [NREG,species,isonuclear_species] = find_nreg_species(SIMULATION);
+catch
     experiment_directory = regexprep(RUN_DIRECTORY, '/[^/]*$', '');
     temp = strtrim(fileread(sprintf('%s/NREG',experiment_directory)));
     NREG = str2double(temp);
@@ -250,8 +252,6 @@ try
     species = strsplit(temp);
     temp = cellfun(@(s) regexp(s, '^[A-Za-z]+', 'match'), species, 'UniformOutput', false);
     isonuclear_species = unique([temp{:}]);
-catch
-    [NREG,species,isonuclear_species] = find_nreg_species(SIMULATION);
 end
 
 species = cellfun(@(s) strrep(s, '+', ''), species, 'UniformOutput', false);
@@ -271,8 +271,15 @@ elseif NREG(1) == 8 && (NREG(2) == 12 || NREG(2) == 26)
     SIMULATION.geometry_type = 'Connected double null';
 elseif NREG(1) == 8 && (NREG(2) == 13 || NREG(2) == 27)
     SIMULATION.geometry_type = 'Disconnected double null';
+elseif NREG(1) == 8 && (NREG(2) == 24)
+    SN_type = detect_LSN_USN(SIMULATION);
+    if strcmp(SN_type,'LSN')
+        SIMULATION.geometry_type = 'Lower single null (CDN-like grid)';
+    elseif strcmp(SN_type,'USN')
+        SIMULATION.geometry_type = 'Upper single null (CDN-like grid)';
+    end
 elseif NREG(1) == 7
-    SIMULATION.geometry_type = 'LFS snowflake';
+    SIMULATION.geometry_type = 'Snowflake';
 end
 
 if numel(NREG) == 1 || numel(NREG) == 3
@@ -441,7 +448,7 @@ if not(NREG(end) == 0)
                 SIMULATION.face_regions_names{3} = 'Entrance to outer divertor';
                 SIMULATION.face_regions_names{4} = 'Outer divertor target';
                 SIMULATION.face_regions_names{5} = 'Connection between core sides';
-                SIMULATION.face_regions_names{6} = 'Connection between bdivertor sides';
+                SIMULATION.face_regions_names{6} = 'Connection between divertor sides';
                 SIMULATION.face_regions_names{7} = 'Inner PFR wall boundary';
                 SIMULATION.face_regions_names{8} = 'Core boundary';
                 SIMULATION.face_regions_names{9} = 'Outer PFR wall boundary';
@@ -682,6 +689,101 @@ if not(NREG(end) == 0)
             SIMULATION.face_regions_names{25} = 'Top outer divertor main wall boundary';
             SIMULATION.face_regions_names{26} = 'Right SOL main wall boundary';
             SIMULATION.face_regions_names{27} = 'Bottom outer divertor main wall boundary';
+        end
+    elseif NREG(1) == 8 && (NREG(2) == 24)
+        SIMULATION.volume_regions = [
+        "+-------+---------------+---------------+-------+" newline ...
+        "|       :               :               :       |" newline ...
+        "|       :       2       :       6       :       |" newline ...
+        "|       :               :               :       |" newline ...
+        "|       :               :               :       |" newline ...
+        "|...3...+---------------+---------------+...8...|" newline ...
+        "|       |       1       :       5       |       |" newline ...
+        "|       |               :               |       |" newline ...
+        "+-------+---------------+---------------+-------+"
+        ];
+        if strcmp(SN_type,'LSN')
+            SIMULATION.volume_regions_names{1} = 'Left Core';
+            SIMULATION.volume_regions_names{2} = 'Left SOL';
+            SIMULATION.volume_regions_names{3} = 'Inner divertor';
+            SIMULATION.volume_regions_names{4} = '-';
+            SIMULATION.volume_regions_names{5} = 'Right Core';
+            SIMULATION.volume_regions_names{6} = 'Right SOL';
+            SIMULATION.volume_regions_names{7} = '-';
+            SIMULATION.volume_regions_names{8} = 'Outer divertor';
+        elseif strcmp(SN_type,'USN')
+            SIMULATION.volume_regions_names{1} = 'Right Core';
+            SIMULATION.volume_regions_names{2} = 'Right SOL';
+            SIMULATION.volume_regions_names{3} = 'Outer divertor';
+            SIMULATION.volume_regions_names{4} = '-';
+            SIMULATION.volume_regions_names{5} = 'Left Core';
+            SIMULATION.volume_regions_names{6} = 'Left SOL';
+            SIMULATION.volume_regions_names{7} = '-';
+            SIMULATION.volume_regions_names{8} = 'Inner divertor';
+        end
+        if numel(NREG) == 2
+            SIMULATION.face_regions = [
+            "+--------4--------------+--------------5--------+" newline ...
+            "|        :              :              :        |" newline ...
+            "|        2              13             7        |" newline ...
+            "|        :              +              :        |" newline ...
+            "|        :              |              :        |" newline ...
+            "1........+------17------+------24------+........8" newline ...
+            "|        |9             |11            |12      |" newline ...
+            "|        |              |              |        |" newline ...
+            "+---14---+------15------+------22------+---23---+"
+            ];
+            if strcmp(SN_type,'LSN')
+                SIMULATION.face_regions_names{1} = 'Inner divertor target';
+                SIMULATION.face_regions_names{2} = 'Entrance to inner divertor';
+                SIMULATION.face_regions_names{3} = '-';
+                SIMULATION.face_regions_names{4} = 'Left SOL main wall boundary';
+                SIMULATION.face_regions_names{5} = 'Right SOL main wall boundary';
+                SIMULATION.face_regions_names{6} = '-';
+                SIMULATION.face_regions_names{7} = 'Entrance to outer divertor';
+                SIMULATION.face_regions_names{8} = 'Outer divertor target';
+                SIMULATION.face_regions_names{9} = 'Connection between bottom inner and bottom outer core';
+                SIMULATION.face_regions_names{10} = '-';
+                SIMULATION.face_regions_names{11} = 'Connection between top outer and top inner core';
+                SIMULATION.face_regions_names{12} = 'Connection between outer and inner PFR';
+                SIMULATION.face_regions_names{13} = 'Connection between right and left SOL';
+                SIMULATION.face_regions_names{14} = 'Inner PFR wall boundary';
+                SIMULATION.face_regions_names{15} = 'Left core boundary';
+                SIMULATION.face_regions_names{16} = '-';
+                SIMULATION.face_regions_names{17} = 'Left separatrix';
+                SIMULATION.face_regions_names{18} = '-';
+                SIMULATION.face_regions_names{19} = '-';
+                SIMULATION.face_regions_names{20} = '-';
+                SIMULATION.face_regions_names{21} = '-';
+                SIMULATION.face_regions_names{22} = 'Right core boundary';
+                SIMULATION.face_regions_names{23} = 'Outer PFR wall boundary';
+                SIMULATION.face_regions_names{24} = 'Right separatrix';
+            elseif strcmp(SN_type,'USN')
+                SIMULATION.face_regions_names{1} = 'Outer divertor target';
+                SIMULATION.face_regions_names{2} = 'Entrance to outer divertor';
+                SIMULATION.face_regions_names{3} = '-';
+                SIMULATION.face_regions_names{4} = 'Right SOL main wall boundary';
+                SIMULATION.face_regions_names{5} = 'Left SOL main wall boundary';
+                SIMULATION.face_regions_names{6} = '-';
+                SIMULATION.face_regions_names{7} = 'Entrance to inner divertor';
+                SIMULATION.face_regions_names{8} = 'Inner divertor target';
+                SIMULATION.face_regions_names{9} = 'Connection between top inner and top outer core';
+                SIMULATION.face_regions_names{10} = '-';
+                SIMULATION.face_regions_names{11} = 'Connection between bottom outer and bottom inner core';
+                SIMULATION.face_regions_names{12} = 'Connection between outer and inner PFR';
+                SIMULATION.face_regions_names{13} = 'Connection between right and left SOL';
+                SIMULATION.face_regions_names{14} = 'Inner PFR wall boundary';
+                SIMULATION.face_regions_names{15} = 'Right core boundary';
+                SIMULATION.face_regions_names{16} = '-';
+                SIMULATION.face_regions_names{17} = 'Right separatrix';
+                SIMULATION.face_regions_names{18} = '-';
+                SIMULATION.face_regions_names{19} = '-';
+                SIMULATION.face_regions_names{20} = '-';
+                SIMULATION.face_regions_names{21} = '-';
+                SIMULATION.face_regions_names{22} = 'Left core boundary';
+                SIMULATION.face_regions_names{23} = 'Outer PFR wall boundary';
+                SIMULATION.face_regions_names{24} = 'Left separatrix';
+            end
         end
     elseif NREG(1) == 7
         SIMULATION.volume_regions = [

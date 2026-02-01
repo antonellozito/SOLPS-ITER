@@ -1,4 +1,4 @@
-function field_averaged = phase_average(field, steps, type)
+function [field_averaged, field_pieces] = phase_average(field, steps, type)
 
 if strcmp(type,'b2time_time_traces')
 
@@ -8,6 +8,10 @@ if strcmp(type,'b2time_time_traces')
     end
 
     if length(size(field)) == 3
+        nBlocks = floor(size(field,3) / steps);
+        for iBlock = 1:nBlocks
+            field_pieces{iBlock} = field(:,:,(iBlock-1)*steps+1:iBlock*steps);
+        end
         for j = 1:size(field,2)
             clear x;
             x(:,:) = field(:,j,:);
@@ -19,6 +23,10 @@ if strcmp(type,'b2time_time_traces')
         clear y;
         field_averaged = reshape(field_averaged, 1, size(field_averaged,1), size(field_averaged,2));
     else
+        nBlocks = floor(size(field,2) / steps);
+        for iBlock = 1:nBlocks
+            field_pieces{iBlock} = field(:,(iBlock-1)*steps+1:iBlock*steps);
+        end
         clear x;
         x = field;
         nBlocks = floor(numel(x) / steps);
@@ -33,8 +41,11 @@ elseif strcmp(type,'b2time_profiles')
     if steps > size(field,dim)
         error('Error: Number of time steps for computing the phase average cannot be larger than total time steps available for plotting (%d)',size(field,dim));
     end
-
     if length(size(field)) == 3
+        nBlocks = floor(size(field,3) / steps);
+        for iBlock = 1:nBlocks
+            field_pieces{iBlock} = field(:,:,(iBlock-1)*steps+1:iBlock*steps);
+        end
         for k = 1:size(field,1)
             for j = 1:size(field,2)
                 clear x;
@@ -47,6 +58,10 @@ elseif strcmp(type,'b2time_profiles')
         field_averaged = y;
         clear y;
     else
+        nBlocks = floor(size(field,2) / steps);
+        for iBlock = 1:nBlocks
+            field_pieces{iBlock} = field(:,(iBlock-1)*steps+1:iBlock*steps);
+        end
         for k = 1:size(field,1)
             clear x;
             x = field(k,:);
@@ -64,7 +79,10 @@ elseif strcmp(type,'tracing')
     if steps > size(field,dim)
         error('Error: Number of time steps for computing the rolling average cannot be larger than total time steps available for plotting (%d)',size(field,dim));
     end
-
+    nBlocks = floor(size(field,dim) / steps);
+    for iBlock = 1:nBlocks
+        field_pieces{iBlock} = field((iBlock-1)*steps+1:iBlock*steps);
+    end
     x = field;
     nBlocks = floor(numel(x) / steps);
     x = x(1:nBlocks*steps);
@@ -75,13 +93,13 @@ elseif strcmp(type,'time')
     if steps > size(field,1)
         error('Error: Number of time steps for computing the phase average cannot be larger than total time steps available for plotting (%d)',size(field,1));
     end
-
     x = field;
     x = x(1:steps);
     field_averaged = x;
+    field_pieces = x;
 
 else
-
+    
     error('Error: Unknown type %s in phase_average. Use ''b2time_time_traces'', ''b2time_profiles'', ''tracing'', or ''time''', type);
 
 end
