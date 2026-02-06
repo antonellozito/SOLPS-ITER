@@ -1,6 +1,6 @@
 function [NREG, species, isonuclear_species] = find_nreg_species(simulation)
 
-% FIND_NREG
+% FIND_NREG_SPECIES
 %
 %   Reads run.log / run.log.gz / run.log.last10, processes the
 %   "Start tallies by region" block, reconstructs continuation lines,
