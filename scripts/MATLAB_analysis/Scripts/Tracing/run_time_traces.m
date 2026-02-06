@@ -300,13 +300,11 @@ check_vars(strings_selection, 'string');
 averages_selection = {'ROLLING_AVERAGE_STEPS'
                       'BATCH_AVERAGE_STEPS'
                       'PHASE_AVERAGE_STEPS'};
-num_nonzero = sum(cellfun(@(v) any(evalin('caller', v) ~= 0), averages_selection));
-if num_nonzero > 1
+if sum([ROLLING_AVERAGE_STEPS, BATCH_AVERAGE_STEPS, PHASE_AVERAGE_STEPS] ~= 0) > 1
     error('Error: At most one of these variables can be nonzero:\n%s', strjoin(averages_selection, ', '));
 end
 
-% Check sanity of time limits
-if (exist('TMIN','var') && ~isnan(TMIN)) && (exist('TMAX','var') && ~isnan(TMAX))
+if ~isnan(TMIN) && ~isnan(TMAX)
     if TMIN >= TMAX
         error('Error: TMIN cannot be larger or equal than TMAX');
     end
@@ -349,9 +347,10 @@ end
 
 %% APPLY AVERAGING SCHEMES
 
+TIME_TRACES_ORIGINAL = TIME_TRACES;
+
 % Rolling average
 if ROLLING_AVERAGE_STEPS > 0
-    TIME_TRACES_ORIGINAL = TIME_TRACES;
     time_step = TIME_TRACES.timesa.value(2) - TIME_TRACES.timesa.value(1);
     fields = fieldnames(TIME_TRACES);
     for i = 1:numel(fields)
@@ -367,7 +366,6 @@ end
 
 % Batch average
 if BATCH_AVERAGE_STEPS > 0
-    TIME_TRACES_ORIGINAL = TIME_TRACES;
     time_step = TIME_TRACES.timesa.value(2) - TIME_TRACES.timesa.value(1);
     fields = fieldnames(TIME_TRACES);
     for i = 1:numel(fields)
@@ -385,7 +383,6 @@ end
 
 % Phase average
 if PHASE_AVERAGE_STEPS > 0
-    TIME_TRACES_ORIGINAL = TIME_TRACES;
     time_step = TIME_TRACES.timesa.value(2) - TIME_TRACES.timesa.value(1);
     fields = fieldnames(TIME_TRACES);
     for i = 1:numel(fields)
@@ -408,6 +405,13 @@ if SHOW_FIGURE
     SHOW_FIGURE_status = 'on';
 else
     SHOW_FIGURE_status = 'off';
+end
+
+HAS_AVERAGING = (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0);
+if HAS_AVERAGING && PLOT_ORIGINAL_DATA
+    orig_time = TIME_TRACES_ORIGINAL.timesa.value;
+else
+    orig_time = [];
 end
 
 % Load colors
@@ -435,6 +439,10 @@ end
 % Set Y-limits style
 originalYLimitMethod = get(groot, 'defaultAxesYLimitMethod');
 set(groot, 'defaultAxesYLimitMethod', YLIM_STYLE);
+
+% Common properties for all plots
+tp_common = {'LineWidth', LINEWIDTH, 'TMIN', TMIN, 'TMAX', TMAX, ...
+             'ShowName', SHOW_NAME, 'RunName', RUN};
 
 % Define the groups of plots depending on the grid topology
 ncut = size(TIME_TRACES.nesepm.value,1);
@@ -501,74 +509,36 @@ end
 %% PLOT MIDPLANE STATE VARIABLES
 
 if PLOT_MIDPLANE_STATE_VARIABLES
-    
+
     for i = 1:ncut
 
         fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_midplane_state_variables{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
-    
+
         % Separatrix electron density
         subplot('position',[0.08 0.25 0.42 0.5]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.nesepm.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.nesepm.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepm.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLOR_DENSITIES); hold on;
-        xl = xlim;
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',18);
-        ylabel('$n_e$ [m$^{-3}$]','interpreter','latex','fontsize',18);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Midplane electron density','interpreter','latex','fontsize',20);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, ...
+            struct('data',TIME_TRACES.nesepm.value(i,:), 'color',COLOR_DENSITIES, 'display_name',labels_midplane{i}, 'line_style','-'), ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nesepm', {i,':'})}, ...
+            'YLabel','$n_e$ [m$^{-3}$]', 'Title','Midplane electron density', tp_common{:});
+
         % Separatrix electron temperature
         subplot('position',[0.57 0.55 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.tesepm.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tesepm.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepm.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLOR_TEMPERATURES); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$T_e$ [eV]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Midplane electron temperature','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, ...
+            struct('data',TIME_TRACES.tesepm.value(i,:), 'color',COLOR_TEMPERATURES, 'display_name',labels_midplane{i}, 'line_style','-'), ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tesepm', {i,':'})}, ...
+            'YLabel','$T_e$ [eV]', 'Title','Midplane electron temperature', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
+
         % Separatrix ion temperature
         subplot('position',[0.57 0.06 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.tisepm.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tisepm.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepm.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLOR_TEMPERATURES); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$T_i$ [eV]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Midplane ion temperature','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-
+        timeplot(TIME_TRACES.timesa.value, ...
+            struct('data',TIME_TRACES.tisepm.value(i,:), 'color',COLOR_TEMPERATURES, 'display_name',labels_midplane{i}, 'line_style','-'), ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tisepm', {i,':'})}, ...
+            'YLabel','$T_i$ [eV]', 'Title','Midplane ion temperature', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
     end
 
     fprintf('Plot of midplane species variables prepared\n');
@@ -584,80 +554,54 @@ if PLOT_MIDPLANE_SPECIES_DENSITIES
     end
 
     ns = length(species_label);
-
-    positions{1}=[0.03 0.58 0.20 0.32];
-    positions{2}=[0.28 0.58 0.20 0.32];
-    positions{3}=[0.53 0.58 0.20 0.32];
-    positions{4}=[0.78 0.58 0.20 0.32];
-    positions{5}=[0.03 0.10 0.20 0.32];
-    positions{6}=[0.28 0.10 0.20 0.32];
-    positions{7}=[0.53 0.10 0.20 0.32];
-    positions{8}=[0.78 0.10 0.20 0.32];
+    positions{1}=[0.03 0.58 0.20 0.32]; positions{2}=[0.28 0.58 0.20 0.32];
+    positions{3}=[0.53 0.58 0.20 0.32]; positions{4}=[0.78 0.58 0.20 0.32];
+    positions{5}=[0.03 0.10 0.20 0.32]; positions{6}=[0.28 0.10 0.20 0.32];
+    positions{7}=[0.53 0.10 0.20 0.32]; positions{8}=[0.78 0.10 0.20 0.32];
 
     for i = 1:ncut
 
-        is = 1;
-        iatm = 1;
+        is = 1; iatm = 1;
         while is <= ns
-    
+
             if mod(is-1,8) == 0
                 fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_midplane_species_densities{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
             end
-    
+
             % Separatrix density of species is
             subplot('position',positions{mod(is-1,8)+1});
             if charge_state(is)==0
+                sp_title = sprintf('Midplane %s atom density',species_label{is});
+            else
+                sp_title = sprintf('Midplane %s ion density',species_label{is});
+            end
+            sp_ylabel = sprintf('$n_{%s}$ [m$^{-3}$]',species_label{is});
+            if charge_state(is)==0
                 try
-                    if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-                        for j = 1:length(TIME_TRACES_ORIGINAL.dabsepm.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.dabsepm.value{j}(i,iatm,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES); hold on;
-                        end
-                    end
-                    temp(:) = TIME_TRACES.dabsepm.value(i,iatm,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLOR_DENSITIES); hold on;
+                    timeplot(TIME_TRACES.timesa.value, ...
+                        struct('data',squeeze(TIME_TRACES.dabsepm.value(i,iatm,:))', 'color',COLOR_DENSITIES, 'display_name',labels_midplane{i}, 'line_style','-'), ...
+                        'OriginalTime', orig_time, ...
+                        'OriginalTraces', {get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'dabsepm', i, iatm)}, ...
+                        'YLabel',sp_ylabel, 'Title',sp_title, tp_common{:});
                 catch
-                    if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-                        for j = 1:length(TIME_TRACES_ORIGINAL.nasepm.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.nasepm.value{j}(i,is,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES); hold on;
-                        end
-                    end
-                    temp(:) = TIME_TRACES.nasepm.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLOR_DENSITIES); hold on;
+                    timeplot(TIME_TRACES.timesa.value, ...
+                        struct('data',squeeze(TIME_TRACES.nasepm.value(i,is,:))', 'color',COLOR_DENSITIES, 'display_name',labels_midplane{i}, 'line_style','-'), ...
+                        'OriginalTime', orig_time, ...
+                        'OriginalTraces', {get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nasepm', i, is)}, ...
+                        'YLabel',sp_ylabel, 'Title',sp_title, tp_common{:});
                 end
                 iatm = iatm+1;
             else
-                if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-                    for j = 1:length(TIME_TRACES_ORIGINAL.nasepm.value)
-                        temp(:) = TIME_TRACES_ORIGINAL.nasepm.value{j}(i,is,:);
-                        plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES); hold on;
-                    end
-                end
-                temp(:) = TIME_TRACES.nasepm.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_midplane{i},'color',COLOR_DENSITIES); hold on;
+                timeplot(TIME_TRACES.timesa.value, ...
+                    struct('data',squeeze(TIME_TRACES.nasepm.value(i,is,:))', 'color',COLOR_DENSITIES, 'display_name',labels_midplane{i}, 'line_style','-'), ...
+                    'OriginalTime', orig_time, ...
+                    'OriginalTraces', {get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nasepm', i, is)}, ...
+                    'YLabel',sp_ylabel, 'Title',sp_title, tp_common{:});
             end
-            xl = xlim; 
-            if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-            if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-            xlim(xl);
-            xlabel('Time [s]','interpreter','latex','fontsize',18);
-            ylabel(sprintf('$n_{%s}$ [m$^{-3}$]',species_label{is}),'interpreter','latex','fontsize',18);
-            lgd = legend('interpreter','latex','fontsize',15);
-            if charge_state(is)==0
-                title(sprintf('Midplane %s atom density',species_label{is}),'interpreter','latex','fontsize',20);
-            else
-                title(sprintf('Midplane %s ion density',species_label{is}),'interpreter','latex','fontsize',20);
-            end
-            if SHOW_NAME
-                text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                    'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-            end
-    
             is = is+1;
 
         end
-
+    
     end
 
     fprintf('Plot of midplane species densities prepared\n');
@@ -671,106 +615,51 @@ if PLOT_DIVERTOR_STATE_VARIABLES
     for i = 1:ncut
 
         fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_divertor_state_variables{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
-    
+
         % Separatrix and maximum electron densities
         subplot('position',[0.08 0.25 0.42 0.5]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.nesepi.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.nesepi.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.nemxip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.nemxip.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT,'linestyle',':'); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.nesepa.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.nesepa.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.nemxap.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.nemxap.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK,'linestyle',':'); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepi.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLOR_DENSITIES_LIGHT); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nemxip.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLOR_DENSITIES_LIGHT,'linestyle',':'); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nesepa.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLOR_DENSITIES_DARK); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.nemxap.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLOR_DENSITIES_DARK,'linestyle',':'); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',18);
-        ylabel('$n_e$ [m$^{-3}$]','interpreter','latex','fontsize',18);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Divertor electron density','interpreter','latex','fontsize',20);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, ...
+            [struct('data',TIME_TRACES.nesepi.value(i,:), 'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{1}, 'line_style','-'), ...
+             struct('data',TIME_TRACES.nemxip.value(i,:), 'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{2}, 'line_style',':'), ...
+             struct('data',TIME_TRACES.nesepa.value(i,:), 'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{3}, 'line_style','-'), ...
+             struct('data',TIME_TRACES.nemxap.value(i,:), 'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{4}, 'line_style',':')], ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nesepi', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nemxip', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nesepa', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nemxap', {i,':'})}, ...
+            'YLabel','$n_e$ [m$^{-3}$]', 'Title','Divertor electron density', tp_common{:});
+
         % Separatrix and maximum electron temperatures
         subplot('position',[0.57 0.55 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.tesepi.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tesepi.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_LIGHT); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.temxip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.temxip.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_LIGHT,'linestyle',':'); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.tesepa.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tesepa.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_DARK); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.temxap.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.temxap.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_DARK,'linestyle',':'); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepi.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLOR_TEMPERATURES_LIGHT); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.temxip.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLOR_TEMPERATURES_LIGHT,'linestyle',':'); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tesepa.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLOR_TEMPERATURES_DARK); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.temxap.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLOR_TEMPERATURES_DARK,'linestyle',':'); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$T_e$ [eV]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Divertor electron temperature','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, ...
+            [struct('data',TIME_TRACES.tesepi.value(i,:), 'color',COLOR_TEMPERATURES_LIGHT, 'display_name',labels_divertor{i}{1}, 'line_style','-'), ...
+             struct('data',TIME_TRACES.temxip.value(i,:), 'color',COLOR_TEMPERATURES_LIGHT, 'display_name',labels_divertor{i}{2}, 'line_style',':'), ...
+             struct('data',TIME_TRACES.tesepa.value(i,:), 'color',COLOR_TEMPERATURES_DARK,  'display_name',labels_divertor{i}{3}, 'line_style','-'), ...
+             struct('data',TIME_TRACES.temxap.value(i,:), 'color',COLOR_TEMPERATURES_DARK,  'display_name',labels_divertor{i}{4}, 'line_style',':')], ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tesepi', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'temxip', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tesepa', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'temxap', {i,':'})}, ...
+            'YLabel','$T_e$ [eV]', 'Title','Divertor electron temperature', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
+
         % Separatrix and maximum ion temperatures
         subplot('position',[0.57 0.06 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.tisepi.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tisepi.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_LIGHT); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.timxip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.timxip.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_LIGHT,'linestyle',':'); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.tisepa.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tisepa.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_DARK); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.timxap.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.timxap.value{j}(i,:),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_DARK,'linestyle',':'); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepi.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLOR_TEMPERATURES_LIGHT); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.timxip.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLOR_TEMPERATURES_LIGHT,'linestyle',':'); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.tisepa.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLOR_TEMPERATURES_DARK); hold on;
-        plot(TIME_TRACES.timesa.value,TIME_TRACES.timxap.value(i,:),'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4}','color',COLOR_TEMPERATURES_DARK,'linestyle',':'); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$T_e$ [eV]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Divertor ion temperature','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-        
+        timeplot(TIME_TRACES.timesa.value, ...
+            [struct('data',TIME_TRACES.tisepi.value(i,:), 'color',COLOR_TEMPERATURES_LIGHT, 'display_name',labels_divertor{i}{1}, 'line_style','-'), ...
+             struct('data',TIME_TRACES.timxip.value(i,:), 'color',COLOR_TEMPERATURES_LIGHT, 'display_name',labels_divertor{i}{2}, 'line_style',':'), ...
+             struct('data',TIME_TRACES.tisepa.value(i,:), 'color',COLOR_TEMPERATURES_DARK,  'display_name',labels_divertor{i}{3}, 'line_style','-'), ...
+             struct('data',TIME_TRACES.timxap.value(i,:), 'color',COLOR_TEMPERATURES_DARK,  'display_name',labels_divertor{i}{4}, 'line_style',':')], ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tisepi', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'timxip', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tisepa', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'timxap', {i,':'})}, ...
+            'YLabel','$T_i$ [eV]', 'Title','Divertor ion temperature', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
+    
     end
 
     fprintf('Plot of divertor state variables prepared\n');
@@ -786,118 +675,64 @@ if PLOT_DIVERTOR_SPECIES_DENSITIES
     end
 
     ns = length(species_label);
-
-    positions{1}=[0.03 0.58 0.20 0.32];
-    positions{2}=[0.28 0.58 0.20 0.32];
-    positions{3}=[0.53 0.58 0.20 0.32];
-    positions{4}=[0.78 0.58 0.20 0.32];
-    positions{5}=[0.03 0.10 0.20 0.32];
-    positions{6}=[0.28 0.10 0.20 0.32];
-    positions{7}=[0.53 0.10 0.20 0.32];
-    positions{8}=[0.78 0.10 0.20 0.32];
+    positions{1}=[0.03 0.58 0.20 0.32]; positions{2}=[0.28 0.58 0.20 0.32];
+    positions{3}=[0.53 0.58 0.20 0.32]; positions{4}=[0.78 0.58 0.20 0.32];
+    positions{5}=[0.03 0.10 0.20 0.32]; positions{6}=[0.28 0.10 0.20 0.32];
+    positions{7}=[0.53 0.10 0.20 0.32]; positions{8}=[0.78 0.10 0.20 0.32];
 
     for i = 1:ncut
 
-        is = 1;
-        iatm = 1;
+        is = 1; iatm = 1;
         while is <= ns
-    
+
             if mod(is-1,8) == 0
                 fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_divertor_species_densities{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
             end
-    
-            % Separatrix and maximum density of species is
+
+            % Separatrix and maximum densities of species is
             subplot('position',positions{mod(is-1,8)+1});
             if charge_state(is)==0
+                sp_title = sprintf('Divertor %s atom density',species_label{is});
+            else
+                sp_title = sprintf('Divertor %s ion density',species_label{is});
+            end
+            sp_ylabel = sprintf('$n_{%s}$ [m$^{-3}$]',species_label{is});
+            if charge_state(is)==0
                 try
-                    if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-                        for j = 1:length(TIME_TRACES_ORIGINAL.dabsepi.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.dabsepi.value{j}(i,iatm,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT); hold on;
-                        end
-                        for j = 1:length(TIME_TRACES_ORIGINAL.dabsepa.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.dabsepa.value{j}(i,iatm,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK); hold on;
-                        end
-                    end
-                    temp(:) = TIME_TRACES.dabsepi.value(i,iatm,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLOR_DENSITIES_LIGHT); hold on;
-                    temp(:) = TIME_TRACES.dabsepa.value(i,iatm,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLOR_DENSITIES_DARK); hold on;
+                    timeplot(TIME_TRACES.timesa.value, ...
+                        [struct('data',squeeze(TIME_TRACES.dabsepi.value(i,iatm,:))', 'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{1}, 'line_style','-'), ...
+                         struct('data',squeeze(TIME_TRACES.dabsepa.value(i,iatm,:))', 'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{3}, 'line_style','-')], ...
+                        'OriginalTime', orig_time, ...
+                        'OriginalTraces', {get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'dabsepi', i, iatm), ...
+                                           get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'dabsepa', i, iatm)}, ...
+                        'YLabel',sp_ylabel, 'Title',sp_title, tp_common{:});
                 catch
-                    if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-                        for j = 1:length(TIME_TRACES_ORIGINAL.nasepi.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.nasepi.value{j}(i,is,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT); hold on;
-                        end
-                        for j = 1:length(TIME_TRACES_ORIGINAL.namxip.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.namxip.value{j}(i,is,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT,'linestyle',':'); hold on;
-                        end
-                        for j = 1:length(TIME_TRACES_ORIGINAL.nesepa.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.nesepa.value{j}(i,is,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK); hold on;
-                        end
-                        for j = 1:length(TIME_TRACES_ORIGINAL.namxap.value)
-                            temp(:) = TIME_TRACES_ORIGINAL.namxap.value{j}(i,is,:);
-                            plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK,'linestyle',':'); hold on;
-                        end
-                    end
-                    temp(:) = TIME_TRACES.nasepi.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLOR_DENSITIES_LIGHT); hold on;
-                    temp(:) = TIME_TRACES.namxip.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2},'color',COLOR_DENSITIES_LIGHT,'linestyle',':'); hold on;
-                    temp(:) = TIME_TRACES.nesepa.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLOR_DENSITIES_DARK); hold on;
-                    temp(:) = TIME_TRACES.namxap.value(i,is,:);
-                    plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLOR_DENSITIES_DARK,'linestyle',':'); hold on;
+                    timeplot(TIME_TRACES.timesa.value, ...
+                        [struct('data',squeeze(TIME_TRACES.nasepi.value(i,is,:))',  'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{1}, 'line_style','-'), ...
+                         struct('data',squeeze(TIME_TRACES.namxip.value(i,is,:))',  'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{2}, 'line_style',':'), ...
+                         struct('data',squeeze(TIME_TRACES.nesepa.value(i,is,:))',  'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{3}, 'line_style','-'), ...
+                         struct('data',squeeze(TIME_TRACES.namxap.value(i,is,:))',  'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{4}, 'line_style',':')], ...
+                        'OriginalTime', orig_time, ...
+                        'OriginalTraces', {get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nasepi', i, is), ...
+                                           get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'namxip', i, is), ...
+                                           get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nesepa', i, is), ...
+                                           get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'namxap', i, is)}, ...
+                        'YLabel',sp_ylabel, 'Title',sp_title, tp_common{:});
                 end
                 iatm = iatm+1;
             else
-                if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-                    for j = 1:length(TIME_TRACES_ORIGINAL.nasepi.value)
-                        temp(:) = TIME_TRACES_ORIGINAL.nasepi.value{j}(i,is,:);
-                        plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT); hold on;
-                    end
-                    for j = 1:length(TIME_TRACES_ORIGINAL.namxip.value)
-                        temp(:) = TIME_TRACES_ORIGINAL.namxip.value{j}(i,is,:);
-                        plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_LIGHT,'linestyle',':'); hold on;
-                    end
-                    for j = 1:length(TIME_TRACES_ORIGINAL.nasepa.value)
-                        temp(:) = TIME_TRACES_ORIGINAL.nasepa.value{j}(i,is,:);
-                        plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK); hold on;
-                    end
-                    for j = 1:length(TIME_TRACES_ORIGINAL.namxap.value)
-                        temp(:) = TIME_TRACES_ORIGINAL.namxap.value{j}(i,is,:);
-                        plot(TIME_TRACES_ORIGINAL.timesa.value,temp,'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES_DARK,'linestyle',':'); hold on;
-                    end
-                end
-                temp(:) = TIME_TRACES.nasepi.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{1},'color',COLOR_DENSITIES_LIGHT); hold on;
-                temp(:) = TIME_TRACES.namxip.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{2}','color',COLOR_DENSITIES_LIGHT,'linestyle',':'); hold on;
-                temp(:) = TIME_TRACES.nasepa.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{3},'color',COLOR_DENSITIES_DARK); hold on;
-                temp(:) = TIME_TRACES.namxap.value(i,is,:);
-                plot(TIME_TRACES.timesa.value,temp,'linewidth',LINEWIDTH,'DisplayName',labels_divertor{i}{4},'color',COLOR_DENSITIES_DARK,'linestyle',':'); hold on;
+                timeplot(TIME_TRACES.timesa.value, ...
+                    [struct('data',squeeze(TIME_TRACES.nasepi.value(i,is,:))',  'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{1}, 'line_style','-'), ...
+                     struct('data',squeeze(TIME_TRACES.namxip.value(i,is,:))',  'color',COLOR_DENSITIES_LIGHT, 'display_name',labels_divertor{i}{2}, 'line_style',':'), ...
+                     struct('data',squeeze(TIME_TRACES.nasepa.value(i,is,:))',  'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{3}, 'line_style','-'), ...
+                     struct('data',squeeze(TIME_TRACES.namxap.value(i,is,:))',  'color',COLOR_DENSITIES_DARK,  'display_name',labels_divertor{i}{4}, 'line_style',':')], ...
+                    'OriginalTime', orig_time, ...
+                    'OriginalTraces', {get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nasepi', i, is), ...
+                                       get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'namxip', i, is), ...
+                                       get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'nasepa', i, is), ...
+                                       get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'namxap', i, is)}, ...
+                    'YLabel',sp_ylabel, 'Title',sp_title, tp_common{:});
             end
-            xl = xlim; 
-            if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-            if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-            xlim(xl);
-            xlabel('Time [s]','interpreter','latex','fontsize',18);
-            ylabel(sprintf('$n_{%s}$ [m$^{-3}$]',species_label{is}),'interpreter','latex','fontsize',18);
-            lgd = legend('interpreter','latex','fontsize',15);
-            if charge_state(is)==0
-                title(sprintf('Divertor %s atom density',species_label{is}),'interpreter','latex','fontsize',20);
-            else
-                title(sprintf('Divertor %s ion density',species_label{is}),'interpreter','latex','fontsize',20);
-            end
-            if SHOW_NAME
-                text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                    'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-            end
-    
             is = is+1;
 
         end
@@ -913,84 +748,41 @@ end
 if PLOT_POLOIDAL_FLUXES
 
     for i = 1:ncut
-    
+
         fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_poloidal_fluxes{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
-    
+
         % Particle fluxes
         subplot('position',[0.08 0.25 0.42 0.5]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.fnixip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.fnixip.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_PARTICLE_FLUXES_LIGHT); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.fnixap.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.fnixap.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_PARTICLE_FLUXES_DARK); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fnixip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{1},'color',COLOR_PARTICLE_FLUXES_LIGHT); hold on;
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fnixap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLOR_PARTICLE_FLUXES_DARK); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',18);
-        ylabel('$\Gamma_{x}$ [s$^{-1}$]','interpreter','latex','fontsize',18);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Poloidal particle fluxes','interpreter','latex','fontsize',20);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, ...
+            [struct('data',TIME_TRACES.fnixip.value(i,:), 'color',COLOR_PARTICLE_FLUXES_LIGHT, 'line_style','-', 'display_name',labels_poloidal_fluxes{i}{1}, 'use_abs',true), ...
+             struct('data',TIME_TRACES.fnixap.value(i,:), 'color',COLOR_PARTICLE_FLUXES_DARK, 'line_style','-', 'display_name',labels_poloidal_fluxes{i}{2}, 'use_abs',true)], ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'fnixip', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'fnixap', {i,':'})}, ...
+            'YLabel','$\Gamma_{x}$ [s$^{-1}$]', 'Title','Poloidal particle fluxes', tp_common{:});
+
         % Electron energy fluxes
         subplot('position',[0.57 0.55 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.feexip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feexip.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.feexap.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feexap.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_DARK); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feexip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{1}','color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feexap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLOR_ENERGY_FLUXES_DARK); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$Q_{e,x}$ [W]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Poloidal electron energy fluxes','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, ...
+            [struct('data',TIME_TRACES.feexip.value(i,:), 'color',COLOR_ENERGY_FLUXES_LIGHT, 'line_style','-', 'display_name',labels_poloidal_fluxes{i}{1}, 'use_abs',true), ...
+             struct('data',TIME_TRACES.feexap.value(i,:), 'color',COLOR_ENERGY_FLUXES_DARK, 'line_style','-', 'display_name',labels_poloidal_fluxes{i}{2}, 'use_abs',true)], ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feexip', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feexap', {i,':'})}, ...
+            'YLabel','$Q_{e,x}$ [W]', 'Title','Poloidal electron energy fluxes', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
+
         % Ion energy fluxes
         subplot('position',[0.57 0.06 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.feixip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feixip.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-            end
-            for j = 1:length(TIME_TRACES_ORIGINAL.feixap.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feixap.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_DARK); hold on;
-            end
-        end
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feixip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{1},'color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feixap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_poloidal_fluxes{i}{2},'color',COLOR_ENERGY_FLUXES_DARK); hold on;
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$Q_{i,x}$ [W]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Poloidal ion energy fluxes','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-
+        timeplot(TIME_TRACES.timesa.value, ...
+            [struct('data',TIME_TRACES.feixip.value(i,:), 'color',COLOR_ENERGY_FLUXES_LIGHT, 'line_style','-', 'display_name',labels_poloidal_fluxes{i}{1}, 'use_abs',true), ...
+             struct('data',TIME_TRACES.feixap.value(i,:), 'color',COLOR_ENERGY_FLUXES_DARK, 'line_style','-', 'display_name',labels_poloidal_fluxes{i}{2}, 'use_abs',true)], ...
+            'OriginalTime', orig_time, ...
+            'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feixip', {i,':'}), ...
+                               get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feixap', {i,':'})}, ...
+            'YLabel','$Q_{i,x}$ [W]', 'Title','Poloidal ion energy fluxes', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
+    
     end
 
     fprintf('Plot of poloidal fluxes prepared\n');
@@ -1001,96 +793,46 @@ end
 
 if PLOT_RADIAL_FLUXES
 
+    is_limiter = strcmp(SIMULATION.geometry_type,'Limiter');
+
     for i = 1:ncut
 
         fig = figure('windowstyle','docked','NumberTitle','off','Name',titles_radial_fluxes{i},'Visible',SHOW_FIGURE_status); figs = [figs, fig];
-    
+
         % Particle fluxes
         subplot('position',[0.08 0.25 0.42 0.5]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.fniyip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.fniyip.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_PARTICLE_FLUXES_LIGHT); hold on;
-            end
-            if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-                for j = 1:length(TIME_TRACES_ORIGINAL.fniyap.value)
-                    plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.fniyap.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_PARTICLE_FLUXES_DARK); hold on;
-                end
-            end
+        tr_part = struct('data',TIME_TRACES.fniyip.value(i,:), 'color',COLOR_PARTICLE_FLUXES_LIGHT, 'line_style','-', 'display_name',labels_radial_fluxes{i}{1}, 'use_abs',true);
+        orig_part = {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'fniyip', {i,':'})};
+        if ~is_limiter
+            tr_part(2) = struct('data',TIME_TRACES.fniyap.value(i,:), 'color',COLOR_PARTICLE_FLUXES_DARK, 'line_style','-', 'display_name',labels_radial_fluxes{i}{2}, 'use_abs',true);
+            orig_part{2} = get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'fniyap', {i,':'});
         end
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fniyip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{1},'color',COLOR_PARTICLE_FLUXES_LIGHT); hold on;
-        if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.fniyap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{2},'color',COLOR_PARTICLE_FLUXES_DARK); hold on;
-        end
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',18);
-        ylabel('[$\Gamma_{y}$ s$^{-1}$]','interpreter','latex','fontsize',18);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Radial particle fluxes','interpreter','latex','fontsize',20);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, tr_part, 'OriginalTime', orig_time, 'OriginalTraces', orig_part, ...
+            'YLabel','[$\Gamma_{y}$ s$^{-1}$]', 'Title','Radial particle fluxes', tp_common{:});
+
         % Electron energy fluxes
         subplot('position',[0.57 0.55 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.feeyip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feeyip.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-            end
-            if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-                for j = 1:length(TIME_TRACES_ORIGINAL.feeyap.value)
-                    plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feeyap.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_DARK); hold on;
-                end
-            end
+        tr_ee = struct('data',TIME_TRACES.feeyip.value(i,:), 'color',COLOR_ENERGY_FLUXES_LIGHT, 'line_style','-', 'display_name',labels_radial_fluxes{i}{1}, 'use_abs',true);
+        orig_ee = {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feeyip', {i,':'})};
+        if ~is_limiter
+            tr_ee(2) = struct('data',TIME_TRACES.feeyap.value(i,:), 'color',COLOR_ENERGY_FLUXES_DARK, 'line_style','-', 'display_name',labels_radial_fluxes{i}{2}, 'use_abs',true);
+            orig_ee{2} = get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feeyap', {i,':'});
         end
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feeyip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{1},'color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-        if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feeyap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{2},'color',COLOR_ENERGY_FLUXES_DARK); hold on;
-        end
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$Q_{e,y}$ [W]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Radial electron energy fluxes','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
-    
+        timeplot(TIME_TRACES.timesa.value, tr_ee, 'OriginalTime', orig_time, 'OriginalTraces', orig_ee, ...
+            'YLabel','$Q_{e,y}$ [W]', 'Title','Radial electron energy fluxes', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
+
         % Ion energy fluxes
         subplot('position',[0.57 0.06 0.32 0.38]);
-        if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-            for j = 1:length(TIME_TRACES_ORIGINAL.feiyip.value)
-                plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feiyip.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-            end
-            if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-                for j = 1:length(TIME_TRACES_ORIGINAL.feiyap.value)
-                    plot(TIME_TRACES_ORIGINAL.timesa.value,abs(TIME_TRACES_ORIGINAL.feiyap.value{j}(i,:)),'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_ENERGY_FLUXES_DARK); hold on;
-                end
-            end
+        tr_ei = struct('data',TIME_TRACES.feiyip.value(i,:), 'color',COLOR_ENERGY_FLUXES_LIGHT, 'line_style','-', 'display_name',labels_radial_fluxes{i}{1}, 'use_abs',true);
+        orig_ei = {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feiyip', {i,':'})};
+        if ~is_limiter
+            tr_ei(2) = struct('data',TIME_TRACES.feiyap.value(i,:), 'color',COLOR_ENERGY_FLUXES_DARK, 'line_style','-', 'display_name',labels_radial_fluxes{i}{2}, 'use_abs',true);
+            orig_ei{2} = get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'feiyap', {i,':'});
         end
-        plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feiyip.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{1},'color',COLOR_ENERGY_FLUXES_LIGHT); hold on;
-        if not(strcmp(SIMULATION.geometry_type,'Limiter'))
-            plot(TIME_TRACES.timesa.value,abs(TIME_TRACES.feiyap.value(i,:)),'linewidth',LINEWIDTH,'DisplayName',labels_radial_fluxes{i}{2},'color',COLOR_ENERGY_FLUXES_DARK); hold on;
-        end
-        xl = xlim; 
-        if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-        if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-        xlim(xl);
-        xlabel('Time [s]','interpreter','latex','fontsize',16);
-        ylabel('$Q_{i,y}$ [W]','interpreter','latex','fontsize',16);
-        lgd = legend('interpreter','latex','fontsize',15);
-        title('Radial ion energy fluxes','interpreter','latex','fontsize',18);
-        if SHOW_NAME
-            text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-                'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-        end
+        timeplot(TIME_TRACES.timesa.value, tr_ei, 'OriginalTime', orig_time, 'OriginalTraces', orig_ei, ...
+            'YLabel','$Q_{i,y}$ [W]', 'Title','Radial ion energy fluxes', ...
+            'LabelFontSize',16, 'TitleFontSize',18, tp_common{:});
 
     end
 
@@ -1106,47 +848,21 @@ if PLOT_INTEGRAL_QUANTITIES
 
     % Total number of particles
     subplot('position',[0.05 0.25 0.42 0.5]);
-    if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-        for j = 1:length(TIME_TRACES_ORIGINAL.tmne.value)
-            plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tmne(1,:).value{j},'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_DENSITIES); hold on;
-        end
-    end
-    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmne(1,:).value,'linewidth',LINEWIDTH,'color',COLOR_DENSITIES);
-    xl = xlim; 
-    if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-    if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-    xlim(xl);
-    xlabel('Time [s]','interpreter','latex','fontsize',18);
-    title('Total number of particles','interpreter','latex','fontsize',20);
-    if SHOW_NAME
-        text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-            'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-    end
+    timeplot(TIME_TRACES.timesa.value, ...
+        struct('data',TIME_TRACES.tmne.value(1,:), 'color',COLOR_DENSITIES, 'line_style','-', 'display_name',''), ...
+        'OriginalTime', orig_time, ...
+        'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tmne', {1,':'})}, ...
+        'Title','Total number of particles', tp_common{:});
 
     % Total energy
     subplot('position',[0.53 0.25 0.42 0.5]);
-    if (ROLLING_AVERAGE_STEPS > 0 || BATCH_AVERAGE_STEPS > 0 || PHASE_AVERAGE_STEPS > 0) && PLOT_ORIGINAL_DATA
-        for j = 1:length(TIME_TRACES_ORIGINAL.tmte.value)
-            plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tmte(1,:).value{j},'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_LIGHT); hold on;
-        end
-        for j = 1:length(TIME_TRACES_ORIGINAL.tmti.value)
-            plot(TIME_TRACES_ORIGINAL.timesa.value,TIME_TRACES_ORIGINAL.tmti(1,:).value{j},'linewidth',LINEWIDTH/3,'HandleVisibility','off','color',COLOR_TEMPERATURES_DARK); hold on;
-        end
-    end
-    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmte(1,:).value,'linewidth',LINEWIDTH,'DisplayName','Electron energy','color',COLOR_TEMPERATURES_LIGHT); hold on;
-    plot(TIME_TRACES.timesa.value,TIME_TRACES.tmti(1,:).value,'linewidth',LINEWIDTH,'DisplayName','Ion energy','color',COLOR_TEMPERATURES_DARK); hold on;
-    xl = xlim; 
-    if exist('TMIN','var') && ~isnan(TMIN), xl(1)=TMIN; else, xl(1)=TIME_TRACES.timesa.value(1); end
-    if exist('TMAX','var') && ~isnan(TMAX), xl(2)=TMAX; else, xl(2)=TIME_TRACES.timesa.value(end); end
-    xlim(xl);
-    xlabel('Time [s]','interpreter','latex','fontsize',18);
-    ylabel('[eV]','interpreter','latex','fontsize',18);
-    lgd = legend('interpreter','latex','fontsize',15);
-    title('Total energy','interpreter','latex','fontsize',20);
-    if SHOW_NAME
-        text(0.98,0.04,RUN,'Units','normalized','HorizontalAlignment','right','VerticalAlignment','bottom', ...
-            'interpreter','latex','FontSize',8,'BackgroundColor','white','EdgeColor','black');
-    end
+    timeplot(TIME_TRACES.timesa.value, ...
+        [struct('data',TIME_TRACES.tmte.value(1,:), 'color',COLOR_TEMPERATURES_LIGHT, 'line_style','-', 'display_name','Electron energy'), ...
+         struct('data',TIME_TRACES.tmti.value(1,:), 'color',COLOR_TEMPERATURES_DARK, 'line_style','-',  'display_name','Ion energy')], ...
+        'OriginalTime', orig_time, ...
+        'OriginalTraces', {get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tmte', {1,':'}), ...
+                           get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, 'tmti', {1,':'})}, ...
+        'YLabel','[eV]', 'Title','Total energy', tp_common{:});
 
     fprintf('Plot of integral quantities prepared\n');
 
@@ -1168,4 +884,44 @@ if nargin ~= 0
     end
 end
 
+end
+
+%% HELPER FUNCTIONS
+
+function orig_cells = get_orig(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, field_name, idx)
+
+% GET_ORIG extracts original data cell array for 2D fields (e.g. value(i,:))
+
+    if HAS_AVERAGING && PLOT_ORIGINAL_DATA && isfield(TIME_TRACES_ORIGINAL, field_name)
+        raw = TIME_TRACES_ORIGINAL.(field_name).value;
+        if iscell(raw)
+            orig_cells = cell(1, length(raw));
+            for j = 1:length(raw)
+                orig_cells{j} = raw{j}(idx{:});
+            end
+        else
+            orig_cells = {};
+        end
+    else
+        orig_cells = {};
+    end
+end
+
+function orig_cells = get_orig_3d(HAS_AVERAGING, PLOT_ORIGINAL_DATA, TIME_TRACES_ORIGINAL, field_name, idx1, idx2)
+
+% GET_ORIG_3D extracts original data cell array for 3D fields (e.g. value(i,is,:))
+
+    if HAS_AVERAGING && PLOT_ORIGINAL_DATA && isfield(TIME_TRACES_ORIGINAL, field_name)
+        raw = TIME_TRACES_ORIGINAL.(field_name).value;
+        if iscell(raw)
+            orig_cells = cell(1, length(raw));
+            for j = 1:length(raw)
+                orig_cells{j} = squeeze(raw{j}(idx1,idx2,:))';
+            end
+        else
+            orig_cells = {};
+        end
+    else
+        orig_cells = {};
+    end
 end
