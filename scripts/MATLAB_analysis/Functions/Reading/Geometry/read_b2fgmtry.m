@@ -43,8 +43,8 @@ index_b2time = find(contains({simulation.run.name},'b2time.nc'));
 if isempty(index_b2time)
    error('Error: b2time.nc not found');
 end
-fid_b2time = simulation.run(index_b2time).fid;
 file_b2time = simulation.run(index_b2time).file;
+fid_b2time = fopen(file_b2time);
 if (fid_b2time == -1)
    error('Error: b2time.nc not found');
 end
@@ -189,9 +189,7 @@ geometry.dsr = ncread(file_b2time,'dsr');
 geometry.dsRT = ncread(file_b2time,'dsRT');
 geometry.dsRP = ncread(file_b2time,'dsRP');
 
-if strcmp(simulation.geometry_type,'Connected double null') || ...
-        strcmp(simulation.geometry_type,'Disconnected double null') || ...
-        strcmp(simulation.geometry_type,'LFS snowflake')
+if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
     geometry.dstl = ncread(file_b2time,'dstl');
     geometry.dsTLT = ncread(file_b2time,'dsTLT');
     geometry.dsTLP = ncread(file_b2time,'dsTLP');
@@ -367,9 +365,13 @@ geometry.dsRP = ncread(file_b2time,'dsRP');
 geometry.icsepimp = ncread(file_b2time,'icsepimp');
 geometry.icsepomp = ncread(file_b2time,'icsepomp');
 
-if strcmp(simulation.geometry_type,'Connected double null') || ...
-        strcmp(simulation.geometry_type,'Disconnected double null') || ...
-        strcmp(simulation.geometry_type,'LFS snowflake')
+if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
+    geometry.cvlisttl = ncread(file_b2time,'cvlisttl');
+    geometry.cnlisttl = ncread(file_b2time,'cnlisttl');
+    geometry.fclisttl = ncread(file_b2time,'fclisttl');
+    geometry.cvlisttr = ncread(file_b2time,'cvlisttr');
+    geometry.cnlisttr = ncread(file_b2time,'cnlisttr');
+    geometry.fclisttr = ncread(file_b2time,'fclisttr');
     geometry.dstl = ncread(file_b2time,'dstl');
     geometry.dsTLT = ncread(file_b2time,'dsTLT');
     geometry.dsTLP = ncread(file_b2time,'dsTLP');
@@ -388,5 +390,10 @@ fprintf('B2.5 geometry from b2fgmtry read\n');
 frewind(fid);
 
 fclose(fid);
+
+try
+    fclose(fid_b2time);
+catch
+end
 
 end

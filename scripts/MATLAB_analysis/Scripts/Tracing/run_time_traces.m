@@ -464,15 +464,15 @@ if ncut == 1
         labels_midplane = {'Sep., outer midplane'};
         titles_divertor_state_variables = {'Divertor state variables'};
         titles_divertor_species_densities = {'Divertor species densities'};
-        if strcmp(SIMULATION.geometry_type,'Lower single null')
+        if contains(SIMULATION.geometry_type,'Lower single null')
             labels_divertor = {{'Sep., inner target','Max., inner target','Sep., outer target','Max., outer target'}};
-        elseif strcmp(SIMULATION.geometry_type,'Upper single null')
+        elseif contains(SIMULATION.geometry_type,'Upper single null')
             labels_divertor = {{'Sep., outer target','Max., outer target','Sep., inner target','Max., inner target'}};
         end
         titles_poloidal_fluxes = {'Poloidal fluxes'};
-        if strcmp(SIMULATION.geometry_type,'Lower single null')
+        if contains(SIMULATION.geometry_type,'Lower single null')
             labels_poloidal_fluxes = {{'Inner target','Outer target'}};
-        elseif strcmp(SIMULATION.geometry_type,'Upper single null')
+        elseif contains(SIMULATION.geometry_type,'Upper single null')
             labels_poloidal_fluxes = {{'Outer target','Inner target'}};
         end
         titles_radial_fluxes = {'Radial fluxes'};

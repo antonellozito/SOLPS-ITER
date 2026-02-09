@@ -49,94 +49,99 @@ function timeplot(time, traces, varargin)
 %       timeplot(t, traces, 'OriginalTime',t_orig, 'OriginalTraces',orig, ...
 %           'YLabel','$n_e$', 'Title','Density');
 
-    %% Parse inputs
-    p = inputParser;
-    p.addRequired('time');
-    p.addRequired('traces');
-    p.addParameter('OriginalTime', []);
-    p.addParameter('OriginalTraces', {});
-    p.addParameter('LineWidth', 1.5, @isnumeric);
-    p.addParameter('TMIN', nan, @isnumeric);
-    p.addParameter('TMAX', nan, @isnumeric);
-    p.addParameter('XLabel', 'Time [s]', @ischar);
-    p.addParameter('YLabel', '', @ischar);
-    p.addParameter('Title', '', @ischar);
-    p.addParameter('LabelFontSize', 18, @isnumeric);
-    p.addParameter('TitleFontSize', 20, @isnumeric);
-    p.addParameter('ShowName', false);
-    p.addParameter('RunName', '', @ischar);
-    p.parse(time, traces, varargin{:});
-    opts = p.Results;
+%% PARSE INPUTS
 
-    ntrace = numel(traces);
+p = inputParser;
+p.addRequired('time');
+p.addRequired('traces');
+p.addParameter('OriginalTime', []);
+p.addParameter('OriginalTraces', {});
+p.addParameter('LineWidth', 1.5, @isnumeric);
+p.addParameter('TMIN', nan, @isnumeric);
+p.addParameter('TMAX', nan, @isnumeric);
+p.addParameter('XLabel', 'Time [s]', @ischar);
+p.addParameter('YLabel', '', @ischar);
+p.addParameter('Title', '', @ischar);
+p.addParameter('LabelFontSize', 18, @isnumeric);
+p.addParameter('TitleFontSize', 20, @isnumeric);
+p.addParameter('ShowName', false);
+p.addParameter('RunName', '', @ischar);
+p.parse(time, traces, varargin{:});
+opts = p.Results;
 
-    %% Plot each trace
-    for k = 1:ntrace
+ntrace = numel(traces);
 
-        tr = traces(k);
+%% PLOT EACH TIME TRACE
 
-        % Defaults for optional trace fields
-        if ~isfield(tr, 'line_style') || isempty(tr.line_style)
-            tr.line_style = '-';
-        end
-        if ~isfield(tr, 'use_abs') || isempty(tr.use_abs)
-            tr.use_abs = false;
-        end
+for k = 1:ntrace
 
-        % Transform function (identity or abs)
-        if tr.use_abs
-            xfm = @(x) abs(x);
-        else
-            xfm = @(x) x;
-        end
+    tr = traces(k);
 
-        % Plot original (un-averaged) data if provided for this trace
-        if ~isempty(opts.OriginalTraces) && ~isempty(opts.OriginalTime) ...
-                && k <= numel(opts.OriginalTraces) && ~isempty(opts.OriginalTraces{k})
-            orig_data = opts.OriginalTraces{k};
-            for j = 1:length(orig_data)
-                plot(opts.OriginalTime, xfm(orig_data{j}), ...
-                    'linewidth', opts.LineWidth/3, ...
-                    'HandleVisibility', 'off', ...
-                    'color', tr.color, ...
-                    'linestyle', tr.line_style); hold on;
-            end
-        end
+    % Defaults for optional trace fields
+    if ~isfield(tr, 'line_style') || isempty(tr.line_style)
+        tr.line_style = '-';
+    end
+    if ~isfield(tr, 'use_abs') || isempty(tr.use_abs)
+        tr.use_abs = false;
+    end
 
-        % Plot main trace
-        if isempty(tr.display_name)
-            plot(opts.time, xfm(tr.data), ...
-                'linewidth', opts.LineWidth, ...
-                'color', tr.color, ...
-                'linestyle', tr.line_style); hold on;
-        else
-            plot(opts.time, xfm(tr.data), ...
-                'linewidth', opts.LineWidth, ...
-                'DisplayName', tr.display_name, ...
+    % Transform function (identity or abs)
+    if tr.use_abs
+        xfm = @(x) abs(x);
+    else
+        xfm = @(x) x;
+    end
+
+    % Plot original (un-averaged) data if provided for this trace
+    if ~isempty(opts.OriginalTraces) && ~isempty(opts.OriginalTime) ...
+            && k <= numel(opts.OriginalTraces) && ~isempty(opts.OriginalTraces{k})
+        orig_data = opts.OriginalTraces{k};
+        for j = 1:length(orig_data)
+            plot(opts.OriginalTime, xfm(orig_data{j}), ...
+                'linewidth', opts.LineWidth/3, ...
+                'HandleVisibility', 'off', ...
                 'color', tr.color, ...
                 'linestyle', tr.line_style); hold on;
         end
-
     end
 
-    %% Finalize subplot
-    xl = xlim;
-    if ~isnan(opts.TMIN), xl(1) = opts.TMIN; else, xl(1) = time(1); end
-    if ~isnan(opts.TMAX), xl(2) = opts.TMAX; else, xl(2) = time(end); end
-    xlim(xl);
-
-    xlabel(opts.XLabel, 'interpreter', 'latex', 'fontsize', opts.LabelFontSize);
-    if ~isempty(opts.YLabel)
-        ylabel(opts.YLabel, 'interpreter', 'latex', 'fontsize', opts.LabelFontSize);
+    % Plot main trace
+    if isempty(tr.display_name)
+        plot(opts.time, xfm(tr.data), ...
+            'linewidth', opts.LineWidth, ...
+            'color', tr.color, ...
+            'linestyle', tr.line_style); hold on;
+    else
+        plot(opts.time, xfm(tr.data), ...
+            'linewidth', opts.LineWidth, ...
+            'DisplayName', tr.display_name, ...
+            'color', tr.color, ...
+            'linestyle', tr.line_style); hold on;
     end
-    legend('interpreter', 'latex', 'fontsize', 15);
-    title(opts.Title, 'interpreter', 'latex', 'fontsize', opts.TitleFontSize);
 
-    if opts.ShowName
-        text(0.98, 0.04, opts.RunName, 'Units', 'normalized', ...
-            'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
-            'interpreter', 'latex', 'FontSize', 8, ...
-            'BackgroundColor', 'white', 'EdgeColor', 'black');
-    end
+end
+
+%% FINALIZE SUBPLOTS
+
+box on;
+
+xl = xlim;
+if ~isnan(opts.TMIN), xl(1) = opts.TMIN; else, xl(1) = time(1); end
+if ~isnan(opts.TMAX), xl(2) = opts.TMAX; else, xl(2) = time(end); end
+xlim(xl);
+
+xlabel(opts.XLabel, 'interpreter', 'latex', 'fontsize', opts.LabelFontSize);
+if ~isempty(opts.YLabel)
+    ylabel(opts.YLabel, 'interpreter', 'latex', 'fontsize', opts.LabelFontSize);
+end
+legend('interpreter', 'latex', 'fontsize', 15);
+title(opts.Title, 'interpreter', 'latex', 'fontsize', opts.TitleFontSize);
+
+if opts.ShowName
+    text(0.98, 0.04, opts.RunName, 'Units', 'normalized', ...
+        'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+        'interpreter', 'latex', 'FontSize', 8, ...
+        'BackgroundColor', 'white', 'EdgeColor', 'black');
+end
 
 end

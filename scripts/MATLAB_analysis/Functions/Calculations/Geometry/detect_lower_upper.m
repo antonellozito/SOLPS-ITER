@@ -1,12 +1,4 @@
-function SN_type = detect_LSN_USN(simulation)
-
-try
-    [NREG,~,~] = find_nreg_species(simulation);
-catch
-    experiment_directory = regexprep(simulation.RUN_DIRECTORY, '/[^/]*$', '');
-    NREG = strtrim(fileread(sprintf('%s/NREG',experiment_directory)));
-    NREG = str2double(NREG);
-end
+function topology_type = detect_lower_upper(simulation)
 
 index_run = find(contains({simulation.run.name},'b2fgmtry'));
 index_baserun = find(contains({simulation.geometry.name},'b2fgmtry'));
@@ -59,19 +51,19 @@ if strcmp(version,'structured')
          crx(leftcut(1)+2, topcut(1)+1, 1) < ...
          crx(leftcut(1)+2, 1, 1)) )
 
-        SN_type = 'LSN';
+        topology_type = 'lower';
     
     else
 
-        SN_type = 'USN';
+        topology_type = 'upper';
 
     end
 
 elseif strcmp(version,'unstructured')
 
-    % TODO, assume LSN
+    % TODO, assume lower topology
 
-    SN_type = 'LSN';
+    topology_type = 'lower';
 
 end
 

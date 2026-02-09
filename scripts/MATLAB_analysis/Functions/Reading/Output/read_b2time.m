@@ -458,9 +458,7 @@ if READ_PROFILES
     output.na3dr.unit = ncreadatt(file,'na3dr','units');
     output.na3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.na3dtl.value = ncread(file,'na3dtl');
         info = ncinfo(file,'na3dtl');
         output.na3dtl.description = ncreadatt(file,'na3dtl','long_name');
@@ -501,9 +499,7 @@ if READ_PROFILES
     output.ne3dr.unit = ncreadatt(file,'ne3dr','units');
     output.ne3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.ne3dtl.value = ncread(file,'ne3dtl');
         info = ncinfo(file,'ne3dtl');
         output.ne3dtl.description = ncreadatt(file,'ne3dtl','long_name');
@@ -541,9 +537,7 @@ if READ_PROFILES
     output.te3dr.unit = ncreadatt(file,'te3dr','units');
     output.te3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.te3dtl.value = ncread(file,'te3dtl');
         info = ncinfo(file,'te3dtl');
         output.te3dtl.description = ncreadatt(file,'te3dtl','long_name');
@@ -581,9 +575,7 @@ if READ_PROFILES
     output.ti3dr.unit = ncreadatt(file,'ti3dr','units');
     output.ti3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.ti3dtl.value = ncread(file,'ti3dtl');
         info = ncinfo(file,'ti3dtl');
         output.ti3dtl.description = ncreadatt(file,'ti3dtl','long_name');
@@ -609,9 +601,7 @@ if READ_PROFILES
     output.fl3dr.unit = ncreadatt(file,'fl3dr','units');
     output.fl3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.fl3dtl.value = ncread(file,'fl3dtl');
         info = ncinfo(file,'fl3dtl');
         output.fl3dtl.description = ncreadatt(file,'fl3dtl','long_name');
@@ -637,9 +627,7 @@ if READ_PROFILES
     output.fo3dr.unit = ncreadatt(file,'fo3dr','units');
     output.fo3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.fo3dtl.value = ncread(file,'fo3dtl');
         info = ncinfo(file,'fo3dtl');
         output.fo3dtl.description = ncreadatt(file,'fo3dtl','long_name');
@@ -665,9 +653,7 @@ if READ_PROFILES
     output.fn3dr.unit = ncreadatt(file,'fn3dr','units');
     output.fn3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.fn3dtl.value = ncread(file,'fn3dtl');
         info = ncinfo(file,'fn3dtl');
         output.fn3dtl.description = ncreadatt(file,'fn3dtl','long_name');
@@ -693,9 +679,7 @@ if READ_PROFILES
     output.fe3dr.unit = ncreadatt(file,'fe3dr','units');
     output.fe3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.fe3dtl.value = ncread(file,'fe3dtl');
         info = ncinfo(file,'fe3dtl');
         output.fe3dtl.description = ncreadatt(file,'fe3dtl','long_name');
@@ -721,9 +705,7 @@ if READ_PROFILES
     output.fi3dr.unit = ncreadatt(file,'fi3dr','units');
     output.fi3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.fi3dtl.value = ncread(file,'fi3dtl');
         info = ncinfo(file,'fi3dtl');
         output.fi3dtl.description = ncreadatt(file,'fi3dtl','long_name');
@@ -749,9 +731,7 @@ if READ_PROFILES
     output.ft3dr.unit = ncreadatt(file,'ft3dr','units');
     output.ft3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.ft3dtl.value = ncread(file,'ft3dtl');
         info = ncinfo(file,'ft3dtl');
         output.ft3dtl.description = ncreadatt(file,'ft3dtl','long_name');
@@ -791,9 +771,7 @@ if READ_PROFILES
     output.dab3dr.unit = ncreadatt(file,'dab3dr','units');
     output.dab3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.dab3dtl.value = ncread(file,'dab3dtl');
         info = ncinfo(file,'dab3dtl');
         output.dab3dtl.description = ncreadatt(file,'dab3dtl','long_name');
@@ -831,9 +809,7 @@ if READ_PROFILES
     output.dmb3dr.unit = ncreadatt(file,'dmb3dr','units');
     output.dmb3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.dmb3dtl.value = ncread(file,'dmb3dtl');
         info = ncinfo(file,'dmb3dtl');
         output.dmb3dtl.description = ncreadatt(file,'dmb3dtl','long_name');
@@ -871,9 +847,7 @@ if READ_PROFILES
     output.tab3dr.unit = ncreadatt(file,'tab3dr','units');
     output.tab3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.tab3dtl.value = ncread(file,'tab3dtl');
         info = ncinfo(file,'tab3dtl');
         output.tab3dtl.description = ncreadatt(file,'tab3dtl','long_name');
@@ -911,9 +885,7 @@ if READ_PROFILES
     output.tmb3dr.unit = ncreadatt(file,'tmb3dr','units');
     output.tmb3dr.dimensions = {info.Dimensions.Name};
 
-    if strcmp(simulation.geometry_type,'Connected double null') || ...
-            strcmp(simulation.geometry_type,'Disconnected double null') || ...
-            strcmp(simulation.geometry_type,'LFS snowflake')
+    if contains(simulation.geometry_type,'double null') || contains(simulation.geometry_type,'snowflake')
         output.tmb3dtl.value = ncread(file,'tmb3dtl');
         info = ncinfo(file,'tmb3dtl');
         output.tmb3dtl.description = ncreadatt(file,'tmb3dtl','long_name');

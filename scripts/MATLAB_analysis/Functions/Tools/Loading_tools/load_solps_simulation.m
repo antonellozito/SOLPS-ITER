@@ -263,10 +263,10 @@ if numel(NREG) == 1 || numel(NREG) == 3
     if NREG(1) == 2
         SIMULATION.geometry_type = 'Limiter';
     elseif NREG(1) == 4
-        SN_type = detect_LSN_USN(SIMULATION);
-        if strcmp(SN_type,'LSN')
+        topology_type = detect_lower_upper(SIMULATION);
+        if strcmp(topology_type,'lower')
             SIMULATION.geometry_type = 'Lower single null';
-        elseif strcmp(SN_type,'USN')
+        elseif strcmp(topology_type,'upper')
             SIMULATION.geometry_type = 'Upper single null';
         end
     elseif NREG(1) == 8 && NREG(2) == 12
@@ -274,7 +274,12 @@ if numel(NREG) == 1 || numel(NREG) == 3
     elseif NREG(1) == 8 && NREG(2) == 13
         SIMULATION.geometry_type = 'Disconnected double null';
     elseif NREG(1) == 7
-        SIMULATION.geometry_type = 'LFS Snowflake';
+        topology_type = detect_lower_upper(SIMULATION);
+        if strcmp(topology_type,'lower')
+            SIMULATION.geometry_type = 'Lower LFS snowflake';
+        elseif strcmp(topology_type,'upper')
+            SIMULATION.geometry_type = 'Upper LFS snowflake';
+        end
     end
 elseif numel(NREG) == 2
     SIMULATION.grid_version = sprintf('Unstructured');
@@ -282,17 +287,17 @@ elseif numel(NREG) == 2
     if strcmp(geometry_type,'Limiter')
         SIMULATION.geometry_type = 'Limiter';
     elseif strcmp(geometry_type,'Single null')
-        SN_type = detect_LSN_USN(SIMULATION);
-        if strcmp(SN_type,'LSN')
+        topology_type = detect_lower_upper(SIMULATION);
+        if strcmp(topology_type,'lower')
             SIMULATION.geometry_type = 'Lower single null';
-        elseif strcmp(SN_type,'USN')
+        elseif strcmp(topology_type,'upper')
             SIMULATION.geometry_type = 'Upper single null';
         end
     elseif strcmp(geometry_type,'Single null (DDN grid)')    
-        SN_type = detect_LSN_USN(SIMULATION);
-        if strcmp(SN_type,'LSN')
+        topology_type = detect_lower_upper(SIMULATION);
+        if strcmp(topology_type,'lower')
             SIMULATION.geometry_type = 'Lower single null (DDN-like grid)';
-        elseif strcmp(SN_type,'USN')
+        elseif strcmp(topology_type,'upper')
             SIMULATION.geometry_type = 'Upper single null (DDN-like grid)';
         end
     elseif strcmp(geometry_type,'Connected double null')
@@ -300,7 +305,12 @@ elseif numel(NREG) == 2
     elseif strcmp(geometry_type,'Disconnected double null')
         SIMULATION.geometry_type = 'Disconnected double null';
     elseif strcmp(geometry_type,'LFS snowflake')
-         SIMULATION.geometry_type = 'LFS Snowflake';   
+        topology_type = detect_lower_upper(SIMULATION);
+        if strcmp(topology_type,'lower')
+            SIMULATION.geometry_type = 'Lower LFS snowflake';
+        elseif strcmp(topology_type,'upper')
+            SIMULATION.geometry_type = 'Upper LFS snowflake';
+        end
     end
 end
 
@@ -380,12 +390,12 @@ if not(NREG(end) == 0)
         "|       |               |       |" newline ...
         "+-------+---------------+-------+"
         ];
-        if strcmp(SN_type,'LSN')
+        if strcmp(topology_type,'lower')
             SIMULATION.volume_regions_names{1} = 'Core';
             SIMULATION.volume_regions_names{2} = 'SOL';
             SIMULATION.volume_regions_names{3} = 'Inner divertor';
             SIMULATION.volume_regions_names{4} = 'Outer divertor';
-        elseif strcmp(SN_type,'USN')
+        elseif strcmp(topology_type,'upper')
             SIMULATION.volume_regions_names{1} = 'Core';
             SIMULATION.volume_regions_names{2} = 'SOL';
             SIMULATION.volume_regions_names{3} = 'Outer divertor';
@@ -403,14 +413,14 @@ if not(NREG(end) == 0)
             "|       |               |       |" newline ...
             "+-------+---------------+-------+"
             ];
-            if strcmp(SN_type,'LSN')
+            if strcmp(topology_type,'lower')
                 SIMULATION.X_directed_regions_names{1} = 'Inner divertor target';
                 SIMULATION.X_directed_regions_names{2} = 'Entrance to inner divertor';
                 SIMULATION.X_directed_regions_names{3} = 'Entrance to outer divertor';
                 SIMULATION.X_directed_regions_names{4} = 'Outer divertor target';
                 SIMULATION.X_directed_regions_names{5} = 'Connection between core sides';
                 SIMULATION.X_directed_regions_names{6} = 'Connection between bdivertor sides';
-            elseif strcmp(SN_type,'USN')
+            elseif strcmp(topology_type,'upper')
                 SIMULATION.X_directed_regions_names{1} = 'Outer divertor target';
                 SIMULATION.X_directed_regions_names{2} = 'Entrance to outer divertor';
                 SIMULATION.X_directed_regions_names{3} = 'Entrance to inner divertor';
@@ -429,7 +439,7 @@ if not(NREG(end) == 0)
             "|       |               |       |" newline ...
             "+---1---+-------2-------+---3---+"
             ];
-            if strcmp(SN_type,'LSN')
+            if strcmp(topology_type,'lower')
                 SIMULATION.Y_directed_regions_names{1} = 'Inner PFR wall boundary';
                 SIMULATION.Y_directed_regions_names{2} = 'Core boundary';
                 SIMULATION.Y_directed_regions_names{3} = 'Outer PFR wall boundary';
@@ -437,7 +447,7 @@ if not(NREG(end) == 0)
                 SIMULATION.Y_directed_regions_names{5} = 'Inner divertor to main wall boundary';
                 SIMULATION.Y_directed_regions_names{6} = 'Main wall boundary';
                 SIMULATION.Y_directed_regions_names{7} = 'Outer divertor to main wall boundary';
-            elseif strcmp(SN_type,'USN')
+            elseif strcmp(topology_type,'upper')
                 SIMULATION.Y_directed_regions_names{1} = 'Outer PFR wall boundary';
                 SIMULATION.Y_directed_regions_names{2} = 'Core boundary';
                 SIMULATION.Y_directed_regions_names{3} = 'Inner PFR wall boundary';
@@ -458,7 +468,7 @@ if not(NREG(end) == 0)
             "|       |               |       |" newline ...
             "+---7---+-------8-------+---9---+"
             ];
-            if strcmp(SN_type,'LSN')
+            if strcmp(topology_type,'lower')
                 SIMULATION.face_regions_names{1} = 'Inner divertor target';
                 SIMULATION.face_regions_names{2} = 'Entrance to inner divertor';
                 SIMULATION.face_regions_names{3} = 'Entrance to outer divertor';
@@ -472,7 +482,7 @@ if not(NREG(end) == 0)
                 SIMULATION.face_regions_names{11} = 'Inner divertor to main wall boundary';
                 SIMULATION.face_regions_names{12} = 'Main wall boundary';
                 SIMULATION.face_regions_names{13} = 'Outer divertor to main wall boundary';
-            elseif strcmp(SN_type,'USN')
+            elseif strcmp(topology_type,'upper')
                 SIMULATION.face_regions_names{1} = 'Outer divertor target';
                 SIMULATION.face_regions_names{2} = 'Entrance to outer divertor';
                 SIMULATION.face_regions_names{3} = 'Entrance to inner divertor';
@@ -718,7 +728,7 @@ if not(NREG(end) == 0)
         "|       |               :               |       |" newline ...
         "+-------+---------------+---------------+-------+"
         ];
-        if strcmp(SN_type,'LSN')
+        if strcmp(topology_type,'lower')
             SIMULATION.volume_regions_names{1} = 'Left Core';
             SIMULATION.volume_regions_names{2} = 'Left SOL';
             SIMULATION.volume_regions_names{3} = 'Inner divertor';
@@ -727,7 +737,7 @@ if not(NREG(end) == 0)
             SIMULATION.volume_regions_names{6} = 'Right SOL';
             SIMULATION.volume_regions_names{7} = '-';
             SIMULATION.volume_regions_names{8} = 'Outer divertor';
-        elseif strcmp(SN_type,'USN')
+        elseif strcmp(topology_type,'upper')
             SIMULATION.volume_regions_names{1} = 'Right Core';
             SIMULATION.volume_regions_names{2} = 'Right SOL';
             SIMULATION.volume_regions_names{3} = 'Outer divertor';
@@ -749,7 +759,7 @@ if not(NREG(end) == 0)
             "|        |              |              |        |" newline ...
             "+---14---+------15------+------22------+---23---+"
             ];
-            if strcmp(SN_type,'LSN')
+            if strcmp(topology_type,'lower')
                 SIMULATION.face_regions_names{1} = 'Inner divertor target';
                 SIMULATION.face_regions_names{2} = 'Entrance to inner divertor';
                 SIMULATION.face_regions_names{3} = '-';
@@ -776,7 +786,7 @@ if not(NREG(end) == 0)
                 SIMULATION.face_regions_names{24} = 'Right separatrix';
                 SIMULATION.face_regions_names{25} = '-';
                 SIMULATION.face_regions_names{26} = 'Right SOL main wall boundary';
-            elseif strcmp(SN_type,'USN')
+            elseif strcmp(topology_type,'upper')
                 SIMULATION.face_regions_names{1} = 'Outer divertor target';
                 SIMULATION.face_regions_names{2} = 'Entrance to outer divertor';
                 SIMULATION.face_regions_names{3} = '-';
@@ -805,7 +815,7 @@ if not(NREG(end) == 0)
                 SIMULATION.face_regions_names{26} = 'Left SOL main wall boundary';
             end
         end
-    elseif strcmp(SIMULATION.geometry_type,'LFS snowflake')
+    elseif strcmp(SIMULATION.geometry_type,'Lower LFS snowflake') || strcmp(SIMULATION.geometry_type,'Upper LFS snowflake')
         SIMULATION.volume_regions = [
         "+-------+-----------------------+-------+-------++-------+-------+" newline ...
         "|       :                       :       :       ||       :       |" newline ...
@@ -817,13 +827,17 @@ if not(NREG(end) == 0)
         "|       |                       |       |       ||       |       |" newline ...
         "+-------+-----------------------+-------+-------++-------+-------+"
         ];
-        SIMULATION.volume_regions_names{1} = 'Core';
-        SIMULATION.volume_regions_names{2} = 'SOL';
-        SIMULATION.volume_regions_names{3} = 'Inner divertor';
-        SIMULATION.volume_regions_names{4} = 'Outer divertor entrance';
-        SIMULATION.volume_regions_names{5} = 'Far SOL divertor leg';
-        SIMULATION.volume_regions_names{6} = 'Secondary divertor leg';
-        SIMULATION.volume_regions_names{7} = 'Primary divertor leg';
+        if strcmp(topology_type,'lower')
+            SIMULATION.volume_regions_names{1} = 'Core';
+            SIMULATION.volume_regions_names{2} = 'SOL';
+            SIMULATION.volume_regions_names{3} = 'Inner divertor';
+            SIMULATION.volume_regions_names{4} = 'Outer divertor entrance';
+            SIMULATION.volume_regions_names{5} = 'Far SOL divertor leg';
+            SIMULATION.volume_regions_names{6} = 'Secondary divertor leg';
+            SIMULATION.volume_regions_names{7} = 'Primary divertor leg';
+        elseif strcmp(topology_type,'upper')
+            % TODO
+        end
         if numel(NREG) == 3
             SIMULATION.X_directed_regions = [
             "+--------+----------------------+--------+--------++--------+--------+" newline ...
@@ -836,19 +850,23 @@ if not(NREG(end) == 0)
             "|        |                      |        |        ||        |        |" newline ...
             "+--------+----------------------+--------+--------++--------+--------+"
             ];
-            SIMULATION.X_directed_regions_names{1} = 'Inner divertor target';
-            SIMULATION.X_directed_regions_names{2} = 'Entrance to inner divertor';
-            SIMULATION.X_directed_regions_names{3} = 'Entrance to outer divertor';
-            SIMULATION.X_directed_regions_names{4} = 'Far SOL outer divertor target';
-            SIMULATION.X_directed_regions_names{5} = 'Secondary outer divertor target';
-            SIMULATION.X_directed_regions_names{6} = 'Entrance to far SOL outer divertor leg';
-            SIMULATION.X_directed_regions_names{7} = 'Connection between secondary and primary outer divertor legs';
-            SIMULATION.X_directed_regions_names{8} = 'Primary outer divertor target';
-            SIMULATION.X_directed_regions_names{9} = 'Connection between left and right core';
-            SIMULATION.X_directed_regions_names{10} = 'Connection between left and right primary PFRs';
-            SIMULATION.X_directed_regions_names{11} = 'Connection between far SOL and secondary outer divertor legs';
-            SIMULATION.X_directed_regions_names{12} = 'Connection between primary PFR and primary outer divertor leg';
-            SIMULATION.X_directed_regions_names{13} = 'Connection between primary CFR and primary outer divertor leg';
+            if strcmp(topology_type,'lower')
+                SIMULATION.X_directed_regions_names{1} = 'Inner divertor target';
+                SIMULATION.X_directed_regions_names{2} = 'Entrance to inner divertor';
+                SIMULATION.X_directed_regions_names{3} = 'Entrance to outer divertor';
+                SIMULATION.X_directed_regions_names{4} = 'Far SOL outer divertor target';
+                SIMULATION.X_directed_regions_names{5} = 'Secondary outer divertor target';
+                SIMULATION.X_directed_regions_names{6} = 'Entrance to far SOL outer divertor leg';
+                SIMULATION.X_directed_regions_names{7} = 'Connection between secondary and primary outer divertor legs';
+                SIMULATION.X_directed_regions_names{8} = 'Primary outer divertor target';
+                SIMULATION.X_directed_regions_names{9} = 'Connection between left and right core';
+                SIMULATION.X_directed_regions_names{10} = 'Connection between left and right primary PFRs';
+                SIMULATION.X_directed_regions_names{11} = 'Connection between far SOL and secondary outer divertor legs';
+                SIMULATION.X_directed_regions_names{12} = 'Connection between primary PFR and primary outer divertor leg';
+                SIMULATION.X_directed_regions_names{13} = 'Connection between primary CFR and primary outer divertor leg';
+            elseif strcmp(topology_type,'upper')
+                % TODO
+            end
             SIMULATION.Y_directed_regions = [
             "+---5---+-----------6-----------+---7---+--11---++--12---+---13--+" newline ...
             "|       :                       :       :       ||       :       |" newline ...
@@ -860,19 +878,23 @@ if not(NREG(end) == 0)
             "|       |                       |       |       ||       |       |" newline ...
             "+---1---+-----------2-----------+---3---+---8---++---9---+---10--+"
             ];
-            SIMULATION.Y_directed_regions_names{1} = 'Inner PFR wall boundary';
-            SIMULATION.Y_directed_regions_names{2} = 'Core boundary';
-            SIMULATION.Y_directed_regions_names{3} = 'Outer divertor entrance PFR wall boundary';
-            SIMULATION.Y_directed_regions_names{4} = 'Primary separatrix';
-            SIMULATION.Y_directed_regions_names{5} = 'Inner divertor main wall boundary';
-            SIMULATION.Y_directed_regions_names{6} = 'SOL main wall boundary';
-            SIMULATION.Y_directed_regions_names{7} = 'Outer divertor entrance main wall boundary';
-            SIMULATION.Y_directed_regions_names{8} = 'Far SOL outer PFR wall boundary';
-            SIMULATION.Y_directed_regions_names{9} = 'Secondary outer PFR wall boundary';
-            SIMULATION.Y_directed_regions_names{10} = 'Primary outer PFR wall boundary';
-            SIMULATION.Y_directed_regions_names{11} = 'Far SOL outer divertor main wall boundary';
-            SIMULATION.Y_directed_regions_names{12} = 'Secondary outer divertor main wall boundary';
-            SIMULATION.Y_directed_regions_names{13} = 'Primary outer divertor main wall boundary';
+            if strcmp(topology_type,'lower')
+                SIMULATION.Y_directed_regions_names{1} = 'Inner PFR wall boundary';
+                SIMULATION.Y_directed_regions_names{2} = 'Core boundary';
+                SIMULATION.Y_directed_regions_names{3} = 'Outer divertor entrance PFR wall boundary';
+                SIMULATION.Y_directed_regions_names{4} = 'Primary separatrix';
+                SIMULATION.Y_directed_regions_names{5} = 'Inner divertor main wall boundary';
+                SIMULATION.Y_directed_regions_names{6} = 'SOL main wall boundary';
+                SIMULATION.Y_directed_regions_names{7} = 'Outer divertor entrance main wall boundary';
+                SIMULATION.Y_directed_regions_names{8} = 'Far SOL outer PFR wall boundary';
+                SIMULATION.Y_directed_regions_names{9} = 'Secondary outer PFR wall boundary';
+                SIMULATION.Y_directed_regions_names{10} = 'Primary outer PFR wall boundary';
+                SIMULATION.Y_directed_regions_names{11} = 'Far SOL outer divertor main wall boundary';
+                SIMULATION.Y_directed_regions_names{12} = 'Secondary outer divertor main wall boundary';
+                SIMULATION.Y_directed_regions_names{13} = 'Primary outer divertor main wall boundary';
+            elseif strcmp(topology_type,'upper')
+                % TODO
+            end
         elseif numel(NREG) == 2
             SIMULATION.face_regions = [
             "+---18---+---------19-----------+---20---+---24---++---25---+---26---+" newline ...
@@ -885,32 +907,36 @@ if not(NREG(end) == 0)
             "|        |                      |        |        ||        |        |" newline ...
             "+---14---+---------15-----------+---16---+---21---++---22---+---23---+"
             ];
-            SIMULATION.face_regions_names{1} = 'Inner divertor target';
-            SIMULATION.face_regions_names{2} = 'Entrance to inner divertor';
-            SIMULATION.face_regions_names{3} = 'Entrance to outer divertor';
-            SIMULATION.face_regions_names{4} = 'Far SOL outer divertor target';
-            SIMULATION.face_regions_names{5} = 'Secondary outer divertor target';
-            SIMULATION.face_regions_names{6} = 'Entrance to far SOL outer divertor leg';
-            SIMULATION.face_regions_names{7} = 'Connection between secondary and primary outer divertor legs';
-            SIMULATION.face_regions_names{8} = 'Primary outer divertor target';
-            SIMULATION.face_regions_names{9} = 'Connection between left and right core';
-            SIMULATION.face_regions_names{10} = 'Connection between left and right primary PFRs';
-            SIMULATION.face_regions_names{11} = 'Connection between far SOL and secondary outer divertor legs';
-            SIMULATION.face_regions_names{12} = 'Connection between primary PFR and primary outer divertor leg';
-            SIMULATION.face_regions_names{13} = 'Connection between primary CFR and primary outer divertor leg';
-            SIMULATION.face_regions_names{14} = 'Inner PFR wall boundary';
-            SIMULATION.face_regions_names{15} = 'Core boundary';
-            SIMULATION.face_regions_names{16} = 'Outer divertor entrance PFR wall boundary';
-            SIMULATION.face_regions_names{17} = 'Primary separatrix';
-            SIMULATION.face_regions_names{18} = 'Inner divertor main wall boundary';
-            SIMULATION.face_regions_names{19} = 'SOL main wall boundary';
-            SIMULATION.face_regions_names{20} = 'Outer divertor entrance main wall boundary';
-            SIMULATION.face_regions_names{21} = 'Far SOL outer PFR wall boundary';
-            SIMULATION.face_regions_names{22} = 'Secondary outer PFR wall boundary';
-            SIMULATION.face_regions_names{23} = 'Primary outer PFR wall boundary';
-            SIMULATION.face_regions_names{24} = 'Far SOL outer divertor main wall boundary';
-            SIMULATION.face_regions_names{25} = 'Secondary outer divertor main wall boundary';
-            SIMULATION.face_regions_names{26} = 'Primary outer divertor main wall boundary';
+            if strcmp(topology_type,'lower')
+                SIMULATION.face_regions_names{1} = 'Inner divertor target';
+                SIMULATION.face_regions_names{2} = 'Entrance to inner divertor';
+                SIMULATION.face_regions_names{3} = 'Entrance to outer divertor';
+                SIMULATION.face_regions_names{4} = 'Far SOL outer divertor target';
+                SIMULATION.face_regions_names{5} = 'Secondary outer divertor target';
+                SIMULATION.face_regions_names{6} = 'Entrance to far SOL outer divertor leg';
+                SIMULATION.face_regions_names{7} = 'Connection between secondary and primary outer divertor legs';
+                SIMULATION.face_regions_names{8} = 'Primary outer divertor target';
+                SIMULATION.face_regions_names{9} = 'Connection between left and right core';
+                SIMULATION.face_regions_names{10} = 'Connection between left and right primary PFRs';
+                SIMULATION.face_regions_names{11} = 'Connection between far SOL and secondary outer divertor legs';
+                SIMULATION.face_regions_names{12} = 'Connection between primary PFR and primary outer divertor leg';
+                SIMULATION.face_regions_names{13} = 'Connection between primary CFR and primary outer divertor leg';
+                SIMULATION.face_regions_names{14} = 'Inner PFR wall boundary';
+                SIMULATION.face_regions_names{15} = 'Core boundary';
+                SIMULATION.face_regions_names{16} = 'Outer divertor entrance PFR wall boundary';
+                SIMULATION.face_regions_names{17} = 'Primary separatrix';
+                SIMULATION.face_regions_names{18} = 'Inner divertor main wall boundary';
+                SIMULATION.face_regions_names{19} = 'SOL main wall boundary';
+                SIMULATION.face_regions_names{20} = 'Outer divertor entrance main wall boundary';
+                SIMULATION.face_regions_names{21} = 'Far SOL outer PFR wall boundary';
+                SIMULATION.face_regions_names{22} = 'Secondary outer PFR wall boundary';
+                SIMULATION.face_regions_names{23} = 'Primary outer PFR wall boundary';
+                SIMULATION.face_regions_names{24} = 'Far SOL outer divertor main wall boundary';
+                SIMULATION.face_regions_names{25} = 'Secondary outer divertor main wall boundary';
+                SIMULATION.face_regions_names{26} = 'Primary outer divertor main wall boundary';
+            elseif strcmp(topology_type,'upper')
+                % TODO
+            end
         end
     end
 
