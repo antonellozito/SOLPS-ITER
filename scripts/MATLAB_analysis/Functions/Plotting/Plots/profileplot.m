@@ -31,9 +31,11 @@ function profileplot(x, profile, varargin)
 %
 %   Optional Name-Value pairs for experimental data overlay:
 %       'ExpData'              - Cell array of experimental data structs, each with
-%                                fields: .rhop (NxM), .values (NxM),
+%                                fields: .x (NxM), .values (NxM),
 %                                .values_unc (NxM, optional), .name (char)
 %                                (default: {})
+%       'ExpDataCoord'         - Coordinate .x for each experimental data structs
+%                                ('rhop', 'dssep' or 'R') 
 %       'ExpDataTypes'         - Cell array of strings ('scatter' or 'line') for
 %                                each element in ExpData (default: all 'scatter')
 %       'ExpDataColors'        - Cell array of RGB colors for each element in ExpData
@@ -94,6 +96,7 @@ p.addParameter('ScaleTransport', 'logarithmic', @ischar);
 
 % Experimental data
 p.addParameter('ExpData', {});
+p.addParameter('ExpDataCoord', {});
 p.addParameter('ExpDataTypes', {});
 p.addParameter('ExpDataColors', {});
 p.addParameter('ExpMarker', 'd');
@@ -158,6 +161,11 @@ if ~isempty(opts.ExpData)
 
     nexp = numel(opts.ExpData);
 
+    coord = opts.ExpDataCoord;
+    if isempty(coord)
+        error('Error: select a coordinate using ExpDataCoord')
+    end
+
     % Default types: all scatter
     exp_types = opts.ExpDataTypes;
     if isempty(exp_types)
@@ -174,21 +182,28 @@ if ~isempty(opts.ExpData)
 
         ed = opts.ExpData{i};
         col = exp_colors{i};
+        if strcmp(coord,'rhop')
+            x = ed.rhop;
+        elseif strcmp(coord,'dssep')
+            x = ed.dssep;
+        elseif strcmp(coord,'R')
+            x = ed.R;
+        end
 
         if strcmp(exp_types{i}, 'scatter')
-            scatter(ed.rhop(1,:), ed.values(1,:), ...
+            scatter(x(1,:), ed.values(1,:), ...
                 opts.ExpMarkerSize, col, 'filled', opts.ExpMarker, ...
                 'DisplayName', ed.name);
             if size(ed.values, 1) > 1
                 for j = 2:size(ed.values, 1)
-                    scatter(ed.rhop(j,:), ed.values(j,:), ...
+                    scatter(x(j,:), ed.values(j,:), ...
                         opts.ExpMarkerSize, col, 'filled', opts.ExpMarker, ...
                         'HandleVisibility', 'off');
                 end
             end
 
         elseif strcmp(exp_types{i}, 'line')
-            errorbar(mean(ed.rhop, 1), ...
+            errorbar(mean(x, 1), ...
                 mean(ed.values, 1), mean(ed.values_unc, 1), ...
                 'CapSize', opts.ExpProfilesCapSize, ...
                 'Color', col, ...

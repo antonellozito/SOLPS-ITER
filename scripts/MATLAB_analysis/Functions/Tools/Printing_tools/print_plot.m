@@ -22,49 +22,6 @@ if nargin < 1 || isempty(figs)
     error('Error: Select at least one figure.');
 end
 
-% Set plot dimensions
-figs_print = gobjects(1, numel(figs));
-
-for k = 1:numel(figs)
-    oldFig = figs(k);
-    
-    % Create invisible figure with same size
-    figs_print(k) = figure('Visible','off', ...
-                        'NumberTitle','off', ...
-                        'Name', oldFig.Name, ...
-                        'Position', oldFig.Position, ...
-                        'Color', oldFig.Color, ...
-                        'Colormap', oldFig.Colormap);
-    
-    % Copy all children (axes, plots, etc.)
-    copyobj(allchild(oldFig), figs_print(k));
-    
-    % Fix axes properties
-    oldAxes = findall(oldFig,'Type','axes');
-    newAxes = findall(figs_print(k),'Type','axes');
-    
-    for i = 1:numel(newAxes)
-        props = {'FontSize','FontName','LineWidth','XLim','YLim','ZLim','XScale','YScale','ZScale'};
-        for p = 1:numel(props)
-            newAxes(i).(props{p}) = oldAxes(i).(props{p});
-        end
-        % Labels and title
-        lbls = {'XLabel','YLabel','ZLabel','Title'};
-        for l = lbls
-            newAxes(i).(l{1}).FontSize = oldAxes(i).(l{1}).FontSize;
-            newAxes(i).(l{1}).FontName = oldAxes(i).(l{1}).FontName;
-        end
-        % Legends
-        oldLg = findall(oldAxes(i),'Type','Legend');
-        newLg = findall(newAxes(i),'Type','Legend');
-        for j = 1:numel(newLg)
-            newLg(j).FontSize = oldLg(j).FontSize;
-            newLg(j).FontName = oldLg(j).FontName;
-        end
-    end
-    
-end
-
 if not(isnumeric(size(1)))
     error('Error: Specify the plot width as a number.')
 end
@@ -72,16 +29,67 @@ if not(isnumeric(size(2)))
     error('Error: Specify the plot height as a number.')
 end
 
-for f = figs_print
-    f.Position(3) = size(1);
-    f.Position(4) = size(2);
+% Prepare figures: try copyobj, fall back to original
+figs_print = gobjects(1, numel(figs));
+used_original = false(1, numel(figs));
+
+% Target paper size in inches
+ppi = get(0, 'ScreenPixelsPerInch');
+paperW = size(1) / ppi;
+paperH = size(2) / ppi;
+
+for k = 1:numel(figs)
+    oldFig = figs(k);
+    
+    try
+        % Try creating invisible copy (works for simple axes)
+        newFig = figure('Visible','off', ...
+                        'NumberTitle','off', ...
+                        'Name', oldFig.Name, ...
+                        'Position', oldFig.Position, ...
+                        'Color', oldFig.Color, ...
+                        'Colormap', oldFig.Colormap);
+        
+        copyobj(allchild(oldFig), newFig);
+        
+        % Fix axes properties
+        oldAxes = findall(oldFig,'Type','axes');
+        newAxes = findall(newFig,'Type','axes');
+        
+        for i = 1:numel(newAxes)
+            props = {'FontSize','FontName','LineWidth','XLim','YLim','ZLim','XScale','YScale','ZScale'};
+            for p = 1:numel(props)
+                newAxes(i).(props{p}) = oldAxes(i).(props{p});
+            end
+            lbls = {'XLabel','YLabel','ZLabel','Title'};
+            for l = lbls
+                newAxes(i).(l{1}).FontSize = oldAxes(i).(l{1}).FontSize;
+                newAxes(i).(l{1}).FontName = oldAxes(i).(l{1}).FontName;
+            end
+            oldLg = findall(oldAxes(i),'Type','Legend');
+            newLg = findall(newAxes(i),'Type','Legend');
+            for j = 1:numel(newLg)
+                newLg(j).FontSize = oldLg(j).FontSize;
+                newLg(j).FontName = oldLg(j).FontName;
+            end
+        end
+        
+        % Set size on the copy (safe — it's invisible and not docked)
+        newFig.Position(3) = size(1);
+        newFig.Position(4) = size(2);
+        figs_print(k) = newFig;
+        
+    catch
+        % Fallback: use original figure, do NOT touch Position
+        figs_print(k) = oldFig;
+        used_original(k) = true;
+    end
 end
 
-% Find Ghostscript executable across different systems and architectures
+% Find Ghostscript executable
 gs_executable = '';
 gs_failed_message = '';
 
-% First try direct path check
 gs_paths = {
     '/usr/bin/gs',...
     '/opt/homebrew/bin/gs',...
@@ -97,7 +105,6 @@ for i = 1:length(gs_paths)
     end
 end
 
-% If not found, try 'which' command
 if isempty(gs_executable)
     [status, result] = system('which gs');
     if status == 0 && ~isempty(strtrim(result))
@@ -105,65 +112,63 @@ if isempty(gs_executable)
     end
 end
 
-figs_print = figs_print(:)';  % ensure row vector
+figs_print = figs_print(:)';
 plots_folder = pwd;
-
 format = lower(format);
+
+% Helper: configure paper properties for a figure before export.
+% For copied figures, Position is already set so paper follows it.
+% For original (fallback) figures, we set paper size directly to the
+% desired output size WITHOUT touching Position (which would undock).
+    function configure_paper(f, idx)
+        f.Renderer = 'painters';
+        f.PaperUnits = 'inches';
+        if used_original(idx)
+            % Don't touch Position — set paper size/position directly
+            f.PaperPositionMode = 'manual';
+            f.PaperSize = [paperW, paperH];
+            f.PaperPosition = [0, 0, paperW, paperH];
+        else
+            % Copied figure: Position already set to desired size
+            f.PaperPositionMode = 'auto';
+            f.PaperSize = [f.Position(3) f.Position(4)] / ppi;
+        end
+    end
 
 % PDF: multipage
 if strcmp(format,'pdf')
 
     outfile = fullfile(plots_folder, [name '.' format]);
     for k = 1:numel(figs_print)
-        f = figs_print(k);
-        f.Renderer = 'painters';
-        % Set paper size to match figure size
-        f.PaperPositionMode = 'auto';
-        f.PaperUnits = 'inches';
-        f.PaperSize = [f.Position(3) f.Position(4)] / get(0, 'ScreenPixelsPerInch');
+        configure_paper(figs_print(k), k);
         appendFlag = (k > 1);
-        exportgraphics(f, outfile, 'ContentType','vector', 'Append', appendFlag);
+        exportgraphics(figs_print(k), outfile, 'ContentType','vector', 'Append', appendFlag);
     end
 
-% EPS: single file only (EPS doesn't support multi-page)
+% EPS: single file only
 elseif strcmp(format, 'eps')
 
     if numel(figs_print) > 1
         for k = 1:numel(figs_print)
-            f = figs_print(k);
-            f.Renderer = 'painters';
-            % Set paper size to match figure size
-            f.PaperPositionMode = 'auto';
-            f.PaperUnits = 'inches';
-            f.PaperSize = [f.Position(3) f.Position(4)] / get(0, 'ScreenPixelsPerInch');
+            configure_paper(figs_print(k), k);
             filename = sprintf('%s_%d.%s', name, k, format);
             outfile = fullfile(plots_folder, filename);
-            exportgraphics(f, outfile, 'ContentType','vector');
+            exportgraphics(figs_print(k), outfile, 'ContentType','vector');
         end
     else
-        % Single figure EPS
-        f = figs_print(1);
-        f.Renderer = 'painters';
-        % Set paper size to match figure size
-        f.PaperPositionMode = 'auto';
-        f.PaperUnits = 'inches';
-        f.PaperSize = [f.Position(3) f.Position(4)] / get(0, 'ScreenPixelsPerInch');
+        configure_paper(figs_print(1), 1);
         outfile = fullfile(plots_folder, [name '.' format]);
-        exportgraphics(f, outfile, 'ContentType','vector');
+        exportgraphics(figs_print(1), outfile, 'ContentType','vector');
     end
 
-% PS: save individually then combine into multi-page PS
+% PS: save individually then combine
 elseif strcmp(format, 'ps')
 
     tempFiles = cell(1,numel(figs_print));
     for k = 1:numel(figs_print)
-        f = figs_print(k);
-        f.Renderer = 'painters';
-        f.PaperPositionMode = 'auto';
-        f.PaperUnits = 'inches';
-        f.PaperSize = [f.Position(3) f.Position(4)] / get(0, 'ScreenPixelsPerInch');
+        configure_paper(figs_print(k), k);
         tempFiles{k} = fullfile(plots_folder, sprintf('temp_%d.eps', k));
-        exportgraphics(f, tempFiles{k}, 'ContentType','vector');
+        exportgraphics(figs_print(k), tempFiles{k}, 'ContentType','vector');
     end
     
     gs_failed = false;
@@ -171,26 +176,18 @@ elseif strcmp(format, 'ps')
     if isempty(gs_executable)
         gs_failed = true;
     else
-        % Combine into multi-page PS file using Ghostscript
         outfile = fullfile(plots_folder, [name '.ps']);
-        
         quotedFiles = cellfun(@(x) sprintf('"%s"', x), tempFiles, 'UniformOutput', false);
         fileList = strjoin(quotedFiles, ' ');
-        
         gsCmd = sprintf('"%s" -dBATCH -dNOPAUSE -dNOSAFER -dEPSCrop -sDEVICE=ps2write -sOutputFile="%s" %s', ...
                         gs_executable, outfile, fileList);
-        
-        [status, cmdout] = system(gsCmd);
-        
+        [status, ~] = system(gsCmd);
         if status ~= 0
             gs_failed = true;
         else
             for k = 1:numel(tempFiles)
                 if exist(tempFiles{k}, 'file')
-                    try
-                        delete(tempFiles{k});
-                    catch
-                    end
+                    try delete(tempFiles{k}); catch, end
                 end
             end
         end
@@ -213,8 +210,7 @@ elseif strcmp(format, 'ps')
 elseif strcmp(format, 'png') || strcmp(format, 'jpg')
 
     for k = 1:numel(figs_print)
-        f = figs_print(k);
-        f.Renderer = 'painters';  % vector still okay for high-quality
+        configure_paper(figs_print(k), k);
         filename = sprintf('%s_%d.%s', name, k, format);
         outfile = fullfile(plots_folder, filename);
         opts = {};
@@ -225,15 +221,23 @@ elseif strcmp(format, 'png') || strcmp(format, 'jpg')
         else
             error('Error: File resolution should be ''vector'' or a DPI in the format e.g. ''r600''');
         end
-        exportgraphics(f, outfile, opts{:});
+        exportgraphics(figs_print(k), outfile, opts{:});
     end
 
 else
-
     error('Error: Printing plot in .%s format not supported',format);
-
 end
 
 fprintf('Figure(s) saved in .%s format%s.\n', format, gs_failed_message);
+
+% Cleanup: close copies, restore paper props on originals
+for k = 1:numel(figs_print)
+    if used_original(k)
+        % Reset paper mode so it doesn't affect the figure going forward
+        figs_print(k).PaperPositionMode = 'auto';
+    else
+        close(figs_print(k));
+    end
+end
 
 end
