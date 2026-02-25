@@ -75,7 +75,7 @@ while ~feof(fid)
                 current_line = [current_line, line];
             else
                 if ~isempty(current_line)
-                    block_lines{end+1} = current_line; %#ok<AGROW>
+                    block_lines{end+1} = current_line;
                 end
                 current_line = line;
             end
@@ -129,7 +129,7 @@ for k = 2:numel(block)
     if ~isempty(line) && line(1) == '+'
         current = [current, line];
     else
-        merged{end+1} = current; %#ok<AGROW>
+        merged{end+1} = current;
         current = line;
     end
 end
