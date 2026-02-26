@@ -13,13 +13,14 @@ function neutrals_parameters = read_neutrals_parameters(simulation)
 
 % Load the files and read the version
 index = find(contains({simulation.run.name},'b2.neutrals.parameters'));
-if isempty(index)
-   error('Error: b2.neutrals.parameters not found');
-end
-file = simulation.run(index).file;
-fid = fopen(file);
-if (fid == -1)
-   error('Error: b2.neutrals.parameters not found');
+file_ok = ~isempty(index);
+
+if file_ok
+    file = simulation.run(index).file;
+    fid = fopen(file);
+    if (fid == -1)
+        file_ok = false;
+    end
 end
 
 % Determine grid version and number of species
@@ -30,53 +31,58 @@ ns = length(simulation.species);
 
 descriptions = read_neutrals_descriptions(simulation.SOLPSTOP, grid_version);
 
-%% READ THE ENTIRE FILE INTO A STRING
+%% READ THE ENTIRE FILE, HANDLE VERSION LINE, EXTRACT NAMELIST BLOCK
 
-raw = fread(fid, '*char')';
-fclose(fid);
+if file_ok
+    raw = fread(fid, '*char')';
+    fclose(fid);
 
-%% HANDLE VERSION LINE
-
-lines = strsplit(raw, {char(10), char(13)});
-first_nonempty = '';
-for iL = 1:length(lines)
-    stripped = strtrim(lines{iL});
-    if ~isempty(stripped)
-        first_nonempty = stripped;
-        break;
+    % Handle version line
+    lines = strsplit(raw, {char(10), char(13)});
+    first_nonempty = '';
+    for iL = 1:length(lines)
+        stripped = strtrim(lines{iL});
+        if ~isempty(stripped)
+            first_nonempty = stripped;
+            break;
+        end
     end
-end
-if length(first_nonempty) >= 7 && strcmpi(first_nonempty(1:7), 'VERSION')
-    neutrals_parameters.version = make_param(first_nonempty, '');
-    idx_newline = find(raw == char(10), 1, 'first');
-    if ~isempty(idx_newline)
-        raw = raw(idx_newline+1:end);
+    if length(first_nonempty) >= 7 && strcmpi(first_nonempty(1:7), 'VERSION')
+        neutrals_parameters.version = make_param(first_nonempty, '');
+        idx_newline = find(raw == char(10), 1, 'first');
+        if ~isempty(idx_newline)
+            raw = raw(idx_newline+1:end);
+        end
+    else
+        neutrals_parameters.version = make_param('', '');
+    end
+
+    % Extract the namelist block
+    idx_start = regexpi(raw, '&\s*NEUTRALS');
+    if isempty(idx_start)
+        nml_str = '';
+    else
+        in_string = false;
+        idx_end = [];
+        for ic = idx_start(1)+10 : length(raw)
+            if raw(ic) == ''''
+                in_string = ~in_string;
+            end
+            if raw(ic) == '/' && ~in_string
+                idx_end = ic;
+                break;
+            end
+        end
+        if isempty(idx_end)
+            nml_str = '';
+        else
+            nml_str = raw(idx_start(1):idx_end);
+        end
     end
 else
     neutrals_parameters.version = make_param('', '');
+    nml_str = '';
 end
-
-%% EXTRACT THE NAMELIST BLOCK
-
-idx_start = regexpi(raw, '&\s*NEUTRALS');
-if isempty(idx_start)
-    error('Error: &NEUTRALS namelist not found in file');
-end
-in_string = false;
-idx_end = [];
-for ic = idx_start(1)+10 : length(raw)
-    if raw(ic) == ''''
-        in_string = ~in_string;
-    end
-    if raw(ic) == '/' && ~in_string
-        idx_end = ic;
-        break;
-    end
-end
-if isempty(idx_end)
-    error('Error: Could not find closing / for &NEUTRALS namelist');
-end
-nml_str = raw(idx_start(1):idx_end);
 
 %% READ NSTRAI
 
@@ -525,8 +531,6 @@ function descriptions = read_neutrals_descriptions(SOLPSTOP, grid_version)
     docfile = sprintf('%s/modules/B2.5/src/documentation/b2cdcn.F', SOLPSTOP);
     fid = fopen(docfile, 'r');
     if fid == -1
-        warning('read_neutrals_parameters:noDocFile', ...
-            'Could not open documentation file: %s\nDescriptions will be empty.', docfile);
         return;
     end
 
@@ -554,8 +558,6 @@ function descriptions = read_neutrals_descriptions(SOLPSTOP, grid_version)
     end
 
     if isempty(block_starts)
-        warning('read_neutrals_parameters:noDocBlock', ...
-            'Could not find NAMELIST /NEUTRALS/ block in %s', docfile);
         return;
     end
     if strcmp(grid_version, 'Unstructured') && length(block_starts) >= 2

@@ -13,13 +13,14 @@ function boundary_parameters = read_boundary_parameters(simulation)
 
 % Load the files and read the version
 index = find(contains({simulation.run.name},'b2.boundary.parameters'));
-if isempty(index)
-   error('Error: b2.boundary.parameters not found');
-end
-file = simulation.run(index).file;
-fid = fopen(file);
-if (fid == -1)
-   error('Error: b2.boundary.parameters not found');
+file_ok = ~isempty(index);
+
+if file_ok
+    file = simulation.run(index).file;
+    fid = fopen(file);
+    if (fid == -1)
+        file_ok = false;
+    end
 end
 
 % Determine grid version and number of species
@@ -30,53 +31,58 @@ ns = length(simulation.species);
 
 descriptions = read_boundary_descriptions(simulation.SOLPSTOP, grid_version);
 
-%% READ THE ENTIRE FILE INTO A STRING
+%% READ THE ENTIRE FILE, HANDLE VERSION LINE, EXTRACT NAMELIST BLOCK
 
-raw = fread(fid, '*char')';
-fclose(fid);
+if file_ok
+    raw = fread(fid, '*char')';
+    fclose(fid);
 
-%% HANDLE VERSION LINE
-
-lines = strsplit(raw, {char(10), char(13)});
-first_nonempty = '';
-for iL = 1:length(lines)
-    stripped = strtrim(lines{iL});
-    if ~isempty(stripped)
-        first_nonempty = stripped;
-        break;
+    % Handle version line
+    lines = strsplit(raw, {char(10), char(13)});
+    first_nonempty = '';
+    for iL = 1:length(lines)
+        stripped = strtrim(lines{iL});
+        if ~isempty(stripped)
+            first_nonempty = stripped;
+            break;
+        end
     end
-end
-if length(first_nonempty) >= 7 && strcmpi(first_nonempty(1:7), 'VERSION')
-    boundary_parameters.version = make_param(first_nonempty, '');
-    idx_newline = find(raw == char(10), 1, 'first');
-    if ~isempty(idx_newline)
-        raw = raw(idx_newline+1:end);
+    if length(first_nonempty) >= 7 && strcmpi(first_nonempty(1:7), 'VERSION')
+        boundary_parameters.version = make_param(first_nonempty, '');
+        idx_newline = find(raw == char(10), 1, 'first');
+        if ~isempty(idx_newline)
+            raw = raw(idx_newline+1:end);
+        end
+    else
+        boundary_parameters.version = make_param('', '');
+    end
+
+    % Extract the namelist block
+    idx_start = regexpi(raw, '&\s*BOUNDARY');
+    if isempty(idx_start)
+        nml_str = '';
+    else
+        in_string = false;
+        idx_end = [];
+        for ic = idx_start(1)+10 : length(raw)
+            if raw(ic) == ''''
+                in_string = ~in_string;
+            end
+            if raw(ic) == '/' && ~in_string
+                idx_end = ic;
+                break;
+            end
+        end
+        if isempty(idx_end)
+            nml_str = '';
+        else
+            nml_str = raw(idx_start(1):idx_end);
+        end
     end
 else
     boundary_parameters.version = make_param('', '');
+    nml_str = '';
 end
-
-%% EXTRACT THE NAMELIST BLOCK
-
-idx_start = regexpi(raw, '&\s*BOUNDARY');
-if isempty(idx_start)
-    error('Error: &BOUNDARY namelist not found in file');
-end
-in_string = false;
-idx_end = [];
-for ic = idx_start(1)+10 : length(raw)
-    if raw(ic) == ''''
-        in_string = ~in_string;
-    end
-    if raw(ic) == '/' && ~in_string
-        idx_end = ic;
-        break;
-    end
-end
-if isempty(idx_end)
-    error('Error: Could not find closing / for &BOUNDARY namelist');
-end
-nml_str = raw(idx_start(1):idx_end);
 
 %% READ NBC AND NNISO
 
@@ -379,8 +385,6 @@ function descriptions = read_boundary_descriptions(SOLPSTOP, grid_version)
     docfile = sprintf('%s/modules/B2.5/src/documentation/b2cdcn.F', SOLPSTOP);
     fid = fopen(docfile, 'r');
     if fid == -1
-        warning('read_boundary_parameters:noDocFile', ...
-            'Could not open documentation file: %s\nDescriptions will be empty.', docfile);
         return;
     end
 
@@ -403,8 +407,6 @@ function descriptions = read_boundary_descriptions(SOLPSTOP, grid_version)
     end
 
     if block_start == 0
-        warning('read_boundary_parameters:noDocBlock', ...
-            'Could not find NAMELIST /BOUNDARY/ block in %s', docfile);
         return;
     end
 
@@ -418,7 +420,6 @@ function descriptions = read_boundary_descriptions(SOLPSTOP, grid_version)
         end
         after_star = ln(2:end);
         var_match = regexp(after_star, '^\s{1,2}([A-Z]\w*)\s+-\s+', 'tokens');
-
         if ~isempty(var_match)
             if ~isempty(current_var)
                 descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
