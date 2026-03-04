@@ -42,7 +42,7 @@ endif
 # Decide repository URL based on device
 switch ($device)
     case "AUG":
-        set repo_url = "https://gitlab.mpcdf.mpg.de/azito/aug_matlab_tools.git"
+        set repo_url = "https://gitlab.mpcdf.mpg.de/azito/matsf.git"
         breaksw
 endsw
 # Clone the repository (fail if folder already exists)
