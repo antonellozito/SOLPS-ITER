@@ -1,7 +1,308 @@
-function [outputArg1,outputArg2] = read_transport_parameters(inputArg1,inputArg2)
-%READ_TRANSPORT_PARAMETERS Summary of this function goes here
-%   Detailed explanation goes here
-outputArg1 = inputArg1;
-outputArg2 = inputArg2;
+function neoclassical_transport = read_neoclassical_transport_parameters(simulation)
+
+% read_neoclassical_transport_parameters reads the
+% b2.neoclassical_transport.parameters containing settings for neoclassical
+% transport coefficient calculation in B2.5
+% Output is a struct "neoclassical_transport" with all the data fields
+% in the b2.neoclassical_transport.parameters file.
+%
+% Each parameter is stored as a substruct with two fields:
+%   .value       - the numeric/char/logical value
+%   .description - a char containing the documentation from b2cdcn.F
+
+%% PRELIMINARY OPERATIONS
+
+% Load the files and read the version
+index = find(contains({simulation.run.name},'b2.neoclassical_transport.parameters'));
+file_ok = ~isempty(index);
+
+if file_ok
+    file = simulation.run(index).file;
+    fid = fopen(file);
+    if (fid == -1)
+        file_ok = false;
+    end
 end
 
+% Determine grid version and number of species
+grid_version = simulation.grid_version; % 'Structured' or 'Unstructured'
+ns = length(simulation.species);
+
+%% READ DOCUMENTATION FROM b2cdcn.F
+
+descriptions = read_neoclassical_descriptions(simulation.SOLPSTOP, grid_version);
+
+%% READ THE ENTIRE FILE, HANDLE VERSION LINE, EXTRACT NAMELIST BLOCK
+
+if file_ok
+    raw = fread(fid, '*char')';
+    fclose(fid);
+
+    % Handle version line
+    lines = strsplit(raw, {char(10), char(13)});
+    first_nonempty = '';
+    for iL = 1:length(lines)
+        stripped = strtrim(lines{iL});
+        if ~isempty(stripped)
+            first_nonempty = stripped;
+            break;
+        end
+    end
+    if length(first_nonempty) >= 7 && strcmpi(first_nonempty(1:7), 'VERSION')
+        neoclassical_transport.version = make_param(first_nonempty, '');
+        idx_newline = find(raw == char(10), 1, 'first');
+        if ~isempty(idx_newline)
+            raw = raw(idx_newline+1:end);
+        end
+    else
+        neoclassical_transport.version = make_param('', '');
+    end
+
+    % Extract the namelist block
+    idx_start = regexpi(raw, '&\s*NEOCLASSICAL_TRANSPORT');
+    if isempty(idx_start)
+        nml_str = '';
+    else
+        in_string = false;
+        idx_end = [];
+        for ic = idx_start(1)+25 : length(raw)
+            if raw(ic) == ''''
+                in_string = ~in_string;
+            end
+            if raw(ic) == '/' && ~in_string
+                idx_end = ic;
+                break;
+            end
+        end
+        if isempty(idx_end)
+            nml_str = '';
+        else
+            nml_str = raw(idx_start(1):idx_end);
+        end
+    end
+else
+    neoclassical_transport.version = make_param('', '');
+    nml_str = '';
+end
+
+%% SET DEFAULT VALUES
+
+% Helper to get description for a variable
+    function d = desc(varname)
+        if isfield(descriptions, lower(varname))
+            d = descriptions.(lower(varname));
+        else
+            d = '';
+        end
+    end
+
+% 1D logical array (0:NS-1), zero-based, default .true.
+neoclassical_transport.neo_ns_set = make_param(true(1, ns), desc('neo_ns_set'));
+
+%% BUILD THE VARIABLE CATALOGUE
+
+catalogue = {
+    'neo_ns_set', '1l', true;
+};
+
+cat_names = catalogue(:,1);
+cat_types = catalogue(:,2);
+cat_zb    = catalogue(:,3);
+
+%% TOKENIZE AND PROCESS THE NAMELIST
+
+nml_body = regexprep(nml_str, '&\s*NEOCLASSICAL_TRANSPORT', '', 'ignorecase');
+idx_slash = find(nml_body == '/', 1, 'last');
+if ~isempty(idx_slash)
+    nml_body = nml_body(1:idx_slash-1);
+end
+nml_body = strrep(nml_body, char(13), '');
+nml_body = strrep(nml_body, char(10), ' ');
+
+pattern = '([a-zA-Z]\w*)\s*(\([^)]*\))?\s*=';
+[tokens, tok_starts, tok_ends] = regexp(nml_body, pattern, ...
+    'tokens', 'start', 'end');
+if isempty(tokens)
+    neoclassical_transport.grid_version = make_param(grid_version, '');
+    return;
+end
+
+for it = 1:length(tokens)
+    tok = tokens{it};
+    lhs = lower(tok{1});
+
+    if length(tok) >= 2 && ~isempty(tok{2})
+        idx_str = strrep(strrep(tok{2}, '(', ''), ')', '');
+        indices = parse_indices(idx_str);
+    else
+        indices = [];
+    end
+
+    val_start = tok_ends(it) + 1;
+    if it < length(tokens)
+        val_end = tok_starts(it+1) - 1;
+    else
+        val_end = length(nml_body);
+    end
+    vstr = strtrim(nml_body(val_start:val_end));
+
+    cat_idx = find(strcmp(lhs, cat_names), 1);
+    if isempty(cat_idx), continue; end
+    vtype = cat_types{cat_idx};
+    is_zb = cat_zb{cat_idx};
+
+    switch vtype
+        case '1l'
+            val = parse_logical_values(vstr);
+            if ~isempty(val)
+                neoclassical_transport.(lhs).value = ...
+                    set_1d_logical(neoclassical_transport.(lhs).value, indices, val, is_zb);
+            end
+    end
+end
+
+neoclassical_transport.grid_version = make_param(grid_version, '');
+
+end
+
+
+%% PARAMETER STRUCT CONSTRUCTOR
+
+function p = make_param(value, description)
+    p.value = value;
+    p.description = description;
+end
+
+
+%% DOCUMENTATION PARSER
+
+function descriptions = read_neoclassical_descriptions(SOLPSTOP, grid_version)
+
+    descriptions = struct();
+
+    docfile = sprintf('%s/modules/B2.5/src/documentation/b2cdcn.F', SOLPSTOP);
+    fid = fopen(docfile, 'r');
+    if fid == -1
+        return;
+    end
+
+    raw_text = fread(fid, '*char')';
+    fclose(fid);
+    all_lines = strsplit(raw_text, char(10));
+
+    % Find NEOCLASSICAL_TRANSPORT blocks with
+    % 'Found in b2.neoclassical_transport.parameters'
+    block_starts = [];
+    block_ends = [];
+    for iL = 1:length(all_lines)
+        ln = all_lines{iL};
+        if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/NEOCLASSICAL_TRANSPORT/', 'once'))
+            if iL < length(all_lines) && ...
+               ~isempty(strfind(all_lines{iL+1}, 'Found in b2.neoclassical_transport.parameters'))
+                block_starts(end+1) = iL;
+            end
+        elseif ~isempty(block_starts) && length(block_ends) < length(block_starts)
+            if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/', 'once'))
+                block_ends(end+1) = iL - 1;
+            end
+        end
+    end
+    if length(block_starts) > length(block_ends)
+        block_ends(end+1) = length(all_lines);
+    end
+
+    if isempty(block_starts)
+        return;
+    end
+
+    if strcmp(grid_version, 'Unstructured') && length(block_starts) >= 2
+        block_start = block_starts(2);
+        block_end = block_ends(2);
+    else
+        block_start = block_starts(1);
+        block_end = block_ends(1);
+    end
+
+    current_var = '';
+    current_desc_lines = {};
+    for iL = block_start:block_end
+        ln = all_lines{iL};
+        if isempty(ln) || ln(1) ~= '*'
+            continue;
+        end
+        after_star = ln(2:end);
+        var_match = regexp(after_star, '^\s{1,4}([A-Z]\w*)\s+-\s+', 'tokens');
+        if ~isempty(var_match)
+            if ~isempty(current_var)
+                descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
+            end
+            current_var = var_match{1}{1};
+            desc_text = strtrim(after_star);
+            current_desc_lines = {desc_text};
+        elseif ~isempty(current_var)
+            desc_text = after_star;
+            desc_text = regexprep(desc_text, '^\s{1,5}', '');
+            current_desc_lines{end+1} = desc_text;
+        end
+    end
+    if ~isempty(current_var)
+        descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
+    end
+end
+
+
+%% ARRAY ASSIGNMENT HELPERS
+
+function arr = set_1d_logical(arr, indices, val, is_zb)
+    si = 1;
+    if ~isempty(indices)
+        if is_zb
+            si = indices(1) + 1;
+        else
+            si = max(1, indices(1));
+        end
+    end
+    nv = length(val);
+    need = si + nv - 1;
+    if need > length(arr), arr(need) = false; end
+    arr(si:si+nv-1) = val;
+end
+
+
+%% VALUE PARSERS
+
+function idx = parse_indices(idx_str)
+    parts = strsplit(strtrim(idx_str), ',');
+    idx = zeros(1, length(parts));
+    for i = 1:length(parts)
+        idx(i) = str2double(strtrim(parts{i}));
+    end
+end
+
+function val = parse_logical_values(vstr)
+    vstr = strip_trailing_comma(vstr);
+    if isempty(vstr), val = []; return; end
+    parts = strsplit(vstr, ',');
+    val = logical([]);
+    for i = 1:length(parts)
+        s = upper(strtrim(parts{i}));
+        if isempty(s), continue; end
+        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
+        if ~isempty(rep)
+            n = str2double(rep{1}{1});
+            v = strrep(rep{1}{2}, '.', '');
+            lv = strcmp(v, 'TRUE') || strcmp(v, 'T');
+            val = [val, repmat(lv, 1, n)];
+        else
+            s = strrep(s, '.', '');
+            val = [val, strcmp(s, 'TRUE') || strcmp(s, 'T')];
+        end
+    end
+end
+
+function vstr = strip_trailing_comma(vstr)
+    vstr = strtrim(vstr);
+    if ~isempty(vstr) && vstr(end) == ','
+        vstr = strtrim(vstr(1:end-1));
+    end
+end
