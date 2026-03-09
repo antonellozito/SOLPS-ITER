@@ -28,6 +28,25 @@ nstra = gmtry.nstra;
 topix = gmtry.topix+1;
 topiy = gmtry.topiy+1;
 
+% Species
+S = ncread(balfile,'species');
+numSpecies = size(S,2);
+species = cell(1,numSpecies);
+for k = 1:numSpecies
+    col = S(:,k)'; 
+    col(col==' ') = [];
+    species{k} = col;
+end
+atomLabels = cellfun(@(s) regexp(s,'^[A-Za-z]+','match'), species, 'UniformOutput', false);
+atomLabels = [atomLabels{:}];
+atoms = unique(atomLabels,'stable');
+natm = numel(atoms);
+groups = cell(1,natm);
+for k = 1:natm
+    groups{k} = find(strcmp(atomLabels, atoms{k}));
+    radiation_label{k} = sprintf('Line radiation (%s)',atoms{k});
+end
+
 % Electron energy fluxes
 tmp = ncread(balfile,'fhe_cond'); % Heat conduction
 fhex_cond = tmp(:,:,1);
@@ -48,8 +67,9 @@ fhey_thermj = tmp(:,:,2);
 % Electron energy sources (fluid)
 b2sihs_divue = ncread(balfile,'b2sihs_divue_bal'); % Parallel electron velocity gradient heating
 tmp = ncread(balfile,'b2stel_she_bal');
-dim = [size(tmp)];
-b2stel_she = sum(tmp(:,:,[1:dim(3)]),3); % Atomic processes + radiation
+for i = 1:natm
+    b2stel_she{i} = sum(tmp(:,:,groups{i}),3); % Line radiation
+end
 b2sihs_joule = ncread(balfile,'b2sihs_joule_bal'); % Joule heating
 b2sihs_exbe = ncread(balfile,'b2sihs_exbe_bal'); % ExB drift heating
 b2sihs_diae = ncread(balfile,'b2sihs_diae_bal'); % Diamagnetic drift heating
@@ -132,7 +152,7 @@ rb = radial_balance(...
     cat(3,...
         raddive_32+raddive_ecrb+raddive_dia+raddive_cond+raddive_thermj,... % Radial transport
         b2sihs_divue,... % Parallel electron velocity gradient heating
-        b2stel_she,... % Atomic processes (B2) + radiation
+        b2stel_she{:},... % Line radiation
         b2sihs_joule,... % Joule heating
         b2sihs_diae+b2sihs_exbe,... % Drift heating
         b2npht_shei,... % e-i temperature equilibration
@@ -152,7 +172,7 @@ rb = radial_balance(...
  'Current-related heat convection'},...
 {'Radial transport',...
  'Parallel el. velocity gradient heating',...
- 'Atomic processes (B2) + radiation',...
+ radiation_label{:},...
  'Joule heating',...
  'Drift heating',...
  'e-i temperature equilibration',...
@@ -173,7 +193,7 @@ pb = poloidal_balance(...
     cat(3,...
         raddive_32+raddive_ecrb+raddive_dia+raddive_cond+raddive_thermj,... % Radial transport
         b2sihs_divue,... % Parallel electron velocity gradient heating
-        b2stel_she,... % Atomic processes (B2) + radiation
+        b2stel_she{:},... % Line radiation
         b2sihs_joule,... % Joule heating
         b2sihs_diae+b2sihs_exbe,... % Drift heating
         b2npht_shei,... % e-i temperature equilibration
@@ -192,7 +212,7 @@ pb = poloidal_balance(...
  'Current-related heat convection'},...
 {'Radial transport',...
  'Parallel el. velocity gradient heating',...
- 'Atomic processes (B2) + radiation',...
+ radiation_label{:},...
  'Joule heating',...
  'Drift heating',...
  'e-i temperature equilibration',...
