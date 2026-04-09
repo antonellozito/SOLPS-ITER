@@ -5,9 +5,11 @@ function sources_profile = read_sources_profile(simulation)
 % Output is a struct "sources_profile" with all the data fields
 % in the b2.sources.profile file.
 
-% Each parameter is stored as a substruct with two fields:
+% Each parameter is stored as a substruct with four fields:
 %   .value       - the numeric/char/logical value
-%   .description - a char containing the documentation from b2cdcn.F
+%   .default     - the default entry from b2input.xml
+%   .type        - the type entry from b2input.xml
+%   .description - the description entry from b2input.xml
 
 %% PRELIMINARY OPERATIONS
 
@@ -31,7 +33,7 @@ ns = length(simulation.species);
 nkind_data   = 2;
 nkind_source = 6;
 
-%% READ DOCUMENTATION FROM b2cdcn.F
+%% READ DOCUMENTATION FROM b2input.xml
 
 descriptions = read_sources_profile_descriptions(simulation.SOLPSTOP, grid_version);
 
@@ -90,12 +92,12 @@ end
 
 %% SET DEFAULT VALUES
 
-% Helper to get description for a variable
+% Helper to get XML metadata for a variable
     function d = desc(varname)
         if isfield(descriptions, lower(varname))
             d = descriptions.(lower(varname));
         else
-            d = '';
+            d = empty_param_metadata();
         end
     end
 
@@ -328,87 +330,10 @@ sources_profile.grid_version = make_param(grid_version, '');
 end
 
 
-%% PARAMETER STRUCT CONSTRUCTOR
-
-function p = make_param(value, description)
-    p.value = value;
-    p.description = description;
-end
-
-
 %% DOCUMENTATION PARSER
 
-function descriptions = read_sources_profile_descriptions(SOLPSTOP, grid_version)
-
-    descriptions = struct();
-
-    docfile = sprintf('%s/modules/B2.5/src/documentation/b2cdcn.F', SOLPSTOP);
-    fid = fopen(docfile, 'r');
-    if fid == -1
-        return;
-    end
-
-    raw_text = fread(fid, '*char')';
-    fclose(fid);
-    all_lines = strsplit(raw_text, char(10));
-
-    % Find PROFILE blocks with 'Found in b2.sources.profile'
-    block_starts = [];
-    block_ends = [];
-    for iL = 1:length(all_lines)
-        ln = all_lines{iL};
-        if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/PROFILE/', 'once'))
-            if iL < length(all_lines) && ...
-               ~isempty(strfind(all_lines{iL+1}, 'Found in b2.sources.profile'))
-                block_starts(end+1) = iL;
-            end
-        elseif ~isempty(block_starts) && length(block_ends) < length(block_starts)
-            if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/', 'once'))
-                block_ends(end+1) = iL - 1;
-            end
-        end
-    end
-    if length(block_starts) > length(block_ends)
-        block_ends(end+1) = length(all_lines);
-    end
-
-    if isempty(block_starts)
-        return;
-    end
-
-    if strcmp(grid_version, 'Unstructured') && length(block_starts) >= 2
-        block_start = block_starts(2);
-        block_end = block_ends(2);
-    else
-        block_start = block_starts(1);
-        block_end = block_ends(1);
-    end
-
-    current_var = '';
-    current_desc_lines = {};
-    for iL = block_start:block_end
-        ln = all_lines{iL};
-        if isempty(ln) || ln(1) ~= '*'
-            continue;
-        end
-        after_star = ln(2:end);
-        var_match = regexp(after_star, '^\s{1,4}([A-Z]\w*)\s+-\s+', 'tokens');
-        if ~isempty(var_match)
-            if ~isempty(current_var)
-                descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
-            end
-            current_var = var_match{1}{1};
-            desc_text = strtrim(after_star);
-            current_desc_lines = {desc_text};
-        elseif ~isempty(current_var)
-            desc_text = after_star;
-            desc_text = regexprep(desc_text, '^\s{1,5}', '');
-            current_desc_lines{end+1} = desc_text;
-        end
-    end
-    if ~isempty(current_var)
-        descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
-    end
+function descriptions = read_sources_profile_descriptions(SOLPSTOP, ~)
+    descriptions = read_b2input_descriptions(SOLPSTOP, 'b2.sources.profile');
 end
 
 
@@ -479,72 +404,5 @@ function lin = sub2ind_custom(sz, subs)
     for k = 2:length(sz)
         stride = stride * sz(k-1);
         lin = lin + (subs(k) - 1) * stride;
-    end
-end
-
-
-%% VALUE PARSERS
-
-function idx = parse_indices(idx_str)
-    parts = strsplit(strtrim(idx_str), ',');
-    idx = zeros(1, length(parts));
-    for i = 1:length(parts)
-        idx(i) = str2double(strtrim(parts{i}));
-    end
-end
-
-function val = parse_int_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    parts = strsplit(vstr, ',');
-    val = [];
-    for i = 1:length(parts)
-        s = strtrim(parts{i});
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            val = [val, repmat(round(str2double(rep{1}{2})), 1, ...
-                               str2double(rep{1}{1}))];
-        else
-            v = str2double(s);
-            if ~isnan(v), val = [val, round(v)]; end
-        end
-    end
-end
-
-function val = parse_real_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    vstr = regexprep(vstr, '([0-9.])D([+-]?\d)', '$1E$2', 'ignorecase');
-    vstr = regexprep(vstr, '_[Rr]8', '');
-    parts = strsplit(vstr, ',');
-    val = [];
-    for i = 1:length(parts)
-        s = strtrim(parts{i});
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            val = [val, repmat(str2double(rep{1}{2}), 1, ...
-                               str2double(rep{1}{1}))];
-        else
-            v = str2double(s);
-            if ~isnan(v), val = [val, v]; end
-        end
-    end
-end
-
-function val = parse_string_value(vstr)
-    tok = regexp(vstr, '''([^'']*)''', 'tokens');
-    if ~isempty(tok)
-        val = tok{1}{1};
-    else
-        val = strip_trailing_comma(vstr);
-    end
-end
-
-function vstr = strip_trailing_comma(vstr)
-    vstr = strtrim(vstr);
-    if ~isempty(vstr) && vstr(end) == ','
-        vstr = strtrim(vstr(1:end-1));
     end
 end

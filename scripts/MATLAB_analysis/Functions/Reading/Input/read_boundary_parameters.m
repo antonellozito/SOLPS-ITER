@@ -5,9 +5,11 @@ function boundary_parameters = read_boundary_parameters(simulation)
 % Output is a struct "boundary_parameters" with all the data fields
 % in the b2.boundary.parameters file.
 
-% Each parameter is stored as a substruct with two fields:
+% Each parameter is stored as a substruct with four fields:
 %   .value       - the numeric/char/logical value
-%   .description - a char containing the documentation from b2cdcn.F
+%   .default     - the default entry from b2input.xml
+%   .type        - the type entry from b2input.xml
+%   .description - the description entry from b2input.xml
 
 %% PRELIMINARY OPERATIONS
 
@@ -27,7 +29,7 @@ end
 grid_version = simulation.grid_version; % 'Structured' or 'Unstructured'
 ns = length(simulation.species);
 
-%% READ DOCUMENTATION FROM b2cdcn.F
+%% READ DOCUMENTATION FROM b2input.xml
 
 descriptions = read_boundary_descriptions(simulation.SOLPSTOP, grid_version);
 
@@ -86,19 +88,19 @@ end
 
 %% READ NBC AND NNISO
 
-nbc = read_scalar_int(nml_str, 'nbc');
+nbc = read_namelist_scalar_int(nml_str, 'nbc');
 if isempty(nbc), nbc = 0; end
-nniso = read_scalar_int(nml_str, 'nniso');
+nniso = read_namelist_scalar_int(nml_str, 'nniso');
 if isempty(nniso), nniso = 0; end
 
 %% SET DEFAULT VALUES
 
-% Helper to get description for a variable
+% Helper to get XML metadata for a variable
     function d = desc(varname)
         if isfield(descriptions, lower(varname))
             d = descriptions.(lower(varname));
         else
-            d = '';
+            d = empty_param_metadata();
         end
     end
 
@@ -350,136 +352,10 @@ boundary_parameters.grid_version = make_param(grid_version, '');
 end
 
 
-%% PARAMETER STRUCT CONSTRUCTOR
-
-function p = make_param(value, description)
-% Create a parameter substruct with .value and .description fields.
-    p.value = value;
-    p.description = description;
-end
-
-
 %% DOCUMENTATION PARSER
 
-function descriptions = read_boundary_descriptions(SOLPSTOP, grid_version)
-
-% Read the BOUNDARY namelist documentation block from b2cdcn.F.
-% Returns a struct where each field is a lowercase variable name and the
-% value is a char containing the multi-line description (lines joined by \n).
-%
-% The file is located at:
-%   <SOLPSTOP>/modules/B2.5/src/documentation/b2cdcn.F
-%
-% The relevant block starts at a line matching:
-%   * NAMELIST /BOUNDARY/
-% and ends just before the next line matching:
-%   * NAMELIST /...
-%
-% Within the block, each variable description starts with a line like:
-%   *  VARNAME - type. Description text...
-% and continuation lines are more indented:
-%   *     continuation text...
-
-    descriptions = struct();
-
-    docfile = sprintf('%s/modules/B2.5/src/documentation/b2cdcn.F', SOLPSTOP);
-    fid = fopen(docfile, 'r');
-    if fid == -1
-        return;
-    end
-
-    % Read all lines
-    raw_text = fread(fid, '*char')';
-    fclose(fid);
-    all_lines = strsplit(raw_text, char(10));
-
-    % Find the BOUNDARY block
-    block_start = 0;
-    block_end = length(all_lines);
-    for iL = 1:length(all_lines)
-        ln = all_lines{iL};
-        if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/BOUNDARY/', 'once'))
-            block_start = iL;
-        elseif block_start > 0 && ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/', 'once'))
-            block_end = iL - 1;
-            break;
-        end
-    end
-
-    if block_start == 0
-        return;
-    end
-
-    % Parse variable descriptions within the block
-    current_var = '';
-    current_desc_lines = {};
-    for iL = block_start:block_end
-        ln = all_lines{iL};
-        if isempty(ln) || ln(1) ~= '*'
-            continue;
-        end
-        after_star = ln(2:end);
-        var_match = regexp(after_star, '^\s{1,2}([A-Z]\w*)\s+-\s+', 'tokens');
-        if ~isempty(var_match)
-            if ~isempty(current_var)
-                descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
-            end
-            current_var = var_match{1}{1};
-            desc_text = strtrim(after_star);
-            current_desc_lines = {desc_text};
-        elseif ~isempty(current_var)
-            desc_text = after_star;
-            desc_text = regexprep(desc_text, '^\s{1,5}', '');
-            current_desc_lines{end+1} = desc_text;
-        end
-    end
-
-    % Save the last variable
-    if ~isempty(current_var)
-        descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
-    end
-end
-
-
-%% ARRAY ASSIGNMENT HELPERS
-
-function arr = set_1d(arr, indices, val, is_zb)
-    si = 1;
-    if ~isempty(indices)
-        if is_zb
-            si = indices(1) + 1;
-        else
-            si = max(1, indices(1));
-        end
-    end
-    nv = length(val);
-    need = si + nv - 1;
-    if need > length(arr), arr(need) = 0; end
-    arr(si:si+nv-1) = val;
-end
-
-function arr = set_1d_char(arr, indices, val)
-    si = 1;
-    if ~isempty(indices), si = max(1, indices(1)); end
-    nv = length(val);
-    need = si + nv - 1;
-    if need > length(arr), arr(need) = ' '; end
-    arr(si:si+nv-1) = val;
-end
-
-function arr = set_1d_str(arr, indices, val, is_zb)
-    si = 1;
-    if ~isempty(indices)
-        if is_zb
-            si = indices(1) + 1;
-        else
-            si = max(1, indices(1));
-        end
-    end
-    nv = length(val);
-    need = si + nv - 1;
-    if need > length(arr), arr{need} = ''; end
-    arr(si:si+nv-1) = val;
+function descriptions = read_boundary_descriptions(SOLPSTOP, ~)
+    descriptions = read_b2input_descriptions(SOLPSTOP, 'b2.boundary.parameters');
 end
 
 function arr = set_2d(arr, indices, val, is_zb)
@@ -501,170 +377,5 @@ function arr = set_2d(arr, indices, val, is_zb)
         c = ceil(lin / sz(1));
         r = lin - (c-1) * sz(1);
         arr(r, c) = val(iv);
-    end
-end
-
-function arr = set_2d_str(arr, indices, val, is_zb)
-    sz = size(arr);
-    i1 = 1; i2 = 1;
-    if ~isempty(indices)
-        if is_zb
-            i1 = indices(1) + 1;
-        else
-            i1 = indices(1);
-        end
-        if length(indices) >= 2, i2 = indices(2); end
-    end
-    lin0 = (i2 - 1) * sz(1) + i1;
-    total = prod(sz);
-    for iv = 1:length(val)
-        lin = lin0 + iv - 1;
-        if lin > total, break; end
-        c = ceil(lin / sz(1));
-        r = lin - (c-1) * sz(1);
-        arr{r, c} = val{iv};
-    end
-end
-
-function arr = set_3d(arr, indices, val, is_zb)
-    sz = size(arr);
-    if length(sz) < 3, sz(3) = 1; end
-    i1 = 1; i2 = 1; i3 = 1;
-    if ~isempty(indices)
-        if is_zb
-            i1 = indices(1) + 1;
-        else
-            i1 = indices(1);
-        end
-        if length(indices) >= 2, i2 = indices(2); end
-        if length(indices) >= 3, i3 = indices(3); end
-    end
-    n1 = sz(1); n2 = sz(2);
-    lin0 = (i3-1)*n1*n2 + (i2-1)*n1 + i1;
-    total = prod(sz);
-    for iv = 1:length(val)
-        lin = lin0 + iv - 1;
-        if lin > total, break; end
-        p = ceil(lin / (n1*n2));
-        rem12 = lin - (p-1)*n1*n2;
-        c = ceil(rem12 / n1);
-        r = rem12 - (c-1)*n1;
-        arr(r, c, p) = val(iv);
-    end
-end
-
-
-%% VALUE PARSERS
-
-function idx = parse_indices(idx_str)
-    parts = strsplit(strtrim(idx_str), ',');
-    idx = zeros(1, length(parts));
-    for i = 1:length(parts)
-        idx(i) = str2double(strtrim(parts{i}));
-    end
-end
-
-function val = parse_int_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    parts = strsplit(vstr, ',');
-    val = [];
-    for i = 1:length(parts)
-        s = strtrim(parts{i});
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            val = [val, repmat(round(str2double(rep{1}{2})), 1, ...
-                               str2double(rep{1}{1}))];
-        else
-            v = str2double(s);
-            if ~isnan(v), val = [val, round(v)]; end
-        end
-    end
-end
-
-function val = parse_real_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    vstr = regexprep(vstr, '([0-9.])D([+-]?\d)', '$1E$2', 'ignorecase');
-    vstr = regexprep(vstr, '_[Rr]8', '');
-    parts = strsplit(vstr, ',');
-    val = [];
-    for i = 1:length(parts)
-        s = strtrim(parts{i});
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            val = [val, repmat(str2double(rep{1}{2}), 1, ...
-                               str2double(rep{1}{1}))];
-        else
-            v = str2double(s);
-            if ~isnan(v), val = [val, v]; end
-        end
-    end
-end
-
-function val = parse_logical_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    parts = strsplit(vstr, ',');
-    val = logical([]);
-    for i = 1:length(parts)
-        s = upper(strtrim(parts{i}));
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            n = str2double(rep{1}{1});
-            v = strrep(rep{1}{2}, '.', '');
-            lv = strcmp(v, 'TRUE') || strcmp(v, 'T');
-            val = [val, repmat(lv, 1, n)];
-        else
-            s = strrep(s, '.', '');
-            val = [val, strcmp(s, 'TRUE') || strcmp(s, 'T')];
-        end
-    end
-end
-
-function val = parse_string_value(vstr)
-    tok = regexp(vstr, '''([^'']*)''', 'tokens');
-    if ~isempty(tok)
-        val = tok{1}{1};
-    else
-        val = strip_trailing_comma(vstr);
-    end
-end
-
-function val = parse_string_list(vstr)
-    tok = regexp(vstr, '''([^'']*)''', 'tokens');
-    val = {};
-    for i = 1:length(tok)
-        val{end+1} = tok{i}{1};
-    end
-end
-
-function val = parse_char_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = ''; return; end
-    tok = regexp(vstr, '''([^'']*)''', 'tokens');
-    val = '';
-    for i = 1:length(tok)
-        val = [val, tok{i}{1}];
-    end
-end
-
-function val = read_scalar_int(nml_str, varname)
-    pattern = ['(?i)' varname '\s*=\s*(-?\d+)'];
-    tok = regexp(nml_str, pattern, 'tokens');
-    if ~isempty(tok)
-        val = str2double(tok{1}{1});
-    else
-        val = [];
-    end
-end
-
-function vstr = strip_trailing_comma(vstr)
-    vstr = strtrim(vstr);
-    if ~isempty(vstr) && vstr(end) == ','
-        vstr = strtrim(vstr(1:end-1));
     end
 end

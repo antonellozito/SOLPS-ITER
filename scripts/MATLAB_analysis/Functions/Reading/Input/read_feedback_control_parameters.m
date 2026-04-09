@@ -5,9 +5,11 @@ function feedback_control = read_feedback_control_parameters(simulation)
 % Output is a struct "feedback_control" with all the data fields
 % in the b2.feedback_control.parameters file.
 %
-% Each parameter is stored as a substruct with two fields:
+% Each parameter is stored as a substruct with four fields:
 %   .value       - the numeric/char/logical value
-%   .description - a char containing the documentation from b2cdcn.F
+%   .default     - the default entry from b2input.xml
+%   .type        - the type entry from b2input.xml
+%   .description - the description entry from b2input.xml
 %
 % Structured grid: reads the /FEEDBACK_CONTROL/ namelist from b2mod_feedback,
 %   containing vacuum_communication_* and na_feedback_* variables.
@@ -44,7 +46,7 @@ end
 nvac    = 4;
 nvacreg = 4;
 
-%% READ DOCUMENTATION FROM b2cdcn.F
+%% READ DOCUMENTATION FROM b2input.xml
 
 descriptions = read_feedback_control_descriptions(simulation.SOLPSTOP, grid_version);
 
@@ -103,12 +105,12 @@ end
 
 %% SET DEFAULT VALUES
 
-% Helper to get description for a variable
+% Helper to get XML metadata for a variable
     function d = desc(varname)
         if isfield(descriptions, lower(varname))
             d = descriptions.(lower(varname));
         else
-            d = '';
+            d = empty_param_metadata();
         end
     end
 
@@ -388,121 +390,13 @@ feedback_control.grid_version = make_param(grid_version, '');
 end
 
 
-%% PARAMETER STRUCT CONSTRUCTOR
-
-function p = make_param(value, description)
-    p.value = value;
-    p.description = description;
-end
-
-
 %% DOCUMENTATION PARSER
 
-function descriptions = read_feedback_control_descriptions(SOLPSTOP, grid_version)
-
-    descriptions = struct();
-
-    docfile = sprintf('%s/modules/B2.5/src/documentation/b2cdcn.F', SOLPSTOP);
-    fid = fopen(docfile, 'r');
-    if fid == -1
-        return;
-    end
-
-    raw_text = fread(fid, '*char')';
-    fclose(fid);
-    all_lines = strsplit(raw_text, char(10));
-
-    % Find FEEDBACK_CONTROL blocks with
-    % 'Found in b2.feedback_control.parameters'
-    block_starts = [];
-    block_ends = [];
-    for iL = 1:length(all_lines)
-        ln = all_lines{iL};
-        if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/FEEDBACK_CONTROL/', 'once'))
-            if iL < length(all_lines) && ...
-               ~isempty(strfind(all_lines{iL+1}, 'Found in b2.feedback_control.parameters'))
-                block_starts(end+1) = iL;
-            end
-        elseif ~isempty(block_starts) && length(block_ends) < length(block_starts)
-            if ~isempty(regexp(ln, '^\*\s+NAMELIST\s+/', 'once'))
-                block_ends(end+1) = iL - 1;
-            end
-        end
-    end
-    if length(block_starts) > length(block_ends)
-        block_ends(end+1) = length(all_lines);
-    end
-
-    if isempty(block_starts)
-        return;
-    end
-
-    if strcmp(grid_version, 'Unstructured') && length(block_starts) >= 2
-        block_start = block_starts(2);
-        block_end = block_ends(2);
-    else
-        block_start = block_starts(1);
-        block_end = block_ends(1);
-    end
-
-    current_var = '';
-    current_desc_lines = {};
-    for iL = block_start:block_end
-        ln = all_lines{iL};
-        if isempty(ln) || ln(1) ~= '*'
-            continue;
-        end
-        after_star = ln(2:end);
-        var_match = regexp(after_star, '^\s{1,4}([A-Z]\w*)\s+-\s+', 'tokens');
-        if ~isempty(var_match)
-            if ~isempty(current_var)
-                descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
-            end
-            current_var = var_match{1}{1};
-            desc_text = strtrim(after_star);
-            current_desc_lines = {desc_text};
-        elseif ~isempty(current_var)
-            desc_text = after_star;
-            desc_text = regexprep(desc_text, '^\s{1,5}', '');
-            current_desc_lines{end+1} = desc_text;
-        end
-    end
-    if ~isempty(current_var)
-        descriptions.(lower(current_var)) = strjoin(current_desc_lines, '\n');
-    end
-end
-
-
-%% ARRAY ASSIGNMENT HELPERS
-
-function arr = set_1d(arr, indices, val, is_zb)
-    si = 1;
-    if ~isempty(indices)
-        if is_zb
-            si = indices(1) + 1;
-        else
-            si = max(1, indices(1));
-        end
-    end
-    nv = length(val);
-    need = si + nv - 1;
-    if need > length(arr), arr(need) = 0; end
-    arr(si:si+nv-1) = val;
-end
-
-function arr = set_1d_logical(arr, indices, val, is_zb)
-    si = 1;
-    if ~isempty(indices)
-        if is_zb
-            si = indices(1) + 1;
-        else
-            si = max(1, indices(1));
-        end
-    end
-    nv = length(val);
-    need = si + nv - 1;
-    if need > length(arr), arr(need) = false; end
-    arr(si:si+nv-1) = val;
+function descriptions = read_feedback_control_descriptions(SOLPSTOP, ~)
+    descriptions = read_b2input_descriptions( ...
+        SOLPSTOP, ...
+        'b2.feedback_control.parameters', ...
+        {'fb_rescale_option', 'fb_rescale'});
 end
 
 function arr = set_2d(arr, indices, val, is_zb)
@@ -548,84 +442,5 @@ function arr = set_2d(arr, indices, val, is_zb)
             sz = size(arr);
         end
         arr(r, c) = val(iv);
-    end
-end
-
-
-%% VALUE PARSERS
-
-function idx = parse_indices(idx_str)
-    parts = strsplit(strtrim(idx_str), ',');
-    idx = zeros(1, length(parts));
-    for i = 1:length(parts)
-        idx(i) = str2double(strtrim(parts{i}));
-    end
-end
-
-function val = parse_int_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    parts = strsplit(vstr, ',');
-    val = [];
-    for i = 1:length(parts)
-        s = strtrim(parts{i});
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            val = [val, repmat(round(str2double(rep{1}{2})), 1, ...
-                               str2double(rep{1}{1}))];
-        else
-            v = str2double(s);
-            if ~isnan(v), val = [val, round(v)]; end
-        end
-    end
-end
-
-function val = parse_real_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    vstr = regexprep(vstr, '([0-9.])D([+-]?\d)', '$1E$2', 'ignorecase');
-    vstr = regexprep(vstr, '_[Rr]8', '');
-    parts = strsplit(vstr, ',');
-    val = [];
-    for i = 1:length(parts)
-        s = strtrim(parts{i});
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            val = [val, repmat(str2double(rep{1}{2}), 1, ...
-                               str2double(rep{1}{1}))];
-        else
-            v = str2double(s);
-            if ~isnan(v), val = [val, v]; end
-        end
-    end
-end
-
-function val = parse_logical_values(vstr)
-    vstr = strip_trailing_comma(vstr);
-    if isempty(vstr), val = []; return; end
-    parts = strsplit(vstr, ',');
-    val = logical([]);
-    for i = 1:length(parts)
-        s = upper(strtrim(parts{i}));
-        if isempty(s), continue; end
-        rep = regexp(s, '^(\d+)\*(.+)$', 'tokens');
-        if ~isempty(rep)
-            n = str2double(rep{1}{1});
-            v = strrep(rep{1}{2}, '.', '');
-            lv = strcmp(v, 'TRUE') || strcmp(v, 'T');
-            val = [val, repmat(lv, 1, n)];
-        else
-            s = strrep(s, '.', '');
-            val = [val, strcmp(s, 'TRUE') || strcmp(s, 'T')];
-        end
-    end
-end
-
-function vstr = strip_trailing_comma(vstr)
-    vstr = strtrim(vstr);
-    if ~isempty(vstr) && vstr(end) == ','
-        vstr = strtrim(vstr(1:end-1));
     end
 end
