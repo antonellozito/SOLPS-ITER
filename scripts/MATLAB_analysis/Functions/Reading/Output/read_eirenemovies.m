@@ -124,181 +124,108 @@ kB    = 1.3806e-23;
 
 eirene_movies.times = ncread(file,'times');
 
-temp_data = ncread(file,'pdena');
-info = ncinfo(file,'pdena');
-eirene_movies.n_atm.value = temp_data;
-eirene_movies.n_atm.description = ncreadatt(file,'pdena','long_name');
-eirene_movies.n_atm.unit = ncreadatt(file,'pdena','units');
-eirene_movies.n_atm.dimensions = {info.Dimensions.Name};
+eirene_movies = set_netcdf_fields(eirene_movies, file, {
+    'n_atm', 'pdena';
+    'n_mol', 'pdenm';
+    'e_atm', 'edena';
+    'e_mol', 'edenm';
+    'm_atm_x', 'vxdena';
+    'm_mol_x', 'vxdenm';
+    'm_atm_y', 'vydena';
+    'm_mol_y', 'vydenm';
+    'm_atm_z', 'vzdena';
+    'm_mol_z', 'vzdenm';
+});
 
-temp_data = ncread(file,'pdenm');
-info = ncinfo(file,'pdenm');
-eirene_movies.n_mol.value = temp_data;
-eirene_movies.n_mol.description = ncreadatt(file,'pdenm','long_name');
-eirene_movies.n_mol.unit = ncreadatt(file,'pdenm','units');
-eirene_movies.n_mol.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'edena');
-info = ncinfo(file,'edena');
-eirene_movies.e_atm.value = temp_data;
-eirene_movies.e_atm.description = ncreadatt(file,'edena','long_name');
-eirene_movies.e_atm.unit = ncreadatt(file,'edena','units');
-eirene_movies.e_atm.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'edenm');
-info = ncinfo(file,'edenm');
-eirene_movies.e_mol.value = temp_data;
-eirene_movies.e_mol.description = ncreadatt(file,'edenm','long_name');
-eirene_movies.e_mol.unit = ncreadatt(file,'edenm','units');
-eirene_movies.e_mol.dimensions = {info.Dimensions.Name};
-
-for i = 1:size(eirene_movies.n_atm.value,2)
-    eirene_movies.T_atm.value(:,i,:) = ((2/3).*eirene_movies.e_atm.value(:,i,:))./(eirene_movies.n_atm.value(:,i,:));
-    eirene_movies.p_atm.value(:,i,:) = ((2/3).*eirene_movies.e_atm.value(:,i,:).*eV);
+T_atm = zeros(size(eirene_movies.n_atm.value));
+p_atm = zeros(size(eirene_movies.n_atm.value));
+for i = 1:size(eirene_movies.n_atm.value, 2)
+    T_atm(:, i, :) = ((2 / 3) .* eirene_movies.e_atm.value(:, i, :)) ./ eirene_movies.n_atm.value(:, i, :);
+    p_atm(:, i, :) = ((2 / 3) .* eirene_movies.e_atm.value(:, i, :) .* eV);
 end
-eirene_movies.T_atm.description = 'Atom temperature';
-eirene_movies.T_atm.unit = 'eV';
-eirene_movies.T_atm.dimensions = eirene_movies.n_atm.dimensions;
+eirene_movies = set_output_field(eirene_movies, 'T_atm', T_atm, ...
+    'Atom temperature', 'eV', eirene_movies.n_atm.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'p_atm', p_atm, ...
+    'Atom pressure', 'Pa', eirene_movies.n_atm.dimensions);
 
-eirene_movies.p_atm.description = 'Atom pressure';
-eirene_movies.p_atm.unit = 'Pa';
-eirene_movies.p_atm.dimensions = eirene_movies.n_atm.dimensions;
-
-for i = 1:size(eirene_movies.n_mol.value,2)
-    eirene_movies.T_mol.value(:,i,:) = ((2/3).*eirene_movies.e_mol.value(:,i,:))./(eirene_movies.n_mol.value(:,i,:));
-    eirene_movies.p_mol.value(:,i,:) = ((2/3).*eirene_movies.e_mol.value(:,i,:).*eV);
+T_mol = zeros(size(eirene_movies.n_mol.value));
+p_mol = zeros(size(eirene_movies.n_mol.value));
+for i = 1:size(eirene_movies.n_mol.value, 2)
+    T_mol(:, i, :) = ((2 / 3) .* eirene_movies.e_mol.value(:, i, :)) ./ eirene_movies.n_mol.value(:, i, :);
+    p_mol(:, i, :) = ((2 / 3) .* eirene_movies.e_mol.value(:, i, :) .* eV);
 end
-eirene_movies.T_mol.description = 'Molecular temperature';
-eirene_movies.T_mol.unit = 'eV';
-eirene_movies.T_mol.dimensions = eirene_movies.n_mol.dimensions;
+eirene_movies = set_output_field(eirene_movies, 'T_mol', T_mol, ...
+    'Molecular temperature', 'eV', eirene_movies.n_mol.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'p_mol', p_mol, ...
+    'Molecular pressure', 'Pa', eirene_movies.n_mol.dimensions);
 
-eirene_movies.p_mol.description = 'Molecular pressure';
-eirene_movies.p_mol.unit = 'Pa';
-eirene_movies.p_mol.dimensions = eirene_movies.n_mol.dimensions;
-
-temp_data = ncread(file,'vxdena');
-info = ncinfo(file,'vxdena');
-eirene_movies.m_atm_x.value = temp_data;
-eirene_movies.m_atm_x.description = ncreadatt(file,'vxdena','long_name');
-eirene_movies.m_atm_x.unit = ncreadatt(file,'vxdena','units');
-eirene_movies.m_atm_x.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'vxdenm');
-info = ncinfo(file,'vxdenm');
-eirene_movies.m_mol_x.value = temp_data;
-eirene_movies.m_mol_x.description = ncreadatt(file,'vxdenm','long_name');
-eirene_movies.m_mol_x.unit = ncreadatt(file,'vxdenm','units');
-eirene_movies.m_mol_x.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'vydena');
-info = ncinfo(file,'vydena');
-eirene_movies.m_atm_y.value = temp_data;
-eirene_movies.m_atm_y.description = ncreadatt(file,'vydena','long_name');
-eirene_movies.m_atm_y.unit = ncreadatt(file,'vydena','units');
-eirene_movies.m_atm_y.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'vydenm');
-info = ncinfo(file,'vydenm');
-eirene_movies.m_mol_y.value = temp_data;
-eirene_movies.m_mol_y.description = ncreadatt(file,'vydenm','long_name');
-eirene_movies.m_mol_y.unit = ncreadatt(file,'vydenm','units');
-eirene_movies.m_mol_y.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'vzdena');
-info = ncinfo(file,'vzdena');
-eirene_movies.m_atm_z.value = temp_data;
-eirene_movies.m_atm_z.description = ncreadatt(file,'vzdena','long_name');
-eirene_movies.m_atm_z.unit = ncreadatt(file,'vzdena','units');
-eirene_movies.m_atm_z.dimensions = {info.Dimensions.Name};
-
-temp_data = ncread(file,'vzdenm');
-info = ncinfo(file,'vzdenm');
-eirene_movies.m_mol_z.value = temp_data;
-eirene_movies.m_mol_z.description = ncreadatt(file,'vzdenm','long_name');
-eirene_movies.m_mol_z.unit = ncreadatt(file,'vzdenm','units');
-eirene_movies.m_mol_z.dimensions = {info.Dimensions.Name};
-
-for i = 1:size(eirene_movies.n_atm.value,2)
-    eirene_movies.f_atm_x.value(:,i,:) = (eirene_movies.m_atm_x.value(:,i,:)./(eirene_movies.mass_atm{i}*pm));
-    eirene_movies.f_atm_y.value(:,i,:) = (eirene_movies.m_atm_y.value(:,i,:)./(eirene_movies.mass_atm{i}*pm));
-    eirene_movies.f_atm_z.value(:,i,:) = (eirene_movies.m_atm_z.value(:,i,:)./(eirene_movies.mass_atm{i}*pm));
-    eirene_movies.f_atm.value(:,i,:) = ...
-        ((eirene_movies.f_atm_x.value(:,i,:)).^2+(eirene_movies.f_atm_y.value(:,i,:)).^2+(eirene_movies.f_atm_z.value(:,i,:)).^2).^(1/2);
-    eirene_movies.v_atm.value(:,i,:) = ...
-        ((eirene_movies.f_atm.value(:,i,:).*1)./eirene_movies.n_atm.value(:,i,:));
+f_atm_x = zeros(size(eirene_movies.n_atm.value));
+f_atm_y = zeros(size(eirene_movies.n_atm.value));
+f_atm_z = zeros(size(eirene_movies.n_atm.value));
+f_atm = zeros(size(eirene_movies.n_atm.value));
+v_atm = zeros(size(eirene_movies.n_atm.value));
+for i = 1:size(eirene_movies.n_atm.value, 2)
+    f_atm_x(:, i, :) = eirene_movies.m_atm_x.value(:, i, :) ./ (eirene_movies.mass_atm{i} * pm);
+    f_atm_y(:, i, :) = eirene_movies.m_atm_y.value(:, i, :) ./ (eirene_movies.mass_atm{i} * pm);
+    f_atm_z(:, i, :) = eirene_movies.m_atm_z.value(:, i, :) ./ (eirene_movies.mass_atm{i} * pm);
+    f_atm(:, i, :) = sqrt(f_atm_x(:, i, :) .^ 2 + f_atm_y(:, i, :) .^ 2 + f_atm_z(:, i, :) .^ 2);
+    v_atm(:, i, :) = f_atm(:, i, :) ./ eirene_movies.n_atm.value(:, i, :);
 end
-eirene_movies.f_atm_x.description = 'Atom x-directed particle flux density';
-eirene_movies.f_atm_x.unit = 'm^-2 s^-1';
-eirene_movies.f_atm_x.dimensions = eirene_movies.m_atm_x.dimensions;
+eirene_movies = set_output_field(eirene_movies, 'f_atm_x', f_atm_x, ...
+    'Atom x-directed particle flux density', 'm^-2 s^-1', eirene_movies.m_atm_x.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'f_atm_y', f_atm_y, ...
+    'Atom y-directed particle flux density', 'm^-2 s^-1', eirene_movies.m_atm_y.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'f_atm_z', f_atm_z, ...
+    'Atom z-directed particle flux density', 'm^-2 s^-1', eirene_movies.m_atm_z.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'f_atm', f_atm, ...
+    'Atom particle flux density', 'm^-2 s^-1', eirene_movies.m_atm_x.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'v_atm', v_atm, ...
+    'Atom particle flow velocity', 'm s^-1', eirene_movies.n_atm.dimensions);
 
-eirene_movies.f_atm_y.description = 'Atom y-directed particle flux density';
-eirene_movies.f_atm_y.unit = 'm^-2 s^-1';
-eirene_movies.f_atm_y.dimensions = eirene_movies.m_atm_y.dimensions;
-
-eirene_movies.f_atm_z.description = 'Atom z-directed particle flux density';
-eirene_movies.f_atm_z.unit = 'm^-2 s^-1';
-eirene_movies.f_atm_z.dimensions = eirene_movies.m_atm_z.dimensions;
-
-eirene_movies.f_atm.description = 'Atom particle flux density';
-eirene_movies.f_atm.unit = 'm^-2 s^-1';
-eirene_movies.f_atm.dimensions = eirene_movies.m_atm_x.dimensions;
-
-eirene_movies.v_atm.description = 'Atom particle flow velocity';
-eirene_movies.v_atm.unit = 'm s^-1';
-eirene_movies.v_atm.dimensions = eirene_movies.n_atm.dimensions;
-
-for i = 1:size(eirene_movies.n_mol.value,2)
-    eirene_movies.f_mol_x.value(:,i,:) = (eirene_movies.m_mol_x.value(:,i,:)./(eirene_movies.mass_mol{i}*pm));
-    eirene_movies.f_mol_y.value(:,i,:) = (eirene_movies.m_mol_y.value(:,i,:)./(eirene_movies.mass_mol{i}*pm));
-    eirene_movies.f_mol_z.value(:,i,:) = (eirene_movies.m_mol_z.value(:,i,:)./(eirene_movies.mass_mol{i}*pm));
-    eirene_movies.f_mol.value(:,i,:) = ...
-        ((eirene_movies.f_mol_x.value(:,i,:)).^2+(eirene_movies.f_mol_y.value(:,i,:)).^2+(eirene_movies.f_mol_z.value(:,i,:)).^2).^(1/2);
-    eirene_movies.v_mol.value(:,i,:) = ...
-        ((eirene_movies.f_mol.value(:,i,:).*1)./eirene_movies.n_mol.value(:,i,:));
+f_mol_x = zeros(size(eirene_movies.n_mol.value));
+f_mol_y = zeros(size(eirene_movies.n_mol.value));
+f_mol_z = zeros(size(eirene_movies.n_mol.value));
+f_mol = zeros(size(eirene_movies.n_mol.value));
+v_mol = zeros(size(eirene_movies.n_mol.value));
+for i = 1:size(eirene_movies.n_mol.value, 2)
+    f_mol_x(:, i, :) = eirene_movies.m_mol_x.value(:, i, :) ./ (eirene_movies.mass_mol{i} * pm);
+    f_mol_y(:, i, :) = eirene_movies.m_mol_y.value(:, i, :) ./ (eirene_movies.mass_mol{i} * pm);
+    f_mol_z(:, i, :) = eirene_movies.m_mol_z.value(:, i, :) ./ (eirene_movies.mass_mol{i} * pm);
+    f_mol(:, i, :) = sqrt(f_mol_x(:, i, :) .^ 2 + f_mol_y(:, i, :) .^ 2 + f_mol_z(:, i, :) .^ 2);
+    v_mol(:, i, :) = f_mol(:, i, :) ./ eirene_movies.n_mol.value(:, i, :);
 end
-eirene_movies.f_mol_x.description = 'Molecular x-directed particle flux density';
-eirene_movies.f_mol_x.unit = 'm^-2 s^-1';
-eirene_movies.f_mol_x.dimensions = eirene_movies.m_mol_x.dimensions;
+eirene_movies = set_output_field(eirene_movies, 'f_mol_x', f_mol_x, ...
+    'Molecular x-directed particle flux density', 'm^-2 s^-1', eirene_movies.m_mol_x.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'f_mol_y', f_mol_y, ...
+    'Molecular y-directed particle flux density', 'm^-2 s^-1', eirene_movies.m_mol_y.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'f_mol_z', f_mol_z, ...
+    'Molecular z-directed particle flux density', 'm^-2 s^-1', eirene_movies.m_mol_z.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'f_mol', f_mol, ...
+    'Molecular particle flux density', 'm^-2 s^-1', eirene_movies.m_mol_x.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'v_mol', v_mol, ...
+    'Molecular particle flow velocity', 'm s^-1', eirene_movies.n_mol.dimensions);
 
-eirene_movies.f_mol_y.description = 'Molecular y-directed particle flux density';
-eirene_movies.f_mol_y.unit = 'm^-2 s^-1';
-eirene_movies.f_mol_y.dimensions = eirene_movies.m_mol_y.dimensions;
-
-eirene_movies.f_mol_z.description = 'Molecular z-directed particle flux density';
-eirene_movies.f_mol_z.unit = 'm^-2 s^-1';
-eirene_movies.f_mol_z.dimensions = eirene_movies.m_mol_z.dimensions;
-
-eirene_movies.f_mol.description = 'Molecular particle flux density';
-eirene_movies.f_mol.unit = 'm^-2 s^-1';
-eirene_movies.f_mol.dimensions = eirene_movies.m_mol_x.dimensions;
-
-eirene_movies.v_mol.description = 'Molecular particle flow velocity';
-eirene_movies.v_mol.unit = 'm s^-1';
-eirene_movies.v_mol.dimensions = eirene_movies.n_mol.dimensions;
-
+V_atm = zeros(size(eirene_movies.n_atm.value));
+F_atm = zeros(size(eirene_movies.n_atm.value));
 for i = 1:natm
-    eirene_movies.V_atm.value(:,i,:) = sqrt((8*kB.*(eirene_movies.T_atm.value(:,i,:)./8.617e-5))./(pi*eirene_movies.mass_atm{i}*pm));
-    eirene_movies.F_atm.value(:,i,:) = (eirene_movies.n_atm.value(:,i,:).*eirene_movies.V_atm.value(:,i,:))./4;
+    V_atm(:, i, :) = sqrt((8 * kB .* (eirene_movies.T_atm.value(:, i, :) ./ 8.617e-5)) ./ (pi * eirene_movies.mass_atm{i} * pm));
+    F_atm(:, i, :) = (eirene_movies.n_atm.value(:, i, :) .* V_atm(:, i, :)) ./ 4;
 end
-eirene_movies.V_atm.description = 'Mean atom particle velocity';
-eirene_movies.V_atm.unit = 'm s^-1';
-eirene_movies.V_atm.dimensions = eirene_movies.n_atm.dimensions;
+eirene_movies = set_output_field(eirene_movies, 'V_atm', V_atm, ...
+    'Mean atom particle velocity', 'm s^-1', eirene_movies.n_atm.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'F_atm', F_atm, ...
+    'Mean atom particle flux density', 'm^-2 s^-1', eirene_movies.n_atm.dimensions);
 
-eirene_movies.F_atm.description = 'Mean atom particle flux density';
-eirene_movies.F_atm.unit = 'm^-2 s^-1';
-eirene_movies.F_atm.dimensions = eirene_movies.n_atm.dimensions;
-
+V_mol = zeros(size(eirene_movies.n_mol.value));
+F_mol = zeros(size(eirene_movies.n_mol.value));
 for i = 1:nmol
-    eirene_movies.V_mol.value(:,i,:) = sqrt((8*kB.*(eirene_movies.T_mol.value(:,i,:)./8.617e-5))./(pi*eirene_movies.mass_mol{i}*pm));
-    eirene_movies.F_mol.value(:,i,:) = (eirene_movies.n_mol.value(:,i,:).*eirene_movies.V_mol.value(:,i,:))./4;
+    V_mol(:, i, :) = sqrt((8 * kB .* (eirene_movies.T_mol.value(:, i, :) ./ 8.617e-5)) ./ (pi * eirene_movies.mass_mol{i} * pm));
+    F_mol(:, i, :) = (eirene_movies.n_mol.value(:, i, :) .* V_mol(:, i, :)) ./ 4;
 end
-eirene_movies.V_mol.description = 'Mean molecular particle velocity';
-eirene_movies.V_mol.unit = 'm s^-1';
-eirene_movies.V_mol.dimensions = eirene_movies.n_mol.dimensions;
-
-eirene_movies.F_mol.description = 'Mean molecular particle flux density';
-eirene_movies.F_mol.unit = 'm^-2 s^-1';
-eirene_movies.F_mol.dimensions = eirene_movies.n_mol.dimensions;
+eirene_movies = set_output_field(eirene_movies, 'V_mol', V_mol, ...
+    'Mean molecular particle velocity', 'm s^-1', eirene_movies.n_mol.dimensions);
+eirene_movies = set_output_field(eirene_movies, 'F_mol', F_mol, ...
+    'Mean molecular particle flux density', 'm^-2 s^-1', eirene_movies.n_mol.dimensions);
 
 if strcmp(version,'unstructured')
 

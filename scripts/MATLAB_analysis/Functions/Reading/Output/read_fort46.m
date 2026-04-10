@@ -102,246 +102,181 @@ kB    = 1.3806e-23;
 
 % State variables
 
-neutrals_triangles.n_atm.value = scan_ft_real_grid(fid,ver,'pdena',[ntri,natm])*1e6;
-neutrals_triangles.n_atm.description = 'Atom particle density';
-neutrals_triangles.n_atm.unit = 'm^-3';
-neutrals_triangles.n_atm.dimensions = {'ntri','natm'};
+tri_atm_dims = {'ntri', 'natm'};
+tri_mol_dims = {'ntri', 'nmol'};
+tri_ion_dims = {'ntri', 'nion'};
 
-neutrals_triangles.n_mol.value = scan_ft_real_grid(fid,ver,'pdenm',[ntri,nmol])*1e6;
-neutrals_triangles.n_mol.description = 'Molecular particle density';
-neutrals_triangles.n_mol.unit = 'm^-3';
-neutrals_triangles.n_mol.dimensions = {'ntri','nmol'};
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'n_atm', 'pdena', [ntri, natm], 'Atom particle density', 'm^-3', tri_atm_dims, 1e6);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'n_mol', 'pdenm', [ntri, nmol], 'Molecular particle density', 'm^-3', tri_mol_dims, 1e6);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'n_ion', 'pdeni', [ntri, nion], 'Test ion particle density', 'm^-3', tri_ion_dims, 1e6);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'e_atm', 'edena', [ntri, natm], 'Atom energy density', 'eV m^-3', tri_atm_dims, 1e6);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'e_mol', 'edenm', [ntri, nmol], 'Molecular energy density', 'eV m^-3', tri_mol_dims, 1e6);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'e_ion', 'edeni', [ntri, nion], 'Test ion energy density', 'eV m^-3', tri_ion_dims, 1e6);
 
-neutrals_triangles.n_ion.value = scan_ft_real_grid(fid,ver,'pdeni',[ntri,nion])*1e6;
-neutrals_triangles.n_ion.description = 'Test ion particle density';
-neutrals_triangles.n_ion.unit = 'm^-3';
-neutrals_triangles.n_ion.dimensions = {'ntri','nion'};
-
-neutrals_triangles.e_atm.value = scan_ft_real_grid(fid,ver,'edena',[ntri,natm])*1e6;
-neutrals_triangles.e_atm.description = 'Atom energy density';
-neutrals_triangles.e_atm.unit = 'eV m^-3';
-neutrals_triangles.e_atm.dimensions = {'ntri','natm'};
-
-neutrals_triangles.e_mol.value = scan_ft_real_grid(fid,ver,'edenm',[ntri,nmol])*1e6;
-neutrals_triangles.e_mol.description = 'Molecular energy density';
-neutrals_triangles.e_mol.unit = 'eV m^-3';
-neutrals_triangles.e_mol.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.e_ion.value = scan_ft_real_grid(fid,ver,'edeni',[ntri,nion])*1e6;
-neutrals_triangles.e_ion.description = 'Test ion energy density';
-neutrals_triangles.e_ion.unit = 'eV m^-3';
-neutrals_triangles.e_ion.dimensions = {'ntri','nion'};
-
+T_atm = zeros(ntri, natm);
+p_atm = zeros(ntri, natm);
 for i = 1:natm
-    neutrals_triangles.T_atm.value(:,i) = ((2/3).*neutrals_triangles.e_atm.value(:,i))./(neutrals_triangles.n_atm.value(:,i));
-    neutrals_triangles.p_atm.value(:,i) = ((2/3).*neutrals_triangles.e_atm.value(:,i).*eV);
+    T_atm(:, i) = ((2 / 3) .* neutrals_triangles.e_atm.value(:, i)) ./ neutrals_triangles.n_atm.value(:, i);
+    p_atm(:, i) = ((2 / 3) .* neutrals_triangles.e_atm.value(:, i) .* eV);
 end
-neutrals_triangles.T_atm.description = 'Atom temperature';
-neutrals_triangles.T_atm.unit = 'eV';
-neutrals_triangles.T_atm.dimensions = {'ntri','natm'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'T_atm', T_atm, ...
+    'Atom temperature', 'eV', tri_atm_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'p_atm', p_atm, ...
+    'Atom pressure', 'Pa', tri_atm_dims);
 
-neutrals_triangles.p_atm.description = 'Atom pressure';
-neutrals_triangles.p_atm.unit = 'Pa';
-neutrals_triangles.p_atm.dimensions = {'ntri','natm'};
-
+T_mol = zeros(ntri, nmol);
+p_mol = zeros(ntri, nmol);
 for i = 1:nmol
-    neutrals_triangles.T_mol.value(:,i) = ((2/3).*neutrals_triangles.e_mol.value(:,i))./(neutrals_triangles.n_mol.value(:,i));
-    neutrals_triangles.p_mol.value(:,i) = ((2/3).*neutrals_triangles.e_mol.value(:,i).*eV);
+    T_mol(:, i) = ((2 / 3) .* neutrals_triangles.e_mol.value(:, i)) ./ neutrals_triangles.n_mol.value(:, i);
+    p_mol(:, i) = ((2 / 3) .* neutrals_triangles.e_mol.value(:, i) .* eV);
 end
-neutrals_triangles.T_mol.description = 'Molecular temperature';
-neutrals_triangles.T_mol.unit = 'eV';
-neutrals_triangles.T_mol.dimensions = {'ntri','nmol'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'T_mol', T_mol, ...
+    'Molecular temperature', 'eV', tri_mol_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'p_mol', p_mol, ...
+    'Molecular pressure', 'Pa', tri_mol_dims);
 
-neutrals_triangles.p_mol.description = 'Molecular pressure';
-neutrals_triangles.p_mol.unit = 'Pa';
-neutrals_triangles.p_mol.dimensions = {'ntri','nmol'};
-
+T_ion = zeros(ntri, nion);
+p_ion = zeros(ntri, nion);
 for i = 1:nion
-    neutrals_triangles.T_ion.value(:,i) = ((2/3).*neutrals_triangles.e_ion.value(:,i))./(neutrals_triangles.n_ion.value(:,i));
-    neutrals_triangles.p_ion.value(:,i) = ((2/3).*neutrals_triangles.e_ion.value(:,i).*eV);
+    T_ion(:, i) = ((2 / 3) .* neutrals_triangles.e_ion.value(:, i)) ./ neutrals_triangles.n_ion.value(:, i);
+    p_ion(:, i) = ((2 / 3) .* neutrals_triangles.e_ion.value(:, i) .* eV);
 end
-neutrals_triangles.T_ion.description = 'Test ion temperature';
-neutrals_triangles.T_ion.unit = 'eV';
-neutrals_triangles.T_ion.dimensions = {'ntri','nion'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'T_ion', T_ion, ...
+    'Test ion temperature', 'eV', tri_ion_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'p_ion', p_ion, ...
+    'Test ion pressure', 'Pa', tri_ion_dims);
 
-neutrals_triangles.p_ion.description = 'Test ion pressure';
-neutrals_triangles.p_ion.unit = 'Pa';
-neutrals_triangles.p_ion.dimensions = {'ntri','nion'};
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_atm_x', 'vxdena', [ntri, natm], 'Atom x-directed momentum density', 'kg s^-1 m^-2', tri_atm_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_mol_x', 'vxdenm', [ntri, nmol], 'Molecular x-directed momentum density', 'kg s^-1 m^-2', tri_mol_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_ion_x', 'vxdeni', [ntri, nion], 'Test ion x-directed momentum density', 'kg s^-1 m^-2', tri_ion_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_atm_y', 'vydena', [ntri, natm], 'Atom y-directed momentum density', 'kg s^-1 m^-2', tri_atm_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_mol_y', 'vydenm', [ntri, nmol], 'Molecular y-directed momentum density', 'kg s^-1 m^-2', tri_mol_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_ion_y', 'vydeni', [ntri, nion], 'Test ion y-directed momentum density', 'kg s^-1 m^-2', tri_ion_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_atm_z', 'vzdena', [ntri, natm], 'Atom z-directed momentum density', 'kg s^-1 m^-2', tri_atm_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_mol_z', 'vzdenm', [ntri, nmol], 'Molecular z-directed momentum density', 'kg s^-1 m^-2', tri_mol_dims, 1e1);
+neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+    'm_ion_z', 'vzdeni', [ntri, nion], 'Test ion z-directed momentum density', 'kg s^-1 m^-2', tri_ion_dims, 1e1);
 
-neutrals_triangles.m_atm_x.value = scan_ft_real_grid(fid,ver,'vxdena',[ntri,natm])*1e1;
-neutrals_triangles.m_atm_x.description = 'Atom x-directed momentum density';
-neutrals_triangles.m_atm_x.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_atm_x.dimensions = {'ntri','natm'};
-
-neutrals_triangles.m_mol_x.value = scan_ft_real_grid(fid,ver,'vxdenm',[ntri,nmol])*1e1;
-neutrals_triangles.m_mol_x.description = 'Molecular x-directed momentum density';
-neutrals_triangles.m_mol_x.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_mol_x.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.m_ion_x.value = scan_ft_real_grid(fid,ver,'vxdeni',[ntri,nion])*1e1;
-neutrals_triangles.m_ion_x.description = 'Test ion x-directed momentum density';
-neutrals_triangles.m_ion_x.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_ion_x.dimensions = {'ntri','nion'};
-
-neutrals_triangles.m_atm_y.value = scan_ft_real_grid(fid,ver,'vydena',[ntri,natm])*1e1;
-neutrals_triangles.m_atm_y.description = 'Atom y-directed momentum density';
-neutrals_triangles.m_atm_y.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_atm_y.dimensions = {'ntri','natm'};
-
-neutrals_triangles.m_mol_y.value = scan_ft_real_grid(fid,ver,'vydenm',[ntri,nmol])*1e1;
-neutrals_triangles.m_mol_y.description = 'Molecular y-directed momentum density';
-neutrals_triangles.m_mol_y.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_mol_y.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.m_ion_y.value = scan_ft_real_grid(fid,ver,'vydeni',[ntri,nion])*1e1;
-neutrals_triangles.m_ion_y.description = 'Test ion y-directed momentum density';
-neutrals_triangles.m_ion_y.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_ion_y.dimensions = {'ntri','nion'};
-
-neutrals_triangles.m_atm_z.value = scan_ft_real_grid(fid,ver,'vzdena',[ntri,natm])*1e1;
-neutrals_triangles.m_atm_z.description = 'Atom z-directed momentum density';
-neutrals_triangles.m_atm_z.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_atm_z.dimensions = {'ntri','natm'};
-
-neutrals_triangles.m_mol_z.value = scan_ft_real_grid(fid,ver,'vzdenm',[ntri,nmol])*1e1;
-neutrals_triangles.m_mol_z.description = 'Molecular z-directed momentum density';
-neutrals_triangles.m_mol_z.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_mol_z.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.m_ion_z.value = scan_ft_real_grid(fid,ver,'vzdeni',[ntri,nion])*1e1;
-neutrals_triangles.m_ion_z.description = 'Test ion z-directed momentum density';
-neutrals_triangles.m_ion_z.unit = 'kg s^-1 m^-2';
-neutrals_triangles.m_ion_z.dimensions = {'ntri','nion'};
-
+f_atm_x = zeros(ntri, natm);
+f_atm_y = zeros(ntri, natm);
+f_atm_z = zeros(ntri, natm);
+f_atm = zeros(ntri, natm);
+v_atm = zeros(ntri, natm);
 for i = 1:natm
-    neutrals_triangles.f_atm_x.value(:,i) = (neutrals_triangles.m_atm_x.value(:,i)./(neutrals_triangles.mass_atm{i}*pm));
-    neutrals_triangles.f_atm_y.value(:,i) = (neutrals_triangles.m_atm_y.value(:,i)./(neutrals_triangles.mass_atm{i}*pm));
-    neutrals_triangles.f_atm_z.value(:,i) = (neutrals_triangles.m_atm_z.value(:,i)./(neutrals_triangles.mass_atm{i}*pm));
-    neutrals_triangles.f_atm.value(:,i) = ...
-        ((neutrals_triangles.f_atm_x.value(:,i)).^2+(neutrals_triangles.f_atm_y.value(:,i)).^2+(neutrals_triangles.f_atm_z.value(:,i)).^2).^(1/2);
-    neutrals_triangles.v_atm.value(:,i) = ...
-        ((neutrals_triangles.f_atm.value(:,i).*1)./neutrals_triangles.n_atm.value(:,i));
+    f_atm_x(:, i) = neutrals_triangles.m_atm_x.value(:, i) ./ (neutrals_triangles.mass_atm{i} * pm);
+    f_atm_y(:, i) = neutrals_triangles.m_atm_y.value(:, i) ./ (neutrals_triangles.mass_atm{i} * pm);
+    f_atm_z(:, i) = neutrals_triangles.m_atm_z.value(:, i) ./ (neutrals_triangles.mass_atm{i} * pm);
+    f_atm(:, i) = sqrt(f_atm_x(:, i) .^ 2 + f_atm_y(:, i) .^ 2 + f_atm_z(:, i) .^ 2);
+    v_atm(:, i) = f_atm(:, i) ./ neutrals_triangles.n_atm.value(:, i);
 end
-neutrals_triangles.f_atm_x.description = 'Atom x-directed flux density';
-neutrals_triangles.f_atm_x.unit = 'm^-2 s^-1';
-neutrals_triangles.f_atm_x.dimensions = {'ntri','natm'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_atm_x', f_atm_x, ...
+    'Atom x-directed flux density', 'm^-2 s^-1', tri_atm_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_atm_y', f_atm_y, ...
+    'Atom y-directed flux density', 'm^-2 s^-1', tri_atm_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_atm_z', f_atm_z, ...
+    'Atom z-directed flux density', 'm^-2 s^-1', tri_atm_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_atm', f_atm, ...
+    'Atom particle flux density', 'm^-2 s^-1', tri_atm_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'v_atm', v_atm, ...
+    'Atom particle flow velocity', 'm s^-1', tri_atm_dims);
 
-neutrals_triangles.f_atm_y.description = 'Atom y-directed flux density';
-neutrals_triangles.f_atm_y.unit = 'm^-2 s^-1';
-neutrals_triangles.f_atm_y.dimensions = {'ntri','natm'};
-
-neutrals_triangles.f_atm_z.description = 'Atom z-directed flux density';
-neutrals_triangles.f_atm_z.unit = 'm^-2 s^-1';
-neutrals_triangles.f_atm_z.dimensions = {'ntri','natm'};
-
-neutrals_triangles.f_atm.description = 'Atom particle flux density';
-neutrals_triangles.f_atm.unit = 'm^-2 s^-1';
-neutrals_triangles.f_atm.dimensions = {'ntri','natm'};
-
-neutrals_triangles.v_atm.description = 'Atom particle flow velocity';
-neutrals_triangles.v_atm.unit = 'm s^-1';
-neutrals_triangles.v_atm.dimensions = {'ntri','natm'};
-
+f_mol_x = zeros(ntri, nmol);
+f_mol_y = zeros(ntri, nmol);
+f_mol_z = zeros(ntri, nmol);
+f_mol = zeros(ntri, nmol);
+v_mol = zeros(ntri, nmol);
 for i = 1:nmol
-    neutrals_triangles.f_mol_x.value(:,i) = (neutrals_triangles.m_mol_x.value(:,i)./(neutrals_triangles.mass_mol{i}*pm));
-    neutrals_triangles.f_mol_y.value(:,i) = (neutrals_triangles.m_mol_y.value(:,i)./(neutrals_triangles.mass_mol{i}*pm));
-    neutrals_triangles.f_mol_z.value(:,i) = (neutrals_triangles.m_mol_z.value(:,i)./(neutrals_triangles.mass_mol{i}*pm));
-    neutrals_triangles.f_mol.value(:,i) = ...
-        ((neutrals_triangles.f_mol_x.value(:,i)).^2+(neutrals_triangles.f_mol_y.value(:,i)).^2+(neutrals_triangles.f_mol_z.value(:,i)).^2).^(1/2);
-    neutrals_triangles.v_mol.value(:,i) = ...
-        ((neutrals_triangles.f_mol.value(:,i).*1)./neutrals_triangles.n_mol.value(:,i));
+    f_mol_x(:, i) = neutrals_triangles.m_mol_x.value(:, i) ./ (neutrals_triangles.mass_mol{i} * pm);
+    f_mol_y(:, i) = neutrals_triangles.m_mol_y.value(:, i) ./ (neutrals_triangles.mass_mol{i} * pm);
+    f_mol_z(:, i) = neutrals_triangles.m_mol_z.value(:, i) ./ (neutrals_triangles.mass_mol{i} * pm);
+    f_mol(:, i) = sqrt(f_mol_x(:, i) .^ 2 + f_mol_y(:, i) .^ 2 + f_mol_z(:, i) .^ 2);
+    v_mol(:, i) = f_mol(:, i) ./ neutrals_triangles.n_mol.value(:, i);
 end
-neutrals_triangles.f_mol_x.description = 'Molecular x-directed flux density';
-neutrals_triangles.f_mol_x.unit = 'm^-2 s^-1';
-neutrals_triangles.f_mol_x.dimensions = {'ntri','nmol'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_mol_x', f_mol_x, ...
+    'Molecular x-directed flux density', 'm^-2 s^-1', tri_mol_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_mol_y', f_mol_y, ...
+    'Molecular y-directed flux density', 'm^-2 s^-1', tri_mol_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_mol_z', f_mol_z, ...
+    'Molecular z-directed flux density', 'm^-2 s^-1', tri_mol_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_mol', f_mol, ...
+    'Molecular particle flux density', 'm^-2 s^-1', tri_mol_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'v_mol', v_mol, ...
+    'Molecular particle flow velocity', 'm s^-1', tri_mol_dims);
 
-neutrals_triangles.f_mol_y.description = 'Molecular y-directed flux density';
-neutrals_triangles.f_mol_y.unit = 'm^-2 s^-1';
-neutrals_triangles.f_mol_y.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.f_mol_z.description = 'Molecular z-directed flux density';
-neutrals_triangles.f_mol_z.unit = 'm^-2 s^-1';
-neutrals_triangles.f_mol_z.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.f_mol.description = 'Molecular particle flux density';
-neutrals_triangles.f_mol.unit = 'm^-2 s^-1';
-neutrals_triangles.f_mol.dimensions = {'ntri','nmol'};
-
-neutrals_triangles.v_mol.description = 'Molecular particle flow velocity';
-neutrals_triangles.v_mol.unit = 'm s^-1';
-neutrals_triangles.v_mol.dimensions = {'ntri','nmol'};
-
+f_ion_x = zeros(ntri, nion);
+f_ion_y = zeros(ntri, nion);
+f_ion_z = zeros(ntri, nion);
+f_ion = zeros(ntri, nion);
+v_ion = zeros(ntri, nion);
 for i = 1:nion
-    neutrals_triangles.f_ion_x.value(:,i) = (neutrals_triangles.m_ion_x.value(:,i)./(neutrals_triangles.mass_ion{i}*pm));
-    neutrals_triangles.f_ion_y.value(:,i) = (neutrals_triangles.m_ion_y.value(:,i)./(neutrals_triangles.mass_ion{i}*pm));
-    neutrals_triangles.f_ion_z.value(:,i) = (neutrals_triangles.m_ion_z.value(:,i)./(neutrals_triangles.mass_ion{i}*pm));
-    neutrals_triangles.f_ion.value(:,i) = ...
-        ((neutrals_triangles.f_ion_x.value(:,i)).^2+(neutrals_triangles.f_ion_y.value(:,i)).^2+(neutrals_triangles.f_ion_z.value(:,i)).^2).^(1/2);
-    neutrals_triangles.v_ion.value(:,i) = ...
-        ((neutrals_triangles.f_ion.value(:,i).*1)./neutrals_triangles.n_ion.value(:,i));
+    f_ion_x(:, i) = neutrals_triangles.m_ion_x.value(:, i) ./ (neutrals_triangles.mass_ion{i} * pm);
+    f_ion_y(:, i) = neutrals_triangles.m_ion_y.value(:, i) ./ (neutrals_triangles.mass_ion{i} * pm);
+    f_ion_z(:, i) = neutrals_triangles.m_ion_z.value(:, i) ./ (neutrals_triangles.mass_ion{i} * pm);
+    f_ion(:, i) = sqrt(f_ion_x(:, i) .^ 2 + f_ion_y(:, i) .^ 2 + f_ion_z(:, i) .^ 2);
+    v_ion(:, i) = f_ion(:, i) ./ neutrals_triangles.n_ion.value(:, i);
 end
-neutrals_triangles.f_ion_x.description = 'Test ion x-directed flux density';
-neutrals_triangles.f_ion_x.unit = 'm^-2 s^-1';
-neutrals_triangles.f_ion_x.dimensions = {'ntri','nion'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_ion_x', f_ion_x, ...
+    'Test ion x-directed flux density', 'm^-2 s^-1', tri_ion_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_ion_y', f_ion_y, ...
+    'Test ion y-directed flux density', 'm^-2 s^-1', tri_ion_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_ion_z', f_ion_z, ...
+    'Test ion z-directed flux density', 'm^-2 s^-1', tri_ion_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'f_ion', f_ion, ...
+    'Test ion particle flux density', 'm^-2 s^-1', tri_ion_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'v_ion', v_ion, ...
+    'Test ion particle flow velocity', 'm s^-1', tri_ion_dims);
 
-neutrals_triangles.f_ion_y.description = 'Test ion y-directed flux density';
-neutrals_triangles.f_ion_y.unit = 'm^-2 s^-1';
-neutrals_triangles.f_ion_y.dimensions = {'ntri','nion'};
-
-neutrals_triangles.f_ion_z.description = 'Test ion z-directed flux density';
-neutrals_triangles.f_ion_z.unit = 'm^-2 s^-1';
-neutrals_triangles.f_ion_z.dimensions = {'ntri','nion'};
-
-neutrals_triangles.f_ion.description = 'Test ion particle flux density';
-neutrals_triangles.f_ion.unit = 'm^-2 s^-1';
-neutrals_triangles.f_ion.dimensions = {'ntri','nion'};
-
-neutrals_triangles.v_ion.description = 'Test ion particle flow velocity';
-neutrals_triangles.v_ion.unit = 'm s^-1';
-neutrals_triangles.v_ion.dimensions = {'ntri','nion'};
-
+V_atm = zeros(ntri, natm);
+F_atm = zeros(ntri, natm);
 for i = 1:natm
-    neutrals_triangles.V_atm.value(:,i) = sqrt((8*kB.*(neutrals_triangles.T_atm.value(:,i)./8.617e-5))./(pi*neutrals_triangles.mass_atm{i}*pm));
-    neutrals_triangles.F_atm.value(:,i) = (neutrals_triangles.n_atm.value(:,i).*neutrals_triangles.V_atm.value(:,i))./4;
+    V_atm(:, i) = sqrt((8 * kB .* (neutrals_triangles.T_atm.value(:, i) ./ 8.617e-5)) ./ (pi * neutrals_triangles.mass_atm{i} * pm));
+    F_atm(:, i) = (neutrals_triangles.n_atm.value(:, i) .* V_atm(:, i)) ./ 4;
 end
-neutrals_triangles.V_atm.description = 'Mean atom particle velocity';
-neutrals_triangles.V_atm.unit = 'm s^-1';
-neutrals_triangles.V_atm.dimensions = {'ntri','natm'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'V_atm', V_atm, ...
+    'Mean atom particle velocity', 'm s^-1', tri_atm_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'F_atm', F_atm, ...
+    'Mean atom particle flux density', 'm^-2 s^-1', tri_atm_dims);
 
-neutrals_triangles.F_atm.description = 'Mean atom particle flux density';
-neutrals_triangles.F_atm.unit = 'm^-2 s^-1';
-neutrals_triangles.F_atm.dimensions = {'ntri','natm'};
-
+V_mol = zeros(ntri, nmol);
+F_mol = zeros(ntri, nmol);
 for i = 1:nmol
-    neutrals_triangles.V_mol.value(:,i) = sqrt((8*kB.*(neutrals_triangles.T_mol.value(:,i)./8.617e-5))./(pi*neutrals_triangles.mass_mol{i}*pm));
-    neutrals_triangles.F_mol.value(:,i) = (neutrals_triangles.n_mol.value(:,i).*neutrals_triangles.V_mol.value(:,i))./4;
+    V_mol(:, i) = sqrt((8 * kB .* (neutrals_triangles.T_mol.value(:, i) ./ 8.617e-5)) ./ (pi * neutrals_triangles.mass_mol{i} * pm));
+    F_mol(:, i) = (neutrals_triangles.n_mol.value(:, i) .* V_mol(:, i)) ./ 4;
 end
-neutrals_triangles.V_mol.description = 'Mean molecular particle velocity';
-neutrals_triangles.V_mol.unit = 'm s^-1';
-neutrals_triangles.V_mol.dimensions = {'ntri','nmol'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'V_mol', V_mol, ...
+    'Mean molecular particle velocity', 'm s^-1', tri_mol_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'F_mol', F_mol, ...
+    'Mean molecular particle flux density', 'm^-2 s^-1', tri_mol_dims);
 
-neutrals_triangles.F_mol.description = 'Mean molecular particle flux density';
-neutrals_triangles.F_mol.unit = 'm^-2 s^-1';
-neutrals_triangles.F_mol.dimensions = {'ntri','nmol'};
-
+V_ion = zeros(ntri, nion);
+F_ion = zeros(ntri, nion);
 for i = 1:nion
-    neutrals_triangles.V_ion.value(:,i) = sqrt((8*kB.*(neutrals_triangles.T_ion.value(:,i)./8.617e-5))./(pi*neutrals_triangles.mass_ion{i}*pm));
-    neutrals_triangles.F_ion.value(:,i) = (neutrals_triangles.n_ion.value(:,i).*neutrals_triangles.V_ion.value(:,i))./4;
+    V_ion(:, i) = sqrt((8 * kB .* (neutrals_triangles.T_ion.value(:, i) ./ 8.617e-5)) ./ (pi * neutrals_triangles.mass_ion{i} * pm));
+    F_ion(:, i) = (neutrals_triangles.n_ion.value(:, i) .* V_ion(:, i)) ./ 4;
 end
-neutrals_triangles.V_ion.description = 'Mean test ion particle velocity';
-neutrals_triangles.V_ion.unit = 'm s^-1';
-neutrals_triangles.V_ion.dimensions = {'ntri','nion'};
-
-neutrals_triangles.F_ion.description = 'Mean test ion particle flux density';
-neutrals_triangles.F_ion.unit = 'm^-2 s^-1';
-neutrals_triangles.F_ion.dimensions = {'ntri','nion'};
+neutrals_triangles = set_output_field(neutrals_triangles, 'V_ion', V_ion, ...
+    'Mean test ion particle velocity', 'm s^-1', tri_ion_dims);
+neutrals_triangles = set_output_field(neutrals_triangles, 'F_ion', F_ion, ...
+    'Mean test ion particle flux density', 'm^-2 s^-1', tri_ion_dims);
 
 if strcmp(version,'structured')
 
-    neutrals_triangles.vol.value = scan_ft_real_grid(fid,ver,'vol',[ntri])/1e6;
-    neutrals_triangles.vol.description = 'volume of the cell';
-    neutrals_triangles.vol.unit = 'm^3';
-    neutrals_triangles.vol.dimensions = {'ntri'};
+    neutrals_triangles = set_ft_real_grid_field(neutrals_triangles, fid, ver, ...
+        'vol', 'vol', [ntri], 'volume of the cell', 'm^3', {'ntri'}, 1e-6);
 
 elseif strcmp(version,'unstructured')
 

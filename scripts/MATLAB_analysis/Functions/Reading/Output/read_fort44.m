@@ -228,186 +228,89 @@ end
 
 % State variables
 
-output.n_atm.value = scan_ft_real_grid(fid,ver,'dab2',[ft44dims,natm]);
-output.n_atm.description = 'atomic density';
-output.n_atm.unit = 'm^-3';
-output.n_atm.dimensions = dim_labels_species_atm;
-
-output.T_atm.value = scan_ft_real_grid(fid,ver,'tab2',[ft44dims,natm]);
-output.T_atm.description = 'atomic temperature';
-output.T_atm.unit = 'eV';
-output.T_atm.dimensions = dim_labels_species_atm;
-
-output.n_mol.value = scan_ft_real_grid(fid,ver,'dmb2',[ft44dims,nmol]);
-output.n_mol.description = 'molecular density';
-output.n_mol.unit = 'm^-3';
-output.n_mol.dimensions = dim_labels_species_mol;
-
-output.T_mol.value = scan_ft_real_grid(fid,ver,'tmb2',[ft44dims,nmol]);
-output.T_mol.description = 'molecular temperature';
-output.T_mol.unit = 'eV';
-output.T_mol.dimensions = dim_labels_species_mol;
-
-output.n_ion.value = scan_ft_real_grid(fid,ver,'dib2',[ft44dims,nion]);
-output.n_ion.description = 'test ions density';
-output.n_ion.unit = 'm^-3';
-output.n_ion.dimensions = dim_labels_species_ion;
-
-output.T_ion.value = scan_ft_real_grid(fid,ver,'tib2',[ft44dims,nion]);
-output.T_ion.description = 'test ions temperature';
-output.T_ion.unit = 'eV';
-output.T_ion.dimensions = dim_labels_species_ion;
+output = set_ft_real_grid_field(output, fid, ver, 'n_atm', 'dab2', [ft44dims, natm], ...
+    'atomic density', 'm^-3', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'T_atm', 'tab2', [ft44dims, natm], ...
+    'atomic temperature', 'eV', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'n_mol', 'dmb2', [ft44dims, nmol], ...
+    'molecular density', 'm^-3', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'T_mol', 'tmb2', [ft44dims, nmol], ...
+    'molecular temperature', 'eV', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'n_ion', 'dib2', [ft44dims, nion], ...
+    'test ions density', 'm^-3', dim_labels_species_ion);
+output = set_ft_real_grid_field(output, fid, ver, 'T_ion', 'tib2', [ft44dims, nion], ...
+    'test ions temperature', 'eV', dim_labels_species_ion);
 
 % Fluxes
 
-output.fn_atm_y.value = scan_ft_real_grid(fid,ver,'rfluxa',[ft44dims,natm]);
-output.fn_atm_y.description = 'atomic radial flux density';
-output.fn_atm_y.unit = 'm^-2 s^-1';
-output.fn_atm_y.dimensions = dim_labels_species_atm;
-
-output.fn_mol_y.value = scan_ft_real_grid(fid,ver,'rfluxm',[ft44dims,nmol]);
-output.fn_mol_y.description = 'molecular radial flux density';
-output.fn_mol_y.unit = 'm^-2 s^-1';
-output.fn_mol_y.dimensions = dim_labels_species_mol;
-
-output.fn_atm_x.value = scan_ft_real_grid(fid,ver,'pfluxa',[ft44dims,natm]);
-output.fn_atm_x.description = 'atomic poloidal flux density';
-output.fn_atm_x.unit = 'm^-2 s^-1';
-output.fn_atm_x.dimensions = dim_labels_species_atm;
-
-output.fn_mol_x.value = scan_ft_real_grid(fid,ver,'pfluxm',[ft44dims,nmol]);
-output.fn_mol_x.description = 'molecular poloidal flux density';
-output.fn_mol_x.unit = 'm^-2 s^-1';
-output.fn_mol_x.dimensions = dim_labels_species_mol;
-
-output.fe_atm_y.value = scan_ft_real_grid(fid,ver,'refluxa',[ft44dims,natm]);
-output.fe_atm_y.description = 'atomic radial energy flux density';
-output.fe_atm_y.unit = 'W m^-2';
-output.fe_atm_y.dimensions = dim_labels_species_atm;
-
-output.fe_mol_y.value = scan_ft_real_grid(fid,ver,'refluxm',[ft44dims,nmol]);
-output.fe_mol_y.description = 'molecular radial energy flux density';
-output.fe_mol_y.unit = 'W m^-2';
-output.fe_mol_y.dimensions = dim_labels_species_mol;
-
-output.fe_atm_x.value = scan_ft_real_grid(fid,ver,'pefluxa',[ft44dims,natm]);
-output.fe_atm_x.description = 'atomic poloidal energy flux density';
-output.fe_atm_x.unit = 'W m^-2';
-output.fe_atm_x.dimensions = dim_labels_species_atm;
-
-output.fe_mol_x.value = scan_ft_real_grid(fid,ver,'pefluxm',[ft44dims,nmol]);
-output.fe_mol_x.description = 'molecular poloidal energy flux density';
-output.fe_mol_x.unit = 'W m^-2';
-output.fe_mol_x.dimensions = dim_labels_species_mol;
+output = set_ft_real_grid_field(output, fid, ver, 'fn_atm_y', 'rfluxa', [ft44dims, natm], ...
+    'atomic radial flux density', 'm^-2 s^-1', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'fn_mol_y', 'rfluxm', [ft44dims, nmol], ...
+    'molecular radial flux density', 'm^-2 s^-1', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'fn_atm_x', 'pfluxa', [ft44dims, natm], ...
+    'atomic poloidal flux density', 'm^-2 s^-1', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'fn_mol_x', 'pfluxm', [ft44dims, nmol], ...
+    'molecular poloidal flux density', 'm^-2 s^-1', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'fe_atm_y', 'refluxa', [ft44dims, natm], ...
+    'atomic radial energy flux density', 'W m^-2', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'fe_mol_y', 'refluxm', [ft44dims, nmol], ...
+    'molecular radial energy flux density', 'W m^-2', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'fe_atm_x', 'pefluxa', [ft44dims, natm], ...
+    'atomic poloidal energy flux density', 'W m^-2', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'fe_mol_x', 'pefluxm', [ft44dims, nmol], ...
+    'molecular poloidal energy flux density', 'W m^-2', dim_labels_species_mol);
 
 % Radiation, emissivity and dissociation
 
-output.Ha_atm.value = scan_ft_real_grid(fid,ver,'emiss',[ft44dims,1]);
-output.Ha_atm.description = 'atomic H_alpha emissivity';
-output.Ha_atm.unit = 'photons m^-3 s^-1';
 if strcmp(version,'structured')
-    output.Ha_atm.dimensions = {'nx','ny','1'};
+    dim_labels_single = {'nx','ny','1'};
 else
-    output.Ha_atm.dimensions = {'nCv','1'};
+    dim_labels_single = {'nCv','1'};
 end
 
-output.Ha_mol.value = scan_ft_real_grid(fid,ver,'emissmol',[ft44dims,1]);
-output.Ha_mol.description = 'molecular H_alpha emissivity';
-output.Ha_mol.unit = 'photons m^-3 s^-1';
-if strcmp(version,'structured')
-    output.Ha_mol.dimensions = {'nx','ny','1'};
-else
-    output.Ha_mol.dimensions = {'nCv','1'};
-end
-
-output.mol_source.value = scan_ft_real_grid(fid,ver,'srcml',[ft44dims,nmol]);
-output.mol_source.description = 'molecule particle source';
-output.mol_source.unit = 'A';
-output.mol_source.dimensions = dim_labels_species_mol;
-
-output.en_mol_diss.value = scan_ft_real_grid(fid,ver,'edissml',[ft44dims,nmol]);
-output.en_mol_diss.description = 'energy for hydrogenic molecular dissociation';
-output.en_mol_diss.unit = 'W';
-output.en_mol_diss.dimensions = dim_labels_species_mol;
-
-output.rad_atm.value = scan_ft_real_grid(fid,ver,'eneutrad',[ft44dims,natm]);
-output.rad_atm.description = 'radiation rate due to atoms';
-output.rad_atm.unit = 'W';
-output.rad_atm.dimensions = dim_labels_species_atm;
-
-output.rad_mol.value = scan_ft_real_grid(fid,ver,'emolrad',[ft44dims,nmol]);
-output.rad_mol.description = 'radiation rate due to molecules';
-output.rad_mol.unit = 'W';
-output.rad_mol.dimensions = dim_labels_species_mol;
-
-output.rad_ion.value = scan_ft_real_grid(fid,ver,'eionrad',[ft44dims,nion]);
-output.rad_ion.description = 'radiation rate due to test ions';
-output.rad_ion.unit = 'W';
-output.rad_ion.dimensions = dim_labels_species_ion;
+output = set_ft_real_grid_field(output, fid, ver, 'Ha_atm', 'emiss', [ft44dims, 1], ...
+    'atomic H_alpha emissivity', 'photons m^-3 s^-1', dim_labels_single);
+output = set_ft_real_grid_field(output, fid, ver, 'Ha_mol', 'emissmol', [ft44dims, 1], ...
+    'molecular H_alpha emissivity', 'photons m^-3 s^-1', dim_labels_single);
+output = set_ft_real_grid_field(output, fid, ver, 'mol_source', 'srcml', [ft44dims, nmol], ...
+    'molecule particle source', 'A', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'en_mol_diss', 'edissml', [ft44dims, nmol], ...
+    'energy for hydrogenic molecular dissociation', 'W', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'rad_atm', 'eneutrad', [ft44dims, natm], ...
+    'radiation rate due to atoms', 'W', dim_labels_species_atm);
+output = set_ft_real_grid_field(output, fid, ver, 'rad_mol', 'emolrad', [ft44dims, nmol], ...
+    'radiation rate due to molecules', 'W', dim_labels_species_mol);
+output = set_ft_real_grid_field(output, fid, ver, 'rad_ion', 'eionrad', [ft44dims, nion], ...
+    'radiation rate due to test ions', 'W', dim_labels_species_ion);
 
 % Integral quantities
 
 try
 
-output.tot_atm_eirene.value = scan_ft_real_grid(fid,ver,'pdena_int',[natm,nstra+1]);
-output.tot_atm_eirene.description = 'Total number of atoms over the EIRENE grid';
-output.tot_atm_eirene.unit = '-';
-output.tot_atm_eirene.dimensions = {'natm','nstra+1'};
-
-output.tot_mol_eirene.value = scan_ft_real_grid(fid,ver,'pdenm_int',[nmol,nstra+1]);
-output.tot_mol_eirene.description = 'Total number of molecules over the EIRENE grid';
-output.tot_mol_eirene.unit = '-';
-output.tot_mol_eirene.dimensions = {'nmol','nstra+1'};
-
-output.tot_ion_eirene.value = scan_ft_real_grid(fid,ver,'pdeni_int',[nion,nstra+1]);
-output.tot_ion_eirene.description = 'Total number of test ions over the EIRENE grid';
-output.tot_ion_eirene.unit = '-';
-output.tot_ion_eirene.dimensions = {'nion','nstra+1'};
-
-output.tot_atm_b2.value = scan_ft_real_grid(fid,ver,'pdena_int_b2',[natm,nstra+1]);
-output.tot_atm_b2.description = 'Total number of atoms over the B2.5 grid';
-output.tot_atm_b2.unit = '-';
-output.tot_atm_b2.dimensions = {'natm','nstra+1'};
-
-output.tot_mol_b2.value = scan_ft_real_grid(fid,ver,'pdenm_int_b2',[nmol,nstra+1]);
-output.tot_mol_b2.description = 'Total number of molecules over the B2.5 grid';
-output.tot_mol_b2.unit = '-';
-output.tot_mol_b2.dimensions = {'nmol','nstra+1'};
-
-output.tot_ion_b2.value = scan_ft_real_grid(fid,ver,'pdeni_int_b2',[nion,nstra+1]);
-output.tot_ion_b2.description = 'Total number of test ions over the B2.5 grid';
-output.tot_ion_b2.unit = '-';
-output.tot_ion_b2.dimensions = {'nion','nstra+1'};
-
-output.tot_en_atm_eirene.value = scan_ft_real_grid(fid,ver,'edena_int',[natm,nstra+1]);
-output.tot_en_atm_eirene.description = 'Total energy carried by atoms over the EIRENE grid';
-output.tot_en_atm_eirene.unit = 'J';
-output.tot_en_atm_eirene.dimensions = {'natm','nstra+1'};
-
-output.tot_en_mol_eirene.value = scan_ft_real_grid(fid,ver,'edenm_int',[nmol,nstra+1]);
-output.tot_en_mol_eirene.description = 'Total energy carried by molecules over the EIRENE grid';
-output.tot_en_mol_eirene.unit = 'J';
-output.tot_en_mol_eirene.dimensions = {'nmol','nstra+1'};
-
-output.tot_en_ion_eirene.value = scan_ft_real_grid(fid,ver,'edeni_int',[nion,nstra+1]);
-output.tot_en_ion_eirene.description = 'Total energy carried by test ions over the EIRENE grid';
-output.tot_en_ion_eirene.unit = 'J';
-output.tot_en_ion_eirene.dimensions = {'nion','nstra+1'};
-
-output.tot_en_atm_b2.value = scan_ft_real_grid(fid,ver,'edena_int_b2',[natm,nstra+1]);
-output.tot_en_atm_b2.description = 'Total energy carried by atoms over the B2.5 grid';
-output.tot_en_atm_b2.unit = 'J';
-output.tot_en_atm_b2.dimensions = {'natm','nstra+1'};
-
-output.tot_en_mol_b2.value = scan_ft_real_grid(fid,ver,'edenm_int_b2',[nmol,nstra+1]);
-output.tot_en_mol_b2.description = 'Total energy carried by molecules over the B2.5 grid';
-output.tot_en_mol_b2.unit = 'J';
-output.tot_en_mol_b2.dimensions = {'nmol','nstra+1'};
-
-output.tot_en_ion_b2.value = scan_ft_real_grid(fid,ver,'edeni_int_b2',[nion,nstra+1]);
-output.tot_en_ion_b2.description = 'Total energy carried by test ions over the B2.5 grid';
-output.tot_en_ion_b2.unit = 'J';
-output.tot_en_ion_b2.dimensions = {'nion','nstra+1'};
+output = set_ft_real_grid_field(output, fid, ver, 'tot_atm_eirene', 'pdena_int', [natm, nstra+1], ...
+    'Total number of atoms over the EIRENE grid', '-', {'natm','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_mol_eirene', 'pdenm_int', [nmol, nstra+1], ...
+    'Total number of molecules over the EIRENE grid', '-', {'nmol','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_ion_eirene', 'pdeni_int', [nion, nstra+1], ...
+    'Total number of test ions over the EIRENE grid', '-', {'nion','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_atm_b2', 'pdena_int_b2', [natm, nstra+1], ...
+    'Total number of atoms over the B2.5 grid', '-', {'natm','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_mol_b2', 'pdenm_int_b2', [nmol, nstra+1], ...
+    'Total number of molecules over the B2.5 grid', '-', {'nmol','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_ion_b2', 'pdeni_int_b2', [nion, nstra+1], ...
+    'Total number of test ions over the B2.5 grid', '-', {'nion','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_en_atm_eirene', 'edena_int', [natm, nstra+1], ...
+    'Total energy carried by atoms over the EIRENE grid', 'J', {'natm','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_en_mol_eirene', 'edenm_int', [nmol, nstra+1], ...
+    'Total energy carried by molecules over the EIRENE grid', 'J', {'nmol','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_en_ion_eirene', 'edeni_int', [nion, nstra+1], ...
+    'Total energy carried by test ions over the EIRENE grid', 'J', {'nion','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_en_atm_b2', 'edena_int_b2', [natm, nstra+1], ...
+    'Total energy carried by atoms over the B2.5 grid', 'J', {'natm','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_en_mol_b2', 'edenm_int_b2', [nmol, nstra+1], ...
+    'Total energy carried by molecules over the B2.5 grid', 'J', {'nmol','nstra+1'});
+output = set_ft_real_grid_field(output, fid, ver, 'tot_en_ion_b2', 'edeni_int_b2', [nion, nstra+1], ...
+    'Total energy carried by test ions over the B2.5 grid', 'J', {'nion','nstra+1'});
 
 catch
 
@@ -490,28 +393,20 @@ frewind(fid);
 % Characteristics of surfaces
 
 output.surface_type.value = scan_ft_int_wall(fid,ver,'isrftype',[nlim+nsts]);
-output.surface_type.description = 'ILIIN surface type variable';
-output.surface_type.unit = '-';
-output.surface_type.dimensions = {'nlim+nsts'};
+output = set_output_field(output, 'surface_type', output.surface_type.value, ...
+    'ILIIN surface type variable', '-', {'nlim+nsts'});
 
 output.area.value = scan_ft_real_wall(fid,ver,'wlarea',[nlim+nsts]);
-output.area.description = 'surface area';
-output.area.unit = 'm^2';
-output.area.dimensions = {'nlim+nsts'};
+output = set_output_field(output, 'area', output.area.value, ...
+    'surface area', 'm^2', {'nlim+nsts'});
 
 frewind(fid);
 
 % Wall loading, reflection
 
 output.kin_power.value(:,1) = scan_ft_real_wall(fid,ver,'wldnek(0)',[nlim+nsts]);
-output.kin_power.description = 'kinetic energy transfered by neutrals to the surface';
-output.kin_power.unit = 'W';
-output.kin_power.dimensions = {'nlim+nsts','nstra+1'};
 
 output.pot_power.value(:,1) = scan_ft_real_wall(fid,ver,'wldnep(0)',[nlim+nsts]);
-output.pot_power.description = 'potential energy released by neutrals on the surface';
-output.pot_power.unit = 'W';
-output.pot_power.dimensions = {'nlim+nsts','nstra+1'};
 
 fn_atm_temp(:,1) = scan_ft_real_wall(fid,ver,'wldna(0)',[nlim+nsts,natm]);
 en_atm_temp(:,1) = scan_ft_real_wall(fid,ver,'ewlda(0)',[nlim+nsts,natm]);
@@ -539,34 +434,28 @@ for i = 1:natm
     output.en_atm.value(:,:,i) = en_atm_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
     output.fn_atm_ref.value(:,:,i) = fn_atm_ref_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
 end
-output.fn_atm.description = 'flux of atoms impinging on the surface';
-output.fn_atm.unit = 'A';
-output.fn_atm.dimensions = {'nlim+nsts','nstra+1','natm'};
-
-output.en_atm.description = 'average energy of atoms impinging on the surface';
-output.en_atm.unit = 'eV';
-output.en_atm.dimensions = {'nlim+nsts','nstra+1','natm'};
-
-output.fn_atm_ref.description = 'flux of atoms reflected from the surface';
-output.fn_atm_ref.unit = 'A';
-output.fn_atm_ref.dimensions = {'nlim+nsts','nstra+1','natm'};
+output = set_output_field(output, 'kin_power', output.kin_power.value, ...
+    'kinetic energy transfered by neutrals to the surface', 'W', {'nlim+nsts','nstra+1'});
+output = set_output_field(output, 'pot_power', output.pot_power.value, ...
+    'potential energy released by neutrals on the surface', 'W', {'nlim+nsts','nstra+1'});
+output = set_output_field(output, 'fn_atm', output.fn_atm.value, ...
+    'flux of atoms impinging on the surface', 'A', {'nlim+nsts','nstra+1','natm'});
+output = set_output_field(output, 'en_atm', output.en_atm.value, ...
+    'average energy of atoms impinging on the surface', 'eV', {'nlim+nsts','nstra+1','natm'});
+output = set_output_field(output, 'fn_atm_ref', output.fn_atm_ref.value, ...
+    'flux of atoms reflected from the surface', 'A', {'nlim+nsts','nstra+1','natm'});
 
 for i = 1:nmol
     output.fn_mol.value(:,:,i) = fn_mol_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
     output.en_mol.value(:,:,i) = en_mol_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
     output.fn_mol_ref.value(:,:,i) = fn_mol_ref_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
 end
-output.fn_mol.description = 'flux of molecules impinging on the surface';
-output.fn_mol.unit = 'A';
-output.fn_mol.dimensions = {'nlim+nsts','nstra+1','nmol'};
-
-output.en_mol.description = 'average energy of molecules impinging on the surface';
-output.en_mol.unit = 'eV';
-output.en_mol.dimensions = {'nlim+nsts','nstra+1','nmol'};
-
-output.fn_mol_ref.description = 'flux of molecules reflected from the surface';
-output.fn_mol_ref.unit = 'A';
-output.fn_mol_ref.dimensions = {'nlim+nsts','nstra+1','nmol'};
+output = set_output_field(output, 'fn_mol', output.fn_mol.value, ...
+    'flux of molecules impinging on the surface', 'A', {'nlim+nsts','nstra+1','nmol'});
+output = set_output_field(output, 'en_mol', output.en_mol.value, ...
+    'average energy of molecules impinging on the surface', 'eV', {'nlim+nsts','nstra+1','nmol'});
+output = set_output_field(output, 'fn_mol_ref', output.fn_mol_ref.value, ...
+    'flux of molecules reflected from the surface', 'A', {'nlim+nsts','nstra+1','nmol'});
 
 % Emission and sputtering
 
@@ -594,42 +483,30 @@ end
 for i = 1:npls
     output.fn_pls.value(:,:,i) = fn_pls_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
 end
-output.fn_pls.description = 'flux of plasma ions impinging on the surface';
-output.fn_pls.unit = 'A';
-output.fn_pls.dimensions = {'nlim+nsts','nstra+1','npls'};
+output = set_output_field(output, 'fn_pls', output.fn_pls.value, ...
+    'flux of plasma ions impinging on the surface', 'A', {'nlim+nsts','nstra+1','npls'});
 
 for i = 1:natm
     output.fn_atm_em.value(:,:,i) = fn_atm_em_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
     output.fn_sput_atm.value(:,:,i) = fn_sput_atm_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
 end
-output.fn_atm_em.description = 'flux of atoms emitted from the surface';
-output.fn_atm_em.unit = 'A';
-output.fn_atm_em.dimensions = {'nlim+nsts','nstra+1','natm'};
-
-output.fn_sput_atm.description = 'flux of sputtered wall material per atom';
-output.fn_sput_atm.unit = 'A';
-output.fn_sput_atm.dimensions = {'nlim+nsts','nstra+1','natm'};
+output = set_output_field(output, 'fn_atm_em', output.fn_atm_em.value, ...
+    'flux of atoms emitted from the surface', 'A', {'nlim+nsts','nstra+1','natm'});
+output = set_output_field(output, 'fn_sput_atm', output.fn_sput_atm.value, ...
+    'flux of sputtered wall material per atom', 'A', {'nlim+nsts','nstra+1','natm'});
 
 for i = 1:nmol
     output.fn_mol_em.value(:,:,i) = fn_mol_em_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
     output.fn_sput_mol.value(:,:,i) = fn_sput_mol_temp(1+(nlim+nsts)*(i-1):(nlim+nsts)*i,:);
 end
-output.fn_mol_em.description = 'flux of molecules emitted from the surface';
-output.fn_mol_em.unit = 'A';
-output.fn_mol_em.dimensions = {'nlim+nsts','nstra+1','nmol'};
-
-output.fn_sput_mol.description = 'flux of sputtered wall material per molecule';
-output.fn_sput_mol.unit = 'A';
-output.fn_sput_mol.dimensions = {'nlim+nsts','nstra+1','nmol'};
-
-output.power_em.value = power_em_temp;
-output.power_em.description = 'power carried by particles emitted from the surface';
-output.power_em.unit = 'W';
-output.power_em.dimensions = {'nlim+nsts','nstra+1'};
-
-output.fn_sput.description = 'flux of sputtered wall material';
-output.fn_sput.unit = 'A';
-output.fn_sput.dimensions = {'nlim+nsts','nstra+1'};
+output = set_output_field(output, 'fn_mol_em', output.fn_mol_em.value, ...
+    'flux of molecules emitted from the surface', 'A', {'nlim+nsts','nstra+1','nmol'});
+output = set_output_field(output, 'fn_sput_mol', output.fn_sput_mol.value, ...
+    'flux of sputtered wall material per molecule', 'A', {'nlim+nsts','nstra+1','nmol'});
+output = set_output_field(output, 'power_em', power_em_temp, ...
+    'power carried by particles emitted from the surface', 'W', {'nlim+nsts','nstra+1'});
+output = set_output_field(output, 'fn_sput', output.fn_sput.value, ...
+    'flux of sputtered wall material', 'A', {'nlim+nsts','nstra+1'});
 
 % Absorption
 
@@ -644,37 +521,28 @@ for i = 1:natm
     output.abs_rate_atm.value(:,i) = abs_rate_atm_temp(i,:);
     output.pump_atm.value(:,i) = pump_atm_temp(i,:);   
 end
-output.abs_rate_atm.description = 'absoption rate for atoms';
-output.abs_rate_atm.unit = '-';
-output.abs_rate_atm.dimensions = {'nlim+nsts','natm'};
-
-output.pump_atm.description = 'pumped flux for atoms';
-output.pump_atm.unit = 'A';
-output.pump_atm.dimensions = {'nlim+nsts','natm'};
+output = set_output_field(output, 'abs_rate_atm', output.abs_rate_atm.value, ...
+    'absoption rate for atoms', '-', {'nlim+nsts','natm'});
+output = set_output_field(output, 'pump_atm', output.pump_atm.value, ...
+    'pumped flux for atoms', 'A', {'nlim+nsts','natm'});
 
 for i = 1:nmol
     output.abs_rate_mol.value(:,i) = abs_rate_mol_temp(i,:);
     output.pump_mol.value(:,i) = pump_mol_temp(i,:);  
 end
-output.abs_rate_mol.description = 'absoption rate for molecules';
-output.abs_rate_mol.unit = '-';
-output.abs_rate_mol.dimensions = {'nlim+nsts','nmol'};
-
-output.pump_mol.description = 'pumped flux for molecules';
-output.pump_mol.unit = 'A';
-output.pump_mol.dimensions = {'nlim+nsts','nmol'};
+output = set_output_field(output, 'abs_rate_mol', output.abs_rate_mol.value, ...
+    'absoption rate for molecules', '-', {'nlim+nsts','nmol'});
+output = set_output_field(output, 'pump_mol', output.pump_mol.value, ...
+    'pumped flux for molecules', 'A', {'nlim+nsts','nmol'});
 
 for i = 1:nion
     output.abs_rate_ion.value(:,i) = abs_rate_ion_temp(i,:);
     output.pump_ion.value(:,i) = pump_ion_temp(i,:);  
 end
-output.abs_rate_ion.description = 'absoption rate for test ions';
-output.abs_rate_ion.unit = '-';
-output.abs_rate_ion.dimensions = {'nlim+nsts','nion'};
-
-output.pump_ion.description = 'pumped flux for test ions';
-output.pump_ion.unit = 'A';
-output.pump_ion.dimensions = {'nlim+nsts','nion'};
+output = set_output_field(output, 'abs_rate_ion', output.abs_rate_ion.value, ...
+    'absoption rate for test ions', '-', {'nlim+nsts','nion'});
+output = set_output_field(output, 'pump_ion', output.pump_ion.value, ...
+    'pumped flux for test ions', 'A', {'nlim+nsts','nion'});
 
 frewind(fid);
 

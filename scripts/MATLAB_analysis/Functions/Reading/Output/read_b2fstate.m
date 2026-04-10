@@ -101,88 +101,44 @@ end
 
 % Charges and masses
 
-state.zamin.value = scan_b2_real(fid,'zamin',ns);
-state.zamin.description = 'Minimum atomic charge';
-state.zamin.unit = '-';
-state.zamin.dimensions = {'ns'};
-
-state.zamax.value = scan_b2_real(fid,'zamax',ns);
-state.zamax.description = 'Maximum atomic charge';
-state.zamax.unit = '-';
-state.zamax.dimensions = {'ns'};
-
-state.zn.value = scan_b2_real(fid,'zn   ',ns);
-state.zn.description = 'Nuclear charge';
-state.zn.unit = '-';
-state.zn.dimensions = {'ns'};
-
-state.am.value = scan_b2_real(fid,'am   ',ns);
-state.am.description = 'Atomic mass';
-state.am.unit = 'AMU';
-state.am.dimensions = {'ns'};
+state = set_b2_real_field(state, fid, 'zamin', 'zamin', ns, ...
+    'Minimum atomic charge', '-', {'ns'});
+state = set_b2_real_field(state, fid, 'zamax', 'zamax', ns, ...
+    'Maximum atomic charge', '-', {'ns'});
+state = set_b2_real_field(state, fid, 'zn', 'zn   ', ns, ...
+    'Nuclear charge', '-', {'ns'});
+state = set_b2_real_field(state, fid, 'am', 'am   ', ns, ...
+    'Atomic mass', 'AMU', {'ns'});
 
 %% READ THE DATA
 
 % State variables
 
-state.na.value = scan_b2_real(fid,'na'    ,statedims);
-state.na.description = 'Ion density';
-state.na.unit = 'm^-3';
-state.na.dimensions = statedims_labels;
-
-state.ne.value = scan_b2_real(fid,'ne'    ,statedim);
-state.ne.description = 'Electron density';
-state.ne.unit = 'm^-3';
-state.ne.dimensions = statedim_labels;
-
-state.ua.value = scan_b2_real(fid,'ua'    ,statedims);
-state.ua.description = 'Ion parallel velocity';
-state.ua.unit = 'm s^-1';
-state.ua.dimensions = statedims_labels;
-
-state.uadia.value = scan_b2_real(fid,'uadia' ,fluxdims);
-state.uadia.description = 'Total drift velocity';
-state.uadia.unit = 'm s^-1';
-state.uadia.dimensions = fluxdims_labels;
-
-Te = scan_b2_real(fid,'te'    ,statedim);
-state.Te.value = Te.*6.242e18;
-state.Te.description = 'Electron temperature';
-state.Te.unit = 'eV';
-state.Te.dimensions = statedim_labels;
-
-Ti = scan_b2_real(fid,'ti'    ,statedim);
-state.Ti.value = Ti.*6.242e18;
-state.Ti.description = 'Ion temperature';
-state.Ti.unit = 'eV';
-state.Ti.dimensions = statedim_labels;
-
-state.po.value = scan_b2_real(fid,'po'    ,statedim);
-state.po.description = 'Electric potential';
-state.po.unit = 'V';
-state.po.dimensions = statedim_labels;
+state = set_b2_real_field(state, fid, 'na', 'na', statedims, ...
+    'Ion density', 'm^-3', statedims_labels);
+state = set_b2_real_field(state, fid, 'ne', 'ne', statedim, ...
+    'Electron density', 'm^-3', statedim_labels);
+state = set_b2_real_field(state, fid, 'ua', 'ua', statedims, ...
+    'Ion parallel velocity', 'm s^-1', statedims_labels);
+state = set_b2_real_field(state, fid, 'uadia', 'uadia', fluxdims, ...
+    'Total drift velocity', 'm s^-1', fluxdims_labels);
+state = set_b2_real_field(state, fid, 'Te', 'te', statedim, ...
+    'Electron temperature', 'eV', statedim_labels, 6.242e18);
+state = set_b2_real_field(state, fid, 'Ti', 'ti', statedim, ...
+    'Ion temperature', 'eV', statedim_labels, 6.242e18);
+state = set_b2_real_field(state, fid, 'po', 'po', statedim, ...
+    'Electric potential', 'V', statedim_labels);
 
 % Fluxes
 
-state.fna.value = scan_b2_real(fid,'fna'   ,fluxdims);
-state.fna.description = 'Particle flux';
-state.fna.unit = 's^-1';
-state.fna.dimensions = fluxdims_labels;
-
-state.fhe.value = scan_b2_real(fid,'fhe'   ,fluxdim);
-state.fhe.description = 'Electron heat flux';
-state.fhe.unit = 'W';
-state.fhe.dimensions = fluxdim_labels;
-
-state.fhi.value = scan_b2_real(fid,'fhi'   ,fluxdim);
-state.fhi.description = 'Ion heat flux';
-state.fhi.unit = 'W';
-state.fhi.dimensions = fluxdim_labels;
-
-state.fch.value = scan_b2_real(fid,'fch'   ,fluxdim);
-state.fch.description = 'Electric current';
-state.fch.unit = 'A';
-state.fch.dimensions = fluxdim_labels;
+state = set_b2_real_field(state, fid, 'fna', 'fna', fluxdims, ...
+    'Particle flux', 's^-1', fluxdims_labels);
+state = set_b2_real_field(state, fid, 'fhe', 'fhe', fluxdim, ...
+    'Electron heat flux', 'W', fluxdim_labels);
+state = set_b2_real_field(state, fid, 'fhi', 'fhi', fluxdim, ...
+    'Ion heat flux', 'W', fluxdim_labels);
+state = set_b2_real_field(state, fid, 'fch', 'fch', fluxdim, ...
+    'Electric current', 'A', fluxdim_labels);
 
 frewind(fid);
 

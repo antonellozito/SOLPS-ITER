@@ -1,7 +1,12 @@
 function output = read_b2fplasmf(varargin)
 %
 % read_b2fplasmf reads the formatted b2fplasmf file created by B2.5
-% Output is a struct "plasma" with all the data fields in the b2fplasmf file
+% Output is a struct "output" with all the requested data fields in the
+% b2fplasmf file. Each field is stored as a substruct with:
+%   .value
+%   .description
+%   .unit
+%   .dimensions
 %
 % 1st input: main simulation structure
 %
@@ -15,30 +20,27 @@ function output = read_b2fplasmf(varargin)
 
 %% PRELIMINARY OPERATIONS
 
-% Load the file and read the version
-
 simulation = varargin{1};
+requested_groups = varargin(2:end);
 
-index = find(contains({simulation.run.name},'b2fplasmf'));
+index = find(contains({simulation.run.name}, 'b2fplasmf'));
 if isempty(index)
    error('Error: b2fplasmf not found');
 end
 file = simulation.run(index).file;
 fid = fopen(file);
-if (fid == -1)
+if fid == -1
    error('Error: b2fplasmf not found');
 end
 
-line    = fgetl(fid);
+line = fgetl(fid);
 version = line(8:17);
 
-if str2num(strrep(version,'.','')) < str2num(strrep('03.002.000','.',''))
+if str2num(strrep(version, '.', '')) < str2num(strrep('03.002.000', '.', ''))
     version = 'structured';
 else
     version = 'unstructured';
 end
-
-% Select which group of fields to read
 
 READ_STATE = false;
 READ_TRANSPORT = false;
@@ -46,70 +48,100 @@ READ_FLUXES = false;
 READ_SOURCES = false;
 READ_RESIDUALS = false;
 
-if numel(varargin) == 1
+if isempty(requested_groups)
     READ_STATE = true;
     READ_TRANSPORT = true;
     READ_FLUXES = true;
     READ_SOURCES = true;
     READ_RESIDUALS = true;
 else
-    if any(strcmp(varargin,'STATE'))
+    if any(strcmp(requested_groups, 'STATE'))
         READ_STATE = true;
     end
-    if any(strcmp(varargin,'TRANSPORT'))
-        READ_TRANSPORT = true;  
+    if any(strcmp(requested_groups, 'TRANSPORT'))
+        READ_TRANSPORT = true;
     end
-    if any(strcmp(varargin,'FLUXES'))
+    if any(strcmp(requested_groups, 'FLUXES'))
         READ_FLUXES = true;
     end
-    if any(strcmp(varargin,'SOURCES'))
-        READ_SOURCES = true;  
+    if any(strcmp(requested_groups, 'SOURCES'))
+        READ_SOURCES = true;
     end
-    if any(strcmp(varargin,'RESIDUALS'))
+    if any(strcmp(requested_groups, 'RESIDUALS'))
         READ_RESIDUALS = true;
     end
 end
 
-% Read the dimensions
+output = struct();
 
-if strcmp(version,'structured')
+%% READ THE DIMENSIONS
 
-    index_state = find(contains({simulation.run.name},'b2fstate'));
+if strcmp(version, 'structured')
+
+    index_state = find(contains({simulation.run.name}, 'b2fstate'));
     if isempty(index_state)
        error('Error: b2fstate not found');
     end
     file_state = simulation.run(index_state).file;
     fid_state = fopen(file_state);
-    if (fid_state == -1)
+    if fid_state == -1
        error('Error: b2fstate not found');
     end
-    
-    dim = scan_b2_int(fid_state,'nx,ny,ns',3);
-    nx  = dim(1);
-    ny  = dim(2);
-    ns  = dim(3);
-    
+
+    dim = scan_b2_int(fid_state, 'nx,ny,ns', 3);
+    nx = dim(1);
+    ny = dim(2);
+    ns = dim(3);
+
     frewind(fid_state);
-
     fclose(fid_state);
-    
-    qcdim = [nx+2,ny+2];
-    fluxdim  = [nx+2,ny+2,2];
-    fluxdims = [nx+2,ny+2,2,ns];
 
-elseif strcmp(version,'unstructured')
+    statedim = [nx+2, ny+2];
+    statedims = [nx+2, ny+2, ns];
+    pairdim = [nx+2, ny+2, 2];
+    fluxdim = [nx+2, ny+2, 2];
+    fluxdims = [nx+2, ny+2, 2, ns];
+    source2dim = [nx+2, ny+2, 2];
+    source2dims = [nx+2, ny+2, 2, ns];
+    source4dim = [nx+2, ny+2, 4];
+    source4dims = [nx+2, ny+2, 4, ns];
 
-    dim = scan_b2_int(fid,'nCv,nFc,ns',3);
-    nCv  = dim(1);
-    nFc  = dim(2);
-    ns   = dim(3);
-    
-    statedim  = [nCv,1];
-    statedims = [nCv,ns];
-    
-    fluxdim   = [nFc,2];
-    fluxdimp  = [nFc,2];
-    fluxdims  = [nFc,2,ns];
+    statedim_labels = {'nx+2', 'ny+2'};
+    statedims_labels = {'nx+2', 'ny+2', 'ns'};
+    pairdim_labels = {'nx+2', 'ny+2', 2};
+    fluxdim_labels = {'nx+2', 'ny+2', 2};
+    fluxdims_labels = {'nx+2', 'ny+2', 2, 'ns'};
+    source2dim_labels = {'nx+2', 'ny+2', 2};
+    source2dims_labels = {'nx+2', 'ny+2', 2, 'ns'};
+    source4dim_labels = {'nx+2', 'ny+2', 4};
+    source4dims_labels = {'nx+2', 'ny+2', 4, 'ns'};
+
+else
+
+    dim = scan_b2_int(fid, 'nCv,nFc,ns', 3);
+    nCv = dim(1);
+    nFc = dim(2);
+    ns = dim(3);
+
+    statedim = [nCv, 1];
+    statedims = [nCv, ns];
+    fluxdim = [nFc, 2];
+    fluxdimp = [nFc, 2];
+    fluxdims = [nFc, 2, ns];
+    source2dim = [nCv, 2];
+    source2dims = [nCv, 2, ns];
+    source4dim = [nCv, 4];
+    source4dims = [nCv, 4, ns];
+
+    statedim_labels = {'nCv'};
+    statedims_labels = {'nCv', 'ns'};
+    fluxdim_labels = {'nFc', 2};
+    fluxdimp_labels = {'nFc', 2};
+    fluxdims_labels = {'nFc', 2, 'ns'};
+    source2dim_labels = {'nCv', 2};
+    source2dims_labels = {'nCv', 2, 'ns'};
+    source4dim_labels = {'nCv', 4};
+    source4dims_labels = {'nCv', 4, 'ns'};
 
 end
 
@@ -117,42 +149,62 @@ end
 
 if READ_STATE
 
-if strcmp(version,'structured')
+if strcmp(version, 'structured')
 
-output.na              = scan_b2_real(fid,'na'    ,[nx+2,ny+2,ns]); % atomic density for each species, m^-3
-output.ne              = scan_b2_real(fid,'ne'    ,[nx+2,ny+2]);    % electron density, m^-3
-output.ni              = scan_b2_real(fid,'ni'    ,[nx+2,ny+2,2]);  % total atomic densities, m^-3
+output = set_real_field(output, fid, 'na', 'na', statedims, ...
+    'Ion density', 'm^-3', statedims_labels);
+output = set_real_field(output, fid, 'ne', 'ne', statedim, ...
+    'Electron density', 'm^-3', statedim_labels);
+output = set_real_field(output, fid, 'ni', 'ni', pairdim, ...
+    'Total atomic densities', 'm^-3', pairdim_labels);
 
-output.po              = scan_b2_real(fid,'po'    ,[nx+2,ny+2]);    % electric potential, V
+output = set_real_field(output, fid, 'po', 'po', statedim, ...
+    'Electric potential', 'V', statedim_labels);
 
-Te                    = scan_b2_real(fid,'te'    ,[nx+2,ny+2]);    % electron temperature, J
-output.Te(:,:)         = Te.*6.242e18;                              % electron temperature, eV
-Ti                    = scan_b2_real(fid,'ti'    ,[nx+2,ny+2]);    % ion temperature, J
-output.Ti(:,:)         = Ti.*6.242e18;                              % ion temperature, eV
+output = set_real_field(output, fid, 'Te', 'te', statedim, ...
+    'Electron temperature', 'eV', statedim_labels, 6.242e18);
+output = set_real_field(output, fid, 'Ti', 'ti', statedim, ...
+    'Ion temperature', 'eV', statedim_labels, 6.242e18);
 
-output.ua              = scan_b2_real(fid,'ua'    ,[nx+2,ny+2,ns]); % parallel velocity, m s^-1
-output.uadia           = scan_b2_real(fid,'uadia' ,fluxdims);       % total drift velocity components, m s^-1
-output.wadia           = scan_b2_real(fid,'wadia' ,fluxdims);       % diamagnetic drift velocity components, m s^-1
-output.vaecrb          = scan_b2_real(fid,'vaecrb',fluxdims);       % ExB drift velocity components, m s^-1 
+output = set_real_field(output, fid, 'ua', 'ua', statedims, ...
+    'Ion parallel velocity', 'm s^-1', statedims_labels);
+output = set_real_field(output, fid, 'uadia', 'uadia', fluxdims, ...
+    'Total drift velocity components', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'wadia', 'wadia', fluxdims, ...
+    'Total diamagnetic drift velocity components', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'vaecrb', 'vaecrb', fluxdims, ...
+    'ExB drift velocity components', 'm s^-1', fluxdims_labels);
 
-elseif strcmp(version,'unstructured')
+elseif strcmp(version, 'unstructured')
 
-output.na     = scan_b2_real(fid,'na'    ,statedims);
-output.ne     = scan_b2_real(fid,'ne'    ,statedim);
-output.ua     = scan_b2_real(fid,'ua'    ,statedims);
-output.uadia  = scan_b2_real(fid,'uadia' ,fluxdims);
-Te           = scan_b2_real(fid,'te'    ,statedim);
-output.Te(:,:)         = Te.*6.242e18;  
-Ti           = scan_b2_real(fid,'ti'    ,statedim);
-output.Ti(:,:)         = Ti.*6.242e18;  
-output.tn     = scan_b2_real(fid,'tn'    ,statedim);
-output.po     = scan_b2_real(fid,'po'    ,statedim);
-output.kt     = scan_b2_real(fid,'kt'    ,statedim);
-output.vaecrb = scan_b2_real(fid,'vaecrb' ,fluxdims);
-output.vadia  = scan_b2_real(fid,'vadia'  ,fluxdims);
-output.wadia  = scan_b2_real(fid,'wadia'  ,fluxdims);
-output.veecrb = scan_b2_real(fid,'veecrb' ,fluxdim);
-output.vedia  = scan_b2_real(fid,'vedia'  ,fluxdim);
+output = set_real_field(output, fid, 'na', 'na', statedims, ...
+    'Ion density', 'm^-3', statedims_labels);
+output = set_real_field(output, fid, 'ne', 'ne', statedim, ...
+    'Electron density', 'm^-3', statedim_labels);
+output = set_real_field(output, fid, 'ua', 'ua', statedims, ...
+    'Ion parallel velocity', 'm s^-1', statedims_labels);
+output = set_real_field(output, fid, 'uadia', 'uadia', fluxdims, ...
+    'Total drift velocity components', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'Te', 'te', statedim, ...
+    'Electron temperature', 'eV', statedim_labels, 6.242e18);
+output = set_real_field(output, fid, 'Ti', 'ti', statedim, ...
+    'Ion temperature', 'eV', statedim_labels, 6.242e18);
+output = set_real_field(output, fid, 'tn', 'tn', statedim, ...
+    'Hydrogenic neutral temperature', 'eV', statedim_labels, 6.242e18);
+output = set_real_field(output, fid, 'po', 'po', statedim, ...
+    'Electric potential', 'V', statedim_labels);
+output = set_real_field(output, fid, 'kt', 'kt', statedim, ...
+    'Turbulent kinetic energy', 'J', statedim_labels);
+output = set_real_field(output, fid, 'vaecrb', 'vaecrb', fluxdims, ...
+    'ExB drift velocity components', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'vadia', 'vadia', fluxdims, ...
+    'Effective diamagnetic drift velocity components', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'wadia', 'wadia', fluxdims, ...
+    'Total diamagnetic drift velocity components', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'veecrb', 'veecrb', fluxdim, ...
+    'Electron ExB drift velocity components', 'm s^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'vedia', 'vedia', fluxdim, ...
+    'Electron diamagnetic drift velocity components', 'm s^-1', fluxdim_labels);
 
 end
 
@@ -166,32 +218,53 @@ end
 
 if READ_TRANSPORT
 
-if strcmp(version,'structured')
+if strcmp(version, 'structured')
 
-output.sig0         = scan_b2_real(fid,'sig0'        ,[nx+2,ny+2]);      % anomalous electrical conductivity, S m^-2
-output.hce0         = scan_b2_real(fid,'hce0'        ,[nx+2,ny+2]);      % anomalous electron thermal diffusivity, m^2 s^-1
-output.alf0         = scan_b2_real(fid,'alf0'        ,[nx+2,ny+2]);      % anomalous thermo-electric coefficient, m V^-1 s^-1
-output.hci0         = scan_b2_real(fid,'hcib'        ,[nx+2,ny+2,ns]);   % anomalous ion thermal diffusivity, m^2 s^-1
-output.dpa0         = scan_b2_real(fid,'dpa0'        ,[nx+2,ny+2,ns]);   % anomalous pressure-driven particle diffusivity, m^2 s^-1
-output.dna0         = scan_b2_real(fid,'dna0'        ,[nx+2,ny+2,ns]);   % anomalous density-driven particle diffusivity, m^2 s^-1
-output.vsa0         = scan_b2_real(fid,'vsa0'        ,[nx+2,ny+2,ns]);   % anomalous viscosity, m^2 s-1
-output.vla0         = scan_b2_real(fid,'vla0'        ,[nx+2,ny+2,2,ns]); % anomalous pinch velocity, m s^-1
+output = set_real_field(output, fid, 'sig0', 'sig0', statedim, ...
+    'Anomalous electrical conductivity', 'S m^-2', statedim_labels);
+output = set_real_field(output, fid, 'hce0', 'hce0', statedim, ...
+    'Anomalous electron thermal diffusivity', 'm^2 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'alf0', 'alf0', statedim, ...
+    'Anomalous thermo-electric coefficient', 'm V^-1 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'hci0', 'hcib', statedims, ...
+    'Anomalous ion thermal diffusivity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'dpa0', 'dpa0', statedims, ...
+    'Anomalous pressure-driven particle diffusivity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'dna0', 'dna0', statedims, ...
+    'Anomalous density-driven particle diffusivity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'vsa0', 'vsa0', statedims, ...
+    'Anomalous viscosity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'vla0', 'vla0', fluxdims, ...
+    'Anomalous pinch velocity', 'm s^-1', fluxdims_labels);
 
-elseif strcmp(version,'unstructured')
+elseif strcmp(version, 'unstructured')
 
-output.sig0     = scan_b2_real(fid,'sig0'    ,[nCv]);
-output.hce0     = scan_b2_real(fid,'hce0'    ,[nCv]);
-output.alf0     = scan_b2_real(fid,'alf0'    ,[nCv]);
-output.hci0     = scan_b2_real(fid,'hci0'    ,[nCv]);
-output.hcib     = scan_b2_real(fid,'hcib'    ,statedims);
-output.dpa0     = scan_b2_real(fid,'dpa0'    ,statedims);
-output.dna0     = scan_b2_real(fid,'dna0'    ,statedims);
-output.vsa0     = scan_b2_real(fid,'vsa0'    ,statedims);
-output.vla0     = scan_b2_real(fid,'vla0'    ,[nCv 2 ns]);
-output.dkt0     = scan_b2_real(fid,'dkt0'    ,[nCv]);
-output.dna_ExB     = scan_b2_real(fid,'dna_ExB'    ,[nCv]);
-output.hce_ExB     = scan_b2_real(fid,'hce_ExB'    ,[nCv]);
-output.hci_ExB     = scan_b2_real(fid,'hci_ExB'    ,[nCv]);
+output = set_real_field(output, fid, 'sig0', 'sig0', statedim, ...
+    'Anomalous electrical conductivity', 'S m^-2', statedim_labels);
+output = set_real_field(output, fid, 'hce0', 'hce0', statedim, ...
+    'Anomalous electron thermal diffusivity', 'm^2 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'alf0', 'alf0', statedim, ...
+    'Anomalous thermo-electric coefficient', 'm V^-1 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'hci0', 'hci0', statedim, ...
+    'Anomalous atom thermal diffusivity', 'm^2 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'hcib', 'hcib', statedims, ...
+    'Anomalous ion thermal diffusivity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'dpa0', 'dpa0', statedims, ...
+    'Anomalous pressure-driven particle diffusivity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'dna0', 'dna0', statedims, ...
+    'Anomalous density-driven particle diffusivity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'vsa0', 'vsa0', statedims, ...
+    'Anomalous viscosity', 'm^2 s^-1', statedims_labels);
+output = set_real_field(output, fid, 'vla0', 'vla0', fluxdims, ...
+    'Anomalous pinch velocity', 'm s^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'dkt0', 'dkt0', statedim, ...
+    'Anomalous turbulent kinetic energy diffusivity', 'm^2 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'dna_ExB', 'dna_ExB', statedim, ...
+    'ExB particle diffusivity contribution', 'm^2 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'hce_ExB', 'hce_ExB', statedim, ...
+    'ExB electron thermal diffusivity contribution', 'm^2 s^-1', statedim_labels);
+output = set_real_field(output, fid, 'hci_ExB', 'hci_ExB', statedim, ...
+    'ExB ion thermal diffusivity contribution', 'm^2 s^-1', statedim_labels);
 
 end
 
@@ -205,89 +278,167 @@ end
 
 if READ_FLUXES
 
-if strcmp(version,'structured')
+if strcmp(version, 'structured')
 
-output.fch                         = scan_b2_real(fid,'fch'   ,fluxdim);
-output.fchp                        = scan_b2_real(fid,'fchp'  ,fluxdim);
-output.fhe                         = scan_b2_real(fid,'fhe'   ,fluxdim);
-output.fhep                        = scan_b2_real(fid,'fhep'  ,fluxdim);
-output.fhet                        = scan_b2_real(fid,'fhet'  ,fluxdim);
-output.fhi                         = scan_b2_real(fid,'fhi'   ,fluxdim);
-output.fhip                        = scan_b2_real(fid,'fhip'  ,fluxdim);
-output.fhit                        = scan_b2_real(fid,'fhit'  ,fluxdim);
-output.fna                         = scan_b2_real(fid,'fna'   ,fluxdims);    
-output.fne                         = scan_b2_real(fid,'fne'   ,fluxdim);
-output.fni                         = scan_b2_real(fid,'fni'   ,fluxdim);
-output.fchdia                      = scan_b2_real(fid,'fchdia',fluxdim);
-output.fmo                         = scan_b2_real(fid,'fmo'   ,fluxdims);
-output.fna_32                      = scan_b2_real(fid,'fna_32',fluxdims);
-output.fna_52                      = scan_b2_real(fid,'fna_52',fluxdims);
-output.fni_32                      = scan_b2_real(fid,'fni_32',fluxdim);
-output.fni_52                      = scan_b2_real(fid,'fni_52',fluxdim);
-output.fne_32                      = scan_b2_real(fid,'fne_32',fluxdim);
-output.fne_52                      = scan_b2_real(fid,'fne_52',fluxdim);
-output.fchvispar                   = scan_b2_real(fid,'fchvispar'   ,fluxdim);
-output.fchvisper                   = scan_b2_real(fid,'fchvisper'   ,fluxdim);
-output.fchin                       = scan_b2_real(fid,'fchin'       ,fluxdim);
-output.fna_nodrift                 = scan_b2_real(fid,'fna_nodrift' ,fluxdims);
-output.fna_mdf                     = scan_b2_real(fid,'fna_mdf'     ,fluxdims);
-output.fhe_mdf                     = scan_b2_real(fid,'fhe_mdf'     ,fluxdim);
-output.fhi_mdf                     = scan_b2_real(fid,'fhi_mdf'     ,fluxdim);
-output.fnaPSch                     = scan_b2_real(fid,'fnaPSch'     ,fluxdims);
-output.fhePSch                     = scan_b2_real(fid,'fhePSch'     ,fluxdim);
-output.fhiPSch                     = scan_b2_real(fid,'fhiPSch'     ,fluxdim);
-output.fna_fcor                    = scan_b2_real(fid,'fna_fcor'    ,fluxdims);
-output.fna_he                      = scan_b2_real(fid,'fna_he'      ,fluxdims);
-output.fchvisq                     = scan_b2_real(fid,'fchvisq'     ,fluxdim);
-output.fchinert                    = scan_b2_real(fid,'fchinert'    ,fluxdim);
-output.fht                         = scan_b2_real(fid,'fht'  ,fluxdim);
-output.fhj                         = scan_b2_real(fid,'fhj'  ,fluxdim);
-output.fhm                         = scan_b2_real(fid,'fhm'  ,fluxdims);
-output.fhp                         = scan_b2_real(fid,'fhp'  ,fluxdims);
+output = set_real_field(output, fid, 'fch', 'fch', fluxdim, ...
+    'Electric current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchp', 'fchp', fluxdim, ...
+    'B2 field fchp', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fhe', 'fhe', fluxdim, ...
+    'Electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhep', 'fhep', fluxdim, ...
+    'B2 field fhep', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhet', 'fhet', fluxdim, ...
+    'B2 field fhet', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhi', 'fhi', fluxdim, ...
+    'Ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhip', 'fhip', fluxdim, ...
+    'B2 field fhip', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhit', 'fhit', fluxdim, ...
+    'B2 field fhit', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fna', 'fna', fluxdims, ...
+    'Particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fne', 'fne', fluxdim, ...
+    'Electron flux', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fni', 'fni', fluxdim, ...
+    'Atomic flux', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fchdia', 'fchdia', fluxdim, ...
+    'Modified diamagnetic current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fmo', 'fmo', fluxdims, ...
+    'Momentum flux', 'N', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_32', 'fna_32', fluxdims, ...
+    '3/2 particle flux contribution', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_52', 'fna_52', fluxdims, ...
+    '5/2 particle flux contribution', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fni_32', 'fni_32', fluxdim, ...
+    '3/2 atomic flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fni_52', 'fni_52', fluxdim, ...
+    '5/2 atomic flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fne_32', 'fne_32', fluxdim, ...
+    '3/2 electron flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fne_52', 'fne_52', fluxdim, ...
+    '5/2 electron flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fchvispar', 'fchvispar', fluxdim, ...
+    'Parallel-viscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchvisper', 'fchvisper', fluxdim, ...
+    'Perpendicular-viscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchin', 'fchin', fluxdim, ...
+    'Ion-neutral friction current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fna_nodrift', 'fna_nodrift', fluxdims, ...
+    'Particle flux without drifts', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_mdf', 'fna_mdf', fluxdims, ...
+    'Modified particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fhe_mdf', 'fhe_mdf', fluxdim, ...
+    'Modified electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhi_mdf', 'fhi_mdf', fluxdim, ...
+    'Modified ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fnaPSch', 'fnaPSch', fluxdims, ...
+    'Pfirsch-Schluter particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fhePSch', 'fhePSch', fluxdim, ...
+    'Pfirsch-Schluter electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhiPSch', 'fhiPSch', fluxdim, ...
+    'Pfirsch-Schluter ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fna_fcor', 'fna_fcor', fluxdims, ...
+    'Particle flux for momentum transport', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_he', 'fna_he', fluxdims, ...
+    'B2 field fna_he', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fchvisq', 'fchvisq', fluxdim, ...
+    'Heat-viscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchinert', 'fchinert', fluxdim, ...
+    'Inertia and gyroviscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fht', 'fht', fluxdim, ...
+    'Total energy flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhj', 'fhj', fluxdim, ...
+    'Electrostatic energy flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhm', 'fhm', fluxdims, ...
+    'Parallel kinetic energy flux', 'W', fluxdims_labels);
+output = set_real_field(output, fid, 'fhp', 'fhp', fluxdims, ...
+    'Potential energy flux', 'W', fluxdims_labels);
 
-elseif strcmp(version,'unstructured')
+elseif strcmp(version, 'unstructured')
 
-output.fna    = scan_b2_real(fid,'fna'   ,fluxdims);
-output.fne    = scan_b2_real(fid,'fne'   ,fluxdim);
-output.fhe    = scan_b2_real(fid,'fhe'   ,fluxdim);
-output.fhi    = scan_b2_real(fid,'fhi'   ,fluxdim);
-output.fhn    = scan_b2_real(fid,'fhn'   ,fluxdim);
-output.fch    = scan_b2_real(fid,'fch'   ,fluxdim);
-output.fch_32 = scan_b2_real(fid,'fch_32',fluxdim);
-output.fch_52 = scan_b2_real(fid,'fch_52',fluxdim);
-output.kinrgy = scan_b2_real(fid,'kinrgy',statedims);
-output.fkt = scan_b2_real(fid,'fkt',fluxdim);
-output.fch_p  = scan_b2_real(fid,'fch_p' ,fluxdimp);
-output.fna_mdf     = scan_b2_real(fid,'fna_mdf'    ,fluxdims);
-output.fhe_mdf     = scan_b2_real(fid,'fhe_mdf'    ,fluxdim);
-output.fhi_mdf     = scan_b2_real(fid,'fhi_mdf'    ,fluxdim);
-output.fna_fcor    = scan_b2_real(fid,'fna_fcor'   ,fluxdims);
-output.fna_nodrift = scan_b2_real(fid,'fna_nodrift',fluxdims);
-output.fna_he      = scan_b2_real(fid,'fna_he'     ,fluxdims);
-output.fnaPSch     = scan_b2_real(fid,'fnaPSch'    ,fluxdims);
-output.fhePSch     = scan_b2_real(fid,'fhePSch'    ,fluxdim);
-output.fhiPSch     = scan_b2_real(fid,'fhiPSch'    ,fluxdim);
-output.fna_eir     = scan_b2_real(fid,'fna_eir'    ,fluxdims);
-output.fne_eir     = scan_b2_real(fid,'fne_eir'    ,fluxdim);
-output.fhe_eir     = scan_b2_real(fid,'fhe_eir'    ,fluxdim);
-output.fhi_eir     = scan_b2_real(fid,'fhi_eir'    ,fluxdim);
-output.fna_32      = scan_b2_real(fid,'fna_32'     ,fluxdims);
-output.fna_52      = scan_b2_real(fid,'fna_52'     ,fluxdims);
-output.fni_32      = scan_b2_real(fid,'fni_32'     ,fluxdim);
-output.fni_52      = scan_b2_real(fid,'fni_52'     ,fluxdim);
-output.fne_32      = scan_b2_real(fid,'fne_32'     ,fluxdim);
-output.fne_52      = scan_b2_real(fid,'fne_52'     ,fluxdim);
-output.fchdia      = scan_b2_real(fid,'fchdia'     ,fluxdim);
-output.fchin       = scan_b2_real(fid,'fchin'      ,fluxdim);
-output.fchvispar   = scan_b2_real(fid,'fchvispar'  ,fluxdim);
-output.fchvisper   = scan_b2_real(fid,'fchvisper'  ,fluxdim);
-output.fchvisq     = scan_b2_real(fid,'fchvisq'    ,fluxdim);
-output.fchinert    = scan_b2_real(fid,'fchinert'   ,fluxdim);
-output.fchanml     = scan_b2_real(fid,'fchanml'    ,fluxdim);
-output.fht         = scan_b2_real(fid,'fht'        ,fluxdim);
-output.fhj         = scan_b2_real(fid,'fhj'        ,fluxdim);
-output.fhm         = scan_b2_real(fid,'fhm'        ,fluxdims);
-output.fhp         = scan_b2_real(fid,'fhp'        ,fluxdims);
+output = set_real_field(output, fid, 'fna', 'fna', fluxdims, ...
+    'Particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fne', 'fne', fluxdim, ...
+    'Electron flux', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fhe', 'fhe', fluxdim, ...
+    'Electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhi', 'fhi', fluxdim, ...
+    'Ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhn', 'fhn', fluxdim, ...
+    'Neutral heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fch', 'fch', fluxdim, ...
+    'Electric current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fch_32', 'fch_32', fluxdim, ...
+    '3/2 current contribution', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fch_52', 'fch_52', fluxdim, ...
+    '5/2 current contribution', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'kinrgy', 'kinrgy', statedims, ...
+    'Particle kinetic energy', 'J', statedims_labels);
+output = set_real_field(output, fid, 'fkt', 'fkt', fluxdim, ...
+    'Turbulent kinetic energy flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fch_p', 'fch_p', fluxdimp, ...
+    'Parallel-current magnetic-sign product', 'A', fluxdimp_labels);
+output = set_real_field(output, fid, 'fna_mdf', 'fna_mdf', fluxdims, ...
+    'Modified particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fhe_mdf', 'fhe_mdf', fluxdim, ...
+    'Modified electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhi_mdf', 'fhi_mdf', fluxdim, ...
+    'Modified ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fna_fcor', 'fna_fcor', fluxdims, ...
+    'Particle flux for momentum transport', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_nodrift', 'fna_nodrift', fluxdims, ...
+    'Particle flux without drifts', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_he', 'fna_he', fluxdims, ...
+    'B2 field fna_he', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fnaPSch', 'fnaPSch', fluxdims, ...
+    'Pfirsch-Schluter particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fhePSch', 'fhePSch', fluxdim, ...
+    'Pfirsch-Schluter electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhiPSch', 'fhiPSch', fluxdim, ...
+    'Pfirsch-Schluter ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fna_eir', 'fna_eir', fluxdims, ...
+    'EIRENE particle flux', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fne_eir', 'fne_eir', fluxdim, ...
+    'EIRENE electron flux', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fhe_eir', 'fhe_eir', fluxdim, ...
+    'EIRENE electron heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhi_eir', 'fhi_eir', fluxdim, ...
+    'EIRENE ion heat flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fna_32', 'fna_32', fluxdims, ...
+    '3/2 particle flux contribution', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fna_52', 'fna_52', fluxdims, ...
+    '5/2 particle flux contribution', 's^-1', fluxdims_labels);
+output = set_real_field(output, fid, 'fni_32', 'fni_32', fluxdim, ...
+    '3/2 atomic flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fni_52', 'fni_52', fluxdim, ...
+    '5/2 atomic flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fne_32', 'fne_32', fluxdim, ...
+    '3/2 electron flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fne_52', 'fne_52', fluxdim, ...
+    '5/2 electron flux contribution', 's^-1', fluxdim_labels);
+output = set_real_field(output, fid, 'fchdia', 'fchdia', fluxdim, ...
+    'Modified diamagnetic current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchin', 'fchin', fluxdim, ...
+    'Ion-neutral friction current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchvispar', 'fchvispar', fluxdim, ...
+    'Parallel-viscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchvisper', 'fchvisper', fluxdim, ...
+    'Perpendicular-viscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchvisq', 'fchvisq', fluxdim, ...
+    'Heat-viscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchinert', 'fchinert', fluxdim, ...
+    'Inertia and gyroviscosity current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fchanml', 'fchanml', fluxdim, ...
+    'Anomalous current', 'A', fluxdim_labels);
+output = set_real_field(output, fid, 'fht', 'fht', fluxdim, ...
+    'Total energy flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhj', 'fhj', fluxdim, ...
+    'Electrostatic energy flux', 'W', fluxdim_labels);
+output = set_real_field(output, fid, 'fhm', 'fhm', fluxdims, ...
+    'Parallel kinetic energy flux', 'W', fluxdims_labels);
+output = set_real_field(output, fid, 'fhp', 'fhp', fluxdims, ...
+    'Potential energy flux', 'W', fluxdims_labels);
 
 end
 
@@ -301,134 +452,244 @@ end
 
 if READ_SOURCES
 
-if strcmp(version,'structured')
+if strcmp(version, 'structured')
 
-output.sch          = scan_b2_real(fid,'sch'         ,[nx+2,ny+2,4]);    % total current source, A
-output.she          = scan_b2_real(fid,'she'         ,[nx+2,ny+2,4]);    % total electron energy source, W
-output.shi          = scan_b2_real(fid,'shi'         ,[nx+2,ny+2,4]);    % total ion energy source, W
-output.smo          = scan_b2_real(fid,'smo'         ,[nx+2,ny+2,4,ns]); % total momentum source, N
-output.smq          = scan_b2_real(fid,'smq'         ,[nx+2,ny+2,4,ns]); % total momentum source, N
-output.sna          = scan_b2_real(fid,'sna'         ,[nx+2,ny+2,2,ns]); % total atomic particle source, s^-1
-output.sne          = scan_b2_real(fid,'sne'         ,[nx+2,ny+2,2]);    % total electron source, s^-1
+output = set_real_field(output, fid, 'sch', 'sch', source4dim, ...
+    'Total current source', 'A', source4dim_labels);
+output = set_real_field(output, fid, 'she', 'she', source4dim, ...
+    'Total electron energy source', 'W', source4dim_labels);
+output = set_real_field(output, fid, 'shi', 'shi', source4dim, ...
+    'Total ion energy source', 'W', source4dim_labels);
+output = set_real_field(output, fid, 'smo', 'smo', source4dims, ...
+    'Total momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'smq', 'smq', source4dims, ...
+    'Total momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'sna', 'sna', source2dims, ...
+    'Total atomic particle source', 's^-1', source2dims_labels);
+output = set_real_field(output, fid, 'sne', 'sne', source2dim, ...
+    'Total electron source', 's^-1', source2dim_labels);
 
-output.rsana        = scan_b2_real(fid,'rsana'       ,[nx+2,ny+2,ns]);   % ionization atomic particle source, s^-1
-output.rsahi        = scan_b2_real(fid,'rsahi'       ,[nx+2,ny+2,ns]);   % ionization ion energy source, W
-output.rsamo        = scan_b2_real(fid,'rsamo'       ,[nx+2,ny+2,ns]);   % ionization momentum source, N
-output.rrana        = scan_b2_real(fid,'rrana'       ,[nx+2,ny+2,ns]);   % recombination atomic particle source, s^-1
-output.rrahi        = scan_b2_real(fid,'rrahi'       ,[nx+2,ny+2,ns]);   % recombination ion energy source, W
-output.rramo        = scan_b2_real(fid,'rramo'       ,[nx+2,ny+2,ns]);   % recombination momentum source, N
-output.rqahe        = scan_b2_real(fid,'rqahe'       ,[nx+2,ny+2,ns]);   % electron cooling rate, W
-output.rqrad        = scan_b2_real(fid,'rqrad'       ,[nx+2,ny+2,ns]);   % line radiation rate, W
-output.rqbrm        = scan_b2_real(fid,'rqbrm'       ,[nx+2,ny+2,ns]);   % bremmstrahlung radiation rate, W
-output.rcxna        = scan_b2_real(fid,'rcxna'       ,[nx+2,ny+2,ns]);   % charge-exchange atomic particle source, s^-1
-output.rcxhi        = scan_b2_real(fid,'rcxhi'       ,[nx+2,ny+2,ns]);   % charge-exchange ion energy source, W
-output.rcxmo        = scan_b2_real(fid,'rcxmo'       ,[nx+2,ny+2,ns]);   % charge-exchange momentum source, N
+output = set_real_field(output, fid, 'rsana', 'rsana', statedims, ...
+    'Ionization atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'rsahi', 'rsahi', statedims, ...
+    'Ionization ion energy source', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rsamo', 'rsamo', statedims, ...
+    'Ionization momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'rrana', 'rrana', statedims, ...
+    'Recombination atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'rrahi', 'rrahi', statedims, ...
+    'Recombination ion energy source', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rramo', 'rramo', statedims, ...
+    'Recombination momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'rqahe', 'rqahe', statedims, ...
+    'Electron cooling rate', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rqrad', 'rqrad', statedims, ...
+    'Line radiation rate', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rqbrm', 'rqbrm', statedims, ...
+    'Bremsstrahlung radiation rate', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rcxna', 'rcxna', statedims, ...
+    'Charge-exchange atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'rcxhi', 'rcxhi', statedims, ...
+    'Charge-exchange ion energy source', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rcxmo', 'rcxmo', statedims, ...
+    'Charge-exchange momentum source', 'N', statedims_labels);
 
-output.b2stbr_sna   = scan_b2_real(fid,'b2stbr_sna'  ,[nx+2,ny+2,ns]);   % recycling atomic particle source, s^-1
-output.b2stbr_smo   = scan_b2_real(fid,'b2stbr_smo'  ,[nx+2,ny+2,ns]);   % recycling momentum source, N
-output.b2stbr_she   = scan_b2_real(fid,'b2stbr_she'  ,[nx+2,ny+2]);      % recycling electron energy source, W
-output.b2stbr_shi   = scan_b2_real(fid,'b2stbr_shi'  ,[nx+2,ny+2]);      % recycling ion energy source, W
-output.b2stbr_sch   = scan_b2_real(fid,'b2stbr_sch'  ,[nx+2,ny+2]);      % recycling current source, A
-output.b2stbr_sne   = scan_b2_real(fid,'b2stbr_sne'  ,[nx+2,ny+2]);      % recycling electron source, s^-1
+output = set_real_field(output, fid, 'b2stbr_sna', 'b2stbr_sna', statedims, ...
+    'Recycling atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'b2stbr_smo', 'b2stbr_smo', statedims, ...
+    'Recycling momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'b2stbr_she', 'b2stbr_she', statedim, ...
+    'Recycling electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_shi', 'b2stbr_shi', statedim, ...
+    'Recycling ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_sch', 'b2stbr_sch', statedim, ...
+    'Recycling current source', 'A', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_sne', 'b2stbr_sne', statedim, ...
+    'Recycling electron source', 's^-1', statedim_labels);
 
-output.b2stbc_sna   = scan_b2_real(fid,'b2stbc_sna'  ,[nx+2,ny+2,ns]);   % boundary atomic particle source, s^-1
-output.b2stbc_smo   = scan_b2_real(fid,'b2stbc_smo'  ,[nx+2,ny+2,ns]);   % boundary momentum source, N
-output.b2stbc_she   = scan_b2_real(fid,'b2stbc_she'  ,[nx+2,ny+2]);      % boundary electron energy source, W
-output.b2stbc_shi   = scan_b2_real(fid,'b2stbc_shi'  ,[nx+2,ny+2]);      % boundary ion energy source, W
-output.b2stbc_sch   = scan_b2_real(fid,'b2stbc_sch'  ,[nx+2,ny+2]);      % boundary current source, A
-output.b2stbc_sne   = scan_b2_real(fid,'b2stbc_sne'  ,[nx+2,ny+2]);      % boundary electron source, s^-1
+output = set_real_field(output, fid, 'b2stbc_sna', 'b2stbc_sna', statedims, ...
+    'Boundary atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'b2stbc_smo', 'b2stbc_smo', statedims, ...
+    'Boundary momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'b2stbc_she', 'b2stbc_she', statedim, ...
+    'Boundary electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbc_shi', 'b2stbc_shi', statedim, ...
+    'Boundary ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbc_sch', 'b2stbc_sch', statedim, ...
+    'Boundary current source', 'A', statedim_labels);
+output = set_real_field(output, fid, 'b2stbc_sne', 'b2stbc_sne', statedim, ...
+    'Boundary electron source', 's^-1', statedim_labels);
 
-output.b2stbm_sna   = scan_b2_real(fid,'b2stbm_sna'  ,[nx+2,ny+2,ns]);   % additional atomic particle source, s^-1
-output.b2stbm_smo   = scan_b2_real(fid,'b2stbm_smo'  ,[nx+2,ny+2,ns]);   % additional momentum source, N
-output.b2stbm_she   = scan_b2_real(fid,'b2stbm_she'  ,[nx+2,ny+2]);      % additional electron energy source, W
-output.b2stbm_shi   = scan_b2_real(fid,'b2stbm_shi'  ,[nx+2,ny+2]);      % additional ion energy source, W
-output.b2stbm_sch   = scan_b2_real(fid,'b2stbm_sch'  ,[nx+2,ny+2]);      % additional current source, A
-output.b2stbm_sne   = scan_b2_real(fid,'b2stbm_sne'  ,[nx+2,ny+2]);      % additional electron source, s^-1
+output = set_real_field(output, fid, 'b2stbm_sna', 'b2stbm_sna', statedims, ...
+    'Additional atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'b2stbm_smo', 'b2stbm_smo', statedims, ...
+    'Additional momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'b2stbm_she', 'b2stbm_she', statedim, ...
+    'Additional electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbm_shi', 'b2stbm_shi', statedim, ...
+    'Additional ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbm_sch', 'b2stbm_sch', statedim, ...
+    'Additional current source', 'A', statedim_labels);
+output = set_real_field(output, fid, 'b2stbm_sne', 'b2stbm_sne', statedim, ...
+    'Additional electron source', 's^-1', statedim_labels);
 
-output.b2sihs_divue = scan_b2_real(fid,'b2sihs_divue',[nx+2,ny+2]);      % parallel-velocity-gradient electron heating, W
-output.b2sihs_divua = scan_b2_real(fid,'b2sihs_divua',[nx+2,ny+2]);      % parallel-velocity-gradient ion heating, W
-output.b2sihs_exbe  = scan_b2_real(fid,'b2sihs_exbe' ,[nx+2,ny+2]);      % ExB electron heating, W
-output.b2sihs_exba  = scan_b2_real(fid,'b2sihs_exba' ,[nx+2,ny+2]);      % ExB ion heating, W
-output.b2sihs_visa  = scan_b2_real(fid,'b2sihs_visa' ,[nx+2,ny+2]);      % viscosity heating, W
-output.b2sihs_joule = scan_b2_real(fid,'b2sihs_joule',[nx+2,ny+2]);      % joule heating, W
-output.b2sihs_fraa  = scan_b2_real(fid,'b2sihs_fraa' ,[nx+2,ny+2]);      % friction heating, W
-output.b2sihs_str   = scan_b2_real(fid,'b2sihs_str ' ,[nx+2,ny+2]);      % strange heating, W
+output = set_real_field(output, fid, 'b2sihs_divue', 'b2sihs_divue', statedim, ...
+    'Parallel-velocity-gradient electron heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_divua', 'b2sihs_divua', statedim, ...
+    'Parallel-velocity-gradient ion heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_exbe', 'b2sihs_exbe', statedim, ...
+    'ExB electron heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_exba', 'b2sihs_exba', statedim, ...
+    'ExB ion heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_visa', 'b2sihs_visa', statedim, ...
+    'Viscosity heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_joule', 'b2sihs_joule', statedim, ...
+    'Joule heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_fraa', 'b2sihs_fraa', statedim, ...
+    'Friction heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_str', 'b2sihs_str ', statedim, ...
+    'Strange heating', 'W', statedim_labels);
 
-output.b2npmo_smaf  = scan_b2_real(fid,'b2npmo_smaf' ,[nx+2,ny+2,4,ns]); % friction momentum source, N
-output.b2npmo_smag  = scan_b2_real(fid,'b2npmo_smag' ,[nx+2,ny+2,4,ns]); % pressure-gradient momentum source, N
-output.b2npmo_smav  = scan_b2_real(fid,'b2npmo_smav' ,[nx+2,ny+2,4,ns]); % viscosity momentum source, N
-output.smpr         = scan_b2_real(fid,'smpr'        ,[nx+2,ny+2,ns]);   % electrostatic force, N
-output.smpt         = scan_b2_real(fid,'smpt'        ,[nx+2,ny+2,ns]);   % thermal force, N
-output.smfr         = scan_b2_real(fid,'smfr'        ,[nx+2,ny+2,ns]);   % friction force, N
-output.smcf         = scan_b2_real(fid,'smcf'        ,[nx+2,ny+2,ns]);   % centrifugal force, N
+output = set_real_field(output, fid, 'b2npmo_smaf', 'b2npmo_smaf', source4dims, ...
+    'Friction momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'b2npmo_smag', 'b2npmo_smag', source4dims, ...
+    'Pressure-gradient momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'b2npmo_smav', 'b2npmo_smav', source4dims, ...
+    'Viscosity momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'smpr', 'smpr', statedims, ...
+    'Electrostatic force', 'N', statedims_labels);
+output = set_real_field(output, fid, 'smpt', 'smpt', statedims, ...
+    'Thermal force', 'N', statedims_labels);
+output = set_real_field(output, fid, 'smfr', 'smfr', statedims, ...
+    'Friction force', 'N', statedims_labels);
+output = set_real_field(output, fid, 'smcf', 'smcf', statedims, ...
+    'Centrifugal force', 'N', statedims_labels);
 
-output.ext_sna      = scan_b2_real(fid,'ext_sna'     ,[nx+2,ny+2,ns]);   % external atomic particle source, s^-1
-output.ext_smo      = scan_b2_real(fid,'ext_smo'     ,[nx+2,ny+2,ns]);   % external momentum source, N
-output.ext_she      = scan_b2_real(fid,'ext_she'     ,[nx+2,ny+2]);      % external electron energy source, W
-output.ext_shi      = scan_b2_real(fid,'ext_shi'     ,[nx+2,ny+2]);      % external ion energy source, W
-output.ext_sch      = scan_b2_real(fid,'ext_sch'     ,[nx+2,ny+2]);      % external current source, A
-output.ext_sne      = scan_b2_real(fid,'ext_sne'     ,[nx+2,ny+2]);      % external electron source, s^-1
+output = set_real_field(output, fid, 'ext_sna', 'ext_sna', statedims, ...
+    'External atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'ext_smo', 'ext_smo', statedims, ...
+    'External momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'ext_she', 'ext_she', statedim, ...
+    'External electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'ext_shi', 'ext_shi', statedim, ...
+    'External ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'ext_sch', 'ext_sch', statedim, ...
+    'External current source', 'A', statedim_labels);
+output = set_real_field(output, fid, 'ext_sne', 'ext_sne', statedim, ...
+    'External electron source', 's^-1', statedim_labels);
 
-elseif strcmp(version,'unstructured')
+elseif strcmp(version, 'unstructured')
 
-output.sna  = scan_b2_real(fid,'sna' ,[nCv,2,ns]);
-output.smo  = scan_b2_real(fid,'smo' ,[nCv,4,ns]);
-output.smq  = scan_b2_real(fid,'smq' ,[nCv,4,ns]);
-output.shi  = scan_b2_real(fid,'shi' ,[nCv,4]);
-output.she  = scan_b2_real(fid,'she' ,[nCv,4]);
-output.shn  = scan_b2_real(fid,'shn' ,[nCv,4]);
-output.skt  = scan_b2_real(fid,'skt' ,[nCv,4]);
-output.skt_prod  = scan_b2_real(fid,'skt_prod' ,[nCv]);
-output.skt_diss  = scan_b2_real(fid,'skt_diss' ,[nCv]);
+output = set_real_field(output, fid, 'sna', 'sna', source2dims, ...
+    'Total atomic particle source', 's^-1', source2dims_labels);
+output = set_real_field(output, fid, 'smo', 'smo', source4dims, ...
+    'Total momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'smq', 'smq', source4dims, ...
+    'Total momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'shi', 'shi', source4dim, ...
+    'Total ion energy source', 'W', source4dim_labels);
+output = set_real_field(output, fid, 'she', 'she', source4dim, ...
+    'Total electron energy source', 'W', source4dim_labels);
+output = set_real_field(output, fid, 'shn', 'shn', source4dim, ...
+    'Total neutral energy source', 'W', source4dim_labels);
+output = set_real_field(output, fid, 'skt', 'skt', source4dim, ...
+    'Total turbulent kinetic energy source', 'W', source4dim_labels);
+output = set_real_field(output, fid, 'skt_prod', 'skt_prod', statedim, ...
+    'Turbulent kinetic energy production', 'W', statedim_labels);
+output = set_real_field(output, fid, 'skt_diss', 'skt_diss', statedim, ...
+    'Turbulent kinetic energy dissipation', 'W', statedim_labels);
 
-output.rsana        = scan_b2_real(fid,'rsana'       ,[nCv,ns]);   % ionization atomic particle source, s^-1
-output.rrana        = scan_b2_real(fid,'rrana'       ,[nCv,ns]);   % recombination atomic particle source, s^-1
-output.rcxna        = scan_b2_real(fid,'rcxna'       ,[nCv,ns]);   % charge-exchange atomic particle source, s^-1
-output.rsamo        = scan_b2_real(fid,'rsamo'       ,[nCv,ns]);   % ionization momentum source, N
-output.rramo        = scan_b2_real(fid,'rramo'       ,[nCv,ns]);   % recombination momentum source, N
-output.rcxmo        = scan_b2_real(fid,'rcxmo'       ,[nCv,ns]);   % charge-exchange momentum source, N
-output.rsahi        = scan_b2_real(fid,'rsahi'       ,[nCv,ns]);   % ionization ion energy source, W
-output.rrahi        = scan_b2_real(fid,'rrahi'       ,[nCv,ns]);   % recombination ion energy source, W
-output.rcxhi        = scan_b2_real(fid,'rcxhi'       ,[nCv,ns]);   % charge-exchange ion energy source, W
-output.rqahe        = scan_b2_real(fid,'rqahe'       ,[nCv,ns]);   % electron cooling rate, W
-output.rqrad        = scan_b2_real(fid,'rqrad'       ,[nCv,ns]);   % line radiation rate, W
-output.rqbrm        = scan_b2_real(fid,'rqbrm'       ,[nCv,ns]);   % bremmstrahlung radiation rate, W
+output = set_real_field(output, fid, 'rsana', 'rsana', statedims, ...
+    'Ionization atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'rrana', 'rrana', statedims, ...
+    'Recombination atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'rcxna', 'rcxna', statedims, ...
+    'Charge-exchange atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'rsamo', 'rsamo', statedims, ...
+    'Ionization momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'rramo', 'rramo', statedims, ...
+    'Recombination momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'rcxmo', 'rcxmo', statedims, ...
+    'Charge-exchange momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'rsahi', 'rsahi', statedims, ...
+    'Ionization ion energy source', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rrahi', 'rrahi', statedims, ...
+    'Recombination ion energy source', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rcxhi', 'rcxhi', statedims, ...
+    'Charge-exchange ion energy source', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rqahe', 'rqahe', statedims, ...
+    'Electron cooling rate', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rqrad', 'rqrad', statedims, ...
+    'Line radiation rate', 'W', statedims_labels);
+output = set_real_field(output, fid, 'rqbrm', 'rqbrm', statedims, ...
+    'Bremsstrahlung radiation rate', 'W', statedims_labels);
 
-output.b2stbc_sna   = scan_b2_real(fid,'b2stbc_sna'  ,[nCv,ns]);   % boundary atomic particle source, s^-1
-output.b2stbr_sna   = scan_b2_real(fid,'b2stbr_sna'  ,[nCv,ns]);   % recycling atomic particle source, s^-1
-output.b2stbm_sna   = scan_b2_real(fid,'b2stbm_sna'  ,[nCv,ns]);   % additional atomic particle source, s^-1
-output.b2stbc_smo   = scan_b2_real(fid,'b2stbc_smo'  ,[nCv,ns]);   % boundary momentum source, N
-output.b2stbr_smo   = scan_b2_real(fid,'b2stbr_smo'  ,[nCv,ns]);   % recycling momentum source, N
-output.b2stbm_smo   = scan_b2_real(fid,'b2stbm_smo'  ,[nCv,ns]);   % additional momentum source, N
-output.b2stbc_she   = scan_b2_real(fid,'b2stbc_she'  ,[nCv]);      % boundary electron energy source, W
-output.b2stbr_she   = scan_b2_real(fid,'b2stbr_she'  ,[nCv]);      % recycling electron energy source, W
-output.b2stbm_she   = scan_b2_real(fid,'b2stbm_she'  ,[nCv]);      % additional electron energy source, W
-output.b2stbc_shi   = scan_b2_real(fid,'b2stbc_shi'  ,[nCv]);      % boundary ion energy source, W
-output.b2stbr_shi   = scan_b2_real(fid,'b2stbr_shi'  ,[nCv]);      % recycling ion energy source, W
-output.b2stbm_shi   = scan_b2_real(fid,'b2stbm_shi'  ,[nCv]);      % additional ion energy source, W
-output.b2stbc_sch   = scan_b2_real(fid,'b2stbc_sch'  ,[nCv]);      % boundary current source, A
-output.b2stbr_sch   = scan_b2_real(fid,'b2stbr_sch'  ,[nCv]);      % recycling current source, A
-output.b2stbc_sne   = scan_b2_real(fid,'b2stbc_sne'  ,[nCv]);      % boundary electron source, s^-1
-output.b2stbr_sne   = scan_b2_real(fid,'b2stbr_sne'  ,[nCv]);      % recycling electron source, s^-1
-output.b2stbm_sne   = scan_b2_real(fid,'b2stbm_sne'  ,[nCv]);      % additional electron source, s^-1
+output = set_real_field(output, fid, 'b2stbc_sna', 'b2stbc_sna', statedims, ...
+    'Boundary atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'b2stbr_sna', 'b2stbr_sna', statedims, ...
+    'Recycling atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'b2stbm_sna', 'b2stbm_sna', statedims, ...
+    'Additional atomic particle source', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'b2stbc_smo', 'b2stbc_smo', statedims, ...
+    'Boundary momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'b2stbr_smo', 'b2stbr_smo', statedims, ...
+    'Recycling momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'b2stbm_smo', 'b2stbm_smo', statedims, ...
+    'Additional momentum source', 'N', statedims_labels);
+output = set_real_field(output, fid, 'b2stbc_she', 'b2stbc_she', statedim, ...
+    'Boundary electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_she', 'b2stbr_she', statedim, ...
+    'Recycling electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbm_she', 'b2stbm_she', statedim, ...
+    'Additional electron energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbc_shi', 'b2stbc_shi', statedim, ...
+    'Boundary ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_shi', 'b2stbr_shi', statedim, ...
+    'Recycling ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbm_shi', 'b2stbm_shi', statedim, ...
+    'Additional ion energy source', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2stbc_sch', 'b2stbc_sch', statedim, ...
+    'Boundary current source', 'A', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_sch', 'b2stbr_sch', statedim, ...
+    'Recycling current source', 'A', statedim_labels);
+output = set_real_field(output, fid, 'b2stbc_sne', 'b2stbc_sne', statedim, ...
+    'Boundary electron source', 's^-1', statedim_labels);
+output = set_real_field(output, fid, 'b2stbr_sne', 'b2stbr_sne', statedim, ...
+    'Recycling electron source', 's^-1', statedim_labels);
+output = set_real_field(output, fid, 'b2stbm_sne', 'b2stbm_sne', statedim, ...
+    'Additional electron source', 's^-1', statedim_labels);
 
-output.b2sihs_divua = scan_b2_real(fid,'b2sihs_divua',[nCv]);      % parallel-velocity-gradient ion heating, W
-output.b2sihs_divue = scan_b2_real(fid,'b2sihs_divue',[nCv]);      % parallel-velocity-gradient electron heating, W
-output.b2sihs_exba  = scan_b2_real(fid,'b2sihs_exba' ,[nCv]);      % ExB ion heating, W
-output.b2sihs_exbe  = scan_b2_real(fid,'b2sihs_exbe' ,[nCv]);      % ExB electron heating, W
-output.b2sihs_fraa  = scan_b2_real(fid,'b2sihs_fraa' ,[nCv]);      % friction heating, W
-output.b2sihs_joule = scan_b2_real(fid,'b2sihs_joule',[nCv]);      % joule heating, W
-output.b2sihs_str   = scan_b2_real(fid,'b2sihs_str ' ,[nCv]);      % strange heating, W
-output.b2sihs_visa  = scan_b2_real(fid,'b2sihs_visa' ,[nCv]);      % viscosity heating, W
+output = set_real_field(output, fid, 'b2sihs_divua', 'b2sihs_divua', statedim, ...
+    'Parallel-velocity-gradient ion heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_divue', 'b2sihs_divue', statedim, ...
+    'Parallel-velocity-gradient electron heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_exba', 'b2sihs_exba', statedim, ...
+    'ExB ion heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_exbe', 'b2sihs_exbe', statedim, ...
+    'ExB electron heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_fraa', 'b2sihs_fraa', statedim, ...
+    'Friction heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_joule', 'b2sihs_joule', statedim, ...
+    'Joule heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_str', 'b2sihs_str ', statedim, ...
+    'Strange heating', 'W', statedim_labels);
+output = set_real_field(output, fid, 'b2sihs_visa', 'b2sihs_visa', statedim, ...
+    'Viscosity heating', 'W', statedim_labels);
 
-
-output.b2npmo_smaf  = scan_b2_real(fid,'b2npmo_smaf' ,[nCv,4,ns]); % friction momentum source, N
-output.b2npmo_smag  = scan_b2_real(fid,'b2npmo_smag' ,[nCv,4,ns]); % pressure-gradient momentum source, N
-output.b2npmo_smav  = scan_b2_real(fid,'b2npmo_smav' ,[nCv,4,ns]); % viscosity momentum source, N
-output.smcf         = scan_b2_real(fid,'smcf'        ,[nCv,ns]);   % centrifugal force, N
-output.smfr         = scan_b2_real(fid,'smfr'        ,[nCv,ns]);   % friction force, N
-output.smpr         = scan_b2_real(fid,'smpr'        ,[nCv,ns]);   % electrostatic force, N
-output.smpt         = scan_b2_real(fid,'smpt'        ,[nCv,ns]);   % thermal force, N
+output = set_real_field(output, fid, 'b2npmo_smaf', 'b2npmo_smaf', source4dims, ...
+    'Friction momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'b2npmo_smag', 'b2npmo_smag', source4dims, ...
+    'Pressure-gradient momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'b2npmo_smav', 'b2npmo_smav', source4dims, ...
+    'Viscosity momentum source', 'N', source4dims_labels);
+output = set_real_field(output, fid, 'smcf', 'smcf', statedims, ...
+    'Centrifugal force', 'N', statedims_labels);
+output = set_real_field(output, fid, 'smfr', 'smfr', statedims, ...
+    'Friction force', 'N', statedims_labels);
+output = set_real_field(output, fid, 'smpr', 'smpr', statedims, ...
+    'Electrostatic force', 'N', statedims_labels);
+output = set_real_field(output, fid, 'smpt', 'smpt', statedims, ...
+    'Thermal force', 'N', statedims_labels);
 
 end
 
@@ -442,25 +703,39 @@ end
 
 if READ_RESIDUALS
 
-if strcmp(version,'structured')
+if strcmp(version, 'structured')
 
-output.resco        = scan_b2_real(fid,'resco'       ,[nx+2,ny+2,ns]);  % continuity equation resitual, s^-1
-output.reshe        = scan_b2_real(fid,'reshe'       ,[nx+2,ny+2]);     % electron energy equation resitual, W
-output.reshi        = scan_b2_real(fid,'reshi'       ,[nx+2,ny+2]);     % ion energy equation resitual, W
-output.resmo        = scan_b2_real(fid,'resmo'       ,[nx+2,ny+2,ns]);  % momentum equation resitual, N
-output.resmt        = scan_b2_real(fid,'resmt'       ,[nx+2,ny+2]);     % total momentum equation resitual, N
-output.respo        = scan_b2_real(fid,'respo'       ,[nx+2,ny+2]);     % potential equation resitual, A
+output = set_real_field(output, fid, 'resco', 'resco', statedims, ...
+    'Continuity equation residual', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'reshe', 'reshe', statedim, ...
+    'Electron energy equation residual', 'W', statedim_labels);
+output = set_real_field(output, fid, 'reshi', 'reshi', statedim, ...
+    'Ion energy equation residual', 'W', statedim_labels);
+output = set_real_field(output, fid, 'resmo', 'resmo', statedims, ...
+    'Momentum equation residual', 'N', statedims_labels);
+output = set_real_field(output, fid, 'resmt', 'resmt', statedim, ...
+    'Total momentum equation residual', 'N', statedim_labels);
+output = set_real_field(output, fid, 'respo', 'respo', statedim, ...
+    'Potential equation residual', 'A', statedim_labels);
 
-elseif strcmp(version,'unstructured')
+elseif strcmp(version, 'unstructured')
 
-output.resco  = scan_b2_real(fid,'resco' ,[nCv,ns]);
-output.reshe  = scan_b2_real(fid,'reshe' ,[nCv]);
-output.reshi  = scan_b2_real(fid,'reshi' ,[nCv]);
-output.reshn  = scan_b2_real(fid,'reshn' ,[nCv]);
-output.resmo  = scan_b2_real(fid,'resmo' ,[nCv,ns]);
-output.resmt  = scan_b2_real(fid,'resmt' ,[nCv]);
-output.respo  = scan_b2_real(fid,'respo' ,[nCv]);
-output.reskt  = scan_b2_real(fid,'reskt' ,[nCv]);
+output = set_real_field(output, fid, 'resco', 'resco', statedims, ...
+    'Continuity equation residual', 's^-1', statedims_labels);
+output = set_real_field(output, fid, 'reshe', 'reshe', statedim, ...
+    'Electron heat balance residual', 'W', statedim_labels);
+output = set_real_field(output, fid, 'reshi', 'reshi', statedim, ...
+    'Ion heat balance residual', 'W', statedim_labels);
+output = set_real_field(output, fid, 'reshn', 'reshn', statedim, ...
+    'Fluid neutral heat balance residual', 'W', statedim_labels);
+output = set_real_field(output, fid, 'resmo', 'resmo', statedims, ...
+    'Parallel momentum equation residual', 'N', statedims_labels);
+output = set_real_field(output, fid, 'resmt', 'resmt', statedim, ...
+    'Total parallel momentum equation residual', 'N', statedim_labels);
+output = set_real_field(output, fid, 'respo', 'respo', statedim, ...
+    'Electric potential equation residual', 'A', statedim_labels);
+output = set_real_field(output, fid, 'reskt', 'reskt', statedim, ...
+    'Turbulent kinetic energy equation residual', 'W', statedim_labels);
 
 end
 
@@ -468,8 +743,18 @@ fprintf('Residuals from b2fplasmf read\n');
 
 frewind(fid);
 
+end
+
 fclose(fid);
 
 end
 
+
+function output = set_real_field(output, fid, field_name, token, data_dims, description, unit, dimension_labels, scale_factor)
+    if nargin < 9
+        scale_factor = 1;
+    end
+
+    output = set_b2_real_field(output, fid, field_name, token, data_dims, ...
+        description, unit, dimension_labels, scale_factor);
 end
