@@ -105,13 +105,14 @@ if ~strcmp(radbaldist,'rho')
     end
     x_radedge = coordinate_edge;
     x_rad = coordinate_cell;
-end
 
-if ~isempty(x_rad)
-    x_rad = 100*x_rad;
-end
-if ~isempty(x_radedge)
-    x_radedge = 100*x_radedge;
+    if ~isempty(x_rad)
+        x_rad = 100*x_rad;
+    end
+    if ~isempty(x_radedge)
+        x_radedge = 100*x_radedge;
+    end
+
 end
 
 end
