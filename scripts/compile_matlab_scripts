@@ -1,5 +1,8 @@
 #!/bin/tcsh -f
 
+# TODO: check if matlab runtime is really installed before skipping the
+#       (re-)installation, instead of just checking the runtime installer
+
 # Check if MATLAB executable is found
 which matlab >& /dev/null
 if ($status != 0) then
@@ -349,6 +352,28 @@ echo "==========================================================================
 echo "Compilation completed: $compiled_count compiled, $skipped_count skipped (already up to date)"
 echo "============================================================================================================="
 
+# Create tarball of compiled scripts
+echo ""
+echo "Creating tarball of compiled scripts:"
+
+if (`uname -s` == "Darwin") then
+    if (`uname -m` == "arm64") then
+        set platform_tar = "maca64"
+    else
+        set platform_tar = "maci64"
+    endif
+else
+    set platform_tar = "glnxa64"
+endif
+
+set scripts_tarball = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_analysis_compiled_scripts_${platform_tar}_R${matlab_version}.tar.gz"
+tar -czf "$scripts_tarball" -C "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis" Scripts
+if ($status == 0) then
+    echo "---> Tarball created: $scripts_tarball"
+else
+    echo "---> Warning: Failed to create compiled scripts tarball"
+endif
+
 # =============================================================================
 # Runtime installer management
 # =============================================================================
@@ -465,44 +490,51 @@ if ($needs_installer == 1) then
     
     mkdir -p "$RUNTIME_DIR"
 
-    if ("$HOST_NAME" == "LINUX" || "$HOST_NAME" == "DARWIN") then
+    echo ""
+    echo "Creating custom MATLAB Runtime installer:" 
+    
+    # Write buildresult files to a temporary file
+    set temp_file_list = "/tmp/buildresult_list_$$.txt"
+    rm -f "$temp_file_list"
+    foreach br_file ($buildresult_files)
+        echo "$br_file" >> "$temp_file_list"
+    end  
+    
+    # Create MATLAB script to read the file list and call customInstaller
+    set temp_matlab_script = "/tmp/matlab_cmd_installer_$$.m"
+    printf "try; fid = fopen('%s', 'r'); files = textscan(fid, '%%s'); fclose(fid); files = files{1}; compiler.runtime.customInstaller('SOLPS_MATLAB_Runtime', files, 'OutputDir', '%s'); exit(0); catch ME; disp(ME.message); exit(1); end\n" "$temp_file_list" "$RUNTIME_DIR" > "$temp_matlab_script"
+    matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')" >& /dev/null
+    rm -f "$temp_matlab_script"
 
-        echo ""
-        echo "Creating custom MATLAB Runtime installer:" 
+    if ($status == 0) then
+        echo "---> Success: Custom MATLAB Runtime installer created"
+        echo -n "---> Location"
+        echo ": $RUNTIME_DIR"
         
-        # Write buildresult files to a temporary file
-        set temp_file_list = "/tmp/buildresult_list_$$.txt"
-        rm -f "$temp_file_list"
-        foreach br_file ($buildresult_files)
-            echo "$br_file" >> "$temp_file_list"
-        end  
+        # Save the dependencies list
+        cp "$temp_deps_new" "$DEPS_FILE"
+        echo "---> Dependencies list saved"
         
-        # Create MATLAB script to read the file list and call customInstaller
-        set temp_matlab_script = "/tmp/matlab_cmd_installer_$$.m"
-        printf "try; fid = fopen('%s', 'r'); files = textscan(fid, '%%s'); fclose(fid); files = files{1}; compiler.runtime.customInstaller('SOLPS_MATLAB_Runtime', files, 'OutputDir', '%s'); exit(0); catch ME; disp(ME.message); exit(1); end\n" "$temp_file_list" "$RUNTIME_DIR" > "$temp_matlab_script"
-        matlab -nodisplay -nosplash -nodesktop -batch "run('$temp_matlab_script')" >& /dev/null
-        rm -f "$temp_matlab_script"
-
-        if ($status == 0) then
-            echo "---> Success: Custom MATLAB Runtime installer created"
-            echo -n "---> Location"
-            echo ": $RUNTIME_DIR"
-            
-            # Save the dependencies list
-            cp "$temp_deps_new" "$DEPS_FILE"
-            echo "---> Dependencies list saved"
-            
-        else
-            echo "---> Failed: Custom MATLAB Runtime installer creation failed"
-            rm -f "$temp_file_list" "$temp_deps_new"
-            if ($had_startup == 1) then
-                mv "$STARTUP_BACKUP" "$STARTUP_FILE"
-            endif
-            exit 1
+    else
+        echo "---> Failed: Custom MATLAB Runtime installer creation failed"
+        rm -f "$temp_file_list" "$temp_deps_new"
+        if ($had_startup == 1) then
+            mv "$STARTUP_BACKUP" "$STARTUP_FILE"
         endif
-        
-        rm -f "$temp_file_list"
+        exit 1
+    endif
+    
+    rm -f "$temp_file_list"
 
+    # Create tarball of runtime installer
+    echo ""
+    echo "Creating tarball of MATLAB Runtime installer:"
+    set installer_tarball = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_analysis_runtime_installer_${platform_tar}_R${matlab_version}.tar.gz"
+    tar -czf "$installer_tarball" -C "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis" MATLAB_Runtime_installer
+    if ($status == 0) then
+        echo "---> Tarball created: $installer_tarball"
+    else
+        echo "---> Warning: Failed to create runtime installer tarball"
     endif
     
     # =============================================================================
@@ -546,12 +578,15 @@ if ($needs_installer == 1) then
         set runtime_release = "$matlab_version"
         
         set platform_str = "glnxa64"
+
+        set FULL_INSTALLER_DIR = "$SOLPSTOP/scripts/$HOST_NAME.$COMPILER/MATLAB_analysis/MATLAB_Runtime_installer_full"
+        mkdir -p "$FULL_INSTALLER_DIR"
         
         # Download URL for full MATLAB Runtime
         set download_url = "https://ssd.mathworks.com/supportfiles/downloads/R${runtime_release}/Release/0/deployment_files/installer/complete/${platform_str}/MATLAB_Runtime_R${runtime_release}_${platform_str}.zip"
         
-        set full_installer_zip = "$RUNTIME_DIR/MATLAB_Runtime_R${runtime_release}_${platform_str}.zip"
-        set full_installer_dir = "$RUNTIME_DIR/MATLAB_Runtime_R${runtime_release}_${platform_str}"
+        set full_installer_zip = "$FULL_INSTALLER_DIR/MATLAB_Runtime_R${runtime_release}_${platform_str}.zip"
+        set full_installer_dir = "$FULL_INSTALLER_DIR/MATLAB_Runtime_R${runtime_release}_${platform_str}"
         
         # Download the full installer if not already present
         if (! -f "$full_installer_zip" && ! -d "$full_installer_dir") then
@@ -584,7 +619,7 @@ if ($needs_installer == 1) then
         # Extract the installer if needed
         if (-f "$full_installer_zip" && ! -d "$full_installer_dir") then
             echo "---> Extracting MATLAB Runtime installer..."
-            unzip -q -o "$full_installer_zip" -d "$RUNTIME_DIR"
+            unzip -q -o "$full_installer_zip" -d "$FULL_INSTALLER_DIR"
             
             if ($status != 0) then
                 echo "---> Error: Failed to extract MATLAB Runtime installer."
@@ -596,13 +631,13 @@ if ($needs_installer == 1) then
         
         # Find the installer executable in the extracted directory
         set installer_exe = ""
-        if (-f "$RUNTIME_DIR/install") then
-            set installer_exe = "$RUNTIME_DIR/install"
-        else if (-f "$RUNTIME_DIR/Install") then
-            set installer_exe = "$RUNTIME_DIR/Install"
+        if (-f "$FULL_INSTALLER_DIR/install") then
+            set installer_exe = "$FULL_INSTALLER_DIR/install"
+        else if (-f "$FULL_INSTALLER_DIR/Install") then
+            set installer_exe = "$FULL_INSTALLER_DIR/Install"
         else
             # Search for install script
-            set found_install = `find "$RUNTIME_DIR" -name "install" -type f | head -1`
+            set found_install = `find "$FULL_INSTALLER_DIR" -name "install" -type f | head -1`
             if ("$found_install" != "") then
                 set installer_exe = "$found_install"
             endif
@@ -707,14 +742,21 @@ if ($needs_installer == 1) then
                     set runtime_valid = 0
                 endif
 
-                #if ($runtime_valid == 1) then
-                #    echo "---> Success: MATLAB Runtime application installed"
-                #    echo -n "---> Location"
-                #    echo ": $MATLAB_RUNTIME_DIR"
-                #else
-                #    echo "---> Failed: MATLAB Runtime installation is incomplete or corrupted"
-                #    exit 1
-                #endif
+                if ($runtime_valid == 1) then
+                    echo "---> Success: MATLAB Runtime application installed"
+                    echo -n "---> Location"
+                    echo ": $MATLAB_RUNTIME_DIR"
+                else
+                    echo "---> Failed: MATLAB Runtime installation is incomplete or corrupted"
+                    exit 1
+                endif
+
+                # Remove full installer directory after successful installation
+                if ("$HOST_NAME" != "LINUX" && "$HOST_NAME" != "DARWIN") then
+                    if (-d "$FULL_INSTALLER_DIR") then
+                        rm -rf "$FULL_INSTALLER_DIR"
+                    endif
+                endif
                 
                 # Add setup lines if they don't already exist
                 set setup_file = "${SOLPSTOP}/SETUP/setup.csh.${HOST_NAME}.${COMPILER}.local"
