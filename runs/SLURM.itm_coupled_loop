@@ -4,6 +4,7 @@
 #SBATCH --ntasks-per-node=#PROCS#
 #SBATCH --cpus-per-task=#THREADS#
 #SBATCH -p gw
+#SBATCH --account=g2
 #SBATCH --time=#HOURS#:00:00
 #SBATCH --mem-per-cpu=#MEM#
 #SBATCH --job-name=#JOBNAME#
@@ -58,10 +59,11 @@ endif
 update_solps_run_status "Using SOLPSTOP = #SOLPSTOP#"
 update_solps_run_status "Started on `hostname` at `date`"
 
-
 rm -f run.KAPUTT
 
-b2run ${STANDALONE_ARG} ${USE_MPI} ${USE_OMP} b2mn #COMPRESS_ARG# >! run.log${COMPRESS_SUFFIX}
+set STANDALONE=${STANDALONE_ARG}
+
+b2run ${STANDALONE} ${USE_MPI} ${USE_OMP} b2mn #COMPRESS_ARG# >! run.log${COMPRESS_SUFFIX}
 
 QSUB.postprocess${COUPLED_SUFFIX}
 

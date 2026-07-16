@@ -6,7 +6,7 @@ set repo="SOLPS-ITER"
 git fetch --prune
 git checkout feature/wg-release && echo "Checked out SOLPS-ITER WG-release branch" || goto branch
 git submodule init
-git submodule update
+git submodule update || git -c submodule.ADAS.update=none submodule update
 git pull && goto b25 || goto local
 
 b25:
@@ -22,7 +22,7 @@ Eirene:
   cd $SOLPSTOP/modules/Eirene
   set repo="Eirene"
   git fetch --prune
-  git checkout feature/wg-release && echo "Checked out Eirene WG-release branch" || goto branch
+  git checkout SOLPS_develop && echo "Checked out Eirene SOLPS_develop branch" || goto branch
   git pull && goto Carre || goto local
 
 Carre:
@@ -36,14 +36,14 @@ Carre:
 Carre2:
   echo "Updating Carre2"
   if (! -d $SOLPSTOP/modules/Carre2) then
-    git clone ssh://git@git.iter.org/bnd/carre.git $SOLPSTOP/modules/Carre2
+    git clone git@github.com:iterorganization/CARRE.git $SOLPSTOP/modules/Carre2
     git submodule init
     git submodule update
   endif
   cd $SOLPSTOP/modules/Carre2
   set repo="Carre2"
   git fetch --prune
-  git checkout feature/Carre2 && echo "Checked out Carre2 branch" || goto branch
+  git checkout feature/Carre2_wg_release && echo "Checked out Carre2 WG-release branch" || goto branch
   git pull && goto DivGeo || goto local
 
 DivGeo:
@@ -51,16 +51,20 @@ DivGeo:
   cd $SOLPSTOP/modules/DivGeo
   set repo="DivGeo"
   git fetch --prune
-  git checkout develop && echo "Checked out DivGeo develop branch" || goto branch
+  git checkout feature/wg_release && echo "Checked out DivGeo WG-release branch" || goto branch
   git pull && goto ADAS || goto local
 
 ADAS:
   echo "Updating ADAS"
-  cd $SOLPSTOP/modules/adas
-  set repo="ADAS"
-  git fetch --prune
-  git checkout develop && echo "Checked out ADAS develop branch" || goto branch
-  git pull && goto compile || goto local
+  if (-s $SOLPSTOP/modules/adas/.gitattributes) then
+    cd $SOLPSTOP/modules/adas
+    set repo="ADAS"
+    git fetch --prune
+    git checkout develop && echo "Checked out ADAS develop branch" || goto branch
+    git pull && goto compile || goto local
+  else
+    $SOLPSTOP/scripts/fetch_adas_datafiles && goto compile || exit
+  endif
 
 branch:
   echo "You are not on the WG-release branch."
