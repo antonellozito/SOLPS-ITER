@@ -21,13 +21,11 @@ set adf15_manifest = "$work_dir/adf15_manifest"
 
 mkdir -p "$work_dir"
 mkdir -p "$bundled_root" "$adf11_root" "$adf15_root"
-if (-l "$SOLPSTOP/modules/adas") then
-  rm "$SOLPSTOP/modules/adas"
+if (-d "$SOLPSTOP/modules/adas" && ! -l "$SOLPSTOP/modules/adas" && `find "$SOLPSTOP/modules/adas" -mindepth 1 -maxdepth 1 -print -quit | wc -l` == 0) then
+  foreach adas_entry (`find "$data_root" -mindepth 1 -maxdepth 1 -print`)
+    ln -s "$adas_entry" "$SOLPSTOP/modules/adas/$adas_entry:t"
+  end
 endif
-mkdir -p "$SOLPSTOP/modules/adas"
-foreach adas_entry (`find "$data_root" -mindepth 1 -maxdepth 1 -print`)
-  if (! -e "$SOLPSTOP/modules/adas/$adas_entry:t" && ! -l "$SOLPSTOP/modules/adas/$adas_entry:t") ln -s "$adas_entry" "$SOLPSTOP/modules/adas/$adas_entry:t"
-end
 
 set downloader = ""
 which curl >& /dev/null
