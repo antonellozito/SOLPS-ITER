@@ -2247,7 +2247,7 @@ The examples presented below are for a pure D plasma.
 \index{b2fgmtry}\label{sec:b2ag}\index{b2ag}\index{b2run}
 
 {\tt b2ag} prepares the geometry file, {\tt b2fgmtry}, reading the
-input file {\tt b2ag.dat}
+input file {\tt b2ag.dat}.
 
 It is run by doing
 \begin{verbatim}
@@ -2266,15 +2266,23 @@ or, best:
 \subsection{b2ag.dat}
 \index{b2ag.dat}
 
-In the following example of {\tt b2ag.dat}, we identify the mesh file
+In the following example of a {\tt b2ag.dat}, corresponding to a
+{\em structured} case, we identify the mesh file
 as {\tt jet.50401.58000.geo}, identify it as being of size $96 \times
 24$ and require a $96 \times 24$ {\tt b2fgmtry} file to be prepared.
 
-\VerbatimInput[fontsize=\footnotesize]{D/b2ag.dat}
+\VerbatimInput[fontsize=\footnotesize]{D/b2ag_structured.dat}
+
+For an {\em unstructured} case, where the original grid file (in this case
+produced by GOAT) is {\tt traduit.out.b2us}, the format looks like:
+
+\VerbatimInput[fontsize=\footnotesize]{D/b2ag_unstructured.dat}
 
 \begin{description}
+\item[*format] (for unstructured cases only) if followed by a line with the word {\tt unstructured}, indicates an unstructured grid
 \item[*dimens] specifies the size of the grid
   \begin{itemize}
+  \item[For structured cases]
   \item first pair is {\tt NX} \& {\tt NY} of the grid you want to produce
   \item second pair is the size of the grid that was originally created
     \begin{itemize}
@@ -2283,6 +2291,8 @@ as {\tt jet.50401.58000.geo}, identify it as being of size $96 \times
       guard cells corresponding to the top divertor boundaries should not be
       multiplied.
     \end{itemize}
+  \item[For unstructured cases]
+  \item a triplet of numbers for {\tt nCv} (the number of control volumes), {\tt nFc} (the number of cell faces), {\tt nVx} (the number of vertices), respectively
   \end{itemize}
 \item[*param] at least 100 additional numbers, of which only the first
   is relevant for us
@@ -4850,7 +4860,7 @@ If only the {\tt input.dat} file is present (or is used), {\tt Eirene} will tran
 
 \section{Input files}
 
-Below are given the input files used for the {\tt D+C+He} benchmark
+Below are given the input files used for the structured {\tt D+C+He} benchmark
 case that can be found on the SVN server. These files can be found in the {\em Examples} folder in the \SOLPSITER SharePoint
 web site
 (\href{https://sharepoint.iter.org/departments/POP/CM/IMAS/SOLPS-ITER}{\allowbreak https://sharepoint.iter.org/departments\allowbreak/POP/CM/IMAS/SOLPS-ITER}), or directly among the examples provided in {\tt \$\{SOLPSTOP\}/runs/examples}, as part of the {\tt AUG\_16151\_D+C+He} case.
