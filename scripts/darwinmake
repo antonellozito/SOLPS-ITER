@@ -1,0 +1,58 @@
+#! /usr/bin/env tcsh
+
+set threads=1
+set objects=""
+
+setenv SOLPSTOP "`determine_SOLPSTOP`"
+cd $SOLPSTOP
+echo Compiling $SOLPSTOP with $COMPILER compiler
+
+argloop:
+  if ("X${1}X" == "X-hX") then
+    cat <<EOF
+
+Help for $0
+
+This script is used to compile SOLPS-ITER locally on MacOS devices (DarwinOS).
+The full compilation log is written to a file, while only progress messages
+(each module as it starts to compile, plus any errors) are shown on screen.
+
+Usage:
+
+  `basename $0` {options} <<TARGETS>>
+
+Available options are:
+  -h              prints this message
+  -t <<THREADS>>  number of parallel compilation jobs (default $threads)
+
+The list of compile targets (default "solps") is to be provided after these options.
+
+EOF
+    exit
+  endif
+  if ("X${1}X" == "X-tX") then
+    shift
+    set threads="$1"
+    echo Compiling over $threads threads
+    shift
+    goto argloop
+  endif
+  if ("X${1}X" != "XX") then
+    set objects="${objects} $1"
+    shift
+    goto argloop
+  endif
+
+set logfile = "${SOLPSTOP}/make.log.${COMPILER}"
+echo "Full build log: $logfile"
+echo "Compiling (this may take a moment to start)..."
+
+( ${MAKE} -j$threads $objects ; echo "__DMRC__=$status" ) |& tee "$logfile" | awk '/Entering directory/ { i=index($0,"/modules/"); if(i>0){ rest=substr($0,i+9); j=index(rest,"/"); if(j>0){mod=substr(rest,1,j-1)}else{mod=rest}; gsub(/[^A-Za-z0-9._+-].*/,"",mod); if(mod!="" && (mod in seen)==0){seen[mod]=1; printf "  compiling %s ...\n",mod; fflush()} } next } /\*\*\* |error: |[Ee]rror:/ { printf "  %s\n",$0; fflush(); next } /__DMRC__=/ { split($0,a,"="); rc=a[2]+0; next } END { exit rc }'
+set rc = $status
+
+if ($rc == 0) then
+  echo "Compilation completed successfully (full log: $logfile)"
+else
+  echo "Compilation FAILED with exit code $rc (see $logfile)"
+endif
+exit $rc
