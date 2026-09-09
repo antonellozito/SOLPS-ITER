@@ -360,7 +360,10 @@ if (! -d "${CONDA_ROOT}/envs/IMAS" ) then
   endif
 endif
 
-set path = ( ${CONDA_ROOT}/envs/IMAS/bin $path )
+# Activate the IMAS environment
+
+source ${CONDA_ROOT}/etc/profile.d/conda.csh
+conda activate ${CONDA_ROOT}/envs/IMAS
 rehash
 
 # Additional Python modules required by imas-idstools
