@@ -132,6 +132,7 @@ if ( `grep -c CLASSPATH ${SETUP_LOCAL}` == 0 ) then
     echo setenv PATH \"${OPENJDK_BIN}:\$PATH\" >> ${SETUP_LOCAL}
   endif
   if ( "$SAXON_JAR" != "" ) then
+    echo 'if ( ! $?CLASSPATH ) setenv CLASSPATH ""' >> ${SETUP_LOCAL}
     echo setenv CLASSPATH \"${SAXON_JAR}:\$CLASSPATH\" >> ${SETUP_LOCAL}
   endif
 
@@ -344,8 +345,6 @@ if (! -d "${CONDA_ROOT}" ) then
   exit 1
 endif
 
-source "${CONDA_ROOT}/etc/profile.d/conda.csh"
-
 if (! -d "${CONDA_ROOT}/envs/IMAS" ) then
   echo
   echo "The IMAS conda environment does not exist."
@@ -361,26 +360,37 @@ if (! -d "${CONDA_ROOT}/envs/IMAS" ) then
   endif
 endif
 
-conda activate IMAS
+set path = ( ${CONDA_ROOT}/envs/IMAS/bin $path )
 rehash
 
 # Additional Python modules required by imas-idstools
 
-echo
-echo "imas-idstools requires several additional Python modules."
-echo -n "Do you wish to install them into the IMAS environment? (y/n) [y] "
-set PYMODS_INSTALL = $<
-if ( "$PYMODS_INSTALL" == "" ) set PYMODS_INSTALL = "y"
-if ( "$PYMODS_INSTALL" == "y" ) then
-  pip install cerberus fortranformat matplotlib netCDF4 pandas pyparsing python-dateutil pyyaml rich rich-argparse six tabulate
+python -c "import cerberus, fortranformat, matplotlib, netCDF4, pandas, pyparsing, dateutil, yaml, rich, rich_argparse, six, tabulate" >& /dev/null
+if ( $status != 0 ) then
+  echo
+  echo "imas-idstools requires several additional Python modules."
+  echo -n "Do you wish to install them into the IMAS environment? (y/n) [y] "
+  set PYMODS_INSTALL = $<
+  if ( "$PYMODS_INSTALL" == "" ) set PYMODS_INSTALL = "y"
+  if ( "$PYMODS_INSTALL" == "y" ) then
+    pip install cerberus fortranformat matplotlib netCDF4 pandas pyparsing python-dateutil pyyaml rich rich-argparse six tabulate
+    sleep 1
+  else
+    set MISSING_DEPENDENCY = 1
+    sleep 1
+  endif
 else
-  set MISSING_DEPENDENCY = 1
+  echo
+  echo The additional Python modules required by imas-idstools are already installed.
   sleep 1
 endif
 
 # IMAS-Core
 
-if (! -d "${IMAS_ROOT}/Core/install" ) then
+set nonomatch
+set _installed = ( ${IMAS_ROOT}/Core/install/lib/libal.* )
+unset nonomatch
+if (! -e "$_installed[1]" ) then
 
   echo
   echo IMAS-Core not locally installed.
@@ -418,6 +428,7 @@ setenv HDF5_USE_FILE_LOCKING FALSE
 'IMAS_CORE_ENV'
 
   echo IMAS-Core successfully installed.
+  sleep 1
 
   else
     set MISSING_DEPENDENCY = 1
@@ -427,6 +438,7 @@ setenv HDF5_USE_FILE_LOCKING FALSE
 else
   echo
   echo IMAS-Core already installed.
+  sleep 1
 endif
 
 if ( -d "${IMAS_ROOT}/Core/install" ) then
@@ -438,7 +450,10 @@ endif
 
 # IMAS-Python
 
-if (! -d "${IMAS_ROOT}/Python/build" ) then
+set nonomatch
+set _installed = ( ${IMAS_ROOT}/Python/build/lib/python*/site-packages/imas )
+unset nonomatch
+if (! -d "$_installed[1]" ) then
 
   echo
   echo IMAS-Python not locally installed.
@@ -460,6 +475,7 @@ if (! -d "${IMAS_ROOT}/Python/build" ) then
   pip install ".[netcdf,xarray]" --prefix $PWD/build
 
   echo IMAS-Python successfully installed.
+  sleep 1
 
   else
     set MISSING_DEPENDENCY = 1
@@ -469,11 +485,15 @@ if (! -d "${IMAS_ROOT}/Python/build" ) then
 else
   echo
   echo IMAS-Python already installed.
+  sleep 1
 endif
 
 # IMAS-Data-Dictionary
 
-if (! -d "${IMAS_ROOT}/Data-Dictionary/build" ) then
+set nonomatch
+set _installed = ( ${IMAS_ROOT}/Data-Dictionary/build/lib/python*/site-packages/imas_data_dictionary )
+unset nonomatch
+if (! -d "$_installed[1]" ) then
 
   echo
   echo IMAS-Data-Dictionary not locally installed.
@@ -495,6 +515,7 @@ if (! -d "${IMAS_ROOT}/Data-Dictionary/build" ) then
   pip install . --prefix $PWD/build
 
   echo IMAS-Data-Dictionary successfully installed.
+  sleep 1
 
   else
     set MISSING_DEPENDENCY = 1
@@ -504,11 +525,15 @@ if (! -d "${IMAS_ROOT}/Data-Dictionary/build" ) then
 else
   echo
   echo IMAS-Data-Dictionary already installed.
+  sleep 1
 endif
 
 # IMAS-Fortran
 
-if (! -d "${IMAS_ROOT}/Fortran/install" ) then
+set nonomatch
+set _installed = ( ${IMAS_ROOT}/Fortran/install/lib/libal-fortran* )
+unset nonomatch
+if (! -e "$_installed[1]" ) then
 
   echo
   echo IMAS-Fortran not locally installed.
@@ -548,6 +573,7 @@ endif
 'IMAS_FORTRAN_ENV'
 
   echo IMAS-Fortran successfully installed.
+  sleep 1
 
   else
     set MISSING_DEPENDENCY = 1
@@ -557,6 +583,7 @@ endif
 else
   echo
   echo IMAS-Fortran already installed.
+  sleep 1
 endif
 
 if ( -d "${IMAS_ROOT}/Fortran/install" ) then
@@ -568,7 +595,10 @@ endif
 
 # IMAS-Cpp
 
-if (! -d "${IMAS_ROOT}/Cpp/install" ) then
+set nonomatch
+set _installed = ( ${IMAS_ROOT}/Cpp/install/lib/libal-cpp* )
+unset nonomatch
+if (! -e "$_installed[1]" ) then
 
   echo
   echo IMAS-Cpp not locally installed.
@@ -608,6 +638,7 @@ endif
 'IMAS_CPP_ENV'
 
   echo IMAS-Cpp successfully installed.
+  sleep 1
 
   else
     set MISSING_DEPENDENCY = 1
@@ -617,6 +648,7 @@ endif
 else
   echo
   echo IMAS-Cpp already installed.
+  sleep 1
 endif
 
 if ( -d "${IMAS_ROOT}/Cpp/install" ) then
@@ -628,7 +660,7 @@ endif
 
 # IMAS-GGD
 
-if (! -d "${IMAS_ROOT}/GGD/install" ) then
+if (! -e "${IMAS_ROOT}/GGD/install/lib/libggd.a" ) then
 
   echo
   echo IMAS-GGD not locally installed.
@@ -667,6 +699,7 @@ setenv GGD_VERSION `pkg-config --modversion ggd`
 'IMAS_GGD_ENV'
 
   echo IMAS-GGD successfully installed.
+  sleep 1
 
   else
     set MISSING_DEPENDENCY = 1
@@ -676,6 +709,7 @@ setenv GGD_VERSION `pkg-config --modversion ggd`
 else
   echo
   echo IMAS-GGD already installed.
+  sleep 1
 endif
 
 if ( -d "${IMAS_ROOT}/GGD/install" ) then
