@@ -187,6 +187,55 @@ else if ("$OSTYPE" == "darwin") then
 
 endif
 
+# Install Blitz++ C++ library
+
+if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
+
+  set pkg_check = `dpkg -l | grep -w libblitz0-dev`
+  if ("$pkg_check" == "") then
+    echo
+    echo Blitz++ C++ library not locally installed.
+    echo -n "Do you wish to install it? The apt package manager will be used. (y/n) [y] "
+    set BLITZ_INSTALL = $<
+    if ( "$BLITZ_INSTALL" == "" ) set BLITZ_INSTALL = "y"
+    if ( "$BLITZ_INSTALL" == "y" ) then
+      sudo apt-get install -y libblitz0-dev
+      echo Blitz++ C++ library successfully installed.
+      sleep 1
+    else
+      set MISSING_DEPENDENCY = 1
+      sleep 1
+    endif
+  else
+    echo
+    echo Blitz++ C++ library already locally installed.
+    sleep 1
+  endif
+
+else if ("$OSTYPE" == "darwin") then
+
+  if ( `brew list | grep -c '^blitz$'` == 0 ) then
+    echo
+    echo Blitz++ C++ library not locally installed.
+    echo -n "Do you wish to install it? The brew package manager will be used. (y/n) [y] "
+    set BLITZ_INSTALL = $<
+    if ( "$BLITZ_INSTALL" == "" ) set BLITZ_INSTALL = "y"
+    if ( "$BLITZ_INSTALL" == "y" ) then
+      brew install blitz
+      echo Blitz++ C++ library successfully installed.
+      sleep 1
+    else
+      set MISSING_DEPENDENCY = 1
+      sleep 1
+    endif
+  else
+    echo
+    echo Blitz++ C++ library already locally installed.
+    sleep 1
+  endif
+
+endif
+
 # Install HDF5 C/C++ libraries
 
 if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
