@@ -1,4 +1,4 @@
-#! /usr/bin/env tcsh
+#!/usr/bin/env tcsh
 
 if ( ! $?RESTART_SOLPS ) set RESTART_SOLPS = 0
 if ( ! $?MISSING_DEPENDENCY ) set MISSING_DEPENDENCY = 0
@@ -502,10 +502,8 @@ endif
 
 # IMAS-Python
 
-set nonomatch
-set _installed = ( ${IMAS_ROOT}/Python/build/lib/python*/site-packages/imas )
-unset nonomatch
-if (! -d "$_installed[1]" ) then
+python -c "import imas" >& /dev/null
+if ( $status != 0 ) then
 
   echo
   echo IMAS-Python not locally installed.
@@ -524,7 +522,7 @@ if (! -d "$_installed[1]" ) then
   cd "${IMAS_ROOT}/Python"
   git checkout main
 
-  pip install ".[netcdf,xarray]" --prefix $PWD/build
+  pip install ".[netcdf,xarray]"
 
   echo IMAS-Python successfully installed.
   sleep 1
@@ -542,10 +540,8 @@ endif
 
 # IMAS-Data-Dictionary
 
-set nonomatch
-set _installed = ( ${IMAS_ROOT}/Data-Dictionary/build/lib/python*/site-packages/imas_data_dictionary )
-unset nonomatch
-if (! -d "$_installed[1]" ) then
+python -c "import imas_data_dictionary" >& /dev/null
+if ( $status != 0 ) then
 
   echo
   echo IMAS-Data-Dictionary not locally installed.
@@ -564,7 +560,7 @@ if (! -d "$_installed[1]" ) then
   cd "${IMAS_ROOT}/Data-Dictionary"
   git checkout main
 
-  pip install . --prefix $PWD/build
+  pip install .
 
   echo IMAS-Data-Dictionary successfully installed.
   sleep 1
