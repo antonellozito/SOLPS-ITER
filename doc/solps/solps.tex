@@ -1,4 +1,16 @@
 \documentclass[a4paper,10pt]{report}
+\raggedbottom
+\makeatletter
+% Same as \raggedbottom, but with a large *finite* stretch instead of the
+% kernel default's infinite-order (.0001fil) one at the bottom of the page.
+% Finite stretch is still generous enough (bounded by \textheight, i.e. a
+% whole page) to absorb any real shortfall like \raggedbottom would, but
+% avoids tripping longtable's \vsplit "Infinite glue shrinkage found in box
+% being split" warning -- and, unlike \flushbottom (no bottom slack at all),
+% doesn't force every page to fill exactly, so it avoids the "Underfull
+% \vbox (badness 10000) ... \output is active" warnings \flushbottom caused.
+\def\@textbottom{\vskip \z@ \@plus \textheight\relax}
+\makeatother
 \usepackage{ifpdf}
 %% \newif\ifpdf
 %% \ifx\pdfoutput\undefined
