@@ -25,6 +25,7 @@ if [[ -n "$SOLPS_PATH" ]]; then
   if [ "$COMPILER" != "ifort64" ]; then
     export OMP_STACKSIZE="256M"
   else
+    unset OMP_STACKSIZE
     export KMP_STACKSIZE="256M"
     # Older Intel toolchains (<=2024) still ship ifort, which is preferred
     # over ifx for OpenMP correctness. Newer toolchains (intel/2025b onward)
@@ -33,7 +34,7 @@ if [[ -n "$SOLPS_PATH" ]]; then
       export FC="ifort"
       echo "Reverting to ifort compiler as ifx is unsafe with OpenMP"
     fi
-    if [ "$MPI_FC" == "mpiifort -fc=mpiifx" || "$MPI_FC" == "mpiifx" ] && command -v ifort >/dev/null 2>&1; then
+    if [[ "$MPI_FC" == "mpiifort -fc=mpiifx" || "$MPI_FC" == "mpiifx" ]] && command -v ifort >/dev/null 2>&1; then
       export MPI_FC="mpiifort"
     fi
   fi
@@ -44,9 +45,11 @@ if [[ -n "$SOLPS_PATH" ]]; then
     export OMP_DISPLAY_AFFINITY="true"
     export OMP_DISPLAY_ENV="true"
   fi
+  if [[ ! -n "$KMP_AFFINITY" ]]; then
 # The settings below can be used if KMP_AFFINITY is not set
-#  export   OMP_PROC_BIND="true"
-#  export   OMP_PLACES="cores"
+    export   OMP_PROC_BIND="true"
+    export   OMP_PLACES="cores"
+  fi
   unset    OLD_SOLPS_PATH
   rehash
   echo "SOLPS-ITER OpenMP mode turned on"

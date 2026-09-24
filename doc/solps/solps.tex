@@ -1,4 +1,16 @@
 \documentclass[a4paper,10pt]{report}
+\raggedbottom
+\makeatletter
+% Same as \raggedbottom, but with a large *finite* stretch instead of the
+% kernel default's infinite-order (.0001fil) one at the bottom of the page.
+% Finite stretch is still generous enough (bounded by \textheight, i.e. a
+% whole page) to absorb any real shortfall like \raggedbottom would, but
+% avoids tripping longtable's \vsplit "Infinite glue shrinkage found in box
+% being split" warning -- and, unlike \flushbottom (no bottom slack at all),
+% doesn't force every page to fill exactly, so it avoids the "Underfull
+% \vbox (badness 10000) ... \output is active" warnings \flushbottom caused.
+\def\@textbottom{\vskip \z@ \@plus \textheight\relax}
+\makeatother
 \usepackage{ifpdf}
 %% \newif\ifpdf
 %% \ifx\pdfoutput\undefined
@@ -270,7 +282,7 @@ For later updates of the {\tt master} branches, it is recommended you use the {\
 
 {\em {\bf \underline{IMPORTANT:}} When updating the code, some routines or other configuration files may have been moved, renamed, added, or deleted, and the updating script itself may have changed. In that case, compilation will likely fail on the first update attempt. The user should then start afresh with a new session, and run the update script a second time. If compilation still fails, then the user should remove old compiled files by means of the appropriate {\tt gmake clean} instruction and attempt another compilation, from scratch.}
 
-Please note that because of the way some of the \SOLPSITER utility scripts function, the path to the \SOLPSITER top directory must not contain any of the strings {\tt .debug}, {\tt .mpi}, {\tt .openmp}, {\tt .ig}, {\tt .tgt}, or {\tt .adj}.
+Please note that because of the way some of the \SOLPSITER utility scripts function, the path to the \SOLPSITER top directory must not contain any of the strings {\tt .debug}, {\tt .mpi}, {\tt .openmp}, {\tt .ig}, {\tt .tgt}, {\tt .adj}, or {\tt .hess\_tgt}.
 
 Since the user-id is immutably encoded into any changes, it is always a good idea to properly configure a local installation of Git on all the systems on which one plans on making code revisions with, e.g.:
 
@@ -280,6 +292,8 @@ Since the user-id is immutably encoded into any changes, it is always a good ide
 \end{verbatim}
 
 ITER IDM account holders who have obtained {\tt REPO\_WRITE} permissions can, for their own development, create {\tt feature/[topic]}, {\tt bugfix/[topic]}, or {\tt hotfix/[topic]} branches and raise a "Pull Request" (\href{https://git.iter.org/projects/BND/repos/solps-iter/pull-requests}{https://git\allowbreak.iter.org/projects/BND\allowbreak/repos/solps-iter/pull-requests}) to have them merged into the {\tt develop} branch after pushing them back to the ITER repository. The {\tt develop}, {\tt master} and {\tt svn/*} branches are protected and can only be manipulated by the owners of the repository. For developers, please create a fork in which to make your own development, and then trigger a Pull Request using the relevant GitHub machinery.
+
+For new users, a dedicated repository with extensive SOLPS-ITER-related documentation, tutorials and tips is available as \href{https://github.com/iterorganization/SOLPS-Tutorials}{https://github.com/iterorganization/SOLPS-Tutorials}.
 
 Issues are handled using the {\tt Issues} and {\tt Discussions} tabs on the GitHub site. You should feel free to create new items associated with \SOLPSITER or any of its submodules if you have any problems or suggestions. Use the {\tt Issues} tab to report bugs or unwanted code behaviour, and the {\tt Discussions} tab to propose new features and allow for debate about whether and how to implement them. The community of \SOLPSITER users is expected to provide support to each other with the ITER Organization providing help as far as possible.
 
@@ -407,6 +421,7 @@ The current list of recognized hostnames, deduced by means of the {\tt whereami}
   \item[ORNL] Oak Ridge National Laboratory: *.ornl.gov
   \item[PITAGORA] PITAGORA supercomputer: *.pitagora.cineca.it
   \item[PPPL] PPPL domain: *.pppl.gov
+  \item[SCNET] SuperComputing Network in China: scnet.cn
   \item[SPBSTU] St. Petersburg State Polytechnical University: *.spbstu.ru
   \item[SURFSARA] Snellius National Supercomputer: *.snellius.surf.nl
   \item[SWIP] SouthWestern Institute of Plasma Physics, Chengdu: *.swip.ac.cn
@@ -440,7 +455,7 @@ If your specific domain name is not on this list, please add it to {\tt whereami
 \end{enumerate}
 
 At the moment the following compiler platforms are supported, assuming a Linux work environment:\label{sec:platforms}
-\begin{description}\index{Platforms}
+\begin{description}\index{Platforms}\index{compilers}
   \item[cray] The Cray compiler, in use at the JFRS supercomputing center
   \item[pgf90] Portland Group 32-bit Fortran compiler, in use at JET and ORNL
   \item[ifort64] Intel 64-bit Fortran compiler, in use at ITER. From Intel oneAPI 2025 onwards, this identifier selects {\tt ifx} (the LLVM-based compiler) instead of the classic {\tt ifort}.
@@ -468,9 +483,7 @@ Then, if this is the first installation in your file space, please do:
 
 \begin{sloppypar}
 This will, if they are not already present in the distribution, create the various {\tt config.\$\{HOST\_NAME\}.\allowbreak \$\{COMPILER\}} files for each of the \SOLPSITER submodules. Feel free to modify them afterwards according to your local requirements. As with {\tt whereami} and {\tt default\_compiler}, if those modifications are worth sharing with the other users, please commit them back to the repository using a pull request.
-\end{sloppypar}
 
-\begin{sloppypar}
 For each combination of hostname and compiler, the set of corresponding environment variables are loaded
 from the {\tt \$\{SOLPSTOP\}\allowbreak /SETUP/setup.csh.\$\{HOST\_NAME\}.\$\{COMPILER\}} file and, subsequently,
 the {\tt \$\{SOLPSTOP\}/\allowbreak SETUP/setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.local} file.
@@ -483,9 +496,10 @@ Users should make sure the settings within these files fit their run environment
 In particular, if the default {\tt python} command on the system points to version 2.7 or similar, and a newer version 3 executable is available, it is recommended to define the {\tt PYTHON} environment variable to point to that executable in the appropriate local {\tt \$\{SOLPSTOP\}/SETUP/setup.csh} file.
 If changes are needed, please forward them to the \SOLPSITER RO so that they may be included in the
 set of distributed files to help other future users.
-\end{sloppypar}
 
-\begin{sloppypar}
+\index{SOLPS\_TOOLCHAIN\_VERSION}
+On HPC environments where several versions of the compilers may co-exist, the {\tt SOLPS\_TOOLCHAIN\_VERSION} environment variable is available to specify with which compiler toolchain the code should be compiled and run. See the {\tt \$SOLPSTOP/SETUP/setup.csh.ITER.ifort64} file for such an example. This environment variable, if non-default, should be set {\em before} running the {\tt setup.csh} script.
+
 For the case where single submodules are cloned from the \SOLPSITER repository, without the full regalia of
 programs, additional sets of configuration files can be found in the {\tt config} directory in each module. The
 compiler settings specific to this module are included there. Users are encouraged to modify these as needed. If local
@@ -715,6 +729,11 @@ The various libraries required for the code to be fully operational need to be i
 > install_dependencies
 \end{verbatim}
 which will guide the user through all the required installation steps. The provided setup and configuration files already recognize the paths to the compiled libraries as automatically provided by the above script.\\
+Optionally, the entire suite of programs constituting the IMAS environment can be also locally installed, in a fully automatized way, by running the script
+\begin{verbatim}
+> install_imas
+\end{verbatim}
+As a result, the IMAS components will be loaded upon entering the \SOLPSITER environment, and full IMAS integration capabilities, such as reading/writing IMAS IDS, will be exploitable.\\
 The compilation of B2.5 and Eirene (both standalone and coupled versions) has been successfully tested. Both serial and parallelized versions of the code (OpenMP and MPI) can be built. All components (standalone B2.5 code, standalone Eirene code, coupled B2.5-Eirene code, DivGeo, Carre, Triang and Uinp) can be successfully compiled and used.
 
 \section{Before every \SOLPSITER session}
@@ -796,9 +815,9 @@ After the cases have been downloaded to your system, make sure that the timestam
 
 \section{Using a central installation}
 \label{Using a central installation}
-\index{add\_central\_device}\index{setup.csh}
+\index{add\_central\_device}\index{setup.csh}\index{setup.ksh}
 
-For systems with several users it is advisable to set up a central \SOLPSITER installation that can be maintained by an administrator. The scripts have been set up to allow this by specifying a {\tt \$\{SOLPSWORK\}} directory that is different from the default {\tt \$\{SOLPSTOP\}/runs} and setting the environment variable {\tt SOLPS\_CENTRAL} to {\tt 'yes'}. Each user will then have a directory for their runs, {\tt \$SOLPSWORK}, which should contain a file named {\tt SOLPSTOP} which contains the value for {\tt \$\{SOLPSTOP\}}. Using an example where each user has their runs in {\tt \$\{HOME\}/solps-runs} then the central installation could have a {\tt SETUP/setup.csh.local} with the following lines:
+For systems with several users it is possible to set up a central \SOLPSITER installation that can be maintained by an administrator. The scripts have been set up to allow this by specifying a {\tt \$\{SOLPSWORK\}} directory that is different from the default {\tt \$\{SOLPSTOP\}/runs} and setting the environment variable {\tt SOLPS\_CENTRAL} to {\tt 'yes'}. Both {\tt setup.csh} and {\tt setup.ksh} preserve a value of {\tt SOLPSWORK} that is already present in the environment, and use {\tt \$\{SOLPSTOP\}/runs} when it is not defined. When {\tt SOLPS\_CENTRAL} is not set, the standard {\tt sbr} alias continues to select {\tt \$\{SOLPSTOP\}/runs}. When {\tt SOLPS\_CENTRAL} is set, a site-defined {\tt sbr} alias is retained, as in the example below. Each user will then have a directory for their runs, {\tt \$SOLPSWORK}, which should contain a file named {\tt SOLPSTOP} which contains the value for {\tt \$\{SOLPSTOP\}}. Using an example where each user has their runs in {\tt \$\{HOME\}/solps-runs} then the central installation could have a {\tt SETUP/setup.csh.local} with the following lines:
 \begin{verbatim}
 setenv SOLPSWORK /home/$USER/solps-runs
 alias sbr 'cd ${SOLPSWORK}'
@@ -809,6 +828,14 @@ endif
 setenv SOLPS_CENTRAL "yes"
 \end{verbatim}
 This will set {\tt SOLPSWORK}, create the appropriate {\tt SOLPSTOP} file, and load a {\tt setup.csh.local} for each user if it exists. The scripts such as {\tt dg}, {\tt carre2}, and {\tt triang} then check if {\tt SOLPS\_CENTRAL} is set and will create the meshes, etc under {\tt \$\{DEVICE\}/\$\{USER\}} instead of just {\tt \$\{DEVICE\}}. It is therefore important that the {\tt DivGeo/device}, {\tt Carre2/meshes} and {\tt Triang/triangles} and each {\tt \$\{DEVICE\}} subdirectory have the permissions set such that each user can write to it. This can be achieved by having a {\tt solps} group, for example, or by providing write access for all users. Users should also have read and execute access throughout the arboresence emanating from the central installation directory. To avoid issues where the first user to create a {\tt \$\{DEVICE\}} directory will do so without the correct permissions, an {\tt add\_central\_device} script has been provided which will create the appropriate directories with write access for all users. The administrator should run this and add each {\tt DEVICE} that will be used by the group.
+
+The setup scripts create links under {\tt \$\{SOLPSTOP\}/scripts} for each host and compiler combination. When the central installation is read-only, existing links will be used but missing or incorrect links cannot be created or replaced. The administrator should therefore source the setup script for each supported host and compiler combination while the installation is writable. A warning is printed when a required path is unavailable and cannot be created or updated after the installation has been made read-only.
+
+Host- and compiler-specific commands that must be evaluated before the environment cache is read can be placed in {\tt SETUP/setup.csh.HOST\_NAME.COMPILER.pre}, where {\tt HOST\_NAME} and {\tt COMPILER} are replaced by their selected values. For example, the following command in this file disables both reading and writing the {\tt setup.csh} environment cache:
+\begin{verbatim}
+setenv SOLPS_DISABLE_ENV_CACHE 1
+\end{verbatim}
+The corresponding {\tt SETUP/setup.ksh.HOST\_NAME.COMPILER.pre} file is sourced before the main host- and compiler-specific {\tt setup.ksh} file. The {\tt setup.ksh} script does not currently use an environment cache, so {\tt SOLPS\_DISABLE\_ENV\_CACHE} applies only to {\tt setup.csh}.
 
 Before each session, each user will then set up the \SOLPSITER environment by running
 \begin{verbatim}
@@ -902,6 +929,8 @@ The {\tt setup.csh} file and its subsidiaries {\tt \$\{SOLPSTOP\}/SETUP/setup.cs
 \item two aliases to swap between the TGT and no\_TGT versions of the code ({\tt set\_tgt} and {\tt unset\_tgt})
 \item two aliases to swap between the ADJ and no\_ADJ versions of the code ({\tt set\_adj} and {\tt unset\_adj})
 \item two aliases to swap between the TAO and no\_TAO versions of the code ({\tt set\_tao} and {\tt unset\_tao})
+\item two aliases to swap between the BFGS and no\_BFGS versions of the code ({\tt set\_bfgs} and {\tt unset\_bfgs})
+\item two aliases to swap between the HESS\_TGT and no\_HESS\_TGT versions of the code ({\tt set\_hess\_tgt} and {\tt unset\_hess\_tgt})
 \end{enumerate}
 Of course, any additional desired definitions can be added. The preferred place for those is, for those variables that need not be shared by other users, the {\tt \$\{SOLPSTOP\}/SETUP/setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.local} and {\tt \$\{SOLPSTOP\}/SETUP/config.\$\{HOST\_NAME\}.\$\{COMPILER\}.local} files. Variables that are needed at compilation time need to appear in the {\tt config.*.*(.local)} file, while variables needed at runtime must appear in {\tt setup.csh.*.*(.local)} file.
 \end{sloppypar}
@@ -1349,7 +1378,7 @@ currently).
 {\tt ratadas.filelist} indicates the global source of the {\tt ADAS} files,
 and which "years" to use.
 
-In case of no access to the AMNS ADAS repository, the script {\tt fetch\_adas\_datafiles} can be used to create a local copy of this folder, as {\tt \$SOLPSTOP/data.local/adas}, which will be populated using open source data downloaded from the \href{https://open.adas.ac.uk/}{OpenADAS website} and, for bundled data, from a Zenodo record.
+In case of no access to the AMNS ADAS repository, the script {\tt fetch\_adas\_datafiles} can be used to create a local copy of this folder, as {\tt \$SOLPSTOP/data.local/adas}, which will be populated using open source data downloaded from the \href{https://open.adas.ac.uk/}{OpenADAS website} and, for bundled data, from a Zenodo record. Since access to the AMNS ADAS repository is restricted, a connection or authentication failure should not prevent the required submodules from being updated. The {\tt solps-iter\_update\_wg\_release} script therefore updates the required submodules first, uses {\tt check\_adas\_repository\_access} to test the ADAS repository separately, and then updates ADAS only when it is accessible. Otherwise, an existing local ADAS checkout or the open-data fallback is used. Setting {\tt SOLPS\_SKIP\_ADAS\_REPOSITORY} before running the update script forces this fallback without testing the repository connection. For SSH repository addresses, the connection timeout defaults to five seconds and can be changed with {\tt SOLPS\_ADAS\_CONNECT\_TIMEOUT}.
 
 \newpage \section{lib}
 
@@ -1417,7 +1446,7 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
 \item Job submission scripts
  \begin{description}
   \item[b2plot]\index{b2plot} Shortcut to \btwoplotns. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run \btwoplot without coupling to {\tt Eirene} data. A {\tt -h} option prints a help description.
-  \item[b2run]\index{b2run}\index{b2co}\index{b2fstate} Shortcut to the {\tt Makefile} launching {\tt B2.5}. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run {\tt B2.5} in standalone mode. A {\tt -m} option allows to run with MPI options. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -t \#} option allows to request an OpenMP run with \# threads. A {\tt -b} option can be used when invoking the {\tt b2co} program to obtain a provisional {\tt b2fstate} file while the main code is running. A {\tt -tgt}, {\tt -hess\_tgt}, or {\tt -adj} option allows to request a standalone run with tangent, Hessian tangent on tangent, or adjoint AD derivatives, respectively. A {\tt -opt\_tgt} or {\tt -opt\_adj} option allows to request a standalone optimization with tangent or adjoint AD derivatives, respectively. A {\tt -h} option prints a help description. (See \ref{b2run} for fuller details)
+  \item[b2run]\index{b2run}\index{b2co}\index{b2fstate} Shortcut to the {\tt Makefile} launching {\tt B2.5}. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run {\tt B2.5} in standalone mode. A {\tt -m} option allows to run with MPI options. When {\tt SOLPS\_MPIRUN} is defined, its value replaces the MPI launcher executable while preserving the options supplied with {\tt -m}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -t \#} option allows to request an OpenMP run with \# threads. A {\tt -b} option can be used when invoking the {\tt b2co} program to obtain a provisional {\tt b2fstate} file while the main code is running. A {\tt -tgt}, {\tt -hess\_tgt}, or {\tt -adj} option allows to request a standalone run with tangent, Hessian tangent on tangent, or adjoint AD derivatives, respectively. A {\tt -opt\_tgt} or {\tt -opt\_adj} option allows to request a standalone optimization with tangent or adjoint AD derivatives, respectively. A {\tt -h} option prints a help description. (See \ref{b2run} for fuller details)
   \item[b2run\_hgw\_cluster]\index{b2run\_hgw\_clus} Shortcut to the {\tt Makefile} launching {\tt B2.5} for the IPP--Greifswald cluster. A {\tt -n} option allows for dry-run tests.
   \item[b2sxdr]\index{b2sxdr} Shortcut to the \SOLPSfour to \SOLPSfive converter. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to specify that the run to convert was not coupled to {\tt Eirene}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -h} option prints a help description.
   \item[convert\_from\_solps4.3 \#1]\index{convert\_from\_solps4.3} Converts run number \#1 from {\tt DEVICE} from the SOLPS4.3 ITER archive to a \SOLPSITER run in directory {\tt \$\{SOLPSTOP\}/runs/\$\{DEVICE\}/\#1} .
@@ -1440,6 +1469,7 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
   \item[pitagorasubmit]\index{pitagorasubmit} Command file to launch runs on the Pitagora supercomputer. See Section~\ref{b2run} for details.
   \item[resave\_mds]\index{resave\_mds} Update an archived {\tt MDSplus} case. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to update a {\tt B2.5} standalone case. A {\tt -r} option allows to pass variable redefinitions to the underlying Makefile.
   \item[save\_mds]\index{save\_mds} Archive an {\tt MDSplus} case. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to archive a {\tt B2.5} standalone case. A {\tt -r} option allows to pass variable redefinitions to the underlying Makefile.
+  \item[scnetsubmit]\index{scnetsubmit} Command file to launch runs on the SCNET cluster. See Section~\ref{b2run} for details.
   \item[sgesubmit]\index{sgesubmit} Command file to launch runs on an SGE system. See Section~\ref{b2run} for details.
   \item[ustcsubmit]\index{ustcsubmit} Command file to launch runs on the USTC computer cluster. See Section~\ref{b2run} for details.
  \end{description}
@@ -1768,13 +1798,14 @@ for the definitions of the regions and surfaces)\index{SOLPS\_FLUIDS}\index{NREG
   \item[awk.transpose]\index{awk.transpose} Transposes an array of data.
   \item[blank]\index{blank} Dummy script that does nothing.
   \item[canonical \#1]\index{canonical} Provides the full absolute path to the filename given as argument.
+  \item[check\_adas\_repository\_access]\index{check\_adas\_repository\_access}\index{ADAS} Tests whether the access-controlled ADAS repository can be contacted without prompting. It returns a successful status only when the repository is accessible and is used by {\tt solps-iter\_update\_wg\_release} to keep an optional ADAS connection failure from blocking required submodule updates. Setting {\tt SOLPS\_SKIP\_ADAS\_REPOSITORY} forces an unsuccessful status without testing the connection. For SSH repository addresses, {\tt SOLPS\_ADAS\_CONNECT\_TIMEOUT} sets the connection timeout in seconds and defaults to five.
   \item[chop\_pwd \#1]\index{chop\_pwd} Truncates the name of the current directory to not exceed \#1 characters (default 60).
   \item[count]\index{count} Basic counting with advanced options ({\tt count -h} for help).
   \item[datestamp]\index{datestamp} Gets a date stamp from the machine.
   \item[define\_compilers]\index{define\_compilers} This script sets the compiling variables {\tt \$\{CC\}} and {\tt \$\{FC\}} to the proper C and Fortran compilers, respectively, if not already set, according to the value of the main {\tt \$\{COMPILER\}} variable.
   \item[env\_var\_length]\index{env\_var\_length} Lists the length of each environment variable in the shell. When executed as in {\tt `env\_var\_length | sort -n | tail`}, prints the 10 longest environment variables.
   \item[env\_var\_prune]\index{env\_var\_prune} Prunes an environment variable by removing duplicated entries. Usage is {\tt setenv X `env\_var\_prune X`}.
-  \item[fetch\_adas\_datafiles]\index{fetch\_adas\_datafiles}\index{ADAS} Downloads the ADAS datafiles used by {\tt B2.5} from the OpenADAS website (adf11 and adf15 files) and from the \SOLPSITER Zenodo archive (bundled files) and puts them into a {\tt \$SOLPSTOP/data.local/adas} folder. Used in case of no access to the AMNS ADAS repository.
+  \item[fetch\_adas\_datafiles]\index{fetch\_adas\_datafiles}\index{ADAS} Downloads the ADAS datafiles used by {\tt B2.5} from the OpenADAS website (adf11 and adf15 files) and from the \SOLPSITER Zenodo archive (bundled files) and puts them into a {\tt \$SOLPSTOP/data.local/adas} folder. Used in case of no access to the AMNS ADAS repository. Files which are already present are retained. A successfully installed bundled archive is recorded in {\tt adas\_bundled/.solps-fetch-complete}, together with its source address, so that it is downloaded again only when the address changes or the marker is removed.
   \item[fixbb]\index{fixbb} A utility script to properly define the bounding box of PostScript files.
   \item[get\_series]\index{get\_series} Gets the data from {\tt last\_2d\_out} files of the runs associated with the series described in {\tt series\_file} and prints them out in a plottable multi-column file {\tt Series.dat} according to {\tt get\_series.cmd} file (default example of this file can be found in {\tt \$SOLPSTOP/scripts/commands}). Read the script header for further details.
   \item[gtdr]\index{gtdr} Script to make a directory tree local.
@@ -1782,7 +1813,8 @@ for the definitions of the regions and surfaces)\index{SOLPS\_FLUIDS}\index{NREG
   \item[grf]\index{grf} A more effective version of {\tt grep} when searching for use of a variable in the source code.
   \item[inspect\_plasmastate \#1]\index{inspect\_plasmastate} This script will return the plasma time stamp at which the {\tt plasmastate} savefile \#1 was written.
   \item[install\_dependencies]\index{install\_dependencies} This script locally downloads and installs all external dependencies needed to correctly compile and run \SOLPSITER, if not already present, in a fully automatized way. Additionally, if needed, it automatically appends the linking flags to the corresponding compiled binaries in a {\tt \$\{SOLPSTOP\}/SETUP/config.\$\{HOST\_NAME\}.\$\{COMPILER\}.local} file and in the corresponding configuration files of the various submodules. For local \SOLPSITER installations, all required external dependencies can be locally provided. For installations on HPC clusters, only the dependencies which may be missing are provided, namely the Blas/Lapack, NetCDF, NCARG, JSON-Fortran, MSCL, GKS, and GR libraries. Note that the NCARG library can be built only for cluster installations using a {\tt gfortran} compiler.
-  \item[install\_miniforge]\index{install\_miniforge} This script installs a \SOLPSITER-specific local Conda installation, based on {\tt miniforge}, located in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}} directory. Such installation is required to obtain some external packages needed by the compilation of the code, namely Blas/Lapack, NetCDF and NCARG, using the {\tt install\_dependencies} script.
+  \item[install\_imas]\index{install\_imas} This script locally downloads and installs all relevant pieces of the IMAS environment (AL core library, data dictionary, data access libraries for Python, C++ and Fortran, GGD library, plus all needed dependencies) needed to fully exploit the \SOLPSITER capabilities within the IMAS environment. At the same time, it automatically appends the relevant paths into a {\tt \$\{SOLPSTOP\}/SETUP/setup.csh.\$\{HOST\_NAME\}.\$\{COMPILER\}.local} file, so that the IMAS environment results fully loaded upon entering the \SOLPSITER environment. The script only works on local hosts ({\bf LINUX} and {\bf DARWIN}).
+  \item[install\_miniforge]\index{install\_miniforge} This script installs a \SOLPSITER-specific local Conda installation, based on {\tt miniforge}, located in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}} directory. Such installation is required to obtain some external packages needed by the compilation of the code when the local host is {\bf LINUX}, namely Blas/Lapack, NetCDF and NCARG, using the {\tt install\_dependencies} script, and to fully build a local IMAS environment using the {\tt install\_imas} script.
   \item[last\_2d]\index{last\_2d} Averaging script for {\tt tracing/*.trc}, {\tt b2time.nc} and {\tt b2tallies.nc} files. Averaging can be perfromed over the last {\tt N} iterations or last {\tt n} seconds. Writes raw output to {\tt last\_2d\_out} and formatted output to {\tt last\_2d\_out\_f}, the latter is governed by the {\tt last\_2d.cmd} file (default example of this file can be found in {\tt \$SOLPSTOP/scripts/commands}). Read the script header for further details.
   \item[lln]\index{lln} Lists the chain of symbolic links leading to a file.
   \item[lndr]\index{lndr} routine to generate shadow trees.
@@ -1831,6 +1863,7 @@ for the definitions of the regions and surfaces)\index{SOLPS\_FLUIDS}\index{NREG
   \item[resmo\_diff]\index{resmo\_diff} Plots the evolution of the residuals of the diff'ed momentum equation (in tangent mode only).
   \item[resrest\_diff]\index{resrest\_diff} Plots the evolution of the residuals of the diff'ed total momentum, ion energy, electron energy, and potential equations (in tangent mode only).
   \item[result\_tao.sh]\index{result\_tao.sh} Produces files that summarize an optimization run performed with {\tt PETSc/TAO}. See \ref{sec:optim_results} for details.
+  \item[result\_bfgs.sh]\index{result\_bfgs.sh} Produces files that summarize an optimization run performed with the built-in BFGS optimization algorithm. See \ref{sec:optim_results} for details.
   \item[run\_info]\index{run\_info} Prints the file {\tt run.info} that contains information about cost function, gradient, optimization. See \ref{sec:optim_results} for details.
  \end{description}
 \item Others
@@ -2068,7 +2101,7 @@ for itself by climbing up the tree. You can add options to the {\tt b2run} comma
   \item[-n] Will run the {\tt Makefile} in dry-run mode. This is useful to check that all the needed files for the runs are in the right order of precedence. If they are not, the {\tt correct\_baserun\_timestamps} script can be used to re-order the pre-requisite files found in the associated {\tt baserun} directory
   \item[-m $\backslash$"MPI-launcher + options$\backslash$"] Allows to launch {\tt b2XX} in MPI
     mode with the provided options (example: [the syntax is important, both
-      the slashes and the quotes are needed] {\tt b2run -m $\backslash$"mpiexec -np 2$\backslash$" b2mn})
+      the slashes and the quotes are needed] {\tt b2run -m $\backslash$"mpiexec -np 2$\backslash$" b2mn}). If {\tt SOLPS\_MPIRUN} is defined, its value replaces only the launcher executable and the remaining options are preserved. For example, setting {\tt SOLPS\_MPIRUN} to {\tt /usr/bin/mpirun} changes the launcher in this command while retaining {\tt -np 2}.
   \item[-s] Specifies that one wishes to run {\tt B2.5} in standalone mode, i.e. without any coupling to {\tt Eirene}.
   \item[-o "run options"] Allows to launch {\tt b2XX} with additional run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances.
   \item[-t \#] Requests an OpenMP run using \# threads.
@@ -2201,11 +2234,11 @@ for tangent, adjoint, and Hessian tangent on tangent AD respectively. This can b
 itersubmit -opt_tgt <<OPT_OPTIONS>>
 itersubmit -opt_adj <<OPT_OPTIONS>>
 \end{verbatim}
-again for tangent and adjoint AD respectively. The user can select the optimization library beforehand, e.g. using {\tt set\_tao} or another available one, otherwise the script will default to {\tt PETSc/TAO}. A concrete example is:
+again for tangent and adjoint AD respectively. The user can select the optimization library beforehand, e.g. using {\tt set\_tao} or another available one, otherwise the script will default to the built-in BFGS algorithm. A concrete example is:
 \begin{verbatim}
 set_tao; itersubmit -opt_tgt '-tao_ls_type armijo'
 \end{verbatim}
-where the {\tt PETSc/TAO armijo} line search option is asked for. For both sensitivity and optimization runs only the {\tt SLURM.iter} script should be employed. Note additionally that MPI and OpenMP are currently not tested for AD executables.
+where the {\tt PETSc/TAO armijo} line search option is asked for. Note that the built-in BFGS algorithm does not take any command line options. For both sensitivity and optimization runs only the {\tt SLURM.iter} script should be employed. Note additionally that MPI and OpenMP are currently not tested for AD executables.
 
 A listing of the available options for each submission script can be obtained by the
 \begin{verbatim}
@@ -2234,7 +2267,7 @@ The examples presented below are for a pure D plasma.
 \index{b2fgmtry}\label{sec:b2ag}\index{b2ag}\index{b2run}
 
 {\tt b2ag} prepares the geometry file, {\tt b2fgmtry}, reading the
-input file {\tt b2ag.dat}
+input file {\tt b2ag.dat}.
 
 It is run by doing
 \begin{verbatim}
@@ -2253,15 +2286,26 @@ or, best:
 \subsection{b2ag.dat}
 \index{b2ag.dat}
 
-In the following example of {\tt b2ag.dat}, we identify the mesh file
-as {\tt jet.50401.58000.geo}, identify it as being of size $96 \times
-24$ and require a $96 \times 24$ {\tt b2fgmtry} file to be prepared.
+\begin{sloppypar}
+In the following example of a {\tt b2ag.dat}, corresponding to a
+{\em structured} case, we identify the mesh file
+as {\tt jet.50401.58000.geo}, identify it as being of size
+$96 \times 24$ and require a $96 \times 24$ {\tt b2fgmtry} file to be prepared.
+\end{sloppypar}
 
-\VerbatimInput[fontsize=\footnotesize]{D/b2ag.dat}
+\VerbatimInput[fontsize=\footnotesize]{D/b2ag_structured.dat}
 
+For an {\em unstructured} case, where the original grid file (in this case
+produced by GOAT) is {\tt traduit.out.b2us}, the format looks like:
+
+\VerbatimInput[fontsize=\footnotesize]{D/b2ag_unstructured.dat}
+
+Those files need to contain fields according to:
 \begin{description}
+\item[*format] (for unstructured cases only) if followed by a line with the word {\tt unstructured}, indicates an unstructured grid
 \item[*dimens] specifies the size of the grid
   \begin{itemize}
+  \item[Structured] cases:
   \item first pair is {\tt NX} \& {\tt NY} of the grid you want to produce
   \item second pair is the size of the grid that was originally created
     \begin{itemize}
@@ -2270,6 +2314,8 @@ as {\tt jet.50401.58000.geo}, identify it as being of size $96 \times
       guard cells corresponding to the top divertor boundaries should not be
       multiplied.
     \end{itemize}
+  \item[Unstructured] cases:
+  \item a triplet of numbers for {\tt nCv} (the number of control volumes), {\tt nFc} (the number of cell faces), {\tt nVx} (the number of vertices), respectively
   \end{itemize}
 \item[*param] at least 100 additional numbers, of which only the first
   is relevant for us
@@ -4514,8 +4560,8 @@ Example of the {\tt b2ydm.dat} file:\\
 \VerbatimInput[fontsize=\footnotesize]{b2ydm.dat}
 
 \newpage
-\section{b2\_ual\_write, writing last state to IDS}
-\label{sec:b2_ual_write}\index{b2\_ual\_write}\index{IDS, Interface Data Structues}
+\section{b2\_ual\_write, writing last state as an IMAS data entry}
+\label{sec:b2_ual_write}\index{b2\_ual\_write}\index{IDS, Interface Data Structues}\index{IMAS}
 
 The program can be run with one of the following
 \begin{verbatim}
@@ -4528,27 +4574,28 @@ or
 \end{verbatim}
 
 \begin{sloppypar}
-This program saves the final output state of a run into an IDS (Interface Data Structure). Currently, it will populate the {\tt edge\_profiles}, {\tt edge\_transport}, {\tt edge\_sources}, {\tt radiation}, {\tt divertors}, {\tt dataset\_description}, and {\tt summary} data structures. If the current run being saved is a time continuation of the run already present in that IDS, then a new time slice is appended, otherwise the IDS is overwritten. If the existing IDS was written with an earlier Data Dictionary version, it is recreated with the current one.
+This program saves the final output state of a run into an IMAS data entry. Currently, it will populate the {\tt edge\_profiles}, {\tt edge\_transport}, {\tt edge\_sources}, {\tt radiation}, {\tt divertors}, {\tt wall}, and {\tt summary} IDSs (Interface Data Structures). If using Data Dictionary version 3, the {\tt dataset\_description} IDS is also filled. If the current run being saved is a time continuation of the run already present in that IMAS data entry, then a new time slice is appended, otherwise the data entry is overwritten. If the existing data entry was written with an earlier Data Dictionary version, it is recreated with the current one.
 \end{sloppypar}
 
 \begin{sloppypar}\index{shotnumber.history}\index{IMASDIR}
 The program reads the {\tt b2mndr\_id*} switch group, defined in {\tt b2mn.dat}:
 \begin{itemize}
   \item {\tt b2mndr\_user} defines the user name and it is set by default to be the same as the {\tt USER} environment variable.
-  \item {\tt b2mndr\_database} defines the IMAS IDS database name and it is set by default to be the same as the {\tt DEVICE} environment variable. If {\tt DEVICE} has been left undefined, the default database name is {\tt 'solps-iter'}. If {\tt DEVICE} has been set to {\tt 'iter'}, the code internally modifies it to {\tt 'ITER'}, following the IMAS convention.
+  \item {\tt b2mndr\_database} defines the IMAS database name and it is set by default to be the same as the {\tt DEVICE} environment variable. If {\tt DEVICE} has been left undefined, the default database name is {\tt 'solps-iter'}. If {\tt DEVICE} has been set to {\tt 'iter'}, the code internally modifies it to {\tt 'ITER'}, following the IMAS convention.
   \item {\tt b2mndr\_device}, superseded by {\tt b2mndr\_database}.
-  \item {\tt b2mndr\_ids\_path} defines the path to the IDS being saved. May or may not contain the environment variable {\tt IMASDIR} as prefix. If not provided, it is read from the last line of the {\tt shotnumber.history} file. Only available when using IMAS Access Layer 5. If it starts with a {\tt /} character and does not contain {\tt IMASDIR}, it is understood to be an absolute path.
+  \item {\tt b2mndr\_ids\_path} defines the path to the IMAS data entry being saved. May or may not contain the environment variable {\tt IMASDIR} as prefix. If not provided, it is read from the last line of the {\tt shotnumber.history} file. Only available when using IMAS Access Layer 5. If it starts with a {\tt /} character and does not contain {\tt IMASDIR}, it is understood to be an absolute path.
   \item {\tt b2mndr\_pulse\_number} defines the pulse (in Access Layer 5) or shot (in Access Layer 4) number. If not provided, it is read from the last line of the {\tt shotnumber.history} file. Superseded by {\tt b2mndr\_ids\_path}.
   \item {\tt b2mndr\_shot\_number}, superseded by {\tt b2mndr\_pulse\_number}.
   \item {\tt b2mndr\_run\_number} defines the run number. If not provided, it is deduced from the last line of the {\tt shotnumber.history} file. Superseded by {\tt b2mndr\_ids\_path}.
+  \item {\tt b2mndr\_ids\_backend} provides the backend to be used. Only available for use with Access Layer 5 (for which the default is {\tt 'hdf5'}). When using Access Layer 4, the backend used will be {\tt 'mdsplus'}.
 \end{itemize}
-These switches are used as identification parameters for the IDS. Afterwards, a
-{\tt b2mn} run is initialized but {\em not} started, so that the final
-output state data is read. Then the data is written to an IDS, with the
-{\tt b2mndr\_id*} switchgroup used as identification descriptors.
+These switches are used as identification parameters for the IMAS data entry.
+ Afterwards, a {\tt b2mn} run is initialized but {\em not} started, so that
+ the final output state data is read. Then the data is written to IDSs, with
+ the {\tt b2mndr\_id*} switchgroup used as identification descriptors.
 \end{sloppypar}
 
-It is possible to replace (or supplement) the IDS switch settings coming from the {\tt b2mn.dat} file by using the command line {\tt -o} option, with the following syntax:
+It is possible to replace (or supplement) the IMAS switch settings coming from the {\tt b2mn.dat} file by using the command line {\tt -o} option, with the following syntax:
 \begin{verbatim}
   b2run -o "-s 123456 -r 1" b2_ual_write
 \end{verbatim}
@@ -4559,7 +4606,8 @@ which will recognize, within the quotes following the {\tt -o} additional option
   \item {\tt -r}, {\tt --run} The run number (superseded by {\tt --path}). If used, must be positive or zero.
   \item {\tt -u}, {\tt --user} The user name (default is {\tt USER}).
   \item {\tt -d}, {\tt --database}, {\tt --device} The IMAS database name (default is {\tt DEVICE}, if set, or {\tt 'solps-iter'} otherwise).
-  \item {\tt -v}, {\tt --version} The IMAS version to be used (default is {\tt 3}).
+  \item {\tt -b}, {\tt --backend} The backend to be used. For Access Layer 5 only (default is {\tt 'hdf5'}).
+  \item {\tt -v}, {\tt --version} The IMAS version to be used (default is {\tt IMAS\_MAJOR\_VERSION}).
 \end{itemize}
 
 Concerning the assignment of pulse (in Access Layer 5) or shot (in Access Layer 4) and run numbers, the following rules are in effect. If not using IMAS Access Layer 5, the shot number must a six digit number between 1 and 214748. ITER pulse or shot numbers shall start with a 1, the second digit represents the majority fuelling species (0:H, 1:He, 2:D, 3:D-T, 4:T, 5:others, the sequence reflecting the order in which fuel gases are expected to be used in the ITER Research Plan), and the last four digits identify the simulation. Because multiple codes are all writing to the same database and we want to avoid clashes, different "slices" of numbers have been assigned for various codes. We will use numbers {\tt 1x2000} to {\tt 1x2999} for transferring existing simulations from the {\bf SOLPS 4.3} database to IMAS, and {\tt 1x3000} to {\tt 1x3499} for new \SOLPSITER cases. Run numbers should start at 1, and be incremented every time a new version of the same simulation (say after a re-run because a bug in the code was fixed) is being stored in the archive. When changing important run parameters such as gas puffing rates, turning on drifts, etc..., a new pulse or shot number should be used. If intending to publish the IMAS data entry in the IO database, please send an email to the IO code Responsible Officer ({\tt Xavier.Bonnin@iter.org}), when you wish to assign a new shot number, as the IO will keep track of those already used. IMPORTANT: {\em When publishing SOLPS-ITER results with IO co-authors involved, archiving into the public IMAS database of the simulations on which the published work is based is mandatory.}
@@ -4568,7 +4616,7 @@ Concerning the assignment of pulse (in Access Layer 5) or shot (in Access Layer 
 With Access Layer 5, the IMAS data entries will be written in the directory with absolute location given by {\tt path}, with the prefix {\tt \$IMASDIR/} if it was not provided. {\tt IMASDIR} should be set as part of the local environment variables in a {\tt setup.csh.local} file. Otherwise, it will be of the form {\tt <path\_to\_user\_public\_directory>/imasdb/\$\{database\}/\$\{version\}}. The {\tt user}, {\tt database}, or {\tt version} input flags allow to overwrite their default values in the {\tt IMASDIR} path. The {\tt path} may also contain {\tt \$HOME}, {\tt \$IMASDIR}, or {\tt \$SOLPSTOP}, which will be parsed by the code.
 \end{sloppypar}
 
-After the IDS files are created, if using IMAS Access Layer 3 or 4, one should also run the {\tt create\_db\_entry} script, with the syntax:
+After the IMAS files are created, if using Access Layer 3 or 4, one should also run the {\tt create\_db\_entry} script, with the syntax:
 \begin{verbatim}
 create_db_entry [-u USER] [-d DATABASE] -s SHOT -r RUN
 \end{verbatim}
@@ -4580,7 +4628,7 @@ ingest_simulation_to_SimDB [REMOTE]
 \end{verbatim}
 where {\tt [REMOTE]} is the name of the remote SimDB server where the run is to be pushed. It must be provided if more than one SimDB remotes are declared, but is otherwise optional. Please refer to the SimDB documentation at \href{https://simdb.readthedocs.io/en/stable}{https://simdb.readthedocs.io/} for more details.
 
-\subsection{b2\_ual\_rewrite, rewriting an existing IDS}
+\subsection{b2\_ual\_rewrite, rewriting an existing IMAS data entry}
 \label{sec:b2_ual_rewrite}\index{b2\_ual\_rewrite}
 
 The program can be run with one of the following
@@ -4594,7 +4642,7 @@ or
 \end{verbatim}
 
 \begin{sloppypar}
-This program rewrites an existing IDS in case a correction needs to be made (because of a bug fix, for instance). It will rewrite the {\tt edge\_profiles}, {\tt edge\_transport}, {\tt edge\_sources}, {\tt radiation}, {\tt divertors}, {\tt dataset\_description}, and {\tt summary} data structures. It uses the same inputs as {\tt b2\_ual\_write}. In addition, one can have the IDS rewritten with a new run number, by means of the optional {\tt -n \it new\_run\_number} argument. Only the last time slice present in the IDS can be rewritten in this way, and data from older time slices will be lost. If a new run number is specified, the {\tt .yaml} file of the old run number will be modified to indicate that it is now obsolete and replaced by the new run number, and the {\tt .yaml} file for the new IDS will also indicate which old run it is replacing. The new run number must be larger than the old one.
+This program rewrites an existing IMAS data entry in case a correction needs to be made (because of a bug fix, for instance). It will rewrite the {\tt edge\_profiles}, {\tt edge\_transport}, {\tt edge\_sources}, {\tt radiation}, {\tt divertors}, {\tt wall}, and {\tt summary} data structures. If using IMAS Data Dictionary version 3, the {\tt dataset\_description} IDS is also filled. The program uses the same inputs as {\tt b2\_ual\_write}. In addition, one can have the IMAS data entry rewritten with a new run number, by means of the optional {\tt -n \it new\_run\_number} argument. Only the last time slice present in an IDS can be rewritten in this way, and data from older time slices will be lost. If a new run number is specified, the {\tt .yaml} file of the old run number will be modified to indicate that it is now obsolete and replaced by the new run number, and the {\tt .yaml} file for the new IMAS data entry will also indicate which old run it is replacing. The new run number must be larger than the old one.
 \end{sloppypar}
 
 \newpage
@@ -4835,7 +4883,7 @@ If only the {\tt input.dat} file is present (or is used), {\tt Eirene} will tran
 
 \section{Input files}
 
-Below are given the input files used for the {\tt D+C+He} benchmark
+Below are given the input files used for the structured {\tt D+C+He} benchmark
 case that can be found on the SVN server. These files can be found in the {\em Examples} folder in the \SOLPSITER SharePoint
 web site
 (\href{https://sharepoint.iter.org/departments/POP/CM/IMAS/SOLPS-ITER}{\allowbreak https://sharepoint.iter.org/departments\allowbreak/POP/CM/IMAS/SOLPS-ITER}), or directly among the examples provided in {\tt \$\{SOLPSTOP\}/runs/examples}, as part of the {\tt AUG\_16151\_D+C+He} case.
@@ -5263,52 +5311,50 @@ several values of $\Delta_t$.
 \section{Dynamic ("Time-dependent") mode}
 \label{sec:dynamic}\index{Dynamic mode}
 
-There is an alternative solution method available, which does not rely on under-relaxation, and is called the dynamic mode, by abuse of language, the "time-dependent" mode. This solution mode allows for a more precise estimate of the time derivative terms, particularly for the momentum and energy equations, and can be helpful to damp out numerical oscillations. This is obtained by setting the switch {\tt b2mndt\_style} to {\tt 2}. The traditional time-dependent solution method is based on a $1^{st}$ order Euler scheme, but a more accurate $2^{nd}$ order Crank-Nicolson scheme is also available. These are chosen using the switch {\tt b2mndt\_ckn}, with values {\tt 1} (default) and {\tt 2} respectively. The Crank-Nicolson scheme can also be used for the "false time-stepping" done in steady-state runs if desired.
+There is an alternative solution method available, which does not rely on under-relaxation, and is called the dynamic mode, or, by abuse of language, the "time-dependent" mode. This solution mode allows for a more precise estimate of the time derivative terms, particularly for the momentum and energy equations, namely the inclusion of terms like $\displaystyle m_aV_a \frac{{\partial}n_a}{{\partial}t}$ and $\displaystyle \frac{3}{2} T_\alpha \frac{{\partial}n_\alpha}{{\partial}t}$, where $a$ is a species index and $\alpha$ stands for $e$ or $i$. The "time-dependent" mode may be helpful to damp out numerical oscillations. This mode is obtained by setting the switch {\tt b2mndt\_style} to {\tt 2}. The traditional time-dependent solution method is based on a $1^{st}$ order Euler scheme, but a more accurate $2^{nd}$ order Crank-Nicolson scheme is also available. These are chosen using the switch {\tt b2mndt\_ckn}, with values {\tt 1} (default) and {\tt 2} respectively. The Crank-Nicolson scheme can also be used for the "false time-stepping" done in steady-state runs if desired.
 
-The dynamic mode triggers the use of the \SOLPSfivetwo physics model. It changes the order of solution of the equations to solve first for the density equations, then the parallel momentum equations, followed by the electrical potential, electron and ion temperature equations. The total momentum and energy equations are not solved.
+The dynamic mode triggers the use of the \SOLPSfivetwo physics model. It includes the terms mentioned above into the numerical approximation of the full time derivative terms, which is essential for the correct description of the time evolution of momentum and internal energy. To achieve this, the switch {\tt b2mndt\_style}, if set to {\tt 2}, changes the order of solution of the equations to solve first for the density equations, then the parallel momentum equations, followed by the electrical potential, then the electron and ion temperature equations. The total momentum and energy equations may still be solved (if, for example, it is desired to reduce numerical noise caused by momentum exchange or heat exchange terms), however, it breaks the {\tt b2mndt\_style.eq.2} numerical approximation of the full time derivative terms -- so that to get a true dynamic mode solving of these total momentum and energy equations is not recommended. If the user asks to solve these equations with {\tt b2mndt\_style} set to {\tt 2}, a warning message appears.
 
 When using the traditional solution method, relying on under-relaxation of the equations, the evolution in time of the solution is not a true reflection of the physical evolution of the system, but rather only a numerical approximation, and only the final steady-state solution can be fully trusted. If one is interested in the details of the time evolution of the plasma state, then this new solution method should be considered. Please note that the timestep may need to be decreased compared to a similar traditional case, using under-relaxation, to achieve convergence.
 
 More specifically, the way the time derivative terms are discretized is changed between the two code operation modes. For the traditional way of running the code, using the under-relaxation scheme, the time derivative term for the parallel momentum equations, (\ref{eq:mom_new}) or (\ref{eq:mom_old}), is discretized as:
 
 \begin{equation}\label{eq:mom_dt_1}
-m_a h_z \sqrt{g} \frac{n_a^{(k)} V_{\parallel a}^{(k+1)} - n_a^{(k)} V_{\parallel a}^{(k)}}{\tau \delta_{ma} \tau_f}
+m_a h_z \sqrt{g} n_a \frac{\partial V_{\parallel a}}{\partial t} \rightarrow m_a h_z \sqrt{g} \frac{n_a^{(k)} V_{\parallel a}^{(k+1)} - n_a^{(k)} V_{\parallel a}^{(k)}}{\tau \delta_{ma} \tau_f}
 \end{equation}
 
 and the time derivative terms for the energy equations, (\ref{eq:ene_new}) and (\ref{eq:eni}), are discretized as:
 
 \begin{equation}\label{eq:en_dt_1}
-\sqrt{g} \frac{3}{2} \frac{n_\alpha^{(k+1)} T_\alpha^{(k+1)} - n_\alpha^{(k)} T_\alpha^{(k)}}{\tau \delta_{e \alpha} \tau_f}
+\sqrt{g} \frac{3}{2} n_\alpha \frac{{\partial} T_\alpha}{{\partial}t} \rightarrow \sqrt{g} \frac{3}{2} \frac{n_\alpha^{(k+1)} T_\alpha^{(k+1)} - n_\alpha^{(k)} T_\alpha^{(k)}}{\tau \delta_{e \alpha} \tau_f}
 \end{equation}
 
 where $\alpha$ stands for $e$ or $i$, $\tau$ is the time step size, $\delta_x$ is the time step multiplier for the $x$ equation (i.e. the value of the {\tt DTMO}, {\tt DTEE}, or {\tt DTEI} arrays for that region and species), and $\tau_f$ is an additional optional time step multiplier, governed by the {\tt CORE\_DT\_FACTOR} switch from the {\tt NUMERICS} namelist (see Section~\ref{lab:b2:numerics:parameters} and Appendix~\ref{lis:b2cdcn} for details).
 
 According to the under-relaxation scheme, the updated values of the parallel velocity and temperatures at time step $k+1$ are given by:
 
-\begin{equation*}
+\begin{equation}\label{eq:mom_underrelaxation}
 V_{\parallel a}^{(k+1)} = V_{\parallel a}^{(k)} + r_{xf_{V_{\parallel a}}} \left( \widetilde{V}_{\parallel a}^{(k+1)} - V_{\parallel a}^{(k)} \right)
-\end{equation*}
-\begin{equation*}
+\end{equation}
+\begin{equation}\label{eq:en_underrelaxation}
 T_\alpha^{(k+1)} = T_\alpha^{(k)} + r_{xf_{T_\alpha}} \left( \widetilde{T}_\alpha^{(k+1)} - T_\alpha^{(k)} \right)
-\end{equation*}
+\end{equation}
 
 where $r_{xf_{V_{\parallel a}}}$ and $r_{xf_{T_\alpha}}$ are the under-relaxation factors, which are equal to {\tt rxf*xfm1} and {\tt rxf*xfm3} respectively, and the tilde quantities are the actual solutions to the equations. The factors {\tt rxf}, {\tt xfm1}, and {\tt xfm3}, are given by the values of the {\tt b2mndr\_rxf}, {\tt b2news\_xfm1}, and {\tt b2news\_xfm3} switches, respectively.
 
 When applying the dynamic mode, the discretization of the time derivative terms becomes, for the parallel momentum equations:
 
 \begin{equation}\label{eq:mom_dt_2}
-m_a h_z \sqrt{g} \frac{ \widetilde{V}_{\parallel a}^{(k+1)} - V_{\parallel a}^{(k)}}{\tau \delta_{ma} \tau_f} n_a^{(k+1)} + m_a h_z \sqrt{g} \frac{n_a^{(k+1)} - n_a^{(k)}}{\tau} V_{\parallel a}^{(k)}
+m_a h_z \sqrt{g} \frac{\partial n_a  V_{\parallel a}}{\partial t} \rightarrow m_a h_z \sqrt{g} \frac{ \widetilde{V}_{\parallel a}^{(k+1)} - V_{\parallel a}^{(k)}}{\tau \delta_{ma} \tau_f} n_a^{(k+1)} + m_a h_z \sqrt{g} \frac{n_a^{(k+1)} - n_a^{(k)}}{\tau \delta_{ma} \tau_f \cdot r_{xf_{V_{\parallel a}}}} V_{\parallel a}^{(k)}
 \end{equation}
 
 and, for the energy equations:
 
 \begin{equation}\label{eq:en_dt_2}
-\sqrt{g} \frac{3}{2} \frac{ \widetilde{T}_\alpha^{(k+1)} - T_\alpha^{(k)}}{\tau \delta_{e \alpha} \tau_f} n_\alpha^{(k+1)} + \sqrt{g} \frac{3}{2} \frac{n_\alpha^{(k+1)} - n_\alpha^{(k)}}{\tau} T_\alpha^{(k)}
+\sqrt{g} \frac{3}{2} \frac{{\partial} n_\alpha T_\alpha}{{\partial}t} \rightarrow \sqrt{g} \frac{3}{2} \frac{ \widetilde{T}_\alpha^{(k+1)} - T_\alpha^{(k)}}{\tau \delta_{e \alpha} \tau_f} n_\alpha^{(k+1)} + \sqrt{g} \frac{3}{2} \frac{n_\alpha^{(k+1)} - n_\alpha^{(k)}}{\tau \delta_{e \alpha} \tau_f \cdot r_{xf_{T_\alpha}} } T_\alpha^{(k)}
 \end{equation}
 
-Note that, since the order of solution of the equations has been changed in the dynamic mode, the updated density $n_a^{(k+1)}$ is now available for use in Eq.~(\ref{eq:mom_dt_2}), providing a more accurate evaluation of the parallel momentum time derivative term.
-
-The conditions
+Note that, since the order of solution of the equations has been changed in the dynamic mode, the updated density $n_a^{(k+1)}$ is now available for use in Eqs.~(\ref{eq:mom_dt_2}) and (\ref{eq:en_dt_2}), providing a more accurate evaluation of the parallel momentum and internal energy time derivative terms -- this is the reason why the order of solution is changed. Thus, in Eqs.~(\ref{eq:mom_dt_2}) and (\ref{eq:en_dt_2}), the second terms are treated as 'already known', while the first are 'unknown' and should be computed while solving the corresponding equations. The under-relaxation scheme (Eqs.~(\ref{eq:mom_underrelaxation}) and (\ref{eq:en_underrelaxation})) is applied as well, therefore the conditions
 \begin{equation}\label{eq:rxf_mo}
 \delta_{m_a} \tau_f r_{xf_{V_{\parallel a}}} = 1
 \end{equation}
@@ -5316,9 +5362,11 @@ The conditions
 \delta_{e \alpha} \tau_f r_{xf_{T_\alpha}} = 1
 \end{equation}
 \begin{equation}\label{eq:rxf_na}
-\delta_{n_a} \tau_f r_{xf_{f_{n_a}}} = 1
+\delta_{n_a} \tau_f r_{xf_{n_a}} = 1
 \end{equation}
-must be fulfilled for the numerical solution to converge to the exact solution as $\tau \rightarrow 0$. Setting all parameters equal to one could be the best option, if it were not for the process of sequential separate solution of the equations, which can lead to a limitation of the time step $\tau$. To expand the region of convergence of this process, one can try to find parameters in Eqs.~(\ref{eq:rxf_mo})-(\ref{eq:rxf_na}) other than unity.
+must be fulfilled for the numerical solution to converge to the exact physically meaningful dynamic solution as $\tau \rightarrow 0$. Setting all parameters equal to one could be the best option, if it were not for the process of sequential separate solution of the equations, which can lead to a limitation of the time step $\tau$. To expand the region of convergence of this process, one can try to find parameters in Eqs.~(\ref{eq:rxf_mo})-(\ref{eq:rxf_na}) other than unity.
+
+Alternatively, the products~(\ref{eq:rxf_mo})-(\ref{eq:rxf_na}) may be set bigger or smaller than unity to achieve a speed-up or slowing down of the evolution of species momentum, internal energy, or particle content, respectively -- in all such cases a warning message is printed if {\tt b2mndt\_style.eq.2} indicating that the numerical approximation of time-derivative terms becomes incorrect.
 
 When computing the residuals in dynamic mode, the contribution from the time derivative terms is not included. If using internal iterations ({\tt b2mndt\_nstg0}, {\tt b2mndt\_nstg1}, or {\tt b2mndt\_nstg2} larger than 1), the time derivative is computed from one internal iteration to the next.
 
@@ -17442,6 +17490,7 @@ no longer needed.
   \begin{verbatim}
 setenv B2PLOT_DEV 'x11 ps'
   \end{verbatim}
+\item[SOLPS\_TOOLCHAIN\_VERSION]\index{SOLPS\_TOOLCHAIN\_VERSION} Used to specify the compiler toolchain with which the code is built, for HPC environments where several toolchains may co-exist (see ITER {\tt setup.csh} files for an example)
 \item[SOLPSTOP]\index{SOLPSTOP} used to specify the top of the {\tt SOLPS} tree
 \item[SOLPSTOP\_FORCE]\index{SOLPSTOP\_FORCE} used to override the value of {\tt \$SOLPSTOP} to force execution of code executables from a different tree (not defined by default)
 \end{description}
@@ -17761,7 +17810,7 @@ coordinate index.
     ni       & \index{b2plot, ni} Total density $(m^{-3})$ (\SOLPSfive and \SOLPSITER runs) \\
     ni       & \index{b2plot, ni} Ion density $(m^{-3})$ (\SOLPSfour runs) \\
     ni0      & \index{b2plot, ni0} Density {\em ni} at previous time step $(m^{-3})$ \\
-    niso     & \index{b2plot, niso} Isolating region number \\
+    niso     & \index{b2plot, niso} Isolated region number \\
     npcl     & \index{b2plot, npcl} Neutral pressure cells \\
     nreg     & \index{b2plot, nreg} Region number \\
     nua      & \index{b2plot, nua} Total collision frequency $(s^{-1})$ \\
@@ -21420,6 +21469,7 @@ Additionally, system-wide compiler flags can be provided by means of the
 \item[AL\_MAJOR\_VERSION] \index{AL\_MAJOR\_VERSION} Major version number of the AL (IMAS Access Layer) library to which the code is linked (set internally by the configuration files)
 \item[AL\_MICRO\_VERSION] \index{AL\_MICRO\_VERSION} Micro version number of the AL (IMAS Access Layer) library to which the code is linked (set internally by the configuration files)
 \item[AL\_MINOR\_VERSION] \index{AL\_MINOR\_VERSION} Minor version number of the AL (IMAS Access Layer) library to which the code is linked (set internally by the configuration files)
+\item[\_\_APPLE\_\_] \index{\_\_APPLE\_\_} Automatically defined by the pre-processor when compiling on macOS devices; used to guard code expressions that are not compatible with the Darwin UNIX system
 \item[CATALYST] \index{CATALYST} Turns on the Paraview Catalyst utility (see the SOLPS-GUI manual for full details)
 \item[DIMENSIONS\_MODULE] \index{DIMENSIONS\_MODULE} Indicates whether the \SOLPSITER version is one that uses a {\tt b2mod\_dimensions.F} module file instead of the {\tt DIMENSIONS.F} include file (set internally by the configuration files)
 \item[COMPILER\_MAJOR\_VERSION] \index{COMPILER\_MAJOR\_VERSION} Major version number of the compiler being used (set internally by the configuration files)
@@ -21648,7 +21698,6 @@ if desired, be declared as part of either the {\tt SOLPS\_CPP} or the
 \item[PERFMON] \index{PERFMON} Enable performance monitoring
 \item[PLPLOT] \index{PLPLOT} Use {\tt PLPLOT} instead of {\tt NCAR} for plotting
 %\item[SCL\_IMP\_RCI] \index{SCL\_IMP\_RCI} Toggles scaling of impurities tallies
-\item[TAO\_NEW] \index{TAO\_NEW} Indicates that the code is to be linked with version 3.17 or newer of the {\tt PETSc} package. Automatically set by the session start-up scripts.
 \item[USE\_CDF\_B2STIME] \index{USE\_CDF\_B2STIME} Specific for \SOLPSfour {\tt CDF} tallies
 \item[WANT\_PROCESS] \index{WANT\_PROCESS} Enables the code for the \SOLPSfive to \SOLPSfour converter
 \item[WITH\_FTIMINGS] \index{WITH\_FTIMINGS} Enables debugging code for timing OpenMP parallelization implementation
@@ -21710,6 +21759,7 @@ AL\_MAJOR\_VERSION & ids/b2mod\_ual.F90 \\
 AL\_MINOR\_VERSION & ids/b2mod\_ual.F90 \\
 AL\_MAJOR\_VERSION & ids/b2mod\_ual\_io.F90 \\
 AL\_MAJOR\_VERSION & ids/b2mod\_ual\_io\_grid.F90 \\
+\_\_APPLE\_\_ & driver/b2mod\_driver.F \\
 ALLOCATE\_AND\_NAMELIST & b2plot/init\_wall.F \\
 ALLOCATE\_AND\_NAMELIST & modules/b2mod\_boundary\_namelist.F \\
 ALLOCATE\_AND\_NAMELIST & modules/b2mod\_input\_profile.F \\
@@ -22306,9 +22356,6 @@ SOLPS4\_3 & modules/b2mod\_mwti.F90 \\
 SOLPS4\_3 & modules/b2mod\_neutrals\_namelist.F \\
 SOLPS4\_3 & modules/b2us\_feedback.F \\
 SOLPS4\_3 & sources/eirene\_f30f31.F \\
-TAO\_NEW & differentiation/b2optim\_tao.F90 \\
-TAO\_NEW & differentiation/adjoint/b2optim\_tao.F90 \\
-TAO\_NEW & differentiation/tangent/b2optim\_tao.F90 \\
 USE\_CDF\_B2STIME & modules/b2mod\_comtimpl.F \\
 USE\_CDF\_B2STIME & common/COUPLE/COMTIMPL.F \\
 USE\_EXT\_OPENMP & driver/b2mod\_driver.F \\
@@ -22588,7 +22635,9 @@ LEGACYCOMP & scoring/updphot.F \\
 LEGACYCOMP & startup-routines/find\_tet\_dim.F \\
 LEGACYCOMP & startup-routines/find\_triang\_dim.F \\
 LEGACYCOMP & startup-routines/read\_fixform.F \\
+MPI\_MOD & assistant/eirmod\_second\_own.F \\
 MPI\_MOD & modules/eirmod\_mpi.F90 \\
+MPI\_VERSION & assistant/eirmod\_second\_own.F \\
 MPI\_VERSION & modules/eirmod\_mpi.F90 \\
 MPI\_VERSION & startup-routines/read\_fixform.F \\
 NAGFOR & assistant/eirmod\_second\_own.F \\
