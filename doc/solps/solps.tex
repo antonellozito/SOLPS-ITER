@@ -16144,34 +16144,36 @@ Similarly as {\tt b2movies.nc}, also {\tt eirenemovies.nc} can become very heavy
 
 \chapter{Quantities stored in b2chords.nc and eirenechords.nc}
 \label{cha:b2chords}\index{b2chords.nc and eirenechords.nc, quantities stored
-  in}\index{chords, b2chords.nc, eirenechords.nc}\index{b2chords.nc, eirenechords.nc}\index{rzchords}
+  in}\index{chords, b2chords.nc, eirenechords.nc}\index{b2chords.nc, eirenechords.nc}\index{rzphichords}
 
 The file {\tt b2chords.nc} stores the same physical quantities as {\tt
 b2movies.nc} (Chapter~\ref{cha:b2movies}), but interpolated along one or
-more custom straight chords rather than over the entire {\tt B2.5} grid.
+more custom straight 3D chords rather than over the entire {\tt B2.5} grid.
 Similarly, chords interpolating quantities belonging to the {\tt Eirene}
 triangular grid, in case of runs with {\tt Eirene}, are stored in {\tt eirenechords.nc}.
 This is convenient, for example, to extract synthetic-diagnostic
 profiles at every requested timestep.
 
 The chords are defined in the {\tt b2.user.parameters} namelist through
-the single array {\tt rzchords(i,j,k)}: the first index selects the $R$
-($i=1$) or $Z$ ($i=2$) coordinate, the second index the start ($j=1$) or
-end ($j=2$) point of the chord, and the third index the chord number
-$k$. The number of chords is inferred automatically from the number of
-defined entries. For example:
+the single array {\tt rzphichords(i,j,k)}: the first index selects the
+major radius $R$ in m ($i=1$), the vertical coordinate $Z$ in m ($i=2$)
+or the toroidal angle $\phi$ in degrees ($i=3$), the second index the
+start ($j=1$) or end ($j=2$) point of the chord, and the third index the
+chord number $k$. The number of chords is inferred automatically from the
+number of defined entries. For example:
 \begin{verbatim}
  &user
- rzchords(1,1,:) =   1.7000, 0.5000,
- rzchords(2,1,:) =   0.0820, 0.0000,
- rzchords(1,2,:) =   2.7000, 1.7000,
- rzchords(2,2,:) =   0.0820, 0.0000,
+ rzphichords(:,:,1) = 1.70, 0.082, 0.0,   2.70, 0.082,  0.0,
+ rzphichords(:,:,2) = 2.40, 0.082, 0.0,   2.40, 0.082, 60.0,
  /
 \end{verbatim}
 
-Each chord is sampled at a fixed spacing in length, set by the switch
-{\tt 'cdfchord\_resolution'} (in m, default $0.01$), between its two
-endpoints. At every sample point the requested cell-centered quantities
+Each chord is the straight line in 3D space between its two end points,
+i.e.\ between the Cartesian points $(R\cos\phi, R\sin\phi, Z)$. It is
+sampled at a fixed spacing in 3D arc length, set by the switch
+{\tt 'cdfchord\_resolution'} (in m, default $0.01$), and every sample
+point is mapped back to its $(R,Z)$, where the axisymmetric solution is
+evaluated. At every sample point the requested cell-centered quantities
 are obtained by inverse-distance-weighted interpolation from the
 surrounding cell centers, and the face-centered fluxes are first reconstructed
 to cell centers and divided by the projected face area, so that the
@@ -16189,11 +16191,14 @@ the existing {\tt b2chords.nc} file, provided that the chords
 
 The files are written in netCDF-4 format with one group per
 chord. Each chord is a separate group named {\tt chord\_NNNN}, where {\tt NNNN} is the chord's
-original (zero-padded) index in the {\tt rzchords} namelist array. Every group
+original (zero-padded) index in the {\tt rzphichords} namelist array. Every group
 has its own {\tt npt} dimension (sampled points per chord) and contains the coordinate
-variables {\tt crx}, {\tt cry} (the $R$ and $Z$ of each sample point) and
-{\tt ds} (the arc length along the chord from its start), the metadata
-scalars {\tt chord\_id}, {\tt rstart}, {\tt zstart}, {\tt rend}, {\tt zend} (the chords end points),
+variables {\tt crx}, {\tt cry} (the $R$ and $Z$ of each sample point, in m),
+{\tt cphi} (its toroidal angle, in degrees, continuous along the chord
+and starting from the given $\phi$ of the start point) and
+{\tt ds} (the 3D arc length along the chord from its start, in m), the metadata
+scalars {\tt chord\_id}, {\tt rstart}, {\tt zstart}, {\tt phistart}, {\tt rend}, {\tt zend},
+{\tt phiend} (the chords end points),
 and all the physics fields for that chord.
 
 Only the portion of each chord that lies \emph{inside} the relevant
@@ -16205,8 +16210,8 @@ Eirene triangular grid for {\tt eirenechords.nc}, so the two files can
 have different per-chord {\tt npt} and even a different set of surviving
 chords (for instance a chord lying in the vacuum region beyond the
 fluid grid has no group in {\tt b2chords.nc} but does have one in {\tt
-eirenechords.nc}). The stored {\tt rstart}/{\tt zstart} and {\tt
-rend}/{\tt zend} are the first and last \emph{kept} point of each chord
+eirenechords.nc}). The stored {\tt rstart}/{\tt zstart}/{\tt phistart} and {\tt
+rend}/{\tt zend}/{\tt phiend} are the first and last \emph{kept} point of each chord
 (its in-domain extent), and {\tt ds} keeps its true arc length from the
 original chord start, so a chord that briefly leaves and re-enters the
 domain shows a gap in {\tt ds}.
