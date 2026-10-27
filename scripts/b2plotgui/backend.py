@@ -16,10 +16,21 @@ import threading
 from . import protocol
 
 
-def wrapper_command(standalone=False, target="b2pl_gui"):
+def wrapper_command(standalone=False, targets=("b2pl_gui",), debugger=None,
+                    dry_run=False):
     """The scripts/b2plot command that stages and runs the executable."""
     cmd = [os.path.join(os.environ["SOLPSTOP"], "scripts", "b2plot")]
-    return cmd + (["-s"] if standalone else []) + [target]
+    cmd += ["-n"] if dry_run else []
+    cmd += ["-s"] if standalone else []
+    cmd += ["-d", debugger] if debugger else []
+    return cmd + list(targets)
+
+
+def command(args):
+    """Child command for the b2plot.py options (--exe or the wrapper)."""
+    if args.exe:
+        return [os.path.abspath(args.exe)]
+    return wrapper_command(args.standalone, args.targets, args.debugger)
 
 
 class Backend:
@@ -118,6 +129,14 @@ class Backend:
                         break
                     except (ProcessLookupError, subprocess.TimeoutExpired):
                         continue
+        if self.proc is not None and self.proc.poll() is not None:
+            for t in self._threads:
+                t.join(2.0)
+            for stream in (self.proc.stdin, self.proc.stdout):
+                try:
+                    stream.close()
+                except (BrokenPipeError, ValueError):
+                    pass
         if self.tmp is not None:
             shutil.rmtree(self.tmp, ignore_errors=True)
             self.tmp = None

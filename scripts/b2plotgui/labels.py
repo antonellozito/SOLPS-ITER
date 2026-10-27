@@ -94,3 +94,19 @@ def to_mathtext(s, fc="@"):
             out.append(value.replace("$", r"\$"))
     flush()
     return "".join(out)
+
+
+_TEX = re.compile(r"([\^_])\{([^{}]*)\}")
+
+
+def tex_to_mathtext(s):
+    """b2plot catalogue labels ('m^{-3}', 'b_{x}') to matplotlib mathtext."""
+    s = s.replace("$", r"\$")
+    s = _TEX.sub(lambda m: "$%s{\\mathrm{%s}}$" % (m.group(1), m.group(2)), s)
+    return s.replace("$$", "")
+
+
+def tex_to_plain(s):
+    """b2plot catalogue labels without the braces: 'm^-3', 'b_x'."""
+    return _TEX.sub(lambda m: m.group(1) + m.group(2), s)
+

@@ -1,6 +1,6 @@
 """CLI parity mode: b2plot commands on stdin, NCAR-like pages out.
 
-    echo "phys te surf" | python3 -m b2plotgui.batch [-s] [-o OUT]
+    echo "phys te surf" | b2plot.py [-s] [-o OUT]
 
 The stdin lines go unchanged to b2pl_gui.exe, followed by "1 sync" and
 "quit". Each page opens in a matplotlib window (NCAR-like by default; zoom,
@@ -8,7 +8,6 @@ pan and save in any matplotlib format from its toolbar), and is written
 to -o if given.
 """
 
-import argparse
 import io
 import os
 import sys
@@ -17,7 +16,7 @@ import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.backends.backend_pdf import PdfPages
 
-from . import backend, labels, protocol, render, scene
+from . import backend, labels, options, protocol, render, scene
 
 
 def _ps_page(fig):
@@ -111,30 +110,13 @@ def replay(path):
     return sc
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(prog="b2plot.py",
-                                 description=__doc__.splitlines()[0])
-    ap.add_argument("-s", action="store_true", dest="standalone",
-                    help="use the standalone build, as for b2plot")
-    ap.add_argument("-o", dest="output", help="additional output file "
-                    "(.pdf multipage, .ps, or numbered .png/.svg/.eps)")
-    ap.add_argument("--no-show", action="store_true",
-                    help="do not open the page windows (use with -o)")
-    ap.add_argument("--dpi", type=int, default=150,
-                    help="resolution of raster output")
-    ap.add_argument("--rundir", default=".", help="run directory")
-    ap.add_argument("--exe", help="development: run this executable in "
-                    "--rundir instead of the scripts/b2plot wrapper")
-    ap.add_argument("--record", help="save the raw message stream")
-    ap.add_argument("--replay", help="render a recorded stream")
-    args = ap.parse_args(argv)
-
+def main(args):
+    """CLI parity mode for the parsed b2plot.py options (options.py)."""
     if args.replay:
         sc, status, bye = replay(args.replay), 0, True
     else:
         lines = sys.stdin.read().splitlines()
-        cmd = ([os.path.abspath(args.exe)] if args.exe
-               else backend.wrapper_command(args.standalone))
+        cmd = backend.command(args)
         record = open(args.record, "wb") if args.record else None
         try:
             sc, status, bye = run_commands(cmd, args.rundir, lines, record)
@@ -162,4 +144,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(options.parse()))

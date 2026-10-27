@@ -28,7 +28,7 @@ endif
 set PYTHON_SERIES = 3.13
 # Required external Python modules ("name>=minimum" or just "name"). On every run, the modules that
 # are missing or too old are installed with pip, so new entries can simply be appended here.
-set PYTHON_MODULES = ( "numpy>=1.21" "matplotlib>=3.6" "PySide6>=6.4" )
+set PYTHON_MODULES = ( "numpy>=1.21" "matplotlib>=3.8" "PySide6>=6.4" )
 
 set PY_URL    = "https://www.python.org/ftp/python"
 set PY_PREFIX = "${SOLPSTOP}/lib/${HOST_NAME}.${COMPILER}/python"

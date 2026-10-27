@@ -83,6 +83,20 @@ SPECS = {
     60: ("SEG_OPEN", "ib:i4"),
     61: ("SEG_CLOSE", ""),
     62: ("SEG_INSERT", "ib:i4"),
+    70: ("GEOMETRY", "nCv:i4 nVx:i4 isClassicalGrid:i4 vxX:r4[nVx] "
+                     "vxY:r4[nVx] haspsi:i4 psin:r4[nVx] ncell:i4 "
+                     "cells:i4[ncell] nv:i4[ncell] nlist:i4 vlist:i4[nlist] "
+                     "cx:r4[ncell] cy:r4[ncell] reg:i4[ncell] ix:i4[ncell] "
+                     "iy:i4[ncell] nxpt:i4 xpt:r4[nxpt*2]"),
+    71: ("OVERLAY_BEGIN", "role:i4 name:str"),
+    72: ("OVERLAY_END", ""),
+    73: ("TRIMESH", "nknot:i4 x:r4[nknot] y:r4[nknot] ntri:i4 "
+                    "tri:i4[ntri*3]"),
+    74: ("FIELD", "label:str location:i4 n:i4 ncol:i4 columns:str[ncol] "
+                  "values:r4[n*ncol] nvx:i4 vertex:r4[nvx*ncol]"),
+    75: ("VECTOR", "label:str label2:str n:i4 ncol:i4 columns:str[ncol] "
+                   "vr:r4[n*ncol] vz:r4[n*ncol] nvx:i4 vxr:r4[nvx*ncol] "
+                   "vxz:r4[nvx*ncol]"),
 }
 
 NAMES = {op: spec[0] for op, spec in SPECS.items()}
