@@ -9,16 +9,11 @@ Each batch is followed by "<n> sync"; "quit" is sent at the end.
 import argparse
 import collections
 import os
-import queue
-import shutil
-import subprocess
 import sys
-import tempfile
-import threading
 
 import numpy as np
 
-from . import protocol
+from . import backend, protocol
 
 
 def _short(value):
@@ -84,70 +79,25 @@ def replay(path, dumper):
 
 
 def run(cmd, rundir, batches, dumper, record=None, console=None):
-    """Run cmd in rundir with a FIFO, send the batches, print messages."""
-    tmp = tempfile.mkdtemp(prefix="b2plotgui-")
-    fifo = os.path.join(tmp, "gui.fifo")
-    os.mkfifo(fifo, 0o600)
-    messages = queue.Queue()
-    opened = threading.Event()
-
-    def read_fifo():
-        try:
-            with open(fifo, "rb", buffering=0) as stream:
-                opened.set()
-                for item in protocol.read_messages(stream, record):
-                    messages.put(item)
-        except protocol.ProtocolError as err:
-            messages.put(err)
-        messages.put(None)
-
-    def read_stdout(stream):
-        for line in stream:
-            if console is not None:
-                console.write(line)
-                console.flush()
-
-    reader = threading.Thread(target=read_fifo, daemon=True)
-    reader.start()
-    env = dict(os.environ, B2PLOT_GUI_FIFO=fifo,
-               GFORTRAN_UNBUFFERED_PRECONNECTED="y")
-    proc = subprocess.Popen(cmd, cwd=rundir, env=env, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1, start_new_session=True)
-    out = threading.Thread(target=read_stdout, args=(proc.stdout,),
-                           daemon=True)
-    out.start()
-    try:
-        for i, line in enumerate(batches, 1):
-            proc.stdin.write(line + "\n")
-            proc.stdin.write(f"{i} sync\n")
-        proc.stdin.write("quit\n")
-        proc.stdin.close()
-    except BrokenPipeError:
+    """Run cmd in rundir, send the batches, print the messages."""
+    be = backend.Backend(cmd, rundir, record)
+    be.start()
+    text = "".join(f"{line}\n{i} sync\n" for i, line in enumerate(batches, 1))
+    if not be.send(text + "quit\n"):
         print("b2plot ended before reading all commands", file=sys.stderr)
-    idle = 0
-    while True:
-        try:
-            item = messages.get(timeout=1.0)
-        except queue.Empty:
-            if proc.poll() is not None and not opened.is_set():
-                # the process ended before opening the FIFO: unblock the reader
-                idle += 1
-                try:
-                    os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
-                except OSError:
-                    if idle > 10:
-                        break
-            continue
-        if item is None:
-            break
-        if isinstance(item, Exception):
-            print(f"protocol error: {item}", file=sys.stderr)
-            continue
-        dumper.feed(*item)
-    status = proc.wait()
-    out.join(timeout=5.0)
-    shutil.rmtree(tmp, ignore_errors=True)
+    be.close_input()
+    status = None
+    for event in be.iter_events():
+        if event[0] == "message":
+            dumper.feed(event[1], event[2])
+        elif event[0] == "console" and console is not None:
+            console.write(event[1])
+            console.flush()
+        elif event[0] == "error":
+            print(f"protocol error: {event[1]}", file=sys.stderr)
+        elif event[0] == "exit":
+            status = event[1]
+    be.stop()
     return status
 
 
@@ -184,8 +134,7 @@ def main(argv=None):
     if args.exe:
         cmd = [os.path.abspath(args.exe)]
     else:
-        cmd = [os.path.join(os.environ["SOLPSTOP"], "scripts", "b2plot")]
-        cmd += (["-s"] if args.standalone else []) + ["b2pl_gui"]
+        cmd = backend.wrapper_command(args.standalone)
     record = open(args.record, "wb") if args.record else None
     console = open(args.console, "w") if args.console else sys.stderr
     try:
