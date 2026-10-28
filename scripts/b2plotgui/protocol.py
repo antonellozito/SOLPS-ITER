@@ -100,6 +100,7 @@ SPECS = {
                    "vxz:r4[nvx*ncol]"),
     77: ("PSIMAP", "nr:i4 nz:i4 r:r4[nr] z:r4[nz] psin:r4[nr*nz] ro:r4 zo:r4 "
                    "rs:r4 zs:r4"),
+    78: ("LEVELS", "kind:i4 n:i4 lev:r4[n]"),
 }
 
 NAMES = {op: spec[0] for op, spec in SPECS.items()}

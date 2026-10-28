@@ -75,6 +75,7 @@ class Field:
     values: np.ndarray          # (ncol, n)
     vertex: np.ndarray = None   # (ncol, nVx) for cell fields
     ops: tuple = ()             # b2plot operations after the label
+    levels: np.ndarray = None   # contour levels b2plot set (clvp, eclvp)
 
     @property
     def title(self):
@@ -202,6 +203,7 @@ class Run:
         self._layer = None
         self._segments = []
         self._result = None
+        self._levels = None
 
     # ------------------------------------------------------------ control
     def start(self):
@@ -295,7 +297,7 @@ class Run:
                 pts = np.column_stack((m.x, m.y))
                 self._segments.extend(np.hstack((pts[:-1], pts[1:])))
             return None
-        if op not in (1, 2, 3, 4, 5, 70, 71, 72, 73, 74, 75, 77):
+        if op not in (1, 2, 3, 4, 5, 70, 71, 72, 73, 74, 75, 77, 78):
             return None
         m = protocol.decode(op, payload)
         if op == OP["RUNINFO"]:
@@ -322,6 +324,8 @@ class Run:
                                  (m.ro, m.zo), (m.rs, m.zs))
         elif op in (OP["FIELD"], OP["VECTOR"]):
             self._result = m
+        elif op == OP["LEVELS"]:
+            self._levels = np.asarray(m.lev, float)
         elif op == OP["BYE"]:
             self.bye = True
         elif op == OP["SYNC"]:
@@ -333,9 +337,11 @@ class Run:
             return None
         req = self.pending.pop(0)
         m, self._result = self._result, None
+        levels, self._levels = self._levels, None
         if req.kind in ("field", "efield") and m is not None \
                 and m.op == OP["FIELD"]:
             req.result = make_field(req.name, m, req.ops)
+            req.result.levels = levels
         elif req.kind in ("vector", "evector") and m is not None \
                 and m.op == OP["VECTOR"]:
             req.result = make_vector(req.name, m, req.ops)

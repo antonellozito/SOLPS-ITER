@@ -84,6 +84,28 @@ class PlotStyle:
     stream_color: str = "#1f77b4"
     stream_style: str = "-"
     seeds: list = field(default_factory=list)
+    level_mode: str = "number"  # number, step, list, proportion (b2plot)
+    level_step: float = 0.0
+    level_list: str = ""
+    decades: int = 0            # log scale: decades below the maximum
+    fill_lines: bool = False    # contour lines over filled contours
+    ix_range: tuple = None      # classical grids: cells shown
+    iy_range: tuple = None
+    regions: tuple = None       # region numbers shown (None: all)
+
+
+@dataclass
+class OverlayStyle:
+    """Arrows and contour lines of further quantities over the plot."""
+    arrow_length: float = 0.0
+    arrow_width: float = 1.0
+    arrow_color: str = "#000000"
+    line_levels: int = 10
+    line_log: bool = False
+    line_color: str = "#ffffff"
+    line_width: float = 0.6
+    line_style: str = "-"
+    line_labels: bool = False
 
 
 def _norm(values, style):
@@ -100,6 +122,9 @@ def _norm(values, style):
     if style.scale == "log":
         lo = lo if lo > 0 else (hi * 1e-6 if hi > 0 else 1.0)
         hi = hi if hi > lo else lo * 10.0
+        decades = getattr(style, "decades", 0)
+        if decades > 0:
+            lo = max(lo, hi / 10.0 ** decades)
         return LogNorm(vmin=lo, vmax=hi)
     if hi <= lo:
         hi = lo + (abs(lo) if lo else 1.0)
@@ -112,6 +137,34 @@ def _norm(values, style):
 def _levels(norm, n):
     t = np.linspace(0.0, 1.0, max(int(n), 1) + 1)
     return np.unique(np.asarray(norm.inverse(t), float))
+
+
+def _floats(text):
+    out = []
+    for item in text.replace(",", " ").split():
+        try:
+            out.append(float(item))
+        except ValueError:
+            pass
+    return np.array(out, float)
+
+
+def _levels_for(st, norm, given=None):
+    """Contour levels for the level mode of st: a number of levels over
+    the range, a step from the minimum, a list, or the levels b2plot
+    computed (clvp, eclvp)."""
+    if st.level_mode == "proportion" and given is not None:
+        lev = np.unique(np.asarray(given, float))
+    elif st.level_mode == "list":
+        lev = np.unique(_floats(st.level_list))
+    elif st.level_mode == "step" and st.level_step > 0:
+        n = min(int((norm.vmax - norm.vmin) / st.level_step), 1000)
+        lev = norm.vmin + st.level_step * np.arange(n + 1)
+    else:
+        lev = _levels(norm, st.levels)
+    if isinstance(norm, LogNorm):
+        lev = lev[lev > 0]
+    return lev if len(lev) >= 2 else _levels(norm, st.levels)
 
 
 def _cmap(style):
@@ -166,6 +219,7 @@ class Plot2D:
         self.mappable = None
         self.cbar = None
         self._cell_pc = None
+        self._cell_key = None
         self._tri_pc = None
         self._reset_axes()
 
@@ -182,7 +236,7 @@ class Plot2D:
         self._reset_axes()
         self.cax.set_visible(False)
         self.run, self.data, self.mappable = run, None, None
-        self._cell_pc = self._tri_pc = None
+        self._cell_pc = self._tri_pc = self._cell_key = None
         g = run.geometry
         self.tri = mtri.Triangulation(g.vx[:, 0], g.vx[:, 1], g.triangles)
         self.finder = self.tri.get_trifinder()
@@ -278,21 +332,48 @@ class Plot2D:
             self._tri_pc.set_visible(False)
         self.cax.set_visible(False)
 
-    def show(self, data, style, unit=None):
+    def show(self, data, style, unit=None, overlays=None):
         """Draw a Field or Vector with a PlotStyle (unit: colour-bar label,
-        default the unit in the label b2plot sent)."""
+        default the unit in the label b2plot sent). overlays maps "arrows"
+        and "lines" to (data, OverlayStyle) drawn over it."""
         self.clear_field()
         self.data, self.style = data, replace(style)
         self.unit = data.unit if unit is None else unit
         if data is None:
             return
+        self.mask = self._cell_mask(style)
         if hasattr(data, "vr"):
             self._vectors(data, style)
         elif data.location == "cells":
             self._cell_field(data, style)
         else:
             self._tri_field(data, style)
+        for role, (odata, ostyle) in (overlays or {}).items():
+            if odata is not None:
+                self._overlay(role, odata, ostyle, style)
         self._colorbar(data, style)
+
+    def _cell_mask(self, st):
+        """Geometry rows shown: cells with an area, inside the index
+        intervals (classical grids) and in the chosen regions."""
+        g = self.run.geometry
+        m = g.visible.copy()
+        if g.classical and st.ix_range is not None:
+            m &= (g.ix >= st.ix_range[0]) & (g.ix <= st.ix_range[1])
+        if g.classical and st.iy_range is not None:
+            m &= (g.iy >= st.iy_range[0]) & (g.iy <= st.iy_range[1])
+        if st.regions is not None:
+            m &= np.isin(g.region, st.regions)
+        return m
+
+    def _cell_tri(self):
+        """Triangulation of the vertices restricted to the shown cells."""
+        g = self.run.geometry
+        hidden = ~self.mask[g.tri_cell]
+        if not hidden.any():
+            return self.tri
+        return mtri.Triangulation(self.tri.x, self.tri.y, self.tri.triangles,
+                                  mask=hidden)
 
     def _column(self, data, style):
         return min(max(style.column, 0), len(data.columns) - 1)
@@ -300,12 +381,17 @@ class Plot2D:
     def _cell_field(self, f, st):
         g = self.run.geometry
         col = self._column(f, st)
-        cell_values = f.values[col][g.cells[g.visible] - 1]
+        rows = np.flatnonzero(self.mask)
+        cell_values = f.values[col][g.cells[rows] - 1]
         norm, cmap = _norm(cell_values, st), _cmap(st)
         if st.kind == "patch":
-            if self._cell_pc is None:
-                polys = [p for p, v in zip(g.polygons, g.visible) if v]
-                self._cell_pc = PolyCollection(polys, zorder=1.0)
+            key = (st.ix_range, st.iy_range, st.regions)
+            if self._cell_pc is None or self._cell_key != key:
+                if self._cell_pc is not None:
+                    self._cell_pc.remove()
+                self._cell_pc = PolyCollection([g.polygons[i] for i in rows],
+                                               zorder=1.0)
+                self._cell_key = key
                 self.ax.add_collection(self._cell_pc, autolim=False)
             pc = self._cell_pc
             vals = np.ma.masked_invalid(cell_values)
@@ -317,8 +403,9 @@ class Plot2D:
             self.mappable = pc
             return
         z = np.asarray(f.vertex[col], float)
-        used = np.unique(self.tri.triangles)
-        self._contours(self.tri, z, _norm(z[used], st), cmap, st)
+        tri = self._cell_tri()
+        used = np.unique(tri.get_masked_triangles())
+        self._contours(tri, z, _norm(z[used], st), cmap, st, f.levels)
 
     def _tri_field(self, f, st):
         t = self.run.trimesh
@@ -341,15 +428,25 @@ class Plot2D:
             pc.set_linewidth(0.1 if st.edges else 0.3)
             self.mappable = pc
             return
-        self._contours(self.etri, node_values(t, values), norm, cmap, st)
+        self._contours(self.etri, node_values(t, values), norm, cmap, st,
+                       f.levels)
 
-    def _contours(self, tri, z, norm, cmap, st):
-        lev = _levels(norm, st.levels)
+    def _contours(self, tri, z, norm, cmap, st, given=None):
+        lev = _levels_for(st, norm, given)
         if st.scale == "log":
             z = np.where(z > 0, z, norm.vmin)
         if st.kind == "contourf":
             cs = self.ax.tricontourf(tri, z, levels=lev, cmap=cmap,
                                      norm=norm, extend="both", zorder=1.0)
+            if st.fill_lines:
+                lines = self.ax.tricontour(tri, z, levels=lev, zorder=2.0,
+                                           colors=st.line_color,
+                                           linewidths=st.line_width,
+                                           linestyles=st.line_style)
+                if st.line_labels:
+                    self.ax.clabel(lines, fontsize="x-small",
+                                   fmt=lambda v: f"{v:.3g}")
+                self.field_artists.append(lines)
         else:
             kw = dict(colors=st.line_color) if st.line_mono else dict(
                 cmap=cmap, norm=norm)
@@ -373,10 +470,11 @@ class Plot2D:
             return (self.ecentres, u, w, self.etri, node_values(t, u),
                     node_values(t, w))
         g = self.run.geometry
-        u = np.asarray(v.vr[col], float)[g.cells - 1]
-        w = np.asarray(v.vz[col], float)[g.cells - 1]
-        return (g.centres, u, w, self.tri, np.asarray(v.vxr[col], float),
-                np.asarray(v.vxz[col], float))
+        rows = np.flatnonzero(self.mask)
+        u = np.asarray(v.vr[col], float)[g.cells[rows] - 1]
+        w = np.asarray(v.vz[col], float)[g.cells[rows] - 1]
+        return (g.centres[rows], u, w, self._cell_tri(),
+                np.asarray(v.vxr[col], float), np.asarray(v.vxz[col], float))
 
     def _quiver(self, pos, u, w, st, cmap, box):
         """Arrows at pos, the longest (or each) st.arrow_length long."""
@@ -465,6 +563,46 @@ class Plot2D:
         sp.lines.set_linestyle(st.stream_style)
         self.field_artists.append(sp.lines)
         self.field_artists += [p for p in self.ax.patches if p not in before]
+
+    def _overlay(self, role, data, o, st):
+        """Arrows of a vector or contour lines of a second quantity, for
+        the species column of the main plot where it exists."""
+        col = min(max(st.column, 0), len(data.columns) - 1)
+        box = self.vector_box()
+        if role == "arrows" and hasattr(data, "vr"):
+            pos, u, w = self._vector_data(data, col)[:3]
+            ast = replace(PlotStyle(), arrow_length=o.arrow_length,
+                          arrow_width=o.arrow_width, every=0,
+                          color_by_magnitude=False, arrow_color=o.arrow_color)
+            q = self._quiver(pos, u, w, ast, None, box)
+            if q is not None:
+                q.set_zorder(5.5)
+        elif role == "lines" and not hasattr(data, "vr"):
+            if data.location == "cells":
+                tri = self._cell_tri()
+                z = np.asarray(data.vertex[col], float)
+                used = np.unique(tri.get_masked_triangles())
+                zz = z[used]
+            elif self.etri is not None:
+                tri = self.etri
+                z = zz = node_values(self.run.trimesh,
+                                     np.asarray(data.values[col], float))
+            else:
+                return
+            lst = replace(PlotStyle(), scale="log" if o.line_log else "linear")
+            norm = _norm(zz, lst)
+            lev = _levels(norm, o.line_levels)
+            if o.line_log:
+                lev = lev[lev > 0]
+                z = np.where(z > 0, z, norm.vmin)
+            cs = self.ax.tricontour(tri, z, levels=lev, zorder=4.5,
+                                    colors=o.line_color,
+                                    linewidths=o.line_width,
+                                    linestyles=o.line_style)
+            if o.line_labels:
+                self.ax.clabel(cs, fontsize="x-small",
+                               fmt=lambda v: f"{v:.3g}")
+            self.field_artists.append(cs)
 
     def _drop_colorbar(self):
         """Detach the colour bar from its (possibly reused) mappable."""
