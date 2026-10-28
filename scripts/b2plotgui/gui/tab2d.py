@@ -1,14 +1,17 @@
 """2D tab: quantity panel, one fixed plot, layers panel."""
 
 import json
+import socket
+from dataclasses import replace
 
 import numpy as np
 from matplotlib.figure import Figure
 
-from .. import catalog, plot2d
+from .. import catalog, page, plot2d
 from ..data import split_unit
 from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore, QtGui,
                   QtWidgets, Qt, Signal)
+from .export import FigureDialog, ValuesDialog
 from .layers import LayersPanel, from_dict
 from .quantity import QuantityPanel
 
@@ -26,6 +29,8 @@ class Tab2D(QtWidgets.QWidget):
     """The 2D plots tab; data requests go through the main window."""
 
     request = Signal(object)        # (role, catalog.Quantity, operations)
+    export = Signal(object)         # (Quantity, names, paths, ops, table)
+    add_to_page = Signal(object)    # plot2d.Snapshot
     status = Signal(str)
 
     def __init__(self, settings, parent=None):
@@ -57,6 +62,11 @@ class Tab2D(QtWidgets.QWidget):
         save = QtWidgets.QToolButton()
         save.setText("Save view")
         save.clicked.connect(lambda *_: self._save_view())
+        add = QtWidgets.QToolButton()
+        add.setText("Add to page")
+        add.setToolTip("Add this plot with all its settings to the page "
+                       "composer")
+        add.clicked.connect(lambda *_: self._add_to_page())
         self.box = []
         for tip in ("R min (m)", "R max (m)", "Z min (m)", "Z max (m)"):
             e = QtWidgets.QLineEdit()
@@ -79,6 +89,7 @@ class Tab2D(QtWidgets.QWidget):
         second.addWidget(self.box[2])
         second.addWidget(self.box[3])
         second.addStretch(1)
+        second.addWidget(add)
         self.hover = QtWidgets.QLabel(" ")
         self.hover.setTextInteractionFlags(Qt.TextSelectableByMouse)
         centre = QtWidgets.QWidget()
@@ -192,6 +203,12 @@ class Tab2D(QtWidgets.QWidget):
     def deliver(self, want, data, error=""):
         """Result of a request (data None and an error text on failure)."""
         role, q, ops = want
+        if role == "export":
+            self.status.emit("Values of %s written to %s" % (
+                q.name, ", ".join(data)) if data is not None else
+                "b2plot did not write the values of %s. %s" % (q.name,
+                                                                error))
+            return
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
                              % (q.name, error))
@@ -209,35 +226,117 @@ class Tab2D(QtWidgets.QWidget):
             self.quantity.set_columns(data.columns, species)
         self.redraw()
 
-    def redraw(self):
-        if self.run is None or self.data is None or not self._current():
-            return
-        style = self.quantity.style()
+    def _unit(self):
         unit = split_unit(self.wanted.description)[1] if self.wanted else None
         factor = self.quantity.factor_value()
         if factor != 1.0:
             unit = "%s  (\u00d7 %g)" % (unit or "", factor)
+        return unit or None
+
+    def _overlay_data(self):
         ostyle = self.quantity.overlay_box.style()
         overlays = {}
         for role, q in self._overlays_needed():
             d = self.odata.get(role)
             if d is not None and d.name == q.name:
                 overlays[role] = (d, ostyle)
+        return overlays
+
+    def _title(self):
+        q = self.wanted
+        title = q.description if q is not None else self.data.label
+        if self.quantity.species.count() > 1:
+            title += "  [%s]" % self.quantity.species.currentText()
+        return title
+
+    def label_values(self):
+        """${NAME} of the label texts: RUN, HOST and TIME of the run."""
+        info = (self.run.info or {}) if self.run is not None else {}
+        return {"RUN": self.run.rundir if self.run is not None else "",
+                "HOST": socket.gethostname().split(".")[0],
+                "TIME": "%.6g" % info.get("time", 0.0)}
+
+    def redraw(self):
+        if self.run is None or self.data is None or not self._current():
+            return
         try:
-            self.plot.show(self.data, style, unit or None, overlays)
+            self.plot.show(self.data, self.quantity.style(), self._unit(),
+                           self._overlay_data())
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
-        q = self.wanted
-        species = self.quantity.species.currentText()
-        title = q.description if q is not None else self.data.label
-        if self.quantity.species.count() > 1:
-            title += "  [%s]" % species
-        self.plot.title(title)
+        title = self._title()
+        self.quantity.labels_box.set_title_hint(title)
+        self.plot.set_labels(self.quantity.labels_box.style(), title,
+                             self.label_values())
         if self.plot.mappable is not None:
             norm = self.plot.mappable.norm
             self.quantity.set_range(norm.vmin, norm.vmax)
         self.canvas.draw_idle()
+
+    # ------------------------------------------------------------- export
+    def snapshot(self):
+        """The plot shown with all its settings, or None."""
+        if self.run is None or not self._current():
+            return None
+        return plot2d.Snapshot(
+            run=self.run, data=self.data, style=self.quantity.style(),
+            unit=self._unit(), overlays=self._overlay_data(),
+            layers={k: replace(s) for k, s in self.layers.styles().items()},
+            view=self.plot.get_view(),
+            labels=self.quantity.labels_box.style(), title=self._title(),
+            values=self.label_values())
+
+    def _add_to_page(self):
+        snap = self.snapshot()
+        if snap is None:
+            self.status.emit("No plot to add to the page")
+            return
+        self.add_to_page.emit(snap)
+
+    def export_figure(self, path=None, shape="shown", dpi=150):
+        """Write the plot (dialog unless path is given); returns files."""
+        snap = self.snapshot()
+        if snap is None:
+            self.status.emit("No plot to export")
+            return []
+        if path is None:
+            dlg = FigureDialog(self.settings, self.wanted.name.replace(
+                " ", "_") + ".pdf", parent=self)
+            if dlg.exec() != QtWidgets.QDialog.Accepted:
+                return []
+            path, dpi = dlg.path(), dlg.dpi.value()
+            shape = dlg.shape.currentData()
+        size = page.SHAPES[shape][1]
+        try:
+            if size is None:            # as shown: the figure of the tab
+                self.figure.savefig(path, dpi=dpi)
+                files = [path]
+            else:
+                files = page.save(path, [snap], size, dpi, own=True)
+        except Exception as err:
+            self.status.emit("Cannot export the figure: %s" % err)
+            return []
+        self.status.emit("Figure written to %s" % ", ".join(files))
+        return files
+
+    def export_values(self, paths=None, table=False, all_species=False):
+        """Ask b2plot to write the values of the quantity shown (dialog
+        unless paths are given)."""
+        q = self.wanted
+        if self.run is None or q is None:
+            return
+        if paths is None:
+            dlg = ValuesDialog(self.settings, q,
+                               self.quantity.species.currentText(), self)
+            if dlg.exec() != QtWidgets.QDialog.Accepted:
+                return
+            paths, table = dlg.paths(), dlg.table()
+            all_species = dlg.all_species()
+        names = [q.poloidal, q.radial] if q.source in ("vector", "evector") \
+            else [q.name]
+        self.export.emit((q, names, list(paths),
+                          self.quantity.value_ops(q, all_species), table))
 
     # -------------------------------------------------------------- views
     def _fill_views(self):

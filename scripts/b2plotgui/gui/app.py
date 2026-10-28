@@ -10,6 +10,7 @@ import sys
 
 from .. import PROTOCOL_VERSION, __version__, backend, data, labels
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
+from .composer import Composer
 from .tab2d import Tab2D
 
 POLL_MS = 20
@@ -45,7 +46,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs = QtWidgets.QTabWidget()
         self.tab2d = Tab2D(self.settings)
         self.tab2d.request.connect(self._request)
+        self.tab2d.export.connect(self._export)
         self.tab2d.status.connect(self._status)
+        self.composer = Composer(self.settings, self)
+        self.composer.status.connect(self._status)
+        self.tab2d.add_to_page.connect(self._add_to_page)
         self.tabs.addTab(self.tab2d, "2D plots")
         for name in PLACEHOLDERS:
             self.tabs.addTab(_placeholder(name), name)
@@ -83,11 +88,22 @@ class MainWindow(QtWidgets.QMainWindow):
         m.addSeparator()
         a = m.addAction("Export figure\u2026")
         a.setShortcut(QtGui.QKeySequence(keys.Save))
-        a.triggered.connect(lambda *_: self.tab2d.toolbar.save_figure())
+        a.triggered.connect(lambda *_: self.tab2d.export_figure())
+        a = m.addAction("Export values\u2026")
+        a.setShortcut(QtGui.QKeySequence("Ctrl+E"))
+        a.setToolTip("Values of the quantity shown, written by b2plot")
+        a.triggered.connect(lambda *_: self.tab2d.export_values())
         m.addSeparator()
         a = m.addAction("Quit")
         a.setShortcut(QtGui.QKeySequence(keys.Quit))
         a.triggered.connect(lambda *_: self.close())
+        m = self.menuBar().addMenu("&Page")
+        a = m.addAction("Add plot to page")
+        a.setShortcut(QtGui.QKeySequence("Ctrl+D"))
+        a.triggered.connect(lambda *_: self.tab2d._add_to_page())
+        a = m.addAction("Page composer\u2026")
+        a.setShortcut(QtGui.QKeySequence("Ctrl+P"))
+        a.triggered.connect(lambda *_: self._show_composer())
         m = self.menuBar().addMenu("&Help")
         m.addAction("About b2plot.py").triggered.connect(
             lambda *_: self.about())
@@ -154,6 +170,31 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.tab2d.deliver(want, res)
 
+    def _export(self, job):
+        q, names, paths, ops, table = job
+        want = ("export", q, ops)
+        if self.run is None or not self.run.alive():
+            self._status("b2plot is not running: File > Reload run")
+            return
+        try:
+            req = self.run.export(names, paths, q.source in (
+                "eirene", "evector"), ops, table)
+        except (OSError, ValueError) as err:
+            self.tab2d.deliver(want, None, str(err))
+            return
+        self.waiting.setdefault(req.ident, []).append((self.tab2d, want))
+        self._status("b2plot writes the values of %s\u2026" % q.name)
+
+    def _add_to_page(self, snap):
+        self.composer.add(snap, snap.values)
+        self._show_composer()
+        self._status("Added to the page composer (%d plots)"
+                     % len(self.composer.snaps))
+
+    def _show_composer(self):
+        self.composer.show()
+        self.composer.raise_()
+
     # -------------------------------------------------------------- poll
     def _poll(self):
         run = self.run
@@ -163,11 +204,11 @@ class MainWindow(QtWidgets.QMainWindow):
             receivers = self.waiting.pop(req.ident, [])
             if req.kind == "init":
                 self._initialised(req)
+            if receivers and req.result is not None:
+                self._status("")
             for tab, want in receivers:
                 tab.deliver(want, req.result,
                             "".join(req.console[-3:]).strip())
-            if receivers and req.result is not None:
-                self._status("")
         self.busy.setVisible(bool(run.pending))
         ended = run.ended >= {"eof", "console_eof", "exit"}
         if ended and not self.crash_shown:

@@ -1,15 +1,16 @@
 """Option groups of the 2D quantity panel: contour levels, overlays on the
-plot, and the cells shown."""
+plot, the cells shown and the labels."""
 
 import numpy as np
 
-from ..plot2d import OverlayStyle
+from ..plot2d import LabelStyle, OverlayStyle
 from ..qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
 
 LEVEL_MODES = [("Number of levels", "number"), ("Step", "step"),
                ("List of values", "list"),
                ("Proportion (b2plot clvp)", "proportion")]
+STANDARD_LABEL = "${HOST} ${RUN} `date` T=${TIME}"     # b2plot stdl
 
 
 def _row(*widgets, stretch=True):
@@ -250,3 +251,66 @@ class CellsBox(QtWidgets.QGroupBox):
                                    if c.isChecked())
         return out
 
+
+class LabelsBox(QtWidgets.QGroupBox):
+    """Texts of the plot (b2plot extl, xlab, ylab, glob, lbsz, bold, noax
+    and xcol); ${NAME} and `date` are expanded as in b2plot."""
+
+    changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__("Labels", parent)
+        form = QtWidgets.QFormLayout(self)
+        self.title = QtWidgets.QLineEdit()
+        self.extra = QtWidgets.QLineEdit()
+        self.extra.setPlaceholderText("extra label over the plot")
+        self.standard = QtWidgets.QToolButton()
+        self.standard.setText("Standard")
+        self.standard.setToolTip("Host, run directory, date and time of the "
+                                 "run (b2plot stdl)")
+        self.standard.clicked.connect(lambda *_: self._standard())
+        self.xlabel = QtWidgets.QLineEdit()
+        self.xlabel.setPlaceholderText("R (m)")
+        self.ylabel = QtWidgets.QLineEdit()
+        self.ylabel.setPlaceholderText("Z (m)")
+        self.header = QtWidgets.QLineEdit()
+        self.header.setPlaceholderText("global header over the figure")
+        for w in (self.title, self.extra, self.xlabel, self.ylabel,
+                  self.header):
+            w.setToolTip("${NAME}: environment, RUN, HOST or TIME; `date`; "
+                         "^{...} and _{...} for super- and subscripts")
+            w.setClearButtonEnabled(True)
+            w.editingFinished.connect(lambda: self.changed.emit())
+        self.size = spin(0.5, 3.0, 0.1, 1.0, 1, "Label size (b2plot lbsz)")
+        self.bold = QtWidgets.QCheckBox("bold")
+        self.axes = QtWidgets.QCheckBox("axes")
+        self.axes.setChecked(True)
+        self.axes.setToolTip("Axes, ticks and axis labels (b2plot noax)")
+        self.color = ColorButton("#000000")
+        form.addRow("Title", self.title)
+        form.addRow("Extra", _row(self.extra, self.standard,
+                                  stretch=False))
+        form.addRow("x label", self.xlabel)
+        form.addRow("y label", self.ylabel)
+        form.addRow("Header", self.header)
+        form.addRow("Size", _row(self.size, self.bold, self.axes,
+                                 self.color))
+        self.size.valueChanged.connect(lambda *_: self.changed.emit())
+        for w in (self.bold, self.axes):
+            w.toggled.connect(lambda *_: self.changed.emit())
+        self.color.changed.connect(lambda *_: self.changed.emit())
+
+    def _standard(self):
+        self.extra.setText(STANDARD_LABEL)
+        self.changed.emit()
+
+    def set_title_hint(self, text):
+        self.title.setPlaceholderText(text)
+
+    def style(self):
+        return LabelStyle(
+            title=self.title.text(), extra=self.extra.text(),
+            xlabel=self.xlabel.text(), ylabel=self.ylabel.text(),
+            header=self.header.text(), size=self.size.value(),
+            bold=self.bold.isChecked(), axes=self.axes.isChecked(),
+            color=self.color.color())

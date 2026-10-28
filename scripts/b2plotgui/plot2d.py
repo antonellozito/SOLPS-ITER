@@ -95,6 +95,37 @@ class PlotStyle:
 
 
 @dataclass
+class LabelStyle:
+    """Texts of the plot, as b2plot extl, xlab, ylab, glob, lbsz, bold,
+    noax and xcol; empty texts take the automatic ones."""
+    title: str = ""
+    extra: str = ""
+    xlabel: str = ""
+    ylabel: str = ""
+    header: str = ""
+    size: float = 1.0
+    bold: bool = False
+    axes: bool = True
+    color: str = "#000000"
+
+
+@dataclass
+class Snapshot:
+    """One plot with all its settings, drawn again by render_snapshot
+    (export shapes and the page composer)."""
+    run: object
+    data: object
+    style: PlotStyle
+    unit: str = None
+    overlays: dict = None
+    layers: dict = None
+    view: tuple = None
+    labels: LabelStyle = None
+    title: str = ""             # automatic title
+    values: dict = None         # ${NAME} of the label texts
+
+
+@dataclass
 class OverlayStyle:
     """Arrows and contour lines of further quantities over the plot."""
     arrow_length: float = 0.0
@@ -167,6 +198,19 @@ def _levels_for(st, norm, given=None):
     return lev if len(lev) >= 2 else _levels(norm, st.levels)
 
 
+def fit_size(s, size, width, bold=False):
+    """Font size, at most size, with which the text s fits in width points
+    (long run paths in the standard label)."""
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.textpath import TextPath
+    try:
+        w = TextPath((0, 0), s, size=size, prop=FontProperties(
+            weight="bold" if bold else "normal")).get_extents().width
+    except (ValueError, RuntimeError):     # text mathtext cannot parse
+        return size
+    return size if w <= width else max(size * width / w, 4.0)
+
+
 def _cmap(style):
     cmap = colormaps[style.cmap]
     return cmap.reversed() if style.reverse else cmap
@@ -205,11 +249,16 @@ def node_values(trimesh, values):
 class Plot2D:
     """One fixed axes with a fixed colour-bar slot."""
 
-    def __init__(self, fig):
-        self.fig = fig
-        self.ax = fig.add_axes([0.09, 0.08, 0.72, 0.86])
-        self.cax = fig.add_axes([0.85, 0.12, 0.025, 0.78])
+    def __init__(self, fig, rect=(0.0, 0.0, 1.0, 1.0)):
+        self.fig, self.rect = fig, tuple(rect)
+        self.label_artists = []
+        self.label_style = LabelStyle()
+        self._top_pts = 0.0         # header and extra label
+        ax_box, cax_box = self._positions()
+        self.ax = fig.add_axes(ax_box)
+        self.cax = fig.add_axes(cax_box)
         self.cax.set_visible(False)
+        fig.canvas.mpl_connect("resize_event", self._place)
         self.run = None
         self.layer_styles = {k: replace(s) for k, (_, s) in LAYERS.items()}
         self.layer_artists = {}
@@ -223,15 +272,40 @@ class Plot2D:
         self._tri_pc = None
         self._reset_axes()
 
+    def _positions(self):
+        """Axes and colour-bar boxes in the rectangle of the figure; the
+        margins are in points, scaled with the label size."""
+        x, y, w, h = self.rect
+        pw, ph = np.maximum(self.fig.get_size_inches() * 72.0, 1.0)
+        fs = 10.0 * self.label_style.size
+        left, bottom = 6.0 * fs / pw, 4.2 * fs / ph
+        top = (3.0 * fs + self._top_pts) / ph
+        gap, bar, right = 1.5 * fs / pw, 1.6 * fs / pw, 6.5 * fs / pw
+        aw = max(w - left - gap - bar - right, 0.1 * w)
+        ah = max(h - bottom - top, 0.1 * h)
+        ax = [x + left, y + bottom, aw, ah]
+        return ax, [x + left + aw + gap, y + bottom + 0.05 * ah, bar,
+                    0.9 * ah]
+
+    def _place(self, *_):
+        """Axes and colour bar to their boxes (labels or figure size
+        changed), keeping the equal aspect."""
+        ax_box, cax_box = self._positions()
+        if not np.allclose(self.ax.get_position().bounds, ax_box):
+            self.ax.set_position(ax_box)
+            self.cax.set_position(cax_box)
+            self._keep_aspect()
+
     def _reset_axes(self):
         self.ax.set_aspect("equal", adjustable="datalim")
         self.ax.set_xlabel("R (m)")
         self.ax.set_ylabel("Z (m)")
 
     # --------------------------------------------------------------- run
-    def set_run(self, run):
+    def set_run(self, run, hover=True):
         self._drop_colorbar()
         self.field_artists, self.layer_artists = [], {}
+        self.label_artists = []
         self.ax.cla()
         self._reset_axes()
         self.cax.set_visible(False)
@@ -239,12 +313,12 @@ class Plot2D:
         self._cell_pc = self._tri_pc = self._cell_key = None
         g = run.geometry
         self.tri = mtri.Triangulation(g.vx[:, 0], g.vx[:, 1], g.triangles)
-        self.finder = self.tri.get_trifinder()
+        self.finder = self.tri.get_trifinder() if hover else None
         self.etri = self.efinder = self.ecentres = None
         if run.trimesh is not None:
             t = run.trimesh
             self.etri = mtri.Triangulation(t.x, t.y, t.triangles)
-            self.efinder = self.etri.get_trifinder()
+            self.efinder = self.etri.get_trifinder() if hover else None
             self.ecentres = np.column_stack((t.x, t.y))[t.triangles].mean(1)
         for key in LAYERS:
             self._build_layer(key)
@@ -627,8 +701,50 @@ class Plot2D:
             self.cbar.update_ticks()
         self.cbar.set_label(labels.any_to_mathtext(self.unit))
 
-    def title(self, text):
-        self.ax.set_title(labels.tex_to_mathtext(text), fontsize="medium")
+    def set_labels(self, ls, title, values=None, header=True):
+        """Texts, sizes and colours of a LabelStyle; title is the automatic
+        title, values expand ${NAME}; header False leaves the global
+        header to the page (composer)."""
+        for a in self.label_artists:
+            a.remove()
+        self.label_artists, self.label_style = [], ls
+        fs = 10.0 * ls.size
+        kw = dict(color=ls.color, fontweight="bold" if ls.bold else "normal")
+
+        def text(s):
+            return labels.tex_to_mathtext(labels.expand(s, values))
+        pts = self.fig.get_size_inches()[1] * 72.0
+        head = ls.header.strip() and header
+        self._top_pts = (1.8 * fs if head else 0.0) + (
+            1.5 * fs if ls.extra.strip() else 0.0)
+        self._place()
+        pw = self.fig.get_size_inches()[0] * 72.0
+        wide = 0.98 * self.rect[2] * pw
+        s = text(ls.title or title)
+        self.ax.set_title(s, fontsize=fit_size(s, 1.1 * fs, wide, ls.bold),
+                          **kw)
+        self.ax.set_xlabel(text(ls.xlabel or "R (m)"), fontsize=fs, **kw)
+        self.ax.set_ylabel(text(ls.ylabel or "Z (m)"), fontsize=fs, **kw)
+        self.ax.tick_params(labelsize=0.9 * fs, labelcolor=ls.color)
+        self.ax.axis("on" if ls.axes else "off")
+        x, y, w, h = self.rect
+        if ls.extra.strip():
+            s = text(ls.extra)
+            self.label_artists.append(self.fig.text(
+                x + 0.5 * w, y + h - (self._top_pts - 0.2 * fs) / pts, s,
+                ha="center", va="bottom", fontsize=fit_size(
+                    s, 0.9 * fs, wide, ls.bold), **kw))
+        if head:
+            s = text(ls.header)
+            self.label_artists.append(self.fig.text(
+                x + 0.5 * w, y + h - 0.4 * fs / pts, s, ha="center",
+                va="top", fontsize=fit_size(s, 1.2 * fs, wide, ls.bold),
+                **kw))
+        if self.cbar is not None:
+            self.cbar.ax.tick_params(labelsize=0.9 * fs,
+                                     labelcolor=ls.color)
+            self.cbar.set_label(labels.any_to_mathtext(self.unit or ""),
+                                fontsize=fs, **kw)
 
     # -------------------------------------------------------------- views
     def full_extent(self):
@@ -680,6 +796,15 @@ class Plot2D:
         self.ax.set_xlim(x0, x1)
         self.ax.set_ylim(y0, y1)
 
+    def _keep_aspect(self):
+        """Z range for the equal aspect after the axes changed height."""
+        x0, x1 = self.ax.get_xlim()
+        y0, y1 = self.ax.get_ylim()
+        bb = self.ax.get_window_extent()
+        if bb.width > 0 and x1 > x0:
+            c, h = 0.5 * (y0 + y1), 0.5 * (x1 - x0) * bb.height / bb.width
+            self.ax.set_ylim(c - h, c + h)
+
     def get_view(self):
         x0, x1 = self.ax.get_xlim()
         y0, y1 = self.ax.get_ylim()
@@ -721,3 +846,20 @@ class Plot2D:
                 out += "  triangle %d  %s %.4g %s" % (
                     jt + 1, d.name, d.values[col][jt], unit)
         return out
+
+
+def render_snapshot(fig, snap, rect=(0.0, 0.0, 1.0, 1.0), header=True):
+    """Draw a Snapshot in a rectangle of a figure (figure fraction)."""
+    p = Plot2D(fig, rect)
+    if snap.layers:
+        p.layer_styles = {k: replace(s) for k, s in snap.layers.items()}
+    p.set_run(snap.run, hover=False)
+    ls = snap.labels or LabelStyle()
+    p.set_labels(ls, snap.title, snap.values, header)
+    if snap.view:
+        p.set_view(snap.view)
+    p.show(snap.data, snap.style, snap.unit, snap.overlays)
+    p.set_labels(ls, snap.title, snap.values, header)
+    if snap.view:
+        p.set_view(snap.view)
+    return p

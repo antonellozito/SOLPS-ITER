@@ -4,7 +4,7 @@ from .. import labels
 from ..plot2d import KINDS_SCALAR, KINDS_VECTOR, PlotStyle
 from ..qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
-from .options2d import CellsBox, LevelsBox, OverlayBox
+from .options2d import CellsBox, LabelsBox, LevelsBox, OverlayBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
@@ -214,6 +214,9 @@ class QuantityPanel(QtWidgets.QWidget):
         self.cells_box = CellsBox()
         self.cells_box.changed.connect(self._changed)
         lay.addWidget(self.cells_box)
+        self.labels_box = LabelsBox()
+        self.labels_box.changed.connect(self._changed)
+        lay.addWidget(self.labels_box)
         self.seeds = []
         self.clear_seeds.clicked.connect(lambda *_: self.set_seeds([]))
 
@@ -356,6 +359,21 @@ class QuantityPanel(QtWidgets.QWidget):
                 ops += ["%d %d eclvp" % (nneg, npos), "guieclv", "0 eclvs"]
             else:
                 ops += ["%d %d clvp" % (nneg, npos), "guiclv", "0 clvs"]
+        return tuple(ops)
+
+    def value_ops(self, q, all_species=False):
+        """b2plot operations for writing the values of q as plotted: sum
+        or species shown (unless all_species), and the scale factor."""
+        eirene = q.source in ("eirene", "evector")
+        ops = []
+        if self.summed():
+            ops.append("0 -1 esumz" if eirene else "0 -1 sumz")
+        elif not all_species and self.species.count() > 1:
+            ops.append("%d %s" % (max(self.species.currentIndex(), 0),
+                                  "ezsel" if eirene else "zsel"))
+        f = self.factor_value()
+        if f != 1.0:
+            ops.append("%s %s" % (real_token(f), "rem*" if eirene else "rm*"))
         return tuple(ops)
 
     def kind(self):

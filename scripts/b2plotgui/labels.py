@@ -123,3 +123,21 @@ def species_text(s):
     """Plain species name: 'D^{+1}' -> 'D+1', 'N^{0}' -> 'N0'."""
     return tex_to_plain(s).replace("^", "").replace("_", "").strip()
 
+
+
+_VAR = re.compile(r"\$\{(\w+)\}")
+
+
+def expand(s, values=None):
+    """Label variables as b2plot customise_label: ${NAME} from values, then
+    from the environment, and `date`; other back-quoted commands are kept
+    as text (the GUI does not run shell commands)."""
+    import os
+    import time
+    values = values or {}
+
+    def var(m):
+        name = m.group(1)
+        return str(values.get(name, os.environ.get(name, "")))
+    s = _VAR.sub(var, s)
+    return s.replace("`date`", time.strftime("%a %b %d %H:%M:%S %Y"))
