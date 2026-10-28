@@ -7,8 +7,8 @@ from matplotlib.figure import Figure
 
 from .. import catalog, plot2d
 from ..data import split_unit
-from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore, QtWidgets,
-                  Qt, Signal)
+from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore, QtGui,
+                  QtWidgets, Qt, Signal)
 from .layers import LayersPanel, from_dict
 from .quantity import QuantityPanel
 
@@ -25,7 +25,7 @@ def _scrolled(widget, width):
 class Tab2D(QtWidgets.QWidget):
     """The 2D plots tab; data requests go through the main window."""
 
-    request = Signal(object)        # (catalog.Quantity, b2plot operations)
+    request = Signal(object)        # (role, catalog.Quantity, operations)
     status = Signal(str)
 
     def __init__(self, settings, parent=None):
@@ -34,6 +34,7 @@ class Tab2D(QtWidgets.QWidget):
         self.run = None
         self.data = None
         self.wanted = None
+        self.odata = {}                 # overlay role -> Field or Vector
         self._seed_points = None
         self.figure = Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
@@ -56,17 +57,35 @@ class Tab2D(QtWidgets.QWidget):
         save = QtWidgets.QToolButton()
         save.setText("Save view")
         save.clicked.connect(lambda *_: self._save_view())
+        self.box = []
+        for tip in ("R min (m)", "R max (m)", "Z min (m)", "Z max (m)"):
+            e = QtWidgets.QLineEdit()
+            e.setValidator(QtGui.QDoubleValidator())
+            e.setToolTip(tip + "; the box is widened to the equal aspect")
+            e.setMaximumWidth(64)
+            e.editingFinished.connect(self._box_edited)
+            self.box.append(e)
         top = QtWidgets.QHBoxLayout()
         top.addWidget(self.toolbar, 1)
-        top.addWidget(QtWidgets.QLabel("View"))
-        top.addWidget(self.views)
-        top.addWidget(save)
+        second = QtWidgets.QHBoxLayout()
+        second.addWidget(QtWidgets.QLabel("View"))
+        second.addWidget(self.views)
+        second.addWidget(save)
+        second.addSpacing(12)
+        second.addWidget(QtWidgets.QLabel("R"))
+        second.addWidget(self.box[0])
+        second.addWidget(self.box[1])
+        second.addWidget(QtWidgets.QLabel("Z"))
+        second.addWidget(self.box[2])
+        second.addWidget(self.box[3])
+        second.addStretch(1)
         self.hover = QtWidgets.QLabel(" ")
         self.hover.setTextInteractionFlags(Qt.TextSelectableByMouse)
         centre = QtWidgets.QWidget()
         cl = QtWidgets.QVBoxLayout(centre)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.addLayout(top)
+        cl.addLayout(second)
         cl.addWidget(self.canvas, 1)
         cl.addWidget(self.hover)
 
@@ -106,10 +125,11 @@ class Tab2D(QtWidgets.QWidget):
 
     # ---------------------------------------------------------------- run
     def set_run(self, run):
-        self.run, self.data, self.wanted = run, None, None
+        self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.plot.set_run(run)
         for signal in ("xlim_changed", "ylim_changed"):
             self.plot.ax.callbacks.connect(signal, self._view_moved)
+        self._view_moved()
         available = {"structure", "device", "separatrices", "boundary"}
         available = (available & set(k for k, v in run.layers.items()
                                      if len(v))) | {"grid"}
@@ -120,7 +140,12 @@ class Tab2D(QtWidgets.QWidget):
         if run.psimap is not None:
             available.add("flux")
         self.layers.set_available(available)
-        self.quantity.set_quantities(catalog.quantities(run.catalog))
+        quantities = catalog.quantities(run.catalog)
+        self.quantity.set_quantities(quantities)
+        self.quantity.set_run_choices(
+            [q for q in quantities if q.source in ("vector", "evector")],
+            [q for q in quantities if q.source in ("matrix", "eirene")],
+            run.geometry)
         self._fill_views()
         self.setEnabled(True)
         self.toolbar.update()
@@ -140,33 +165,46 @@ class Tab2D(QtWidgets.QWidget):
                 and (self.data.name, self.data.ops)
                 == (self.wanted.name, self.quantity.ops(self.wanted)))
 
+    def _overlays_needed(self):
+        """[(role, Quantity)] of the active overlays (scalar plots only)."""
+        if self.quantity.kind() not in plot2d.KINDS_SCALAR:
+            return []
+        return self.quantity.overlay_box.wanted()
+
     def _fetch(self):
-        """Ask for the chosen quantity with the current b2plot operations."""
+        """Ask for the chosen quantity (with the current b2plot operations)
+        and for the active overlays that are not loaded yet."""
         if self.wanted is None:
             return
+        for role, q in self._overlays_needed():
+            d = self.odata.get(role)
+            if d is None or d.name != q.name:
+                self.request.emit((role, q, ()))
         if self._current():
             self.redraw()
         else:
-            self.request.emit((self.wanted, self.quantity.ops(self.wanted)))
+            self.request.emit(("main", self.wanted,
+                               self.quantity.ops(self.wanted)))
 
     def _options_changed(self):
-        if self.wanted is not None and self.data is not None \
-                and not self._current():
-            self._fetch()
-        else:
-            self.redraw()
+        self._fetch()
 
     def deliver(self, want, data, error=""):
         """Result of a request (data None and an error text on failure)."""
-        q, ops = want
-        if q is not self.wanted or ops != self.quantity.ops(q):
-            return
+        role, q, ops = want
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
                              % (q.name, error))
             return
+        if role != "main":
+            if (role, q) in self._overlays_needed():
+                self.odata[role] = data
+                self.redraw()
+            return
+        if q is not self.wanted or ops != self.quantity.ops(q):
+            return
         self.data = data
-        if not self.quantity.summed():
+        if not self.quantity.reduced():
             species = (self.run.info or {}).get("species")
             self.quantity.set_columns(data.columns, species)
         self.redraw()
@@ -176,8 +214,17 @@ class Tab2D(QtWidgets.QWidget):
             return
         style = self.quantity.style()
         unit = split_unit(self.wanted.description)[1] if self.wanted else None
+        factor = self.quantity.factor_value()
+        if factor != 1.0:
+            unit = "%s  (\u00d7 %g)" % (unit or "", factor)
+        ostyle = self.quantity.overlay_box.style()
+        overlays = {}
+        for role, q in self._overlays_needed():
+            d = self.odata.get(role)
+            if d is not None and d.name == q.name:
+                overlays[role] = (d, ostyle)
         try:
-            self.plot.show(self.data, style, unit or None)
+            self.plot.show(self.data, style, unit or None, overlays)
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
@@ -226,12 +273,24 @@ class Tab2D(QtWidgets.QWidget):
             self._fill_views()
 
     def _view_moved(self, *_):
-        if self.data is not None and hasattr(self.data, "vr"):
+        for e, v in zip(self.box, self.plot.get_view()):
+            e.setText("%.4g" % v)
+        vectors = self.data is not None and hasattr(self.data, "vr")
+        if vectors or "arrows" in self.odata:
             self._vector_timer.start()
 
+    def _box_edited(self):
+        try:
+            box = [float(e.text()) for e in self.box]
+        except ValueError:
+            return
+        if box[1] > box[0] and box[3] > box[2]:
+            self.plot.set_view(box)
+            self.toolbar.push_current()
+            self.canvas.draw_idle()
+
     def _redraw_vectors(self):
-        if self.data is not None and hasattr(self.data, "vr"):
-            self.redraw()
+        self.redraw()
 
     # -------------------------------------------------------------- mouse
     def _motion(self, event):

@@ -4,6 +4,7 @@ from .. import labels
 from ..plot2d import KINDS_SCALAR, KINDS_VECTOR, PlotStyle
 from ..qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
+from .options2d import CellsBox, LevelsBox, OverlayBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
@@ -12,6 +13,13 @@ SUM = "Sum over species"
 CMAPS = ["turbo", "viridis", "plasma", "inferno", "magma", "cividis",
          "jet", "hot", "coolwarm", "RdBu_r", "seismic", "bwr", "Spectral_r",
          "gray"]
+
+
+def real_token(x):
+    """A b2plot real: short (b2plot reads tokens of limited length) and
+    with a point or an exponent, so that it is not read as an integer."""
+    t = "%.6g" % x
+    return t if ("." in t or "e" in t or "n" in t) else t + ".0"
 
 
 def _number(text, default):
@@ -94,11 +102,22 @@ class QuantityPanel(QtWidgets.QWidget):
         row.addWidget(self.vmin, 1)
         row.addWidget(self.vmax, 1)
         cf.addRow("Range", row)
-        self.levels = QtWidgets.QSpinBox()
-        self.levels.setRange(2, 200)
-        self.levels.setValue(20)
-        self.levels.setKeyboardTracking(False)
-        cf.addRow("Levels", self.levels)
+        row = QtWidgets.QHBoxLayout()
+        self.factor = QtWidgets.QLineEdit("1")
+        self.factor.setValidator(QtGui.QDoubleValidator())
+        self.factor.setToolTip("Values multiplied by this factor (b2plot "
+                               "rm*, rem*)")
+        self.factor.editingFinished.connect(self._changed)
+        self.decades = QtWidgets.QSpinBox()
+        self.decades.setRange(0, 30)
+        self.decades.setSpecialValueText("all")
+        self.decades.setToolTip("Log scale: decades shown below the "
+                                "maximum")
+        self.decades.setKeyboardTracking(False)
+        row.addWidget(self.factor, 1)
+        row.addWidget(QtWidgets.QLabel("decades"))
+        row.addWidget(self.decades)
+        cf.addRow("Factor", row)
         row = QtWidgets.QHBoxLayout()
         self.colorbar = QtWidgets.QCheckBox("colour bar")
         self.colorbar.setChecked(True)
@@ -107,13 +126,20 @@ class QuantityPanel(QtWidgets.QWidget):
         row.addWidget(self.edges)
         cf.addRow(row)
         lay.addWidget(col)
+        self.levels_box = LevelsBox()
+        self.levels_box.changed.connect(self._changed)
+        lay.addWidget(self.levels_box)
 
         # contour lines
         self.lines_box = QtWidgets.QGroupBox("Contour lines")
         lf = QtWidgets.QFormLayout(self.lines_box)
         row = QtWidgets.QHBoxLayout()
+        self.fill_lines = QtWidgets.QCheckBox("over the fill")
+        self.fill_lines.setToolTip("Lines on the filled contours, as "
+                                   "b2plot cont")
         self.mono = QtWidgets.QCheckBox("one colour")
         self.line_color = ColorButton("#000000")
+        row.addWidget(self.fill_lines)
         row.addWidget(self.mono)
         row.addWidget(self.line_color)
         row.addStretch(1)
@@ -182,15 +208,22 @@ class QuantityPanel(QtWidgets.QWidget):
         row.addWidget(self.clear_seeds)
         sf.addRow(row)
         lay.addWidget(self.stream_box)
+        self.overlay_box = OverlayBox()
+        self.overlay_box.changed.connect(self._changed)
+        lay.addWidget(self.overlay_box)
+        self.cells_box = CellsBox()
+        self.cells_box.changed.connect(self._changed)
+        lay.addWidget(self.cells_box)
         self.seeds = []
         self.clear_seeds.clicked.connect(lambda *_: self.set_seeds([]))
 
         for w in (self.cmap, self.scale, self.line_style, self.stream_style):
             w.currentIndexChanged.connect(self._changed)
         for w in (self.reverse, self.colorbar, self.edges, self.mono,
-                  self.line_labels, self.normalize, self.by_magnitude):
+                  self.line_labels, self.normalize, self.by_magnitude,
+                  self.fill_lines):
             w.toggled.connect(self._changed)
-        for w in (self.levels, self.every, self.line_width,
+        for w in (self.decades, self.every, self.line_width,
                   self.arrow_length, self.arrow_width, self.density,
                   self.stream_width):
             w.valueChanged.connect(self._changed)
@@ -245,6 +278,7 @@ class QuantityPanel(QtWidgets.QWidget):
         if (kind in KINDS_VECTOR) != vector:
             self.kind_buttons.button(3 if vector else 0).setChecked(True)
         self.edges.setEnabled(not vector)
+        self._kind_changed(emit=False)
         self.quantity_chosen.emit(q)
 
     def select(self, name):
@@ -282,12 +316,46 @@ class QuantityPanel(QtWidgets.QWidget):
     def summed(self):
         return self.species.currentText() == SUM
 
+    def factor_value(self):
+        try:
+            return float(self.factor.text())
+        except ValueError:
+            return 1.0
+
+    def proportion(self):
+        """clvp intervals when b2plot computes the contour levels."""
+        if self.kind() not in ("contourf", "contour"):
+            return None
+        return self.levels_box.proportion()
+
+    def reduced(self):
+        """True if b2plot sends one column (sum or clvp on one species)."""
+        return self.summed() or (self.proportion() is not None
+                                 and self.current is not None
+                                 and self.current.source in ("matrix",
+                                                             "eirene"))
+
     def ops(self, q):
-        """b2plot operations applied after the label of quantity q."""
+        """b2plot operations applied after the label of quantity q: species
+        sum or selection, scale factor, clvp contour levels."""
+        eirene = q.source in ("eirene", "evector")
         ops = []
+        prop = self.proportion() if q.source in ("matrix", "eirene") \
+            else None
         if self.summed():
-            eirene = q.source in ("eirene", "evector")
             ops.append("0 -1 esumz" if eirene else "0 -1 sumz")
+        elif prop is not None:
+            col = max(self.species.currentIndex(), 0)
+            ops.append("%d %s" % (col, "ezsel" if eirene else "zsel"))
+        f = self.factor_value()
+        if f != 1.0:
+            ops.append("%s %s" % (real_token(f), "rem*" if eirene else "rm*"))
+        if prop is not None:
+            npos, nneg = prop
+            if eirene:
+                ops += ["%d %d eclvp" % (nneg, npos), "guieclv", "0 eclvs"]
+            else:
+                ops += ["%d %d clvp" % (nneg, npos), "guiclv", "0 clvs"]
         return tuple(ops)
 
     def kind(self):
@@ -296,10 +364,14 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def _kind_changed(self, emit=True):
         kind = self.kind()
-        self.lines_box.setVisible(kind == "contour")
+        source = self.current.source if self.current is not None else ""
+        self.lines_box.setVisible(kind in ("contour", "contourf"))
+        self.fill_lines.setVisible(kind == "contourf")
         self.arrow_box.setVisible(kind in ("quiver", "quiverstream"))
         self.stream_box.setVisible(kind in ("stream", "quiverstream"))
-        self.levels.setEnabled(kind in ("contourf", "contour"))
+        self.levels_box.setVisible(kind in ("contourf", "contour"))
+        self.overlay_box.setVisible(kind in KINDS_SCALAR)
+        self.cells_box.setVisible(source in ("matrix", "vector"))
         if emit:
             self._changed()
 
@@ -318,15 +390,24 @@ class QuantityPanel(QtWidgets.QWidget):
         self.seeds = list(seeds)
         self._changed()
 
+    def set_run_choices(self, vectors, scalars, geometry):
+        """Overlay quantities and cell groups of a new run."""
+        self.overlay_box.set_choices(vectors, scalars)
+        self.cells_box.set_geometry(geometry)
+
     def style(self):
         return PlotStyle(
+            **self.levels_box.style_fields(), **self.cells_box.style_fields(),
+            decades=self.decades.value(),
+            fill_lines=self.fill_lines.isChecked(),
             kind=self.kind(),
-            column=0 if self.summed() else max(self.species.currentIndex(), 0),
+            column=0 if self.reduced()
+            else max(self.species.currentIndex(), 0),
             cmap=self.cmap.currentText(), reverse=self.reverse.isChecked(),
             scale=self.scale.currentText(), auto=self.auto.isChecked(),
             vmin=_number(self.vmin.text(), 0.0),
             vmax=_number(self.vmax.text(), 1.0),
-            levels=self.levels.value(), colorbar=self.colorbar.isChecked(),
+            colorbar=self.colorbar.isChecked(),
             edges=self.edges.isChecked(), line_mono=self.mono.isChecked(),
             line_color=self.line_color.color(),
             line_width=self.line_width.value(),

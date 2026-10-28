@@ -35,7 +35,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings = QtCore.QSettings("SOLPS-ITER", "b2plot.py")
         self.run = None
         self.record = open(args.record, "wb") if args.record else None
-        self.waiting = {}           # request ident -> (tab, quantity)
+        self.waiting = {}           # request ident -> [(tab, want)]
         self.crash_shown = False
 
         self.runline = QtWidgets.QLabel()
@@ -121,7 +121,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._status("Cannot start b2plot: %s" % err)
             self.run = None
             return
-        self.waiting[req.ident] = (None, None)
+        self.waiting[req.ident] = []
         self.tab2d.setEnabled(False)
         recent = [path] + [p for p in (self.settings.value("recent", [])
                                        or []) if p != path]
@@ -138,7 +138,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.waiting.clear()
 
     def _request(self, want):
-        q, ops = want
+        role, q, ops = want
         if self.run is None or not self.run.alive():
             self._status("b2plot is not running: File > Reload run")
             return
@@ -149,7 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
             res = self.run.field(q.name, eirene=q.source == "eirene",
                                  ops=ops)
         if isinstance(res, data.Request):
-            self.waiting[res.ident] = (self.tab2d, want)
+            self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
             self._status("Loading %s\u2026" % q.name)
         else:
             self.tab2d.deliver(want, res)
@@ -160,13 +160,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if run is None:
             return
         for req in run.poll(POLL_BUDGET):
-            tab, q = self.waiting.pop(req.ident, (None, None))
+            receivers = self.waiting.pop(req.ident, [])
             if req.kind == "init":
                 self._initialised(req)
-            elif tab is not None:
-                tab.deliver(q, req.result, "".join(req.console[-3:]).strip())
-                if req.result is not None:
-                    self._status("")
+            for tab, want in receivers:
+                tab.deliver(want, req.result,
+                            "".join(req.console[-3:]).strip())
+            if receivers and req.result is not None:
+                self._status("")
         self.busy.setVisible(bool(run.pending))
         ended = run.ended >= {"eof", "console_eof", "exit"}
         if ended and not self.crash_shown:
