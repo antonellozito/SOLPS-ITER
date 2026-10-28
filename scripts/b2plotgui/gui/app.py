@@ -154,31 +154,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.waiting.clear()
 
     def _request(self, want):
-        role, q, ops = want
+        role, q, ops, source = want
         if self.run is None or not self.run.alive():
             self._status("b2plot is not running: File > Reload run")
             return
         if q.source in ("vector", "evector"):
             res = self.run.vector(q.poloidal, q.radial,
-                                  eirene=q.source == "evector", ops=ops)
+                                  eirene=q.source == "evector", ops=ops,
+                                  source=source)
         else:
             res = self.run.field(q.name, eirene=q.source == "eirene",
-                                 ops=ops)
+                                 ops=ops, source=source)
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
-            self._status("Loading %s\u2026" % q.name)
+            if role != "prefetch":
+                self._status("Loading %s\u2026" % q.name)
         else:
             self.tab2d.deliver(want, res)
 
     def _export(self, job):
-        q, names, paths, ops, table = job
-        want = ("export", q, ops)
+        q, names, paths, ops, table, source = job
+        want = ("export", q, ops, source)
         if self.run is None or not self.run.alive():
             self._status("b2plot is not running: File > Reload run")
             return
         try:
             req = self.run.export(names, paths, q.source in (
-                "eirene", "evector"), ops, table)
+                "eirene", "evector"), ops, table, source)
         except (OSError, ValueError) as err:
             self.tab2d.deliver(want, None, str(err))
             return

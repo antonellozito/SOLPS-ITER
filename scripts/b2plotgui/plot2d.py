@@ -720,9 +720,12 @@ class Plot2D:
         self._place()
         pw = self.fig.get_size_inches()[0] * 72.0
         wide = 0.98 * self.rect[2] * pw
+        box = self.ax.get_position()
+        mid = 0.5 * (box.x0 + box.x1)   # the title is centred on the axes
+        half = min(mid - self.rect[0], self.rect[0] + self.rect[2] - mid)
         s = text(ls.title or title)
-        self.ax.set_title(s, fontsize=fit_size(s, 1.1 * fs, wide, ls.bold),
-                          **kw)
+        self.ax.set_title(s, fontsize=fit_size(s, 1.1 * fs, 1.96 * half * pw,
+                                               ls.bold), **kw)
         self.ax.set_xlabel(text(ls.xlabel or "R (m)"), fontsize=fs, **kw)
         self.ax.set_ylabel(text(ls.ylabel or "Z (m)"), fontsize=fs, **kw)
         self.ax.tick_params(labelsize=0.9 * fs, labelcolor=ls.color)

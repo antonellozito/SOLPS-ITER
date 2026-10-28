@@ -145,6 +145,10 @@ class OverlayBox(QtWidgets.QGroupBox):
             w.changed.connect(lambda *_: self.changed.emit())
 
     def set_choices(self, vectors, scalars, default_vector="up vv"):
+        """Quantities offered (final state or movie), keeping the names
+        chosen where they exist."""
+        old = (self.vector.currentText() or default_vector,
+               self.scalar.currentText())
         for combo, items in ((self.vector, vectors), (self.scalar, scalars)):
             combo.blockSignals(True)
             combo.clear()
@@ -152,9 +156,16 @@ class OverlayBox(QtWidgets.QGroupBox):
                 combo.addItem(q.name, q)
                 combo.setItemData(combo.count() - 1, q.text, Qt.ToolTipRole)
             combo.blockSignals(False)
-        i = self.vector.findText(default_vector)
-        if i >= 0:
-            self.vector.setCurrentIndex(i)
+        for combo, name in zip((self.vector, self.scalar), old):
+            i = combo.findText(name)
+            if i >= 0:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(i)
+                combo.blockSignals(False)
+        if self.vector.findText(old[0]) < 0:
+            i = self.vector.findText(default_vector)
+            if i >= 0:
+                self.vector.setCurrentIndex(i)
         completer = QtWidgets.QCompleter([q.name for q in scalars], self)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
