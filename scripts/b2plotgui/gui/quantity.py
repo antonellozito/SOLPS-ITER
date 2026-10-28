@@ -5,6 +5,7 @@ from ..plot2d import KINDS_SCALAR, KINDS_VECTOR, PlotStyle
 from ..qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
 from .options2d import CellsBox, LabelsBox, LevelsBox, OverlayBox
+from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
@@ -41,6 +42,8 @@ class QuantityPanel(QtWidgets.QWidget):
         self.current = None
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
+        self.time_box = TimeBox()
+        lay.addWidget(self.time_box)
 
         self.search = QtWidgets.QLineEdit()
         self.search.setPlaceholderText("Search quantities (te, flux, ...)")

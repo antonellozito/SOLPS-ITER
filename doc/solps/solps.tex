@@ -1454,6 +1454,7 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
 \item Job submission scripts
  \begin{description}
   \item[b2plot]\index{b2plot} Shortcut to \btwoplotns. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run \btwoplot without coupling to {\tt Eirene} data. A {\tt -h} option prints a help description.
+  \item[b2plot.py]\index{b2plot.py} Shortcut to the Python version of \btwoplotns. The arguments are the same as for \btwoplotns. When invoked without arguments, the GUI window will open.
   \item[b2run]\index{b2run}\index{b2co}\index{b2fstate} Shortcut to the {\tt Makefile} launching {\tt B2.5}. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run {\tt B2.5} in standalone mode. A {\tt -m} option allows to run with MPI options. When {\tt SOLPS\_MPIRUN} is defined, its value replaces the MPI launcher executable while preserving the options supplied with {\tt -m}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -t \#} option allows to request an OpenMP run with \# threads. A {\tt -b} option can be used when invoking the {\tt b2co} program to obtain a provisional {\tt b2fstate} file while the main code is running. A {\tt -tgt}, {\tt -hess\_tgt}, or {\tt -adj} option allows to request a standalone run with tangent, Hessian tangent on tangent, or adjoint AD derivatives, respectively. A {\tt -opt\_tgt} or {\tt -opt\_adj} option allows to request a standalone optimization with tangent or adjoint AD derivatives, respectively. A {\tt -h} option prints a help description. (See \ref{b2run} for fuller details)
   \item[b2run\_hgw\_cluster]\index{b2run\_hgw\_clus} Shortcut to the {\tt Makefile} launching {\tt B2.5} for the IPP--Greifswald cluster. A {\tt -n} option allows for dry-run tests.
   \item[b2sxdr]\index{b2sxdr} Shortcut to the \SOLPSfour to \SOLPSfive converter. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to specify that the run to convert was not coupled to {\tt Eirene}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -h} option prints a help description.
@@ -17501,6 +17502,7 @@ no longer needed.
 setenv B2PLOT_DEV 'x11 ps'
   \end{verbatim}
 \item[SOLPS\_TOOLCHAIN\_VERSION]\index{SOLPS\_TOOLCHAIN\_VERSION} Used to specify the compiler toolchain with which the code is built, for HPC environments where several toolchains may co-exist (see ITER {\tt setup.csh} files for an example)
+\item[B2PLOT\_GUI\_FIFO]\index{B2PLOT\_GUI\_FIFO} set by {\tt b2plot.py} (see \ref{sec:b2plotpy}) to the named pipe on which \btwoplot sends its binary messages (see \ref{sec:b2plotpydata}); without it the commands that only send data do nothing
 \item[SOLPSTOP]\index{SOLPSTOP} used to specify the top of the {\tt SOLPS} tree
 \item[SOLPSTOP\_FORCE]\index{SOLPSTOP\_FORCE} used to override the value of {\tt \$SOLPSTOP} to force execution of code executables from a different tree (not defined by default)
 \end{description}
@@ -19072,6 +19074,112 @@ Each such file contains the power loading onto the set of walls defined in that
 plot zone. If LM = 99 and J \textgreater 0, additional diagnostics are produced that indicate the radiation split by isonuclear sequence. If LM = 98 and J \textgreater 0, additional diagnostics are produced that indicate the radiation coming from the core additional sources. Note that the radiation loading is computed using a cylindrical approximation, i.e. neglecting the toroidal curvature. \\
 If the user wants to use the heat transfer model for the monoblock and/or the reflector plates, then plot zones for the inner/outer target, the reflector plates, and/or the dome must be defined in the DG model, using the labels {\tt trg[i-o]}, {\tt [i-o]rp}, and/or {\tt dome}, respectively. The {\tt wlld\_*.dat} files produced should then be postprocessed by either {\tt b2ymb} (see \ref{sec:b2ymb}), {\tt b2yrp} (\ref{sec:b2yrp}), or {\tt b2ydm} (\ref{sec:b2ydm}).
 
+
+\section{b2plot.py}
+\label{sec:b2plotpy}\index{b2plot.py}
+
+{\tt b2plot.py} (started by the script {\tt \$\{SOLPSTOP\}/scripts/b2plot.py})
+is a Python-based front end of \btwoplotns. The Fortran source
+code of \btwoplot stays the only program that reads the run and
+computes the quantities: its executable receives data as binary messages
+to make them available to a Python environment.
+It needs Python 3.9 or newer with PySide6 (6.4
+or newer), numpy (1.21) and matplotlib (3.8), as installed by the
+{\tt install\_python} script. {\tt b2plot.py --info} prints the versions and the
+build it would use.
+
+\subsection{Command-line use}
+
+With commands on {\tt stdin}, {\tt b2plot.py} is used like \btwoplotns:
+\begin{verbatim}
+echo "phys te surf" | b2plot.py
+b2plot.py < commands -o pages.pdf
+\end{verbatim}
+The commands go unchanged to \btwoplotns, and every page opens in a
+matplotlib window drawn like the {\tt NCAR} page. Files are written only
+with {\tt -o} ({\tt .pdf} or {\tt .ps} with all pages, numbered
+{\tt .png}, {\tt .svg} or {\tt .eps}).
+{\tt b2plot.py -h} lists all available command-line options.
+
+\subsection{The GUI}
+
+Started with {\tt stdin} a terminal ({\tt b2plot.py} in a run directory,
+or {\tt b2plot.py -r <run directory>}), {\tt b2plot.py} opens a window
+without any command input: everything is chosen with lists, buttons and
+toggles. The run line shows the run directory, the grid and the species;
+{\tt File} opens another run, reloads the run (after a crash of
+\btwoplotns) and exports. The {\tt 2D plots} tab is complete; the
+{\tt Profiles}, {\tt Chords}, {\tt Wall and targets} and {\tt Time traces}
+tabs follow in later versions. The 2D tab has three parts.
+
+The {\bf quantity panel} (left):
+\begin{itemize}
+\item {\tt Time}: the final state ({\tt b2fstate}) or the movie frames,
+  read by \btwoplot with {\bf guimovie} and {\bf guimvvec}
+  (\ref{sec:guimovie}): one frame, the mean over a range of frames, a
+  rolling mean (a window of $W$ frames ending at the frame or centred on
+  it, moved frame by frame) or a batch mean (consecutive blocks of $W$
+  frames), each position being one request of the frames $k_1$ to $k_2$;
+  a slider selects the position, {\tt Play} shows them in turn while the
+  next one is read, and {\tt Export frames} writes every position as
+  numbered image files or as the pages of one PDF; all options of the tab
+  apply to movie data;
+\item the quantity tree of the \btwoplot labels, with a search field;
+  vector quantities pair the poloidal and radial components (B2.5) or the
+  Cartesian components (EIRENE);
+\item the species, including the sum over the species (\btwoplot
+  {\tt sumz}, {\tt esumz});
+\item the plot type: patch, filled contour, contour lines, quiver,
+  streamlines, or quiver and streamlines;
+\item the colour scale: colour map, linear, logarithmic or symmetric
+  logarithmic scale, fixed or automatic range, the number of decades of a
+  logarithmic scale, and a scale factor applied by \btwoplot ({\tt rm*},
+  {\tt rem*});
+\item the contour levels: number, step, list, or proportion as computed by
+  \btwoplot {\tt clvp} or {\tt eclvp}; lines over filled contours, as
+  {\tt cont};
+\item the overlay on scalar plots: arrows of any vector quantity (as
+  {\tt arow}) and contour lines of a second quantity (as {\tt same});
+\item the cells shown: index intervals on classical grids and regions;
+\item the labels: title, extra label (with the standard label of
+  {\tt stdl}), axis labels, global header, size, bold, axes on or off and
+  colour (as {\tt extl}, {\tt xlab}, {\tt ylab}, {\tt glob}, {\tt lbsz},
+  {\tt bold}, {\tt noax}, {\tt xcol}); {\tt \$\{NAME\}} (environment,
+  {\tt RUN}, {\tt HOST}, {\tt TIME}) and \verb|`date`| are expanded,
+  other shell commands are not run.
+\end{itemize}
+
+The {\bf plot} (centre) shows the physical domain only. View presets
+(full, outer midplane, divertors), saved views and the R and Z limits set
+the view; the cursor shows the cell (and its {\tt ix}, {\tt iy} on
+classical grids) or the triangle and the value. Arrows are binned over the
+current view and redrawn after zoom and pan.
+
+The {\bf layers panel} (right) shows and styles the device structure
+(from {\tt structure.dat}), the vessel ({\tt mesh.extra}), the
+separatrices, the X-points, the grid boundary, the B2.5 grid, the EIRENE
+grid and flux surfaces (from {\tt rzpsi.dat}, normalised $\psi_N =
+(\psi-\psi_O)/(\psi_S-\psi_O)$ or $\rho_{pol}$, with the O-point and the
+primary X-point found from the $\psi$ map).
+
+Export:
+\begin{itemize}
+\item {\tt File > Export figure}: PDF, PNG, SVG or EPS, as shown on the
+  screen or square, A4 portrait or A4 landscape (as {\tt sq},
+  {\tt a4p}, {\tt a4l});
+\item {\tt File > Export values}: \btwoplot writes the values of the
+  quantity plotted (species shown or all, with the scale factor) with
+  {\tt mprt} or {\tt mtab}, or {\tt eprt} for EIRENE quantities; a vector
+  gives one file per component;
+\item {\tt Page > Page composer}: plots added with {\tt Add to page} keep
+  all their settings and are laid out $n_x \times n_y$ on pages (as
+  {\tt page}) with a global header; a PDF holds all pages, other formats
+  give one file per page.
+\end{itemize}
+
+{\tt b2plot.py} talks to {\tt b2pl\_gui.exe} with the commands of
+\ref{sec:b2plotpydata} and ends every request with {\bf sync}
+(\ref{sec:sync}).
 
 \section{Common errors}
 \index{b2plot, troubleshooting}
@@ -20782,6 +20890,61 @@ Currently coded functions are:
 \end{description}
 \end{sloppypar}
 
+\subsubsection{help}\index{b2plot, help}\label{sec:help}
+Prints the catalogue of \btwoplot labels by category (matrix and Eirene
+quantities and functions, wall quantities and functions, target
+functions, parameters, constants): name, number of species columns and
+description. With {\tt B2PLOT\_GUI\_FIFO} set (\ref{sec:b2plotpydata}) the
+catalogue is also sent to {\tt b2plot.py}.
+
+\subsubsection{dflt}\index{b2plot, dflt}\label{sec:dflt}
+Restores all the plot settings of the start of \btwoplot (page, plot
+flags, values, arrow lengths, transformations), so that the next plot
+does not depend on the commands before it.
+
+\subsubsection{$<$id,{\bf I}$>$ sync}\index{b2plot, sync}\label{sec:sync}
+Prints {\tt b2plot sync} and $\langle${\tt id}$\rangle$; a program that
+writes commands to \btwoplot uses it to know that all commands before it
+are done. With {\tt B2PLOT\_GUI\_FIFO} set it also sends the depths of the
+seven stacks and the label of the top of the matrix stack.
+
+\subsection{Data channel to b2plot.py}\label{sec:b2plotpydata}
+
+These commands send data to {\tt b2plot.py} (\ref{sec:b2plotpy}) as
+binary messages on the named pipe given by {\tt B2PLOT\_GUI\_FIFO}. They
+exist in every \btwoplot executable; without {\tt B2PLOT\_GUI\_FIFO} the
+commands that only send data do nothing, while those that drop fields
+still drop them.
+
+\subsubsection{guigeom}\index{b2plot, guigeom}\label{sec:guigeom}
+Sends the grid (cell polygons, regions, {\tt ix} and {\tt iy} on
+classical grids, X-points), the overlays drawn by the vessel, separatrix
+and outline routines, the device structure read from {\tt structure.dat},
+the {\tt Eirene} triangles and, when {\tt rzpsi.dat} is present, the
+normalised flux $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$ on its
+$(R,Z)$ box, with the O-point taken at the minimum of $|\nabla\psi|$
+inside the separatrix and $\psi_S$ at the primary X-point.
+
+\subsubsection{guifield, guiefld}\index{b2plot, guifield}\label{sec:guifield}\index{b2plot, guiefld}\label{sec:guiefld}
+Send and drop the field on top of the matrix stack ({\bf guifield}, at
+the cell centres, with values at the vertices from {\tt intvertex}) or
+of the Eirene stack ({\bf guiefld}, on the triangles).
+
+\subsubsection{guivect, guievect}\index{b2plot, guivect}\label{sec:guivect}\index{b2plot, guievect}\label{sec:guievect}
+Send and drop the two fields on top of the matrix stack (poloidal below,
+radial on top, turned into $(R,Z)$ components as for {\bf arow}) or of
+the Eirene stack (Cartesian $R$ and $Z$ components at the triangle
+centroids).
+
+\subsubsection{guiclv, guieclv}\index{b2plot, guiclv}\label{sec:guiclv}\index{b2plot, guieclv}\label{sec:guieclv}
+Send the contour levels set by {\bf clvs}, {\bf clvd}, {\bf clvn} or
+{\bf clvp} ({\bf guiclv}), or by their Eirene versions ({\bf guieclv}).
+
+\subsubsection{guimvinf}\index{b2plot, guimvinf}\label{sec:guimvinf}
+Sends the movie files found by {\bf guimovie} (\ref{sec:guimovie}), their
+frame times and, for every variable that {\bf guimovie} can read, its
+name, {\tt long\_name}, {\tt units}, location and number of columns.
+
 \subsection{Still need to do}
 
 \begin{description}
@@ -21041,6 +21204,43 @@ controlled with the {\bf mvsk} command.
 \subsubsection{$<$istart,{\bf I}$>$ $<$iend,{\bf I}$>$ $<$filename, {\bf S}$>$ $<$varname, {\bf S}$>$ omovie}\index{b2plot, omovie}\label{sec:omovie}
 Creates a movie for timeslice $\langle${\tt istart}$\rangle$ to time slice $\langle${\tt iend}$\rangle$ of variable $\langle${\tt varname}$\rangle$ read
 from file $\langle${\tt filename}$\rangle$.
+
+\subsubsection{$<$varname,{\bf S}$>$ $<$file,{\bf I}$>$ $<$k1,{\bf I}$>$ $<$k2,{\bf I}$>$ guimovie}\index{b2plot, guimovie}\label{sec:guimovie}
+Pushes the mean of the frames $\langle${\tt k1}$\rangle$ to
+$\langle${\tt k2}$\rangle$ (one frame if they are equal) of the variable
+$\langle${\tt varname}$\rangle$ of a movie file: file 1 is
+{\tt b2movies.nc}, file 2 {\tt eirenemovies.nc}
+(Chapter~\ref{cha:b2movies}), found as the other input files of
+\btwoplot (the run directory or its baserun) and opened once per
+session. Every variable with the time as last dimension can be read, with
+all its species columns:
+\begin{itemize}
+\item cell variables go on the matrix stack;
+\item face variables are interpolated to the cell centres with the
+  factors {\tt intcellP} (names ending in {\tt x}) or {\tt intcellR}
+  (names ending in {\tt y}) and go on the matrix stack;
+\item {\tt Eirene} variables, stored on the {\tt Eirene} tally cells, are
+  mapped to the triangles as the {\tt fort.46} data and go on the Eirene
+  stack.
+\end{itemize}
+The label is the {\tt long\_name} with the frames and the {\tt units}.
+The mean is a running sum per variable: when the frames change, only the
+frames that enter or leave the range are read, so rolling and block
+means over many frames are cheap. Wrong files, variables or frames give
+a message and push nothing. For example, the frame 5 and the mean of
+frames 1 to 20 of $T_e$, and frame 5 of the atom density:
+\begin{verbatim}
+phys 'te' 1 5 5 guimovie surf
+phys 'te' 1 1 20 guimovie surf
+phys 'pdena' 2 5 5 guimovie esurf
+\end{verbatim}
+
+\subsubsection{$<$xname,{\bf S}$>$ $<$yname,{\bf S}$>$ $<$file,{\bf I}$>$ $<$k1,{\bf I}$>$ $<$k2,{\bf I}$>$ guimvvec}\index{b2plot, guimvvec}\label{sec:guimvvec}
+As {\bf guimovie} for both components of a vector ({\tt fnax} and
+{\tt fnay}, {\tt vxdena} and {\tt vydena}, \ldots), pushed with the
+$y$ component on top; both are pushed or none. For example
+{\tt phys 'fnax' 'fnay' 1 5 5 guimvvec guivect} sends the particle flux
+of frame 5 to {\tt b2plot.py}.
 
 \subsubsection{$<$sonnetfile$>$ sonn}\index{b2plot, sonn}\label{sec:sonn}
 Reads in a new {\tt Sonnet} geometry file.

@@ -101,6 +101,9 @@ SPECS = {
     77: ("PSIMAP", "nr:i4 nz:i4 r:r4[nr] z:r4[nz] psin:r4[nr*nz] ro:r4 zo:r4 "
                    "rs:r4 zs:r4"),
     78: ("LEVELS", "kind:i4 n:i4 lev:r4[n]"),
+    79: ("MOVIEINFO", "file:i4 path:str nt:i4 times:r8[nt] nvar:i4"),
+    80: ("MOVIEVAR", "file:i4 var:str long:str units:str location:i4 "
+                     "ncol:i4 dim:str"),
 }
 
 NAMES = {op: spec[0] for op, spec in SPECS.items()}
