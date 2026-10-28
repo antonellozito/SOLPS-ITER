@@ -14,12 +14,16 @@ import matplotlib.tri as mtri
 from matplotlib import colormaps
 from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.colors import LogNorm, Normalize, SymLogNorm
+from matplotlib.ticker import LogFormatterSciNotation, LogLocator
 
 from . import labels
 
 KINDS_SCALAR = ("patch", "contourf", "contour")
 KINDS_VECTOR = ("quiver", "stream", "quiverstream")
 STREAM_GRID = 400
+AUTO_ARROWS = 2000              # arrows shown when the spacing is automatic
+ARROW_PERCENTILE = 98.0         # magnitude drawn with the arrow length
+ARROW_CAP = 1.5                 # longest arrow, in arrow lengths
 
 
 @dataclass
@@ -34,8 +38,9 @@ class LayerStyle:
 
 
 LAYERS = {
-    "structure": ("Device structure",
-                  LayerStyle(True, "#000000", 1.0)),
+    "device": ("Device structure (structure.dat)",
+               LayerStyle(True, "#000000", 1.0)),
+    "structure": ("Vessel (mesh.extra)", LayerStyle(True, "#000000", 1.0)),
     "separatrices": ("Separatrices", LayerStyle(True, "#d62728", 1.2)),
     "xpoints": ("X-points", LayerStyle(False, "#d62728", 8.0)),
     "boundary": ("Grid boundary", LayerStyle(False, "#1f3b8c", 0.8)),
@@ -46,7 +51,8 @@ LAYERS = {
                         "0.90 0.95 1.00 1.02 1.04 1.06")),
 }
 ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2, "boundary": 3.3,
-          "structure": 3.4, "separatrices": 3.5, "xpoints": 3.6}
+          "structure": 3.4, "device": 3.45, "separatrices": 3.5,
+          "xpoints": 3.6}
 
 
 @dataclass
@@ -70,7 +76,7 @@ class PlotStyle:
     normalize: bool = False
     arrow_length: float = 0.0   # metres, 0 = automatic
     arrow_width: float = 1.0
-    every: int = 1
+    every: int = 0              # one arrow every n cells, 0 = automatic
     color_by_magnitude: bool = True
     arrow_color: str = "#000000"
     density: float = 1.5
@@ -111,6 +117,22 @@ def _levels(norm, n):
 def _cmap(style):
     cmap = colormaps[style.cmap]
     return cmap.reversed() if style.reverse else cmap
+
+
+def _spread(pos, index, box):
+    """About AUTO_ARROWS of index, one per bin of a regular grid over box,
+    the element nearest to the bin centre (even density on any mesh)."""
+    x0, x1, y0, y1 = box
+    w, h = max(x1 - x0, 1e-12), max(y1 - y0, 1e-12)
+    d = np.sqrt(w * h / AUTO_ARROWS)
+    ix = np.floor((pos[:, 0] - x0) / d).astype(int)
+    iy = np.floor((pos[:, 1] - y0) / d).astype(int)
+    cx, cy = x0 + (ix + 0.5) * d, y0 + (iy + 0.5) * d
+    dist = np.hypot(pos[:, 0] - cx, pos[:, 1] - cy)
+    order = np.lexsort((dist, iy, ix))
+    key = ix[order] * 1000003 + iy[order]
+    first = np.concatenate(([True], key[1:] != key[:-1]))
+    return np.sort(index[order[first]])
 
 
 def node_values(trimesh, values):
@@ -164,11 +186,12 @@ class Plot2D:
         g = run.geometry
         self.tri = mtri.Triangulation(g.vx[:, 0], g.vx[:, 1], g.triangles)
         self.finder = self.tri.get_trifinder()
-        self.etri = self.efinder = None
+        self.etri = self.efinder = self.ecentres = None
         if run.trimesh is not None:
             t = run.trimesh
             self.etri = mtri.Triangulation(t.x, t.y, t.triangles)
             self.efinder = self.etri.get_trifinder()
+            self.ecentres = np.column_stack((t.x, t.y))[t.triangles].mean(1)
         for key in LAYERS:
             self._build_layer(key)
         self.set_view(self.views()["Full"])
@@ -180,7 +203,7 @@ class Plot2D:
         if old is not None:
             old.remove()
         art = None
-        if key in ("structure", "separatrices", "boundary"):
+        if key in ("structure", "device", "separatrices", "boundary"):
             seg = run.layers.get(key)
             if seg is not None and len(seg):
                 art = LineCollection(seg.reshape(-1, 2, 2))
@@ -197,7 +220,7 @@ class Plot2D:
         elif key == "xpoints" and len(run.geometry.xpoints):
             xp = run.geometry.xpoints
             art, = self.ax.plot(xp[:, 0], xp[:, 1], ls="none", marker="x")
-        elif key == "flux" and st.visible and run.geometry.psin is not None:
+        elif key == "flux" and st.visible and run.psimap is not None:
             art = self._flux_surfaces(st)
         if isinstance(art, LineCollection):
             self.ax.add_collection(art, autolim=False)
@@ -212,10 +235,9 @@ class Plot2D:
             lev = []
         if not lev:
             return None
-        psin = self.run.geometry.psin
-        z = np.sqrt(np.clip(psin, 0.0, None)) if st.rho else psin
-        cs = self.ax.tricontour(self.tri, z, levels=lev)
-        return cs
+        m = self.run.psimap
+        z = np.sqrt(np.clip(m.psin, 0.0, None)) if st.rho else m.psin
+        return self.ax.contour(m.r, m.z, z, levels=lev)
 
     def _restyle(self, key):
         art, st = self.layer_artists.get(key), self.layer_styles[key]
@@ -256,10 +278,12 @@ class Plot2D:
             self._tri_pc.set_visible(False)
         self.cax.set_visible(False)
 
-    def show(self, data, style):
-        """Draw a Field or Vector with a PlotStyle."""
+    def show(self, data, style, unit=None):
+        """Draw a Field or Vector with a PlotStyle (unit: colour-bar label,
+        default the unit in the label b2plot sent)."""
         self.clear_field()
         self.data, self.style = data, replace(style)
+        self.unit = data.unit if unit is None else unit
         if data is None:
             return
         if hasattr(data, "vr"):
@@ -276,11 +300,12 @@ class Plot2D:
     def _cell_field(self, f, st):
         g = self.run.geometry
         col = self._column(f, st)
-        cell_values = f.values[col][g.cells - 1]
+        cell_values = f.values[col][g.cells[g.visible] - 1]
         norm, cmap = _norm(cell_values, st), _cmap(st)
         if st.kind == "patch":
             if self._cell_pc is None:
-                self._cell_pc = PolyCollection(g.polygons, zorder=1.0)
+                polys = [p for p, v in zip(g.polygons, g.visible) if v]
+                self._cell_pc = PolyCollection(polys, zorder=1.0)
                 self.ax.add_collection(self._cell_pc, autolim=False)
             pc = self._cell_pc
             vals = np.ma.masked_invalid(cell_values)
@@ -292,7 +317,8 @@ class Plot2D:
             self.mappable = pc
             return
         z = np.asarray(f.vertex[col], float)
-        self._contours(self.tri, z, norm, cmap, st)
+        used = np.unique(self.tri.triangles)
+        self._contours(self.tri, z, _norm(z[used], st), cmap, st)
 
     def _tri_field(self, f, st):
         t = self.run.trimesh
@@ -337,45 +363,83 @@ class Plot2D:
         self.mappable = cs if not (st.kind == "contour" and st.line_mono) \
             else None
 
-    def _vectors(self, v, st):
+    def _vector_data(self, v, col):
+        """Positions and components, and the mesh and node values used
+        for streamlines (B2.5 cells or EIRENE triangles)."""
+        if v.location == "triangles":
+            t = self.run.trimesh
+            u = np.asarray(v.vr[col], float)
+            w = np.asarray(v.vz[col], float)
+            return (self.ecentres, u, w, self.etri, node_values(t, u),
+                    node_values(t, w))
         g = self.run.geometry
-        col = self._column(v, st)
         u = np.asarray(v.vr[col], float)[g.cells - 1]
         w = np.asarray(v.vz[col], float)[g.cells - 1]
+        return (g.centres, u, w, self.tri, np.asarray(v.vxr[col], float),
+                np.asarray(v.vxz[col], float))
+
+    def _quiver(self, pos, u, w, st, cmap, box):
+        """Arrows at pos, the longest (or each) st.arrow_length long."""
         mag = np.hypot(u, w)
-        x0, x1, y0, y1 = self.full_extent()
+        x0, x1, y0, y1 = box
+        keep = np.flatnonzero((mag > 0) & (pos[:, 0] >= x0) & (pos[:, 0] <= x1)
+                              & (pos[:, 1] >= y0) & (pos[:, 1] <= y1))
+        if int(st.every) > 0:
+            keep = keep[::int(st.every)]
+        else:
+            keep = _spread(pos[keep], keep, box)
+        if not keep.size:
+            return None
+        x0, x1 = box[0], box[1]
+        length = st.arrow_length or 0.025 * (x1 - x0)
+        m = mag[keep]
+        if st.normalize:
+            scale = length / m
+        else:
+            # reference: 98th percentile, longer arrows capped at 1.5 times
+            ref = max(float(np.percentile(m, ARROW_PERCENTILE)), 1e-300)
+            scale = length / ref * np.minimum(m, ARROW_CAP * ref) / m
+        c = pos[keep]
+        kw = dict(angles="xy", scale_units="xy", scale=1.0,
+                  width=0.0022 * st.arrow_width, zorder=5.0)
+        if st.color_by_magnitude:
+            q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
+                               w[keep] * scale, m, cmap=cmap,
+                               norm=_norm(m, st), **kw)
+        else:
+            q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
+                               w[keep] * scale, color=st.arrow_color, **kw)
+        self.field_artists.append(q)
+        return q
+
+    def vector_box(self):
+        """Current view, limited to the extent of the data (arrows and
+        streamlines follow zoom and pan)."""
+        f = self.full_extent()
+        x0, x1, y0, y1 = self.get_view()
+        box = (max(x0, f[0]), min(x1, f[1]), max(y0, f[2]), min(y1, f[3]))
+        return box if box[1] > box[0] and box[3] > box[2] else f
+
+    def _vectors(self, v, st):
+        col = self._column(v, st)
+        pos, u, w, tri, nu, nw = self._vector_data(v, col)
+        box = self.vector_box()
         cmap = _cmap(st)
         if st.kind in ("quiver", "quiverstream"):
-            keep = np.flatnonzero(mag > 0)[::max(int(st.every), 1)]
-            if keep.size:
-                length = st.arrow_length or 0.025 * (x1 - x0)
-                m = mag[keep]
-                scale = length / m if st.normalize else length / m.max()
-                c = g.centres[keep]
-                kw = dict(angles="xy", scale_units="xy", scale=1.0,
-                          width=0.0022 * st.arrow_width, zorder=5.0)
-                if st.color_by_magnitude:
-                    norm = _norm(m, st)
-                    q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
-                                       w[keep] * scale, m, cmap=cmap,
-                                       norm=norm, **kw)
-                    self.mappable = q
-                else:
-                    q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
-                                       w[keep] * scale, color=st.arrow_color,
-                                       **kw)
-                self.field_artists.append(q)
+            q = self._quiver(pos, u, w, st, cmap, box)
+            if q is not None and st.color_by_magnitude:
+                self.mappable = q
         if st.kind in ("stream", "quiverstream"):
-            self._streamlines(v, col, st, cmap, (x0, x1, y0, y1))
+            self._streamlines(tri, nu, nw, st, cmap, box)
 
-    def _streamlines(self, v, col, st, cmap, box):
+    def _streamlines(self, tri, nu, nw, st, cmap, box):
         x0, x1, y0, y1 = box
         ny = STREAM_GRID
         nx = max(int(STREAM_GRID * (x1 - x0) / max(y1 - y0, 1e-9)), 2)
         xs, ys = np.linspace(x0, x1, nx), np.linspace(y0, y1, ny)
         X, Y = np.meshgrid(xs, ys)
-        U = mtri.LinearTriInterpolator(self.tri, v.vxr[col])(X, Y)
-        V = mtri.LinearTriInterpolator(self.tri, v.vxz[col])(X, Y)
+        U = mtri.LinearTriInterpolator(tri, nu)(X, Y)
+        V = mtri.LinearTriInterpolator(tri, nw)(X, Y)
         speed = np.ma.hypot(U, V)
         if speed.count() == 0:
             return
@@ -419,7 +483,11 @@ class Plot2D:
             return
         self.cax.set_visible(True)
         self.cbar = self.fig.colorbar(self.mappable, cax=self.cax)
-        self.cbar.set_label(labels.tex_to_mathtext(data.unit))
+        if isinstance(self.mappable.norm, LogNorm):
+            self.cbar.locator = LogLocator()
+            self.cbar.formatter = LogFormatterSciNotation()
+            self.cbar.update_ticks()
+        self.cbar.set_label(labels.any_to_mathtext(self.unit))
 
     def title(self, text):
         self.ax.set_title(labels.tex_to_mathtext(text), fontsize="medium")
@@ -428,9 +496,10 @@ class Plot2D:
     def full_extent(self):
         g = self.run.geometry
         pts = [g.vx[np.unique(g.triangles)]]
-        seg = self.run.layers.get("structure")
-        if seg is not None and len(seg):
-            pts.append(seg.reshape(-1, 2))
+        for key in ("structure", "device"):
+            seg = self.run.layers.get(key)
+            if seg is not None and len(seg):
+                pts.append(seg.reshape(-1, 2))
         p = np.vstack(pts)
         return (float(p[:, 0].min()), float(p[:, 0].max()),
                 float(p[:, 1].min()), float(p[:, 1].max()))
@@ -495,11 +564,16 @@ class Plot2D:
             return out
         col = self._column(d, self.style)
         unit = d.unit
-        if hasattr(d, "vr"):
+        if hasattr(d, "vr") and d.location == "cells":
             if it >= 0:
                 i = g.cells[g.tri_cell[it]] - 1
                 out += "  |v| %.4g %s" % (np.hypot(d.vr[col][i],
                                                    d.vz[col][i]), unit)
+        elif hasattr(d, "vr") and self.efinder is not None:
+            jt = int(self.efinder(x, y))
+            if jt >= 0:
+                out += "  triangle %d  |v| %.4g %s" % (
+                    jt + 1, np.hypot(d.vr[col][jt], d.vz[col][jt]), unit)
         elif d.location == "cells" and it >= 0:
             out += "  %s %.4g %s" % (d.name, d.values[col][g.cells[
                 g.tri_cell[it]] - 1], unit)

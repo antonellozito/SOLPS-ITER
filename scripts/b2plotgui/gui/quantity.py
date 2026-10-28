@@ -1,5 +1,6 @@
 """Quantity panel of the 2D tab: what to plot and how."""
 
+from .. import labels
 from ..plot2d import KINDS_SCALAR, KINDS_VECTOR, PlotStyle
 from ..qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
@@ -7,6 +8,7 @@ from .layers import ColorButton, spin, style_combo
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
+SUM = "Sum over species"
 CMAPS = ["turbo", "viridis", "plasma", "inferno", "magma", "cividis",
          "jet", "hot", "coolwarm", "RdBu_r", "seismic", "bwr", "Spectral_r",
          "gray"]
@@ -132,12 +134,15 @@ class QuantityPanel(QtWidgets.QWidget):
         self.normalize = QtWidgets.QCheckBox("same length for all")
         af.addRow(self.normalize)
         self.arrow_length = spin(0.0, 10.0, 0.005, 0.0, 3,
-                                 "Longest arrow in m (0: automatic)")
+                                 "Arrow length in m (0: automatic) for the "
+                                 "98th percentile of the magnitudes; longer "
+                                 "arrows are capped at 1.5 times")
         af.addRow("Length (m)", self.arrow_length)
         self.arrow_width = spin(0.1, 10.0, 0.1, 1.0, tip="Relative width")
         af.addRow("Width", self.arrow_width)
         self.every = QtWidgets.QSpinBox()
-        self.every.setRange(1, 100)
+        self.every.setRange(0, 1000)
+        self.every.setSpecialValueText("auto")
         self.every.setKeyboardTracking(False)
         af.addRow("One arrow every", self.every)
         row = QtWidgets.QHBoxLayout()
@@ -233,7 +238,7 @@ class QuantityPanel(QtWidgets.QWidget):
         if q is None or q is self.current:
             return
         self.current = q
-        vector = q.source == "vector"
+        vector = q.source in ("vector", "evector")
         for b in self.kind_buttons.buttons():
             b.setEnabled((b.property("kind") in KINDS_VECTOR) == vector)
         kind = self.kind()
@@ -256,11 +261,14 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def set_columns(self, columns, species=None):
         """Species names of the field columns (keeps the choice if it can)."""
-        names = [c.strip() or (species[i] if species and i < len(species)
-                                else "") for i, c in enumerate(columns)]
+        names = [labels.species_text(c) or (
+            labels.species_text(species[i]) if species and i < len(species)
+            else "") for i, c in enumerate(columns)]
         names = [n or "column %d" % (i + 1) for i, n in enumerate(names)]
         if len(columns) == 1 and not columns[0].strip():
             names = ["\u2014"]
+        if len(names) > 1:
+            names.append(SUM)
         old = self.species.currentText()
         self.species.blockSignals(True)
         self.species.clear()
@@ -271,6 +279,17 @@ class QuantityPanel(QtWidgets.QWidget):
         self.species.blockSignals(False)
 
     # -------------------------------------------------------------- style
+    def summed(self):
+        return self.species.currentText() == SUM
+
+    def ops(self, q):
+        """b2plot operations applied after the label of quantity q."""
+        ops = []
+        if self.summed():
+            eirene = q.source in ("eirene", "evector")
+            ops.append("0 -1 esumz" if eirene else "0 -1 sumz")
+        return tuple(ops)
+
     def kind(self):
         b = self.kind_buttons.checkedButton()
         return b.property("kind") if b else "patch"
@@ -301,7 +320,8 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def style(self):
         return PlotStyle(
-            kind=self.kind(), column=max(self.species.currentIndex(), 0),
+            kind=self.kind(),
+            column=0 if self.summed() else max(self.species.currentIndex(), 0),
             cmap=self.cmap.currentText(), reverse=self.reverse.isChecked(),
             scale=self.scale.currentText(), auto=self.auto.isChecked(),
             vmin=_number(self.vmin.text(), 0.0),

@@ -5,6 +5,12 @@ from dataclasses import replace
 from ..plot2d import LAYERS, LayerStyle
 from ..qt import QtGui, QtWidgets, Signal
 
+# Why a layer can be missing in a run
+MISSING = {"device": "No structure.dat found for this run",
+           "structure": "No mesh.extra found for this run",
+           "flux": "No rzpsi.dat found for this run",
+           "eirene": "No EIRENE triangles in this run",
+           "xpoints": "No X-point in this grid"}
 LINESTYLES = [("solid", "-"), ("dashed", "--"), ("dotted", ":"),
               ("dash-dot", "-.")]
 
@@ -135,7 +141,8 @@ class LayersPanel(QtWidgets.QWidget):
             for w in ("check", "color", "width", "style", "alpha"):
                 row[w].setEnabled(on and not (key == "xpoints"
                                               and w == "style"))
-            row["check"].setToolTip("" if on else "Not available in this run")
+            row["check"].setToolTip("" if on else MISSING.get(
+                key, "Not available in this run"))
 
     def _emit(self, key):
         self.changed.emit(key, self.style(key))

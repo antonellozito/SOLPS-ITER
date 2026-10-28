@@ -16,7 +16,8 @@ import numpy as np
 from . import backend, protocol
 
 OP = protocol.OPCODES
-LAYER_ROLES = {1: "structure", 2: "separatrices", 3: "boundary"}
+LAYER_ROLES = {1: "structure", 2: "separatrices", 3: "boundary",
+               4: "device"}
 
 
 @dataclass
@@ -34,6 +35,7 @@ class Geometry:
     classical: bool
     triangles: np.ndarray       # (ntri, 3) fan triangles of the cells
     tri_cell: np.ndarray        # (ntri,) row of the cell of each triangle
+    visible: np.ndarray = None  # cells with an area (not degenerate guards)
 
     @property
     def bbox(self):
@@ -43,6 +45,16 @@ class Geometry:
     @property
     def used(self):
         return np.unique(self.triangles)
+
+
+@dataclass
+class PsiMap:
+    """Normalised poloidal flux on the box of rzpsi.dat (from b2plot)."""
+    r: np.ndarray
+    z: np.ndarray
+    psin: np.ndarray            # (nz, nr)
+    opoint: tuple
+    spoint: tuple               # point that defines psiN = 1
 
 
 @dataclass
@@ -62,6 +74,7 @@ class Field:
     columns: list
     values: np.ndarray          # (ncol, n)
     vertex: np.ndarray = None   # (ncol, nVx) for cell fields
+    ops: tuple = ()             # b2plot operations after the label
 
     @property
     def title(self):
@@ -74,14 +87,17 @@ class Field:
 
 @dataclass
 class Vector:
-    """(R, Z) vector from a poloidal and a radial b2plot quantity."""
+    """(R, Z) vector from two b2plot quantities (poloidal and radial, or
+    EIRENE Cartesian R and Z)."""
     name: str
     label: str
     columns: list
-    vr: np.ndarray              # (ncol, nCv) at the cell centres
+    vr: np.ndarray              # (ncol, n) at cell centres or triangles
     vz: np.ndarray
-    vxr: np.ndarray             # (ncol, nVx) at the vertices
-    vxz: np.ndarray
+    vxr: np.ndarray = None      # (ncol, nVx) at the vertices (cells only)
+    vxz: np.ndarray = None
+    location: str = "cells"     # "cells" or "triangles"
+    ops: tuple = ()
 
     @property
     def unit(self):
@@ -91,8 +107,9 @@ class Vector:
 @dataclass
 class Request:
     ident: int
-    kind: str                   # "init", "field", "efield", "vector"
-    name: str
+    kind: str                   # "init", "field", "efield", "vector",
+    name: str                   # "evector"
+    ops: tuple = ()
     result: object = None
     console: list = field(default_factory=list)
 
@@ -119,33 +136,48 @@ def make_geometry(m):
     vlist = np.asarray(m.vlist) - 1
     pos, cell = fan_triangles(m.nv)
     offsets = np.cumsum(m.nv)[:-1]
+    polygons = np.split(vx[vlist], offsets)
+    span = np.ptp(vx, axis=0).max() if len(vx) else 1.0
+    area = np.array([0.5 * abs(np.dot(p[:, 0], np.roll(p[:, 1], -1))
+                               - np.dot(p[:, 1], np.roll(p[:, 0], -1)))
+                     for p in polygons])
+    visible = (np.asarray(m.nv) >= 3) & (area > 1e-12 * span ** 2)
     return Geometry(
         vx=vx, psin=np.asarray(m.psin, float) if m.haspsi else None,
-        cells=np.asarray(m.cells), polygons=np.split(vx[vlist], offsets),
+        cells=np.asarray(m.cells), polygons=polygons,
         centres=np.column_stack((m.cx, m.cy)).astype(float),
         region=np.asarray(m.reg), ix=np.asarray(m.ix), iy=np.asarray(m.iy),
         xpoints=np.asarray(m.xpt, float).reshape(-1, 2),
         classical=bool(m.isClassicalGrid), triangles=vlist[pos],
-        tri_cell=cell)
+        tri_cell=cell, visible=visible)
 
 
-def make_field(name, m):
+def make_field(name, m, ops=()):
     ncol, n = m.ncol, m.n
     vertex = (np.asarray(m.vertex).reshape(ncol, m.nvx) if m.nvx else None)
     return Field(name=name, label=m.label, columns=list(m.columns),
                  location="cells" if m.location == 1 else "triangles",
                  values=np.asarray(m.values).reshape(ncol, n),
-                 vertex=vertex)
+                 vertex=vertex, ops=tuple(ops))
 
 
-def make_vector(name, m):
+def vector_label(label):
+    """Label of a vector from the label of its first component."""
+    label = re.sub(r"(?i)\bpoloidal\s+", "", label, count=1)
+    label = re.sub(r"(?i)\bcartesian\s+x-", "", label, count=1)
+    return label[:1].upper() + label[1:]
+
+
+def make_vector(name, m, ops=()):
     ncol, n, nvx = m.ncol, m.n, m.nvx
-    label = re.sub(r"(?i)\bpoloidal\s+", "", m.label, count=1)
-    return Vector(name=name, label=label, columns=list(m.columns),
+    vxr = np.asarray(m.vxr).reshape(ncol, nvx) if nvx else None
+    vxz = np.asarray(m.vxz).reshape(ncol, nvx) if nvx else None
+    return Vector(name=name, label=vector_label(m.label),
+                  columns=list(m.columns),
                   vr=np.asarray(m.vr).reshape(ncol, n),
-                  vz=np.asarray(m.vz).reshape(ncol, n),
-                  vxr=np.asarray(m.vxr).reshape(ncol, nvx),
-                  vxz=np.asarray(m.vxz).reshape(ncol, nvx))
+                  vz=np.asarray(m.vz).reshape(ncol, n), vxr=vxr, vxz=vxz,
+                  location="cells" if m.location == 1 else "triangles",
+                  ops=tuple(ops))
 
 
 class Run:
@@ -159,6 +191,7 @@ class Run:
         self.geometry = None
         self.layers = {}            # role name -> (n, 4) segments
         self.trimesh = None
+        self.psimap = None
         self.cache = {}             # (kind, name) -> Field or Vector
         self.pending = []           # requests in flight, in order
         self.next_id = 0
@@ -181,33 +214,48 @@ class Run:
     def alive(self):
         return not self.bye and "exit" not in self.ended
 
-    def _request(self, kind, name, text):
+    def _request(self, kind, name, text, ops=()):
         self.next_id += 1
-        req = Request(self.next_id, kind, name)
+        req = Request(self.next_id, kind, name, tuple(ops))
         self.pending.append(req)
         self.backend.send(text + "%d sync\n" % req.ident)
         return req
 
-    def field(self, name, eirene=False):
-        """Cached Field, or a Request whose result arrives later."""
-        kind = "efield" if eirene else "field"
-        if (kind, name) in self.cache:
-            return self.cache[(kind, name)]
+    def _lookup(self, kind, name, ops):
+        key = (kind, name, tuple(ops))
+        if key in self.cache:
+            return self.cache[key]
         for req in self.pending:
-            if (req.kind, req.name) == (kind, name):
+            if (req.kind, req.name, req.ops) == key:
                 return req
-        cmd = "guiefld" if eirene else "guifield"
-        return self._request(kind, name, "%s %s\n" % (name, cmd))
+        return None
 
-    def vector(self, poloidal, radial):
-        name = poloidal + " " + radial
-        if ("vector", name) in self.cache:
-            return self.cache[("vector", name)]
-        for req in self.pending:
-            if (req.kind, req.name) == ("vector", name):
-                return req
-        return self._request("vector", name,
-                             "%s %s guivect\n" % (poloidal, radial))
+    def field(self, name, eirene=False, ops=()):
+        """Cached Field, or a Request whose result arrives later.
+
+        ops are b2plot operations applied after the label, e.g.
+        ("0 -1 sumz",) for the sum over the species.
+        """
+        kind = "efield" if eirene else "field"
+        found = self._lookup(kind, name, ops)
+        if found is not None:
+            return found
+        cmd = "guiefld" if eirene else "guifield"
+        text = " ".join((name,) + tuple(ops) + (cmd,))
+        return self._request(kind, name, text + "\n", ops)
+
+    def vector(self, first, second, eirene=False, ops=()):
+        """Vector from two quantities (poloidal and radial for B2.5,
+        Cartesian R and Z for EIRENE); ops apply to both."""
+        kind = "evector" if eirene else "vector"
+        name = first + " " + second
+        found = self._lookup(kind, name, ops)
+        if found is not None:
+            return found
+        cmd = "guievect" if eirene else "guivect"
+        text = " ".join((first,) + tuple(ops) + (second,) + tuple(ops)
+                        + (cmd,))
+        return self._request(kind, name, text + "\n", ops)
 
     # ------------------------------------------------------------- events
     def poll(self, budget=None):
@@ -247,7 +295,7 @@ class Run:
                 pts = np.column_stack((m.x, m.y))
                 self._segments.extend(np.hstack((pts[:-1], pts[1:])))
             return None
-        if op not in (1, 2, 3, 4, 5, 70, 71, 72, 73, 74, 75):
+        if op not in (1, 2, 3, 4, 5, 70, 71, 72, 73, 74, 75, 77):
             return None
         m = protocol.decode(op, payload)
         if op == OP["RUNINFO"]:
@@ -267,6 +315,11 @@ class Run:
             self.trimesh = TriMesh(np.asarray(m.x, float),
                                    np.asarray(m.y, float),
                                    np.asarray(m.tri).reshape(-1, 3) - 1)
+        elif op == OP["PSIMAP"]:
+            psin = np.asarray(m.psin, float).reshape(m.nz, m.nr)
+            self.psimap = PsiMap(np.asarray(m.r, float),
+                                 np.asarray(m.z, float), psin,
+                                 (m.ro, m.zo), (m.rs, m.zs))
         elif op in (OP["FIELD"], OP["VECTOR"]):
             self._result = m
         elif op == OP["BYE"]:
@@ -282,12 +335,12 @@ class Run:
         m, self._result = self._result, None
         if req.kind in ("field", "efield") and m is not None \
                 and m.op == OP["FIELD"]:
-            req.result = make_field(req.name, m)
-        elif req.kind == "vector" and m is not None \
+            req.result = make_field(req.name, m, req.ops)
+        elif req.kind in ("vector", "evector") and m is not None \
                 and m.op == OP["VECTOR"]:
-            req.result = make_vector(req.name, m)
+            req.result = make_vector(req.name, m, req.ops)
         elif req.kind == "init":
             req.result = self.geometry
         if req.result is not None and req.kind != "init":
-            self.cache[(req.kind, req.name)] = req.result
+            self.cache[(req.kind, req.name, req.ops)] = req.result
         return req

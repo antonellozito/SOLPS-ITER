@@ -3,4 +3,4 @@
 __version__ = "0.1.0"
 
 # Must match gui_protocol_version in modules/B2.5/src/modules/b2mod_b2plot_gui.F
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3

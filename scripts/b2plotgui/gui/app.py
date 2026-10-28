@@ -8,7 +8,7 @@ tabs. There is no console and no b2plot command input.
 import os
 import sys
 
-from .. import PROTOCOL_VERSION, __version__, backend, data
+from .. import PROTOCOL_VERSION, __version__, backend, data, labels
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
 from .tab2d import Tab2D
 
@@ -40,6 +40,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.runline = QtWidgets.QLabel()
         self.runline.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.runline.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                                   QtWidgets.QSizePolicy.Preferred)
         self.tabs = QtWidgets.QTabWidget()
         self.tab2d = Tab2D(self.settings)
         self.tab2d.request.connect(self._request)
@@ -135,19 +137,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.run = None
         self.waiting.clear()
 
-    def _request(self, q):
+    def _request(self, want):
+        q, ops = want
         if self.run is None or not self.run.alive():
             self._status("b2plot is not running: File > Reload run")
             return
-        if q.source == "vector":
-            res = self.run.vector(q.poloidal, q.radial)
+        if q.source in ("vector", "evector"):
+            res = self.run.vector(q.poloidal, q.radial,
+                                  eirene=q.source == "evector", ops=ops)
         else:
-            res = self.run.field(q.name, eirene=q.source == "eirene")
+            res = self.run.field(q.name, eirene=q.source == "eirene",
+                                 ops=ops)
         if isinstance(res, data.Request):
-            self.waiting[res.ident] = (self.tab2d, q)
+            self.waiting[res.ident] = (self.tab2d, want)
             self._status("Loading %s\u2026" % q.name)
         else:
-            self.tab2d.deliver(q, res)
+            self.tab2d.deliver(want, res)
 
     # -------------------------------------------------------------- poll
     def _poll(self):
@@ -178,7 +183,10 @@ class MainWindow(QtWidgets.QMainWindow):
                         "".join(run.console[-30:]))
             return
         info = run.info or {}
-        sp = " ".join(info.get("species", []))
+        names = [labels.species_text(s) for s in info.get("species", [])]
+        sp = ", ".join(names if len(names) <= 8 else
+                       names[:4] + ["\u2026"] + names[-2:])
+        sp = "%d (%s)" % (len(names), sp)
         self.runline.setText(
             "%s   \u2014   %d cells, %s grid, species: %s%s" % (
                 run.rundir, len(run.geometry.cells),

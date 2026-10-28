@@ -6,8 +6,9 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .. import catalog, plot2d
-from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtWidgets, Qt,
-                  Signal)
+from ..data import split_unit
+from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore, QtWidgets,
+                  Qt, Signal)
 from .layers import LayersPanel, from_dict
 from .quantity import QuantityPanel
 
@@ -24,7 +25,7 @@ def _scrolled(widget, width):
 class Tab2D(QtWidgets.QWidget):
     """The 2D plots tab; data requests go through the main window."""
 
-    request = Signal(object)        # catalog.Quantity
+    request = Signal(object)        # (catalog.Quantity, b2plot operations)
     status = Signal(str)
 
     def __init__(self, settings, parent=None):
@@ -42,7 +43,7 @@ class Tab2D(QtWidgets.QWidget):
 
         self.quantity = QuantityPanel()
         self.quantity.quantity_chosen.connect(self._chosen)
-        self.quantity.style_changed.connect(self.redraw)
+        self.quantity.style_changed.connect(self._options_changed)
         self.quantity.seed_line.connect(self._start_seed_line)
         self.layers = LayersPanel(self._saved_layers())
         self.layers.changed.connect(self._layer_changed)
@@ -80,6 +81,10 @@ class Tab2D(QtWidgets.QWidget):
         lay.addWidget(split)
 
         self.canvas.mpl_connect("motion_notify_event", self._motion)
+        self._vector_timer = QtCore.QTimer(self)
+        self._vector_timer.setSingleShot(True)
+        self._vector_timer.setInterval(150)
+        self._vector_timer.timeout.connect(self._redraw_vectors)
         self.canvas.mpl_connect("button_press_event", self._click)
         self.setEnabled(False)
 
@@ -103,13 +108,16 @@ class Tab2D(QtWidgets.QWidget):
     def set_run(self, run):
         self.run, self.data, self.wanted = run, None, None
         self.plot.set_run(run)
-        available = {"structure", "separatrices", "boundary", "grid"}
-        available &= set(run.layers) | {"grid"}
+        for signal in ("xlim_changed", "ylim_changed"):
+            self.plot.ax.callbacks.connect(signal, self._view_moved)
+        available = {"structure", "device", "separatrices", "boundary"}
+        available = (available & set(k for k, v in run.layers.items()
+                                     if len(v))) | {"grid"}
         if run.trimesh is not None:
             available.add("eirene")
         if len(run.geometry.xpoints):
             available.add("xpoints")
-        if run.geometry.psin is not None:
+        if run.psimap is not None:
             available.add("flux")
         self.layers.set_available(available)
         self.quantity.set_quantities(catalog.quantities(run.catalog))
@@ -124,29 +132,52 @@ class Tab2D(QtWidgets.QWidget):
     def _chosen(self, q):
         self.wanted = q
         self.settings.setValue("quantity2d", q.name)
-        self.request.emit(q)
+        self._fetch()
 
-    def deliver(self, q, data, error=""):
+    def _current(self):
+        """True if the data shown belong to the chosen quantity and ops."""
+        return (self.data is not None and self.wanted is not None
+                and (self.data.name, self.data.ops)
+                == (self.wanted.name, self.quantity.ops(self.wanted)))
+
+    def _fetch(self):
+        """Ask for the chosen quantity with the current b2plot operations."""
+        if self.wanted is None:
+            return
+        if self._current():
+            self.redraw()
+        else:
+            self.request.emit((self.wanted, self.quantity.ops(self.wanted)))
+
+    def _options_changed(self):
+        if self.wanted is not None and self.data is not None \
+                and not self._current():
+            self._fetch()
+        else:
+            self.redraw()
+
+    def deliver(self, want, data, error=""):
         """Result of a request (data None and an error text on failure)."""
-        if q is not self.wanted:
+        q, ops = want
+        if q is not self.wanted or ops != self.quantity.ops(q):
             return
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
                              % (q.name, error))
             return
         self.data = data
-        species = (self.run.info or {}).get("species")
-        self.quantity.set_columns(data.columns, species)
+        if not self.quantity.summed():
+            species = (self.run.info or {}).get("species")
+            self.quantity.set_columns(data.columns, species)
         self.redraw()
 
     def redraw(self):
-        if self.run is None or self.data is None:
-            return
-        if self.wanted is not None and self.data.name != self.wanted.name:
+        if self.run is None or self.data is None or not self._current():
             return
         style = self.quantity.style()
+        unit = split_unit(self.wanted.description)[1] if self.wanted else None
         try:
-            self.plot.show(self.data, style)
+            self.plot.show(self.data, style, unit or None)
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
@@ -193,6 +224,14 @@ class Tab2D(QtWidgets.QWidget):
             saved[name.strip()] = list(self.plot.get_view())
             self.settings.setValue("views2d", json.dumps(saved))
             self._fill_views()
+
+    def _view_moved(self, *_):
+        if self.data is not None and hasattr(self.data, "vr"):
+            self._vector_timer.start()
+
+    def _redraw_vectors(self):
+        if self.data is not None and hasattr(self.data, "vr"):
+            self.redraw()
 
     # -------------------------------------------------------------- mouse
     def _motion(self, event):
