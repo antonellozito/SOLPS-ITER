@@ -110,3 +110,16 @@ def tex_to_plain(s):
     """b2plot catalogue labels without the braces: 'm^-3', 'b_x'."""
     return _TEX.sub(lambda m: m.group(1) + m.group(2), s)
 
+
+def any_to_mathtext(s):
+    """Mathtext from b2plot labels in either form: Plotchar function codes
+    (FIELD labels, 'm@S@-3@N@') or the catalogue form ('m^{-3}')."""
+    if re.search(r"@[SBNFG]", s):
+        return to_mathtext(s, "@")
+    return tex_to_mathtext(s)
+
+
+def species_text(s):
+    """Plain species name: 'D^{+1}' -> 'D+1', 'N^{0}' -> 'N0'."""
+    return tex_to_plain(s).replace("^", "").replace("_", "").strip()
+

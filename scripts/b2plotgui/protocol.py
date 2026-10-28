@@ -94,9 +94,12 @@ SPECS = {
                     "tri:i4[ntri*3]"),
     74: ("FIELD", "label:str location:i4 n:i4 ncol:i4 columns:str[ncol] "
                   "values:r4[n*ncol] nvx:i4 vertex:r4[nvx*ncol]"),
-    75: ("VECTOR", "label:str label2:str n:i4 ncol:i4 columns:str[ncol] "
+    75: ("VECTOR", "label:str label2:str location:i4 n:i4 ncol:i4 "
+                   "columns:str[ncol] "
                    "vr:r4[n*ncol] vz:r4[n*ncol] nvx:i4 vxr:r4[nvx*ncol] "
                    "vxz:r4[nvx*ncol]"),
+    77: ("PSIMAP", "nr:i4 nz:i4 r:r4[nr] z:r4[nz] psin:r4[nr*nz] ro:r4 zo:r4 "
+                   "rs:r4 zs:r4"),
 }
 
 NAMES = {op: spec[0] for op, spec in SPECS.items()}
