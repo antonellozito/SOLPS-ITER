@@ -2,7 +2,7 @@
 
     echo "phys te surf" | b2plot.py [-s] [-o OUT]
 
-The stdin lines go unchanged to b2pl_gui.exe, followed by "1 sync" and
+The stdin lines go unchanged to b2pl_py.exe, followed by "1 sync" and
 "quit"; lines with wall commands are skipped (see WALL).
 Each page opens in a matplotlib window (NCAR-like by default; zoom, pan
 and save in any matplotlib format from its toolbar), and is written to
@@ -17,12 +17,14 @@ import sys
 import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.figure import Figure
 
 from . import backend, labels, options, protocol, render, scene
 
 # Wall quantities and wall functions of b2plot (wlabels, wfns of
-# b2mod_b2plot_help.F): b2plot sets up the wall stack only under WG_TODO,
-# so input lines that use them are skipped instead of stopping b2plot
+# b2mod_b2plot_help.F) and the matrix functions that fill the wall stack:
+# b2plot sets up the wall stack only under WG_TODO, so input lines that
+# use them are skipped instead of stopping b2plot
 WALL = frozenset("""
     wallarea ei wallflux wallhflx r1 r2 z1 z2 walltemp plathick cooltemp
     vaprtemp north south west east nseg iwlt iweq iwgt iswlt isweq iswgt
@@ -40,6 +42,7 @@ WALL = frozenset("""
     rwm* rwm/ rwm** wdrop wdup wswap wover wsel wzsel wmmin wmmax rwmmi
     rwmma wmlt wmle wmeq wmne wmgt wmge wlog wln wsqrt wexp wzrng wchs
     wtos wtot wpos wsaw wallf outpw wprt wtab wlld woff wlist
+    xtow ytow itow rtow stow
 """.split())
 _TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|(\S+)")
 
@@ -121,7 +124,7 @@ def without_wall(lines):
 
 
 def run_commands(cmd, rundir, lines, record=None, console=sys.stdout):
-    """Run b2pl_gui.exe on the command lines; return the Scene and status."""
+    """Run b2pl_py.exe on the command lines; return the Scene and status."""
     sc = scene.Scene()
     be = backend.Backend(cmd, rundir, record)
     be.start()
@@ -142,6 +145,18 @@ def run_commands(cmd, rundir, lines, record=None, console=sys.stdout):
     return sc, status, bye
 
 
+def _draw(frame, number, fig=None):
+    """One page; a page that cannot be drawn is reported and kept as far
+    as it got, so that the other pages are still shown and written."""
+    fig = Figure() if fig is None else fig
+    try:
+        return render.render_frame(frame, fig=fig)
+    except Exception as err:
+        print(f"b2plot.py: page {number} could not be drawn: {err}",
+              file=sys.stderr)
+        return fig
+
+
 def show(frames):
     """One matplotlib window per page (QtAgg on PySide6); wait until closed."""
     os.environ.setdefault("QT_API", "pyside6")
@@ -153,7 +168,7 @@ def show(frames):
         name = f"b2plot.py page {i}" + (f": {labels.plain_text(title)}"
                                         if title else "")
         fig = plt.figure(num=name, clear=True)
-        figures.append(render.render_frame(frame, fig=fig))
+        figures.append(_draw(frame, i, fig))
     plt.show()
     return figures
 
@@ -184,8 +199,8 @@ def main(args):
         frames.append(sc.current)
     if args.output and frames:
         figures = []
-        for frame in frames:
-            fig = render.render_frame(frame)
+        for i, frame in enumerate(frames, 1):
+            fig = _draw(frame, i)
             FigureCanvasAgg(fig)
             figures.append(fig)
         for name in write_output(figures, args.output, args.dpi):
@@ -193,7 +208,7 @@ def main(args):
     if frames and not args.no_show:
         show(frames)
     if not bye:
-        print(f"b2plot.py: b2pl_gui.exe ended without BYE (exit status "
+        print(f"b2plot.py: b2pl_py.exe ended without BYE (exit status "
               f"{status})", file=sys.stderr)
         return 1
     return 0 if status == 0 else 1

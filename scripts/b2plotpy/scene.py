@@ -1,7 +1,7 @@
 """Scene model: rebuild NCAR frames, panels and primitives from messages.
 
 The Scene is a small GKS-like state machine fed with the decoded messages
-of b2pl_gui.exe (protocol.py). Completed frames are kept in Scene.frames;
+of b2pl_py.exe (protocol.py). Completed frames are kept in Scene.frames;
 the frame being drawn is Scene.current.
 """
 
@@ -148,6 +148,7 @@ class Scene:
         self.rect = None
         self.segments = {}
         self.recording = None
+        self.gui_data = False
         self.run = None
         self.catalog = None
         self.last_sync = None
@@ -156,6 +157,11 @@ class Scene:
     # ------------------------------------------------------------- input
     def feed(self, op, payload):
         """Feed one raw message (opcode and payload bytes)."""
+        if op in (71, 72):              # overlays sent as GUI data (guigeom)
+            self.gui_data = op == 71
+            return
+        if self.gui_data:
+            return
         if self.recording is not None and op not in (61,):
             self.segments[self.recording].append((op, payload))
             return

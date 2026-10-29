@@ -17432,7 +17432,9 @@ For LFS snowflake topologies, face-based regions 15 and 17, the core boundary an
 
 \btwoplot is designed to take data from {\tt B2}, {\tt B2.5} or {\tt B2.5-Eirene} and plot it
 under interactive control.  It uses {\tt NCAR} and so the user must have
-access to the {\tt NCAR} environment. Some, but far from all, functionalities
+access to the {\tt NCAR} environment.
+{\tt b2plot.py} (Section~\ref{sec:b2plotpy}) runs the same \btwoplot without {\tt NCAR}.
+Some, but far from all, functionalities
 have been ported so that \btwoplot may also work in the {\tt PLPLOT}
 environment. Preprocessing before compilation with {\tt -DPLPLOT} option is then necessary
 (see Section~\ref{sec:compilingb2} for more details).
@@ -19083,6 +19085,7 @@ is a Python-based front end of \btwoplotns. The Fortran source
 code of \btwoplot stays the only program that reads the run and
 computes the quantities: its executable receives data as binary messages
 to make them available to a Python environment.
+Its executable, {\tt b2pl\_py.exe}, is built with the other B2.5 executables, with or without {\tt NCAR}.
 It needs Python 3.9 or newer with PySide6 (6.4
 or newer), numpy (1.21) and matplotlib (3.8), as installed by the
 {\tt install\_python} script. {\tt b2plot.py --info} prints the versions and the
@@ -19177,7 +19180,7 @@ Export:
   give one file per page.
 \end{itemize}
 
-{\tt b2plot.py} talks to {\tt b2pl\_gui.exe} with the commands of
+{\tt b2plot.py} talks to {\tt b2pl\_py.exe} with the commands of
 \ref{sec:b2plotpydata} and ends every request with {\bf sync}
 (\ref{sec:sync}).
 

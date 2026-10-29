@@ -1,4 +1,4 @@
-"""Run b2pl_gui.exe as a child process with a FIFO for its messages.
+"""Run b2pl_py.exe as a child process with a FIFO for its messages.
 
 Python never calls Fortran routines: b2plot command text goes to the
 child's stdin, binary messages come back on the FIFO named by
@@ -16,7 +16,7 @@ import threading
 from . import protocol
 
 
-def wrapper_command(standalone=False, targets=("b2pl_gui",), debugger=None,
+def wrapper_command(standalone=False, targets=("b2pl_py",), debugger=None,
                     dry_run=False):
     """The scripts/b2plot command that stages and runs the executable."""
     cmd = [os.path.join(os.environ["SOLPSTOP"], "scripts", "b2plot")]

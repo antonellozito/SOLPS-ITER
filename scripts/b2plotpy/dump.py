@@ -1,4 +1,4 @@
-"""Debug tool: run b2pl_gui.exe (or replay a recording) and print its messages.
+"""Debug tool: run b2pl_py.exe (or replay a recording) and print its messages.
 
     python3 -m b2plotpy.dump [options] [COMMANDS]
 
