@@ -14,7 +14,8 @@ from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.figure import Figure
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path
-from matplotlib.ticker import FixedLocator, NullLocator
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.ticker import FixedFormatter, FixedLocator, NullLocator
 
 from . import labels
 from .scene import Contour, Fill, Image, Markers, Polyline, Text
@@ -31,6 +32,9 @@ LINE_WIDTH = 0.6
 FONT = {"family": "serif"}
 MARKERS = {1: ".", 2: "+", 3: "*", 4: "o", 5: "x"}
 LINESTYLES = {1: "-", 2: "--", 3: ":", 4: "-."}
+# Line patterns of the colour indices in black and white (Softfill TY)
+HATCHES = ["-", "|", "/", "\\", "+", "x", "--", "||", "//", "\\\\",
+           "++", "xx"]
 
 
 def _rgb(colors, ci):
@@ -82,13 +86,16 @@ class Renderer:
         self.ndc_pt = ndc_inches * 72.0
 
     # ------------------------------------------------------------ figure
-    def figure(self, frame, fig=None):
-        """Draw frame into fig (a new Figure if None) and return it."""
-        xw, yh = frame.xwidth, frame.yheight
+    def figure(self, frame, fig=None, extent=None):
+        """Draw frame into fig (a new Figure if None) and return it. A page
+        narrower or lower than the NCAR frame (a4p, a4l) is widened to the
+        texts drawn beyond it, as NCAR draws in the whole frame."""
+        xw, yh = extent or (frame.xwidth, frame.yheight)
         size = (self.ndc_inches * xw, self.ndc_inches * yh)
         if fig is None:
             fig = Figure(figsize=size)
         else:
+            fig.clear()
             fig.set_size_inches(*size)
         fig.patch.set_facecolor(_rgb(frame.colors, 0))
         self.fig, self.colors, self.xw, self.yh = fig, frame.colors, xw, yh
@@ -96,6 +103,15 @@ class Renderer:
             self._panel(panel)
         for bar in frame.colorbars:
             self._colorbar(bar)
+        if extent is None and (xw < 1.0 or yh < 1.0):
+            canvas = fig.canvas
+            if not hasattr(canvas, "get_renderer"):
+                canvas = FigureCanvasAgg(fig)
+            box = fig.get_tightbbox(canvas.get_renderer())
+            need = (min(1.0, max(xw, (box.x1 + 0.05) / self.ndc_inches)),
+                    min(1.0, max(yh, (box.y1 + 0.05) / self.ndc_inches)))
+            if need[0] > xw + 0.005 or need[1] > yh + 0.005:
+                return self.figure(frame, fig, need)
         return fig
 
     def _font_pt(self, size):
@@ -151,11 +167,19 @@ class Renderer:
 
     # -------------------------------------------------------- primitives
     def _fills(self, fills):
-        verts = [np.column_stack((f.x, f.y)) for f in fills]
-        colors = [_rgb(self.colors, f.ci) for f in fills]
-        pc = PolyCollection(verts, facecolors=colors, edgecolors=colors,
-                            linewidths=0.3, antialiaseds=False)
-        self.ax.add_collection(pc)
+        solid = [f for f in fills if not f.pattern]
+        if solid:
+            verts = [np.column_stack((f.x, f.y)) for f in solid]
+            colors = [_rgb(self.colors, f.ci) for f in solid]
+            pc = PolyCollection(verts, facecolors=colors, edgecolors=colors,
+                                linewidths=0.3, antialiaseds=False)
+            self.ax.add_collection(pc)
+        for ci in sorted({f.ci for f in fills if f.pattern}):
+            verts = [np.column_stack((f.x, f.y)) for f in fills
+                     if f.pattern and f.ci == ci]
+            self.ax.add_collection(PolyCollection(
+                verts, facecolors="none", edgecolors="black",
+                linewidths=0.0, hatch=HATCHES[ci % len(HATCHES)]))
 
     def _dashes(self, style):
         """matplotlib line style for a Dashline pattern or GKS type."""
@@ -187,6 +211,12 @@ class Renderer:
         self.ax.add_collection(lc)
 
     def _markers(self, m):
+        if m.mtype == 0:
+            self.ax.plot(m.x, m.y, ls="none", marker="o", markeredgewidth=0,
+                         color=_rgb(self.colors, m.ci),
+                         markersize=max(m.scale * LINE_WIDTH, 0.1),
+                         clip_on=True)
+            return
         self.ax.plot(m.x, m.y, ls="none", marker=MARKERS.get(m.mtype, "*"),
                      color=_rgb(self.colors, m.ci), markersize=4 * m.scale,
                      clip_on=True)
@@ -358,7 +388,9 @@ class Renderer:
                 (ax.yaxis, a["mjry"], a["mnry"], a["iylb"], a["fmty"],
                  a["iszy"], a["ixdc"])):
             lo, hi = (ax.get_xlim() if axis is ax.xaxis else ax.get_ylim())
-            if axis.get_scale() == "linear" and mjr > 0:
+            if axis.get_scale() == "log" and lo > 0 and hi > lo:
+                self._log_ticks(axis, lo, hi, fmt, lab, isz * unit)
+            elif axis.get_scale() == "linear" and mjr > 0:
                 major = np.linspace(lo, hi, mjr + 1)
                 axis.set_major_locator(FixedLocator(major))
                 if mnr > 1:
@@ -383,6 +415,32 @@ class Renderer:
         ax.tick_params(which="both", top=True, right=True, labeltop=False,
                        labelright=False)
 
+    def _log_ticks(self, axis, lo, hi, fmt, lab, size):
+        """NCAR log axis: a major tick and a label in the GRIDAL format at
+        every decade, minor ticks 2 to 9; labels thinned only where they
+        would overlap."""
+        e0, e1 = int(np.ceil(np.log10(lo) - 1e-9)), int(np.floor(
+            np.log10(hi) + 1e-9))
+        major = 10.0 ** np.arange(e0, e1 + 1)
+        minor = [m * 10.0 ** e for e in range(e0 - 1, e1 + 1)
+                 for m in range(2, 10) if lo <= m * 10.0 ** e <= hi]
+        axis.set_major_locator(FixedLocator(major))
+        axis.set_minor_locator(FixedLocator(minor))
+        f = fortran_format(fmt)
+        text = [f(v) for v in major]
+        box = self.ax.get_position()
+        span = (box.width * self.xw if axis is self.ax.xaxis
+                else box.height * self.yh) * self.ndc_pt
+        if axis is self.ax.xaxis:
+            width = max((len(t) for t in text), default=1) * 0.6
+        else:
+            width = 1.5
+        width *= size * TEXT_SCALE
+        step = max(1, int(np.ceil(len(major) * width / max(span, 1.0))))
+        axis.set_major_formatter(FixedFormatter(
+            [t if lab > 0 and (k % step == 0) else ""
+             for k, t in enumerate(text)]))
+
     # ---------------------------------------------------------- colour bar
     def _colorbar(self, bar):
         m = bar.msg
@@ -402,8 +460,13 @@ class Renderer:
                 r = Rectangle((0.0, k / nbox), boxw, 1.0 / nbox)
             else:
                 r = Rectangle((k / nbox, 1.0 - boxh), 1.0 / nbox, boxh)
-            r.set_facecolor(_rgb(self.colors, ci))
-            r.set_edgecolor("black" if m.nbox > 0 else "none")
+            if bar.pattern:
+                r.set_facecolor("white")
+                r.set_hatch(HATCHES[ci % len(HATCHES)])
+                r.set_edgecolor("black")
+            else:
+                r.set_facecolor(_rgb(self.colors, ci))
+                r.set_edgecolor("black" if m.nbox > 0 else "none")
             r.set_linewidth(LINE_WIDTH)
             ax.add_patch(r)
         if m.lbab == 0 or m.nlbs == 0:
@@ -417,7 +480,8 @@ class Renderer:
         # label size and gap measured on NCAR pages (bar 0.08 of the frame);
         # NCAR shrinks the labels until the longest one fits
         span = (m.xreb - m.xleb) if vertical else (m.yteb - m.ybeb)
-        longest = max((len(s.strip()) for s in m.llbs), default=1) or 1
+        longest = max((len(labels.plain_text(s.strip())) for s in m.llbs),
+                      default=1) or 1
         width = 0.145 * span
         if vertical:
             width = min(width, (1.0 - boxw - 0.18) * span / longest)
