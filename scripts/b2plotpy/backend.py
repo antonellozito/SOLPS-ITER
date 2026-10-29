@@ -48,7 +48,7 @@ class Backend:
         self._threads = []
 
     def start(self):
-        self.tmp = tempfile.mkdtemp(prefix="b2plotgui-")
+        self.tmp = tempfile.mkdtemp(prefix="b2plotpy-")
         self.fifo = os.path.join(self.tmp, "gui.fifo")
         os.mkfifo(self.fifo, 0o600)
         # the FIFO reader must wait for the writer before the child starts

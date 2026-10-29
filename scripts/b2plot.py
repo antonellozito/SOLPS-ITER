@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
-from b2plotgui import options, requirements  # noqa: E402
+from b2plotpy import options, requirements  # noqa: E402
 
 
 def _version(name):
@@ -28,10 +28,10 @@ def _version(name):
 
 def info(args):
     """--info: versions, paths and the build b2plot.py would use."""
-    import b2plotgui
+    import b2plotpy
     v = sys.version_info
-    rows = [("b2plot.py", "%s (protocol %d)" % (b2plotgui.__version__,
-                                                b2plotgui.PROTOCOL_VERSION)),
+    rows = [("b2plot.py", "%s (protocol %d)" % (b2plotpy.__version__,
+                                                b2plotpy.PROTOCOL_VERSION)),
             ("Python", "%d.%d.%d  %s" % (v[0], v[1], v[2], sys.executable))]
     for name, minimum in requirements.REQUIRED:
         rows.append((name, "%s (need >= %s)" % (_version(name), minimum)))
@@ -62,7 +62,7 @@ def info(args):
 def dry_run(args):
     """-n: the make commands of the wrapper, nothing is run."""
     import subprocess
-    from b2plotgui import backend
+    from b2plotpy import backend
     cmd = backend.wrapper_command(args.standalone, args.targets,
                                   args.debugger, dry_run=True)
     return subprocess.call(cmd, cwd=args.rundir)
@@ -92,9 +92,9 @@ def main(argv=None):
     if args.dry_run:
         return dry_run(args)
     if gui:
-        from b2plotgui.gui import app
+        from b2plotpy.gui import app
         return app.main(args)
-    from b2plotgui import batch
+    from b2plotpy import batch
     return batch.main(args)
 
 

@@ -3,13 +3,15 @@
     echo "phys te surf" | b2plot.py [-s] [-o OUT]
 
 The stdin lines go unchanged to b2pl_gui.exe, followed by "1 sync" and
-"quit". Each page opens in a matplotlib window (NCAR-like by default; zoom,
-pan and save in any matplotlib format from its toolbar), and is written
-to -o if given.
+"quit"; lines with wall commands are skipped (see WALL).
+Each page opens in a matplotlib window (NCAR-like by default; zoom, pan
+and save in any matplotlib format from its toolbar), and is written to
+-o if given.
 """
 
 import io
 import os
+import re
 import sys
 
 import matplotlib
@@ -17,6 +19,29 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.backends.backend_pdf import PdfPages
 
 from . import backend, labels, options, protocol, render, scene
+
+# Wall quantities and wall functions of b2plot (wlabels, wfns of
+# b2mod_b2plot_help.F): b2plot sets up the wall stack only under WG_TODO,
+# so input lines that use them are skipped instead of stopping b2plot
+WALL = frozenset("""
+    wallarea ei wallflux wallhflx r1 r2 z1 z2 walltemp plathick cooltemp
+    vaprtemp north south west east nseg iwlt iweq iwgt iswlt isweq iswgt
+    ibnd walldist wallngth sput sput2 sputchem thermev sputres backscat
+    backscae erosion deposit ero_ml depo_ml time imapx imapy kappa_a
+    kappa_b kappa_a1 kappa_a2 kappa_a3 kappa_a4 kappapa1 kappapa2
+    kappapa3 kappapa4 tgdns cp_b1 cp_b2 cp_b3 erel bbdyemis vapprs_a
+    vapprs_b vapprs qevap qrad stckcoef sublheat ckappa_a ckappa_b
+    ckappaa1 ckappaa2 ckappaa3 ckappaa4 ckapppa1 ckapppa2 ckapppa3
+    ckapppa4 ctgdns c_cp_b1 c_cp_b2 c_cp_b3 coathick lkappa lrho lcp
+    lemis sputfrac lthick ldepth iwle iwge iswle iswge c_cp_b4 cp_b4
+    kappa_a5 kappapa5 ckappaa5 ckapppa5 iwne iswne
+    wall wall_ank logw linw logxw linxw plwl sumw intw intw* pswa wclvs
+    wclvd wclvn wclvp wwid wabs ddw wsumz pwne wm+ wm- wm* wm/ rwm+ rwm-
+    rwm* rwm/ rwm** wdrop wdup wswap wover wsel wzsel wmmin wmmax rwmmi
+    rwmma wmlt wmle wmeq wmne wmgt wmge wlog wln wsqrt wexp wzrng wchs
+    wtos wtot wpos wsaw wallf outpw wprt wtab wlld woff wlist
+""".split())
+_TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|(\S+)")
 
 
 def _ps_page(fig):
@@ -62,6 +87,37 @@ def write_output(figures, path, dpi):
         fig.savefig(name, dpi=dpi)
         names.append(name)
     return names
+
+
+def wall_commands(line):
+    """Wall commands of a b2plot input line, outside quoted strings and
+    comments (lines starting with *, ! or #; ! starts a comment)."""
+    if line[:1] in ("*", "!", "#"):
+        return []
+    out = []
+    for m in _TOKEN.finditer(line):
+        word = m.group(1)
+        if word is None:
+            continue
+        if word.startswith("!"):
+            break
+        word = word.split("!", 1)[0]
+        if word in WALL:
+            out.append(word)
+    return out
+
+
+def without_wall(lines):
+    """The input lines without wall commands, telling which are skipped."""
+    kept = []
+    for line in lines:
+        if wall_commands(line):
+            print("b2plot.py: wall data are not available in this version "
+                  "of b2plot, line skipped: %s" % line.strip(),
+                  file=sys.stderr)
+        else:
+            kept.append(line)
+    return kept
 
 
 def run_commands(cmd, rundir, lines, record=None, console=sys.stdout):
@@ -115,7 +171,7 @@ def main(args):
     if args.replay:
         sc, status, bye = replay(args.replay), 0, True
     else:
-        lines = sys.stdin.read().splitlines()
+        lines = without_wall(sys.stdin.read().splitlines())
         cmd = backend.command(args)
         record = open(args.record, "wb") if args.record else None
         try:
