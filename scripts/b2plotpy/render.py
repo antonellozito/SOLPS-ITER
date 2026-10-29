@@ -232,6 +232,8 @@ class Renderer:
 
     def _image(self, img):
         m = img.msg
+        if m.nxclr * m.nyclr == 0:
+            return
         idx = m.clria.reshape(m.nyclr, m.nxclr)
         lut = np.array([_rgb(self.colors, ci) for ci in range(int(idx.max())
                                                              + 1)])

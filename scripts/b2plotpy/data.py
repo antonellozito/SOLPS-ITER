@@ -1,4 +1,4 @@
-"""Data client of the GUI: raw grid, overlays and fields from b2pl_gui.exe.
+"""Data client of the GUI: raw grid, overlays and fields from b2pl_py.exe.
 
 The GUI sends only the data commands of b2plot (guigeom, guifield,
 guiefld, guivect, each request ended by "<id> sync") and receives raw
@@ -216,7 +216,7 @@ def make_vector(name, m, ops=()):
 
 
 class Run:
-    """One b2pl_gui.exe serving the data of one run directory."""
+    """One b2pl_py.exe serving the data of one run directory."""
 
     def __init__(self, cmd, rundir, record=None):
         self.backend = backend.Backend(cmd, rundir, record)

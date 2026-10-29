@@ -4,7 +4,7 @@
 Used as b2plot: plot commands on stdin (echo "phys te surf" | b2plot.py,
 b2plot.py < cmds), one matplotlib window per page. With stdin a terminal
 the GUI opens. All values are computed by the Fortran b2plot
-(b2pl_gui.exe); b2plot.py -h lists the options.
+(b2pl_py.exe); b2plot.py -h lists the options.
 
 Any Python 3 syntax up to the requirements check, so that an old
 interpreter still prints the requirements message.

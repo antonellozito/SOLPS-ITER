@@ -52,11 +52,11 @@ prints = b2uf.prt b2fu.prt b2pl.prt b2yi.prt b2yn.prt b2md.prt b2rd.prt b2yi_gnu
 target_uf = b2uf.prt
 target_fu = b2fu.prt
 target_pl = b2pl.prt
-target_plgui = b2pl_gui.prt
+target_plpy = b2pl_py.prt
 B2PL_EXE = b2pl.exe
 B2PL_DIR = b2pl.exe.dir
-$(target_plgui) : B2PL_EXE = b2pl_gui.exe
-$(target_plgui) : B2PL_DIR = b2pl_gui.exe.dir
+$(target_plpy) : B2PL_EXE = b2pl_py.exe
+$(target_plpy) : B2PL_DIR = b2pl_py.exe.dir
 target_pl.dbx = b2pl.dbx
 target_yi = b2yi.prt b2yi.plt
 target_yi_gnuplot = b2yi_gnuplot.prt
@@ -121,9 +121,9 @@ $(target_fu) : b2fgmtry b2fparam b2fstate b2fplasmf
 	-rmdir b2fu.exe.dir
 
 ifndef STAND_ALONE
-$(target_pl) $(target_plgui) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
+$(target_pl) $(target_plpy) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
 else
-$(target_pl) $(target_plgui) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL
+$(target_pl) $(target_plpy) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL
 endif
 	rm -rf $(B2PL_DIR) >& /dev/null ; mkdir $(B2PL_DIR) ; cp $^ $(B2PL_DIR)
 	[ -e param.dg ] && cp param.dg $(B2PL_DIR)/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg $(B2PL_DIR)/ || echo > /dev/null )

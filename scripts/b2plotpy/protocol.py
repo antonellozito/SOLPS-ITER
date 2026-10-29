@@ -1,4 +1,4 @@
-"""Binary message protocol between b2pl_gui.exe and b2plot.py.
+"""Binary message protocol between b2pl_py.exe and b2plot.py.
 
 Every message is ``int32 opcode | int32 nbytes | payload``, in native byte
 order. The payload layouts are written by b2mod_b2plot_gui.F and

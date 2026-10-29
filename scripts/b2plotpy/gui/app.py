@@ -1,6 +1,6 @@
 """Main window of the b2plot.py GUI: run line, tabs, status bar.
 
-One b2pl_gui.exe per open run serves the data (data.Run); a QTimer
+One b2pl_py.exe per open run serves the data (data.Run); a QTimer
 drains its events in the GUI thread and hands finished requests to the
 tabs. There is no console and no b2plot command input.
 """
@@ -264,7 +264,7 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.about(
             self, "About b2plot.py",
             "b2plot.py %s (protocol %d)\nPython %d.%d.%d, PySide6 %s, "
-            "matplotlib %s\nData from b2pl_gui.exe; drawing by matplotlib."
+            "matplotlib %s\nData from b2pl_py.exe; drawing by matplotlib."
             % (__version__, PROTOCOL_VERSION, v[0], v[1], v[2],
                PYSIDE6_VERSION, matplotlib.__version__))
 
