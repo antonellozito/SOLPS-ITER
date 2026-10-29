@@ -1,6 +1,6 @@
 """Debug tool: run b2pl_gui.exe (or replay a recording) and print its messages.
 
-    python3 -m b2plotgui.dump [options] [COMMANDS]
+    python3 -m b2plotpy.dump [options] [COMMANDS]
 
 COMMANDS is a file of b2plot commands, one batch per line (default: stdin).
 Each batch is followed by "<n> sync"; "quit" is sent at the end.
@@ -102,7 +102,7 @@ def run(cmd, rundir, batches, dumper, record=None, console=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="python3 -m b2plotgui.dump",
+    ap = argparse.ArgumentParser(prog="python3 -m b2plotpy.dump",
                                  description=__doc__.splitlines()[0])
     ap.add_argument("commands", nargs="?",
                     help="file of command batches (default: stdin)")
