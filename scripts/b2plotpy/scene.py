@@ -37,6 +37,7 @@ class Fill:
     tagkind: int = 0
     tagindex: int = 0
     tagvalue: float = 0.0
+    pattern: int = 0            # Softfill TY: 0 solid, else line pattern
 
 
 @dataclass
@@ -44,8 +45,8 @@ class Markers:
     x: np.ndarray
     y: np.ndarray
     ci: int
-    mtype: int
-    scale: float
+    mtype: int                  # GKS marker type, 0 a line-width dot
+    scale: float                # marker scale, line width for type 0
 
 
 @dataclass
@@ -71,6 +72,7 @@ class Image:
 class ColorBar:
     msg: protocol.Message
     ci: int
+    pattern: int = 0            # Softfill TY when the bar was drawn
 
 
 @dataclass
@@ -264,10 +266,10 @@ class Scene:
 
     def _on_line(self, m):
         style = self._style()
-        if m.xa == m.xb and m.ya == m.yb:
+        if m.xa == m.xb and m.ya == m.yb:     # a round-capped dot in NCAR
             self._add(Markers(np.array([m.xa], np.float32),
-                              np.array([m.ya], np.float32), self.plci, 1,
-                              1.0))
+                              np.array([m.ya], np.float32), self.plci, 0,
+                              self.lwsc))
             return
         if self.panel is None:
             self._set_panel((0.0, 1.0, 0.0, 1.0), (0.0, 1.0, 0.0, 1.0), 1)
@@ -286,7 +288,8 @@ class Scene:
 
     def _on_fill(self, m):
         ci = self.faci if m.ci < 0 else m.ci
-        self._add(Fill(m.x, m.y, ci, m.tagkind, m.tagindex, m.tagvalue))
+        self._add(Fill(m.x, m.y, ci, m.tagkind, m.tagindex, m.tagvalue,
+                       self.sfset.get("TY", 0)))
 
     def _on_markers(self, m):
         self._add(Markers(m.x, m.y, self.pmci, self.mk, self.mksc))
@@ -306,7 +309,8 @@ class Scene:
                                ci=self.plci)
 
     def _on_colorbar(self, m):
-        self.current.colorbars.append(ColorBar(m, self.plci))
+        self.current.colorbars.append(ColorBar(m, self.plci,
+                                               self.sfset.get("TY", 0)))
 
     def _on_cellarray(self, m):
         self._add(Image(m, self.plci))
