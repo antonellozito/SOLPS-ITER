@@ -204,8 +204,10 @@ class Renderer:
     def _lines(self, lines):
         style = lines[0].style
         segs = [np.column_stack((l.x, l.y)) for l in lines]
+        # GKS draws a line width scale of 0 as its thinnest line
+        width = style.width if style.width > 0 else 1.0
         lc = LineCollection(segs, colors=[_rgb(self.colors, style.ci)],
-                            linewidths=style.width * LINE_WIDTH,
+                            linewidths=width * LINE_WIDTH,
                             linestyles=[self._dashes(style)],
                             capstyle="butt", joinstyle="round")
         self.ax.add_collection(lc)
