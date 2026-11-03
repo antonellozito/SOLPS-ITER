@@ -2,7 +2,7 @@
 
 Python never calls Fortran routines: b2plot command text goes to the
 child's stdin, binary messages come back on the FIFO named by
-B2PLOT_GUI_FIFO, console text on stdout.
+B2PLOT_PY_FIFO, console text on stdout.
 """
 
 import os
@@ -49,11 +49,11 @@ class Backend:
 
     def start(self):
         self.tmp = tempfile.mkdtemp(prefix="b2plotpy-")
-        self.fifo = os.path.join(self.tmp, "gui.fifo")
+        self.fifo = os.path.join(self.tmp, "b2pl_py.fifo")
         os.mkfifo(self.fifo, 0o600)
         # the FIFO reader must wait for the writer before the child starts
         self._thread(self._read_fifo)
-        env = dict(os.environ, B2PLOT_GUI_FIFO=self.fifo,
+        env = dict(os.environ, B2PLOT_PY_FIFO=self.fifo,
                    GFORTRAN_UNBUFFERED_PRECONNECTED="y")
         self.proc = subprocess.Popen(
             self.cmd, cwd=self.rundir, env=env, stdin=subprocess.PIPE,
