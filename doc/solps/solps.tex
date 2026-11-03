@@ -17729,7 +17729,7 @@ no longer needed.
 setenv B2PLOT_DEV 'x11 ps'
   \end{verbatim}
 \item[SOLPS\_TOOLCHAIN\_VERSION]\index{SOLPS\_TOOLCHAIN\_VERSION} Used to specify the compiler toolchain with which the code is built, for HPC environments where several toolchains may co-exist (see ITER {\tt setup.csh} files for an example)
-\item[B2PLOT\_GUI\_FIFO]\index{B2PLOT\_GUI\_FIFO} set by {\tt b2plot.py} (see \ref{sec:b2plotpy}) to the named pipe on which \btwoplot sends its binary messages (see \ref{sec:b2plotpydata}); without it the commands that only send data do nothing
+\item[B2PLOT\_PY\_FIFO]\index{B2PLOT\_PY\_FIFO} set by {\tt b2plot.py} (see \ref{sec:b2plotpy}) to the named pipe on which \btwoplot sends its binary messages (see \ref{sec:b2plotpydata}); without it the commands that only send data do nothing
 \item[SOLPSTOP]\index{SOLPSTOP} used to specify the top of the {\tt SOLPS} tree
 \item[SOLPSTOP\_FORCE]\index{SOLPSTOP\_FORCE} used to override the value of {\tt \$SOLPSTOP} to force execution of code executables from a different tree (not defined by default)
 \end{description}
@@ -19343,8 +19343,8 @@ tabs follow in later versions. The 2D tab has three parts.
 The {\bf quantity panel} (left):
 \begin{itemize}
 \item {\tt Time}: the final state ({\tt b2fstate}) or the movie frames,
-  read by \btwoplot with {\bf guimovie} and {\bf guimvvec}
-  (\ref{sec:guimovie}): one frame, the mean over a range of frames, a
+  read by \btwoplot with {\bf mvframe} and {\bf mvframev}
+  (\ref{sec:mvframe}): one frame, the mean over a range of frames, a
   rolling mean (a window of $W$ frames ending at the frame or centred on
   it, moved frame by frame) or a batch mean (consecutive blocks of $W$
   frames), each position being one request of the frames $k_1$ to $k_2$;
@@ -21122,7 +21122,7 @@ Currently coded functions are:
 Prints the catalogue of \btwoplot labels by category (matrix and Eirene
 quantities and functions, wall quantities and functions, target
 functions, parameters, constants): name, number of species columns and
-description. With {\tt B2PLOT\_GUI\_FIFO} set (\ref{sec:b2plotpydata}) the
+description. With {\tt B2PLOT\_PY\_FIFO} set (\ref{sec:b2plotpydata}) the
 catalogue is also sent to {\tt b2plot.py}.
 
 \subsubsection{dflt}\index{b2plot, dflt}\label{sec:dflt}
@@ -21133,14 +21133,14 @@ does not depend on the commands before it.
 \subsubsection{$<$id,{\bf I}$>$ sync}\index{b2plot, sync}\label{sec:sync}
 Prints {\tt b2plot sync} and $\langle${\tt id}$\rangle$; a program that
 writes commands to \btwoplot uses it to know that all commands before it
-are done. With {\tt B2PLOT\_GUI\_FIFO} set it also sends the depths of the
+are done. With {\tt B2PLOT\_PY\_FIFO} set it also sends the depths of the
 seven stacks and the label of the top of the matrix stack.
 
 \subsection{Data channel to b2plot.py}\label{sec:b2plotpydata}
 
 These commands send data to {\tt b2plot.py} (\ref{sec:b2plotpy}) as
-binary messages on the named pipe given by {\tt B2PLOT\_GUI\_FIFO}. They
-exist in every \btwoplot executable; without {\tt B2PLOT\_GUI\_FIFO} the
+binary messages on the named pipe given by {\tt B2PLOT\_PY\_FIFO}. They
+exist in every \btwoplot executable; without {\tt B2PLOT\_PY\_FIFO} the
 commands that only send data do nothing, while those that drop fields
 still drop them.
 
@@ -21169,8 +21169,8 @@ Send the contour levels set by {\bf clvs}, {\bf clvd}, {\bf clvn} or
 {\bf clvp} ({\bf guiclv}), or by their Eirene versions ({\bf guieclv}).
 
 \subsubsection{guimvinf}\index{b2plot, guimvinf}\label{sec:guimvinf}
-Sends the movie files found by {\bf guimovie} (\ref{sec:guimovie}), their
-frame times and, for every variable that {\bf guimovie} can read, its
+Sends the movie files found by {\bf mvframe} (\ref{sec:mvframe}), their
+frame times and, for every variable that {\bf mvframe} can read, its
 name, {\tt long\_name}, {\tt units}, location and number of columns.
 
 \subsection{Still need to do}
@@ -21436,7 +21436,7 @@ controlled with the {\bf mvsk} command.
 Creates a movie for timeslice $\langle${\tt istart}$\rangle$ to time slice $\langle${\tt iend}$\rangle$ of variable $\langle${\tt varname}$\rangle$ read
 from file $\langle${\tt filename}$\rangle$.
 
-\subsubsection{$<$varname,{\bf S}$>$ $<$file,{\bf I}$>$ $<$k1,{\bf I}$>$ $<$k2,{\bf I}$>$ guimovie}\index{b2plot, guimovie}\label{sec:guimovie}
+\subsubsection{$<$varname,{\bf S}$>$ $<$file,{\bf I}$>$ $<$k1,{\bf I}$>$ $<$k2,{\bf I}$>$ mvframe}\index{b2plot, mvframe}\label{sec:mvframe}
 Pushes the mean of the frames $\langle${\tt k1}$\rangle$ to
 $\langle${\tt k2}$\rangle$ (one frame if they are equal) of the variable
 $\langle${\tt varname}$\rangle$ of a movie file: file 1 is
@@ -21461,16 +21461,16 @@ means over many frames are cheap. Wrong files, variables or frames give
 a message and push nothing. For example, the frame 5 and the mean of
 frames 1 to 20 of $T_e$, and frame 5 of the atom density:
 \begin{verbatim}
-phys 'te' 1 5 5 guimovie surf
-phys 'te' 1 1 20 guimovie surf
-phys 'pdena' 2 5 5 guimovie esurf
+phys 'te' 1 5 5 mvframe surf
+phys 'te' 1 1 20 mvframe surf
+phys 'pdena' 2 5 5 mvframe esurf
 \end{verbatim}
 
-\subsubsection{$<$xname,{\bf S}$>$ $<$yname,{\bf S}$>$ $<$file,{\bf I}$>$ $<$k1,{\bf I}$>$ $<$k2,{\bf I}$>$ guimvvec}\index{b2plot, guimvvec}\label{sec:guimvvec}
-As {\bf guimovie} for both components of a vector ({\tt fnax} and
+\subsubsection{$<$xname,{\bf S}$>$ $<$yname,{\bf S}$>$ $<$file,{\bf I}$>$ $<$k1,{\bf I}$>$ $<$k2,{\bf I}$>$ mvframev}\index{b2plot, mvframev}\label{sec:mvframev}
+As {\bf mvframe} for both components of a vector ({\tt fnax} and
 {\tt fnay}, {\tt vxdena} and {\tt vydena}, \ldots), pushed with the
 $y$ component on top; both are pushed or none. For example
-{\tt phys 'fnax' 'fnay' 1 5 5 guimvvec guivect} sends the particle flux
+{\tt phys 'fnax' 'fnay' 1 5 5 mvframev guivect} sends the particle flux
 of frame 5 to {\tt b2plot.py}.
 
 \subsubsection{$<$sonnetfile$>$ sonn}\index{b2plot, sonn}\label{sec:sonn}

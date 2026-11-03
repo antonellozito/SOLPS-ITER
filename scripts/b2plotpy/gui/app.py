@@ -8,7 +8,8 @@ tabs. There is no console and no b2plot command input.
 import os
 import sys
 
-from .. import PROTOCOL_VERSION, __version__, backend, data, labels
+from .. import PROTOCOL_VERSION, __version__, backend, labels
+from . import data
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
 from .composer import Composer
 from .tab2d import Tab2D

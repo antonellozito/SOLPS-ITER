@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from ..plot2d import LAYERS, LayerStyle
+from .plot2d import LAYERS, LayerStyle
 from ..qt import QtGui, QtWidgets, Signal
 
 # Why a layer can be missing in a run

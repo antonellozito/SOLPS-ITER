@@ -10,7 +10,7 @@ groups only sort the list for the user; the names are the b2plot labels.
 import re
 from dataclasses import dataclass
 
-from . import labels
+from .. import labels
 
 VECTORS = "Fluxes and velocities (vectors)"
 GROUPS = [

@@ -5,7 +5,8 @@ interactive plot of the tab stays one."""
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-from .. import labels, page
+from .. import labels
+from . import page
 from ..qt import QtCore, QtGui, QtWidgets, Qt, Signal
 from .export import FigureDialog
 

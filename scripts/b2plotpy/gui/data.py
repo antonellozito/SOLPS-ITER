@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import backend, protocol
+from .. import backend, protocol
 
 CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 
@@ -272,7 +272,7 @@ class Run:
     def _movie(name, source):
         """b2plot tokens pushing a movie variable: frames first to last
         of file 1 (b2movies.nc) or 2 (eirenemovies.nc)."""
-        return "'%s' %d %d %d guimovie" % ((name,) + tuple(source))
+        return "'%s' %d %d %d mvframe" % ((name,) + tuple(source))
 
     def field(self, name, eirene=False, ops=(), source=None):
         """Cached Field, or a Request whose result arrives later.
@@ -304,7 +304,7 @@ class Run:
         cmd = "guievect" if eirene else "guivect"
         if source:
             swap = "eswap" if eirene else "swap"
-            words = ("'%s' '%s' %d %d %d guimvvec" % ((first, second)
+            words = ("'%s' '%s' %d %d %d mvframev" % ((first, second)
                                                      + source),) \
                 + tuple(ops) + (swap,) + tuple(ops) + (swap, cmd)
         else:

@@ -8,8 +8,8 @@ from dataclasses import replace
 import numpy as np
 from matplotlib.figure import Figure
 
-from .. import catalog, page, plot2d
-from ..data import split_unit
+from . import catalog, page, plot2d
+from .data import split_unit
 from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore, QtGui,
                   QtWidgets, Qt, Signal)
 from .export import FigureDialog, ValuesDialog

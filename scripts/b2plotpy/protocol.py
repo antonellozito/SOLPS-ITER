@@ -1,8 +1,8 @@
 """Binary message protocol between b2pl_py.exe and b2plot.py.
 
 Every message is ``int32 opcode | int32 nbytes | payload``, in native byte
-order. The payload layouts are written by b2mod_b2plot_gui.F and
-ncar_gui.F (modules/B2.5/src) and are listed in SPECS below.
+order. The payload layouts are written by b2mod_b2plot_py.F and
+ncar_py.F (modules/B2.5/src) and are listed in SPECS below.
 """
 
 import re
