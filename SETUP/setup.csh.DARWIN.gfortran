@@ -44,14 +44,20 @@ endif
 
 setenv OPENBLAS_HOME `brew --prefix openblas`
 setenv SUITESPARSE_HOME `brew --prefix suite-sparse`
+if ( $?USE_NCAR ) then
 setenv FREETYPE_HOME `brew --prefix freetype`
+endif
 setenv HDF5_HOME `brew --prefix hdf5`
 setenv LAPACK_DIR `brew --prefix lapack`
+if ( $?USE_NCAR ) then
 setenv LIBPNG_HOME `brew --prefix libpng`
+endif
 setenv LIBXP_HOME `brew --prefix libxp`
 setenv NETCDF_HOME `brew --prefix netcdf`
 setenv NETCDF_FORTRAN_HOME `brew --prefix netcdf-fortran`
+if ( $?USE_NCAR ) then
 setenv NCARG_ROOT /opt/local
+endif
 setenv MOTIF_HOME /opt/local
 
 setenv DBX ddt
@@ -80,8 +86,10 @@ endif
 if ( `brew list | grep -c '^doxygen$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
 endif
+if ( $?USE_NCAR ) then
 if ( `brew list | grep -c '^freetype$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 if ( `brew list | grep -c '^ghostscript$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
@@ -95,8 +103,10 @@ endif
 if ( `brew list | grep -c '^lapack$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
 endif
+if ( $?USE_NCAR ) then
 if ( `brew list | grep -c '^libpng$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 if ( `brew list | grep -c '^libxp$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
@@ -122,8 +132,10 @@ endif
 if ( ! -e /opt/local/lib/libjsonfortran.a ) then
     set MISSING_DEPENDENCY = 1
 endif
+if ( $?USE_NCAR ) then
 if ( ! -e /opt/local/lib/libncarg.a ) then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 if ( ! -e /opt/local/lib/libXm.a ) then
     set MISSING_DEPENDENCY = 1

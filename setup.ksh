@@ -124,7 +124,7 @@ ulimit -s unlimited
 
 [ -z "$GRAPHCAP" ] && export GRAPHCAP=X11
 
-[ -z "$B2PLOT_DEV" ] && export B2PLOT_DEV="x11 ps"
+[ -z "$B2PLOT_DEV" ] && export B2PLOT_DEV="x11"
 [ -z "$GRSOFT_DEVICE" ] && export GRSOFT_DEVICE="211 62"
 export SonnetTopDirectory=${SOLPSTOP}/modules/Sonnet-light
 export EscapeSonnet=`echo ${SonnetTopDirectory} | sed 's:\/:\\\/:g'`

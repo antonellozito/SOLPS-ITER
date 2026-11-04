@@ -338,7 +338,7 @@ To best use the \SOLPSITER code suite, the user will need, locally installed:
 \item[MPI] Parallelization framework (optional)
 \item[NAG]\index{NAG} mathematical library (optional) (available from \href{http://www.nag.com/content/nag-library}{http://www.nag.com/content/nag-library})
 \item[BLAS/LAPACK] mathematical libraries (available from \href{http://www.netlib.org/}{http://www.netlib.org/})
-\item[NCAR] plotting library (available from \href{https://www.ncl.ucar.edu/Download/}{https://www.ncl.ucar.edu/Download/})
+\item[NCAR] plotting library (optional, only for the NCAR Graphics versions of the {\tt B2.5} graphical programs, built with {\tt USE\_NCAR}, see Section~\ref{sec:b2plotpy}; available from \href{https://www.ncl.ucar.edu/Download/}{https://www.ncl.ucar.edu/Download/})
 \item[GR] plotting library (optional, developed at FZ-J{\"u}lich, available as an open-source package at \href{https://github.com/iterorganization/GR-Software}{https://github.com/iterorganization/GR-Software})
 \item[GKS] graphical kernel library (available from \href{http://ngwww.ucar.edu}{http://ngwww.ucar.edu})
 \item[HDF5] data storage library (available from \href{http://support.hdfgroup.org/HDF5/}{http://support.hdfgroup.org/HDF5/})
@@ -352,7 +352,7 @@ To best use the \SOLPSITER code suite, the user will need, locally installed:
 \item[plotmtv] for obtaining graphs of the time evolution of various profiles (optional)
 \item[LaTeX interpreter] to produce this manual (optional)
 \item[GIT] version control software
-\item[python] scripting language (\SOLPSITER needs at least version 2.7, but version at least 3.5 is required for many additional features; a local \SOLPSITERns-specific Python installation can be built with the {\tt install\_dependencies} script, see Section~\ref{sec:localpython})
+\item[python] scripting language (\SOLPSITER needs at least version 2.7, but version at least 3.5 is required for many additional features; a local \SOLPSITERns-specific Python installation can be built with the {\tt install\_dependencies} script, see Section~\ref{sec:localpython}; the graphics of \btwoplot and of the B2 post-processors need it, see Section~\ref{sec:b2plotpy})
 \item[/bin/bash] used by some scripts
 \item[/bin/csh] used by some scripts
 \item[/bin/ksh] used by some scripts
@@ -373,12 +373,12 @@ Those libraries which are not available in a cluster must be necessarily locally
 \begin{verbatim}
 > install_dependencies
 \end{verbatim}
-it is possible to automatically obtain several libraries which might be not already available in some HPC clusters. In particular, the Blas/Lapack, NetCDF and NCARG libraries (using a local Conda installation based on {\tt miniforge}), and the Gnuplot, JSON-Fortran, MSCL, GKS, and GR libraries (which are locally built from source). Both the local Conda installation and the locally compiled libraries will reside in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}} directory. Note the NCARG library can be obtained only for cluster installations using a {\tt gfortran} compiler. The paths and the compiling flags needed to correctly find and link these libraries are also automatically set. The same script can also build a local \SOLPSITERns-specific Python installation, described below.
+it is possible to automatically obtain several libraries which might be not already available in some HPC clusters. In particular, the Blas/Lapack, NetCDF and NCARG libraries (using a local Conda installation based on {\tt miniforge}; NCARG and the libraries needed only by it, Freetype, PNG and Cairo, are offered only when {\tt USE\_NCAR} is set), and the Gnuplot, JSON-Fortran, MSCL, GKS, and GR libraries (which are locally built from source). Both the local Conda installation and the locally compiled libraries will reside in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}} directory. Note the NCARG library can be obtained only for cluster installations using a {\tt gfortran} compiler. The paths and the compiling flags needed to correctly find and link these libraries are also automatically set. The same script can also build a local \SOLPSITERns-specific Python installation, described below.
 \end{sloppypar}
 
 \begin{sloppypar}
 \index{Python, local installation}\index{install\_dependencies}\index{install\_python}\label{sec:localpython}
-The {\tt install\_dependencies} script offers to build a local \SOLPSITERns-specific Python installation, a step which can also be run alone with the {\tt install\_python} script. This is useful even if another Python installation already exists on the system, since it guarantees that the Python version and the external Python modules needed by the \SOLPSITER Python tools are all present, in suitable versions. It is not needed to compile \SOLPSITERns. The Python source code is downloaded from \href{https://www.python.org/ftp/python/}{https://www.python.org/ftp/python/}, compiled and installed in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory. The latest released micro version of the 3.13 Python series set is currently used. The external Python modules listed in the script (currently {\tt numpy}, {\tt matplotlib} and {\tt PySide6}) are then installed into it with {\tt pip}.
+The {\tt install\_dependencies} script offers to build a local \SOLPSITERns-specific Python installation, a step which can also be run alone with the {\tt install\_python} script. This is useful even if another Python installation already exists on the system, since it guarantees that the Python version and the external Python modules needed by the \SOLPSITER Python tools, the graphics of \btwoplot included (Section~\ref{sec:b2plotpy}), are all present, in suitable versions. It is not needed to compile \SOLPSITERns. The Python source code is downloaded from \href{https://www.python.org/ftp/python/}{https://www.python.org/ftp/python/}, compiled and installed in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory. The latest released micro version of the 3.13 Python series set is currently used. The external Python modules listed in the script (currently {\tt numpy}, {\tt matplotlib} and {\tt PySide6}) are then installed into it with {\tt pip}.
 If this is done, at every initialization of a \SOLPSITER session, the \SOLPSITERns-specific Python environment takes precedence over any other Python installation that may have been already active before in the system; the commands {\tt python}, {\tt python3}, {\tt pip} and {\tt pip3} will all refer to it.
 \end{sloppypar}
 
@@ -666,7 +666,7 @@ purpose, a master \SOLPSITER {\tt Makefile} is provided, located at {\tt \$\{SOL
   \item[divgeo] The {\tt DivGeo} graphical input file builder and accompanying equilibrium and template converters only
   \item[divgeo\_nox] Equilibrium and template converters for {\tt DivGeo}
   \item[b25] The {\tt B2.5} standalone plasma fluid solver and accompanying programs only
-  \item[b25\_nox] The {\tt B2.5} standalone plasma fluid solver and accompanying programs, not using NCAR Graphics
+  \item[b25\_nox] The {\tt B2.5} standalone plasma fluid solver and accompanying programs, without the graphical post-processing programs
   \item[b25\_all] The {\tt B2.5} standalone plasma fluid solver and accompanying programs only, plus {\tt b2xd} the \SOLPSfive to \SOLPSfour converter
   \item[eirene] The {\tt Eirene} standalone Monte Carlo neutral transport code only
   \item[eirene\_nox] The {\tt Eirene} standalone Monte Carlo neutral transport code only, without graphics
@@ -923,10 +923,11 @@ The {\tt setup.csh} file and its subsidiaries {\tt \$\{SOLPSTOP\}/SETUP/setup.cs
 \item {\tt MDSPLUS\_DIR}\index{MDSPLUS\_DIR}, the root of the {\tt MDSplus} tree, and {\tt LD\_MDSPLUS}, the appropriate loader instruction to load {\tt MDSplus}
 \item {\tt MSCL\_ROOT}\index{MSCL\_ROOT}, the root of the {\tt mscl} tree, and {\tt LD\_MSCL}, the appropriate loader instruction to load the {\tt mscl} library
 \item {\tt NAGDIR}\index{NAGDIR}, the root of the {\tt NAG} tree, and {\tt LD\_NAG}, the appropriate loader instruction to load the {\tt NAG} library
-\item {\tt NCARG\_ROOT}\index{NCARG\_ROOT}, the root of the {\tt NCAR} tree, and {\tt LD\_NCARG}, the appropriate loader instruction to load {\tt NCAR} (It is best if the definition of {\tt NCARG\_ROOT} appears in both the {\tt setup.csh.*.*} and {\tt config.*.*} files as some implementations of NCAR use it both during compilation and at runtime)
+\item {\tt NCARG\_ROOT}\index{NCARG\_ROOT}, the root of the {\tt NCAR} tree, and {\tt LD\_NCARG}, the appropriate loader instruction to load {\tt NCAR}, both needed only with {\tt USE\_NCAR} (It is best if the definition of {\tt NCARG\_ROOT} appears in both the {\tt setup.csh.*.*} and {\tt config.*.*} files as some implementations of NCAR use it both during compilation and at runtime)
 \item {\tt NCDIR}\index{NCDIR}, the root of the {\tt NetCDF} tree, and {\tt LD\_NETCDF}, the appropriate loader instruction to load {\tt NetCDF}
 \item {\tt PERFMON}\index{PERFMON}, an environment variable used by the compiler to know whether to enable the performance monitoring libraries
 \item {\tt SOLPS\_CPP}\index{SOLPS\_CPP}, an environment variable containing the global "defines" to use during compilation of {\tt SOLPS} code components
+\item {\tt USE\_NCAR}\index{USE\_NCAR}, if set, builds the {\tt B2.5} graphical programs with {\tt NCAR} Graphics instead of the Python graphics (Section~\ref{sec:b2plotpy}); it must be set before {\tt setup.csh} is sourced
 \item some aliases to move around the tree ({\tt sbb}, {\tt sei}, {\it etc.})
 \item some aliases for plotting ({\tt xyplot}, etc...)
 \item two aliases to swap between the debug and no\_debug versions of the code ({\tt set\_debug} and {\tt unset\_debug})
@@ -1451,8 +1452,8 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
 \begin{itemize}
 \item Job submission scripts
  \begin{description}
-  \item[b2plot]\index{b2plot} Shortcut to \btwoplotns. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run \btwoplot without coupling to {\tt Eirene} data. A {\tt -h} option prints a help description.
-  \item[b2plot.py]\index{b2plot.py} Shortcut to the Python version of \btwoplotns. The arguments are the same as for \btwoplotns. When invoked without arguments, the GUI window will open.
+  \item[b2plot]\index{b2plot} Shortcut to \btwoplotns, with the graphics of the {\tt B2.5} build (Section~\ref{sec:b2plotpy}). A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run \btwoplot without coupling to {\tt Eirene} data. A {\tt -h} option prints a help description.
+  \item[b2plot\_gui]\index{b2plot\_gui} Opens the \btwoplot GUI on the run directory (Section~\ref{sec:b2plotpy}); needs the Python graphics of {\tt B2.5}. The {\tt -d}, {\tt -h} and {\tt -s} options are those of {\tt b2plot}.
   \item[b2run]\index{b2run}\index{b2co}\index{b2fstate} Shortcut to the {\tt Makefile} launching {\tt B2.5}. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run {\tt B2.5} in standalone mode. A {\tt -m} option allows to run with MPI options. When {\tt SOLPS\_MPIRUN} is defined, its value replaces the MPI launcher executable while preserving the options supplied with {\tt -m}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -t \#} option allows to request an OpenMP run with \# threads. A {\tt -b} option can be used when invoking the {\tt b2co} program to obtain a provisional {\tt b2fstate} file while the main code is running. A {\tt -tgt}, {\tt -hess\_tgt}, or {\tt -adj} option allows to request a standalone run with tangent, Hessian tangent on tangent, or adjoint AD derivatives, respectively. A {\tt -opt\_tgt} or {\tt -opt\_adj} option allows to request a standalone optimization with tangent or adjoint AD derivatives, respectively. A {\tt -h} option prints a help description. (See \ref{b2run} for fuller details)
   \item[b2run\_hgw\_cluster]\index{b2run\_hgw\_clus} Shortcut to the {\tt Makefile} launching {\tt B2.5} for the IPP--Greifswald cluster. A {\tt -n} option allows for dry-run tests.
   \item[b2sxdr]\index{b2sxdr} Shortcut to the \SOLPSfour to \SOLPSfive converter. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to specify that the run to convert was not coupled to {\tt Eirene}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -h} option prints a help description.
@@ -1821,7 +1822,7 @@ for the definitions of the regions and surfaces)\index{SOLPS\_FLUIDS}\index{NREG
   \item[inspect\_plasmastate \#1]\index{inspect\_plasmastate} This script will return the plasma time stamp at which the {\tt plasmastate} savefile \#1 was written.
   \item[install\_dependencies]\index{install\_dependencies} This script locally downloads and installs all external dependencies needed to correctly compile and run \SOLPSITER, if not already present, in a fully automatized way. Additionally, if needed, it automatically appends the linking flags to the corresponding compiled binaries in a {\tt \$\{SOLPSTOP\}/SETUP/config.\$\{HOST\_NAME\}.\$\{COMPILER\}.local} file and in the corresponding configuration files of the various submodules. For local \SOLPSITER installations, all required external dependencies can be locally provided. For installations on HPC clusters, only the dependencies which may be missing are provided, namely the Blas/Lapack, NetCDF, NCARG, JSON-Fortran, MSCL, GKS, and GR libraries. Note that the NCARG library can be built only for cluster installations using a {\tt gfortran} compiler. The script can also build a local \SOLPSITERns-specific Python installation, with all the external Python modules needed by the \SOLPSITER Python tools, and activate it in the {\tt \$\{SOLPSTOP\}/SETUP/\allowbreak setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.local} file (see Section~\ref{sec:localpython}).
   \item[install\_imas]\index{install\_imas} This script locally downloads and installs all relevant pieces of the IMAS environment (AL core library, data dictionary, data access libraries for Python, C++ and Fortran, GGD library, plus all needed dependencies) needed to fully exploit the \SOLPSITER capabilities within the IMAS environment. At the same time, it automatically appends the relevant paths into a {\tt \$\{SOLPSTOP\}/SETUP/setup.csh.\$\{HOST\_NAME\}.\$\{COMPILER\}.local} file, so that the IMAS environment results fully loaded upon entering the \SOLPSITER environment. The script only works on local hosts ({\bf LINUX} and {\bf DARWIN}).
-  \item[install\_miniforge]\index{install\_miniforge} This script installs a \SOLPSITER-specific local Conda installation, based on {\tt miniforge}, located in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}} directory. Such installation is required to obtain some external packages needed by the compilation of the code when the local host is {\bf LINUX}, namely Blas/Lapack, NetCDF and NCARG, using the {\tt install\_dependencies} script, and to fully build a local IMAS environment using the {\tt install\_imas} script.
+  \item[install\_miniforge]\index{install\_miniforge} This script installs a \SOLPSITER-specific local Conda installation, based on {\tt miniforge}, located in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}} directory. Such installation is required to obtain some external packages needed by the compilation of the code when the local host is {\bf LINUX}, namely Blas/Lapack, NetCDF and NCARG (with {\tt USE\_NCAR}), using the {\tt install\_dependencies} script, and to fully build a local IMAS environment using the {\tt install\_imas} script.
   \item[install\_python]\index{install\_python} This script builds a local \SOLPSITERns-specific Python installation, located in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory, installs into it the external Python modules needed by the \SOLPSITER Python tools, and activates it in the {\tt \$\{SOLPSTOP\}/SETUP/\allowbreak setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.local} file (see Section~\ref{sec:localpython}). It is also run by the {\tt install\_dependencies} script.
   \item[last\_2d]\index{last\_2d} Averaging script for {\tt tracing/*.trc}, {\tt b2time.nc} and {\tt b2tallies.nc} files. Averaging can be perfromed over the last {\tt N} iterations or last {\tt n} seconds. Writes raw output to {\tt last\_2d\_out} and formatted output to {\tt last\_2d\_out\_f}, the latter is governed by the {\tt last\_2d.cmd} file (default example of this file can be found in {\tt \$SOLPSTOP/scripts/commands}). Read the script header for further details.
   \item[lln]\index{lln} Lists the chain of symbolic links leading to a file.
@@ -3798,6 +3799,7 @@ The file can be converted into a PostScript file by means of the command:
 \begin{verbatim}
   ctrans -d ps.mono b2yg.plt > b2yg.ps
 \end{verbatim}
+With the Python graphics of {\tt B2.5} (the default build, see Section~\ref{sec:b2plotpy}), the pages go to {\tt b2yg.pdf} instead (make target of the same name); the {\tt b2yg.plt} file and {\tt ctrans} belong to the NCAR Graphics build ({\tt USE\_NCAR}).
 
 The input file {\tt b2yg.dat} looks like:
 \VerbatimInput[fontsize=\footnotesize]{b2yg.dat}
@@ -3911,6 +3913,7 @@ The files can be converted into PostScript by means of the commands:
   ctrans -d ps.mono b2yi.plt > b2yi.ps
   ctrans -d ps.mono b2yp.plt > b2yp.ps
 \end{verbatim}
+With the Python graphics of {\tt B2.5} (the default build, see Section~\ref{sec:b2plotpy}), the pages go to {\tt b2yi.pdf} and {\tt b2yp.pdf} instead (make targets of the same names); the {\tt b2yi.plt} and {\tt b2yp.plt} files and {\tt ctrans} belong to the NCAR Graphics build ({\tt USE\_NCAR}).
 
 The input file {\tt b2yi.dat} looks like:
 \VerbatimInput[fontsize=\footnotesize]{b2yi.dat}
@@ -4007,6 +4010,7 @@ and an easier-to-read font.\index{ncar.cfg} The file can be converted into a Pos
 \begin{verbatim}
   ctrans -d ps.mono b2yr.plt > b2yr.ps
 \end{verbatim}
+With the Python graphics of {\tt B2.5} (the default build, see Section~\ref{sec:b2plotpy}), the pages go to {\tt b2yr.pdf} instead (make target of the same name); the {\tt b2yr.plt} file and {\tt ctrans} belong to the NCAR Graphics build ({\tt USE\_NCAR}).
 
 The input file for {\tt b2yr} is {\tt b2yr.dat}, and an example is provided below:
 \VerbatimInput[fontsize=\footnotesize]{b2yr.dat}
@@ -4044,6 +4048,7 @@ a PostScript file by means of the command:
 \begin{verbatim}
   ctrans -d ps.mono b2ym.plt > b2ym.ps
 \end{verbatim}
+With the Python graphics of {\tt B2.5} (the default build, see Section~\ref{sec:b2plotpy}), the pages go to {\tt b2ym.pdf} instead (make target of the same name); the {\tt b2ym.plt} file and {\tt ctrans} belong to the NCAR Graphics build ({\tt USE\_NCAR}).
 
 The input file {\tt b2ym.dat} looks like:
 \VerbatimInput[fontsize=\footnotesize]{b2ym.dat}
@@ -4098,6 +4103,7 @@ a PostScript file by means of the command:
 \begin{verbatim}
   ctrans -d ps.mono b2yn.plt > b2yn.ps
 \end{verbatim}
+With the Python graphics of {\tt B2.5} (the default build, see Section~\ref{sec:b2plotpy}), the pages go to {\tt b2yn.pdf} instead (make target of the same name); the {\tt b2yn.plt} file and {\tt ctrans} belong to the NCAR Graphics build ({\tt USE\_NCAR}).
 
 The input file {\tt b2yn.dat} looks like:
 \VerbatimInput[fontsize=\footnotesize]{b2yn.dat}
@@ -4145,6 +4151,7 @@ will produce a {\tt b2yq.plt} file containing a quick display of the
 {\tt B2.5} evolution data, as well as a {\tt b2yq.prt} ASCII file containing
 some additional output.
 The data from {\tt B2.5} is extracted from the {\tt b2ftrace} file.
+With the Python graphics of {\tt B2.5} (the default build, see Section~\ref{sec:b2plotpy}), the pages go to {\tt b2yq.pdf} instead (make target of the same name); the {\tt b2yq.plt} file and {\tt ctrans} belong to the NCAR Graphics build ({\tt USE\_NCAR}).
 
 The input file {\tt b2yq.dat} looks like:
 \VerbatimInput[fontsize=\footnotesize]{b2yq.dat}
@@ -17656,9 +17663,9 @@ For LFS snowflake topologies, face-based regions 15 and 17, the core boundary an
 \section{Introduction}
 
 \btwoplot is designed to take data from {\tt B2}, {\tt B2.5} or {\tt B2.5-Eirene} and plot it
-under interactive control.  It uses {\tt NCAR} and so the user must have
-access to the {\tt NCAR} environment.
-{\tt b2plot.py} (Section~\ref{sec:b2plotpy}) runs the same \btwoplot without {\tt NCAR}.
+under interactive control.  It was written for {\tt NCAR}; by default its
+drawing calls go to the Python graphics (Section~\ref{sec:b2plotpy}), and
+{\tt B2.5} built with {\tt USE\_NCAR} gives the original {\tt NCAR} program.
 Some, but far from all, functionalities
 have been ported so that \btwoplot may also work in the {\tt PLPLOT}
 environment. Preprocessing before compilation with {\tt -DPLPLOT} option is then necessary
@@ -17724,12 +17731,12 @@ no longer needed.
 \section{Environment variables}
 
 \begin{description}
-\item[B2PLOT\_DEV]\index{B2PLOT\_DEV} is used to specify plotting to any combination of {\tt x11}, {\tt ps} or {\tt cgm} (default is {\tt ps}).  Under {\tt tcsh}, use
+\item[B2PLOT\_DEV]\index{B2PLOT\_DEV} is used to specify plotting to any combination of {\tt x11}, {\tt ps} or {\tt cgm} (default is {\tt x11}, set by {\tt setup.csh}; with the Python graphics {\tt x11} gives one window per page and {\tt cgm} needs the NCAR Graphics build, see Section~\ref{sec:b2plotpy}).  Under {\tt tcsh}, use
   \begin{verbatim}
 setenv B2PLOT_DEV 'x11 ps'
   \end{verbatim}
 \item[SOLPS\_TOOLCHAIN\_VERSION]\index{SOLPS\_TOOLCHAIN\_VERSION} Used to specify the compiler toolchain with which the code is built, for HPC environments where several toolchains may co-exist (see ITER {\tt setup.csh} files for an example)
-\item[B2PLOT\_PY\_FIFO]\index{B2PLOT\_PY\_FIFO} set by {\tt b2plot.py} (see \ref{sec:b2plotpy}) to the named pipe on which \btwoplot sends its binary messages (see \ref{sec:b2plotpydata}); without it the commands that only send data do nothing
+\item[B2PLOT\_PY\_FIFO]\index{B2PLOT\_PY\_FIFO} set by the Python graphics (see \ref{sec:b2plotpy}) to the named pipe on which \btwoplot sends its binary messages (see \ref{sec:b2plotpydata}); without it the commands that only send data do nothing
 \item[SOLPSTOP]\index{SOLPSTOP} used to specify the top of the {\tt SOLPS} tree
 \item[SOLPSTOP\_FORCE]\index{SOLPSTOP\_FORCE} used to override the value of {\tt \$SOLPSTOP} to force execution of code executables from a different tree (not defined by default)
 \end{description}
@@ -19302,37 +19309,62 @@ plot zone. If LM = 99 and J \textgreater 0, additional diagnostics are produced 
 If the user wants to use the heat transfer model for the monoblock and/or the reflector plates, then plot zones for the inner/outer target, the reflector plates, and/or the dome must be defined in the DG model, using the labels {\tt trg[i-o]}, {\tt [i-o]rp}, and/or {\tt dome}, respectively. The {\tt wlld\_*.dat} files produced should then be postprocessed by either {\tt b2ymb} (see \ref{sec:b2ymb}), {\tt b2yrp} (\ref{sec:b2yrp}), or {\tt b2ydm} (\ref{sec:b2ydm}).
 
 
-\section{b2plot.py}
-\label{sec:b2plotpy}\index{b2plot.py}
+\section{Python graphics}
+\label{sec:b2plotpy}\index{Python graphics}\index{USE\_NCAR}\index{b2plot\_gui}
 
-{\tt b2plot.py} (started by the script {\tt \$\{SOLPSTOP\}/scripts/b2plot.py})
-is a Python-based front end of \btwoplotns. The Fortran source
-code of \btwoplot stays the only program that reads the run and
-computes the quantities: its executable receives data as binary messages
-to make them available to a Python environment.
-Its executable, {\tt b2pl\_py.exe}, is built with the other B2.5 executables, with or without {\tt NCAR}.
-It needs Python 3.9 or newer with PySide6 (6.4
-or newer), numpy (1.21) and matplotlib (3.8), as installed by the
-{\tt install\_python} script. {\tt b2plot.py --info} prints the versions and the
-build it would use.
+\btwoplot and the B2 post-processors {\tt b2yg}, {\tt b2yi}, {\tt b2ym},
+{\tt b2yn}, {\tt b2yp}, {\tt b2yq} and {\tt b2yr} were written for
+{\tt NCAR}. By default {\tt B2.5} builds them ({\tt b2pl.exe},
+{\tt b2yg.exe}, \ldots) with a replacement of the {\tt NCAR} routines
+that sends every drawing call as a binary message to Python, where
+matplotlib draws the page. The Fortran code stays the only program that
+reads the run and computes the quantities; {\tt NCAR} is not needed.
+
+With {\tt USE\_NCAR} set (any value), {\tt B2.5} builds the original
+{\tt NCAR} programs instead; this needs {\tt NCARG\_ROOT}, otherwise
+{\tt make} stops, and the GUI does not work with them. A change of
+{\tt USE\_NCAR} relinks the programs at the next {\tt make}. The build
+folder holds a stamp file ({\tt .graphics\_python} or
+{\tt .graphics\_ncar}) from which {\tt b2plot}, {\tt b2run} and
+{\tt b2plot\_gui} know which graphics were built. {\tt USE\_NCAR} must be
+set before {\tt setup.csh} is sourced (for instance in
+{\tt \$\{SOLPSTOP\}/SETUP/setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.pre}),
+since the {\bf LINUX} and {\bf DARWIN} setup files define the {\tt NCAR}
+variables and check its libraries only when it is set.
+
+The Python graphics need Python 3.9 or newer with PySide6 (6.4 or newer),
+numpy (1.21) and matplotlib (3.8), as installed by the
+{\tt install\_python} script (Section~\ref{sec:localpython}); the
+programs build without them. {\tt python \$SOLPSTOP/\allowbreak scripts/\allowbreak b2plotpy --info}
+prints the versions and the build that would be used.
 
 \subsection{Command-line use}
 
-With commands on {\tt stdin}, {\tt b2plot.py} is used like \btwoplotns:
+\btwoplot is used as always, with the commands on {\tt stdin}:
 \begin{verbatim}
-echo "phys te surf" | b2plot.py
-b2plot.py < commands -o pages.pdf
+echo "phys te surf" | b2plot
+b2plot < commands
+b2plot
 \end{verbatim}
-The commands go unchanged to \btwoplotns, and every page opens in a
-matplotlib window drawn like the {\tt NCAR} page. Files are written only
-with {\tt -o} ({\tt .pdf} or {\tt .ps} with all pages, numbered
-{\tt .png}, {\tt .svg} or {\tt .eps}).
-{\tt b2plot.py -h} lists all available command-line options.
+Piped or redirected, all the commands go to \btwoplotns; typed at the
+terminal, each line goes at once and the pages are drawn as they grow.
+{\tt B2PLOT\_DEV} chooses the output: with {\tt x11} every page opens in
+a matplotlib window drawn like the {\tt NCAR} page (zoom, pan and save
+from its toolbar), and the windows stay open after {\tt quit} until they
+are closed; with {\tt ps} the pages go to {\tt b2plot.ps} in the run
+directory; {\tt cgm} gives a message, since metafiles need the NCAR
+Graphics build; without a display the windows are skipped.
+
+The Python package can also be run directly,
+{\tt python \$SOLPSTOP/\allowbreak scripts/\allowbreak b2plotpy -o pages.pdf < commands}, which
+runs \btwoplot through {\tt b2plot} and also writes the pages to the
+{\tt -o} file ({\tt .pdf} or {\tt .ps} with all pages, numbered
+{\tt .png}, {\tt .svg} or {\tt .eps}); {\tt -h} lists all its options.
 
 \subsection{The GUI}
 
-Started with {\tt stdin} a terminal ({\tt b2plot.py} in a run directory,
-or {\tt b2plot.py -r <run directory>}), {\tt b2plot.py} opens a window
+{\tt b2plot\_gui}, started in a run directory (options {\tt -s}, {\tt -d}
+and {\tt -h} as for {\tt b2plot}), opens a window
 without any command input: everything is chosen with lists, buttons and
 toggles. The run line shows the run directory, the grid and the species;
 {\tt File} opens another run, reloads the run (after a crash of
@@ -19405,7 +19437,7 @@ Export:
   give one file per page.
 \end{itemize}
 
-{\tt b2plot.py} talks to {\tt b2pl\_py.exe} with the commands of
+The GUI talks to {\tt b2pl.exe} with the commands of
 \ref{sec:b2plotpydata} and ends every request with {\bf sync}
 (\ref{sec:sync}).
 
@@ -21123,7 +21155,7 @@ Prints the catalogue of \btwoplot labels by category (matrix and Eirene
 quantities and functions, wall quantities and functions, target
 functions, parameters, constants): name, number of species columns and
 description. With {\tt B2PLOT\_PY\_FIFO} set (\ref{sec:b2plotpydata}) the
-catalogue is also sent to {\tt b2plot.py}.
+catalogue is also sent to the Python graphics.
 
 \subsubsection{dflt}\index{b2plot, dflt}\label{sec:dflt}
 Restores all the plot settings of the start of \btwoplot (page, plot
@@ -21136,9 +21168,9 @@ writes commands to \btwoplot uses it to know that all commands before it
 are done. With {\tt B2PLOT\_PY\_FIFO} set it also sends the depths of the
 seven stacks and the label of the top of the matrix stack.
 
-\subsection{Data channel to b2plot.py}\label{sec:b2plotpydata}
+\subsection{Data channel to the Python graphics}\label{sec:b2plotpydata}
 
-These commands send data to {\tt b2plot.py} (\ref{sec:b2plotpy}) as
+These commands send data to the \btwoplot GUI (\ref{sec:b2plotpy}) as
 binary messages on the named pipe given by {\tt B2PLOT\_PY\_FIFO}. They
 exist in every \btwoplot executable; without {\tt B2PLOT\_PY\_FIFO} the
 commands that only send data do nothing, while those that drop fields
@@ -21471,7 +21503,7 @@ As {\bf mvframe} for both components of a vector ({\tt fnax} and
 {\tt fnay}, {\tt vxdena} and {\tt vydena}, \ldots), pushed with the
 $y$ component on top; both are pushed or none. For example
 {\tt phys 'fnax' 'fnay' 1 5 5 mvframev guivect} sends the particle flux
-of frame 5 to {\tt b2plot.py}.
+of frame 5 to the GUI.
 
 \subsubsection{$<$sonnetfile$>$ sonn}\index{b2plot, sonn}\label{sec:sonn}
 Reads in a new {\tt Sonnet} geometry file.
