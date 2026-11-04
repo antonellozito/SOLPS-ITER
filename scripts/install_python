@@ -40,7 +40,8 @@ if (! -e "${PY_PREFIX}" ) then   # Check if the local Python installation alread
 
   echo
   echo Local SOLPS-ITER-specific Python installation not found.
-  echo It provides Python ${PYTHON_SERIES} with all the modules needed by the SOLPS-ITER Python tools:
+  echo It provides Python ${PYTHON_SERIES} with all the modules needed by the SOLPS-ITER Python tools,
+  echo the graphics of b2plot and of the B2 post-processors included:
   echo "$PYTHON_MODULES:q"
   echo and will take precedence over any other Python installations already existing on this computer.
   echo -n "Do you want to install a local SOLPS-ITER-specific Python installation? It will be downloaded and locally compiled in SOLPSLIB. (y/n) [y] "

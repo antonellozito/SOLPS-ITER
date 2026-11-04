@@ -97,6 +97,7 @@ if ("$OSTYPE" == "linux") then
 
   if ("$HOST_NAME" == "LINUX") then   # Local machine
 
+    if ( $?USE_NCAR ) then   # miniforge is needed for the NCARG library only
     set CONDA_ROOT = "$SOLPSTOP/lib/${HOST_NAME}.${COMPILER}/miniforge3"
     if (! -d "${CONDA_ROOT}" ) then
       echo
@@ -118,6 +119,7 @@ if ("$OSTYPE" == "linux") then
         sleep 1
       endif
     endif
+    endif
 
   else   # HPC cluster
 
@@ -125,7 +127,7 @@ if ("$OSTYPE" == "linux") then
     if (! -d "${CONDA_ROOT}" ) then
       echo
       echo "Warning: miniforge installation not found."
-      echo "This will be needed to locally, install the Blas/Lapack, NetCDF and NCARG libraries,"
+      echo "This will be needed to locally, install the Blas/Lapack, NetCDF and (with USE_NCAR) NCARG libraries,"
       echo "if any of these is not present in your cluster."
       echo -n "Do you wish to install it? (y/n) [n] "
       set MINIFORGE_INSTALL = $<
@@ -529,6 +531,7 @@ endif
 
 # Install Freetype library
 
+if ( $?USE_NCAR ) then   # needed by NCAR Graphics only
 if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
 
   set pkg_check = `dpkg -l | grep -w libfreetype-dev`
@@ -588,6 +591,7 @@ else if ("$OSTYPE" == "darwin") then
 
   endif
 
+endif
 endif
 
 # Install Ghostscript library
@@ -987,6 +991,7 @@ endif
 
 # Install PNG library
 
+if ( $?USE_NCAR ) then   # needed by NCAR Graphics only
 if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
 
   set pkg_check = `dpkg -l | grep -w libpng-dev`
@@ -1046,6 +1051,7 @@ else if ("$OSTYPE" == "darwin") then
 
   endif
 
+endif
 endif
 
 # Install XPrint library
@@ -1628,6 +1634,7 @@ endif
 
 # Install NCARG/Cairo libraries
 
+if ( $?USE_NCAR ) then   # needed by NCAR Graphics only
 if ("$OSTYPE" == "linux") then
 
   if ("$HOST_NAME" == "LINUX") then   # Local machine
@@ -1778,6 +1785,7 @@ else if ("$OSTYPE" == "darwin") then
 
   endif
 
+endif
 endif
 
 # Clone and compile MSCL library
