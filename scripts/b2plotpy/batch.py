@@ -111,7 +111,7 @@ def _draw(frame, number, fig=None):
 
 def _pyplot():
     """pyplot on QtAgg (PySide6) for the page windows."""
-    os.environ.setdefault("QT_API", "pyside6")
+    os.environ["QT_API"] = "pyside6"
     matplotlib.use("QtAgg")
     import matplotlib.pyplot as plt
     return plt

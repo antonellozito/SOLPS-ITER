@@ -2,7 +2,7 @@
 
 import os
 
-os.environ.setdefault("QT_API", "pyside6")
+os.environ["QT_API"] = "pyside6"
 
 import matplotlib  # noqa: E402
 
