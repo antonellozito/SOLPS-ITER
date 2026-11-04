@@ -63,8 +63,13 @@ def dry_run(args):
     """-n: the make commands of the wrapper, nothing is run."""
     import subprocess
     from b2plotpy import backend
-    cmd = backend.wrapper_command(args.standalone, args.targets,
-                                  args.debugger, dry_run=True)
+    if args.program:
+        cmd = backend.wrapper_command(args.standalone, [args.program],
+                                      args.debugger, dry_run=True,
+                                      tool="b2run")
+    else:
+        cmd = backend.wrapper_command(args.standalone, args.targets,
+                                      args.debugger, dry_run=True)
     return subprocess.call(cmd, cwd=args.rundir)
 
 
@@ -74,7 +79,7 @@ def main(argv=None):
     if args.info:
         return info(args)
     gui = options.gui_mode(args)
-    requirements.check(gui)
+    requirements.check(gui or options.windows(args))
     if args.debugger == "":
         args.debugger = os.environ.get("DBX", "")
         if not args.debugger:
@@ -82,7 +87,8 @@ def main(argv=None):
                                            "is not set"])
     if not args.replay and not args.exe:
         found = requirements.environment_problems(
-            args.standalone, args.debugger is not None, args.targets,
+            args.standalone, args.debugger is not None,
+            [args.program] if args.program else args.targets,
             built=not args.dry_run)
         if found:
             requirements.fail_environment(found)
@@ -95,6 +101,10 @@ def main(argv=None):
         from b2plotpy.gui import app
         return app.main(args)
     from b2plotpy import batch
+    if args.program:
+        return batch.run_program(args)
+    if args.cli and sys.stdin.isatty():
+        return batch.interactive(args)
     return batch.main(args)
 
 

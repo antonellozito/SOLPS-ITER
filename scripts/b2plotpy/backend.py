@@ -17,9 +17,10 @@ from . import protocol
 
 
 def wrapper_command(standalone=False, targets=("b2pl_py",), debugger=None,
-                    dry_run=False):
-    """The scripts/b2plot command that stages and runs the executable."""
-    cmd = [os.path.join(os.environ["SOLPSTOP"], "scripts", "b2plot")]
+                    dry_run=False, tool="b2plot"):
+    """The scripts/b2plot (or b2run) command that stages and runs the
+    executable."""
+    cmd = [os.path.join(os.environ["SOLPSTOP"], "scripts", tool)]
     cmd += ["-n"] if dry_run else []
     cmd += ["-s"] if standalone else []
     cmd += ["-d", debugger] if debugger else []
@@ -27,9 +28,13 @@ def wrapper_command(standalone=False, targets=("b2pl_py",), debugger=None,
 
 
 def command(args):
-    """Child command for the b2plot.py options (--exe or the wrapper)."""
+    """Child command for the b2plot.py options (--exe, or the wrapper:
+    b2run for a B2 post-processor, as it is run without b2plot.py)."""
     if args.exe:
         return [os.path.abspath(args.exe)]
+    if getattr(args, "program", None):
+        return wrapper_command(args.standalone, [args.program],
+                               args.debugger, tool="b2run")
     return wrapper_command(args.standalone, args.targets, args.debugger)
 
 

@@ -38,6 +38,8 @@ class Fill:
     tagindex: int = 0
     tagvalue: float = 0.0
     pattern: int = 0            # Softfill TY: 0 solid, else line pattern
+    style: int = 1              # GKS interior style: 0 hollow, 1 solid,
+    hatch: int = 0              # 2 and 3 hatched with this style index
 
 
 @dataclass
@@ -60,6 +62,7 @@ class Text:
     ci: int
     fc: str
     bold: bool
+    va: str = "center"          # GKS text sits on its baseline
 
 
 @dataclass
@@ -92,6 +95,7 @@ class Panel:
     lf: int
     items: list = field(default_factory=list)
     axes: dict = None
+    grids: list = field(default_factory=list)   # GRIDAL grid lines
     meta: dict = None
 
 
@@ -135,6 +139,12 @@ class Scene:
         self.ln = 1
         self.dash = ("$", 1)
         self.faci = 1
+        self.fais = 1
+        self.fasi = 1
+        self.txci = 1
+        self.chh = 0.01             # GKS character height and up vector
+        self.chup = (0.0, 1.0)
+        self.ticks = None
         self.pmci = 1
         self.mk = 3
         self.mksc = 1.0
@@ -245,6 +255,24 @@ class Scene:
     def _on_faci(self, m):
         self.faci = m.ci
 
+    def _on_fais(self, m):
+        self.fais = m.ints
+
+    def _on_fasi(self, m):
+        self.fasi = m.styli
+
+    def _on_txci(self, m):
+        self.txci = m.ci
+
+    def _on_chattr(self, m):
+        if m.which == 1:
+            self.chh = m.a
+        elif m.which == 4 and (m.a or m.b):
+            self.chup = (m.a, m.b)
+
+    def _on_tick4(self, m):
+        self.ticks = (m.lmjx, m.lmnx, m.lmjy, m.lmny)
+
     def _on_pmci(self, m):
         self.pmci = m.ci
 
@@ -294,8 +322,10 @@ class Scene:
 
     def _on_fill(self, m):
         ci = self.faci if m.ci < 0 else m.ci
+        style = self.fais if m.ci < 0 else 1
         self._add(Fill(m.x, m.y, ci, m.tagkind, m.tagindex, m.tagvalue,
-                       self.sfset.get("TY", 0)))
+                       self.sfset.get("TY", 0), style,
+                       self.fasi if style in (2, 3) else 0))
 
     def _on_markers(self, m):
         self._add(Markers(m.x, m.y, self.pmci, self.mk, self.mksc))
@@ -305,14 +335,30 @@ class Scene:
                        self.fc, self.font == -30 or self.pc_font == 30))
 
     def _on_gkstext(self, m):
-        self._add(Text(m.x, m.y, 0.01, 0.0, -1.0, m.chrs, self.plci, "",
-                       self.font == -30))
+        # GKS height (capitals, world units) as the Plotchar width of the
+        # renderer, angle from the character up vector
+        p = self.panel
+        scale = 1.0
+        if p is not None and p.lf in (1, 3) and p.window[3] != p.window[2]:
+            scale = (p.viewport[3] - p.viewport[2]) / abs(p.window[3]
+                                                          - p.window[2])
+        size = self.chh * scale / (0.7 * 1.83)
+        angd = float(np.degrees(np.arctan2(-self.chup[0], self.chup[1])))
+        self._add(Text(m.x, m.y, size, angd, -1.0, m.chrs, self.txci, "",
+                       self.font == -30, "baseline"))
 
     def _on_axes(self, m):
         if self.panel is None:
             return
-        self.panel.axes = dict(m.fields, gaset=dict(self.gaset),
-                               ci=self.plci)
+        a = dict(m.fields, gaset=dict(self.gaset), ci=self.plci,
+                 ticks=self.ticks)
+        # IGPH: 4*(x code)+(y code), 0 grid, 1 perimeter, 2 axis; grid
+        # lines in the current line style, over a frame drawn before
+        if m.igph // 4 == 0 or m.igph % 4 == 0:
+            self.panel.grids.append(dict(a, style=self._style()))
+            if self.panel.axes is not None:
+                return
+        self.panel.axes = a
 
     def _on_colorbar(self, m):
         self.current.colorbars.append(ColorBar(m, self.plci,
@@ -342,6 +388,10 @@ class Scene:
 
     def _on_contour_lines(self, m):
         self._contour("lines", m)
+
+    def _on_contour_lines_unmasked(self, m):
+        data = self.mesh if m.source == 1 else self.rect
+        self._add(Contour("lines", m, data, []))
 
     def _on_contour_info(self, m):
         self._contour("info", m)
