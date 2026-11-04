@@ -1,4 +1,5 @@
-"""b2plot.py: Qt/matplotlib front end of the SOLPS-ITER b2plot Fortran code."""
+"""Python graphics of b2plot: Qt/matplotlib front end of the SOLPS-ITER
+b2plot Fortran code and of the B2 post-processors."""
 
 __version__ = "0.1.0"
 

@@ -1,0 +1,58 @@
+#! /bin/tcsh -f
+
+# Opens the b2plot GUI on the run directory: needs a B2.5 build with the
+# Python graphics (the default, not USE_NCAR) and the SOLPS-ITER Python
+
+setenv SOLPSTOP "`determine_SOLPSTOP`"
+if ($SOLPSTOP == "") then
+  setenv SOLPSTOP "`echo $PWD | sed 's:/runs/.*::'`"
+endif
+
+set opts=()
+
+argloop:
+  if ("X${1}X" == "X-hX") then
+    echo 'Usage: b2plot_gui [OPTIONS]'
+    echo 'Opens the b2plot GUI on the run directory'
+    echo ' '
+    echo 'Optional arguments:'
+    echo ' -d <debugger>: run b2pl.exe with debugger <debugger> (or with $DBX if <debugger> not specified).'
+    echo ' -h: Prints this message.'
+    echo ' -s: request a stand-alone run (without Eirene).'
+    echo ' '
+    echo 'The GUI needs a B2.5 build with the Python graphics (the default, not'
+    echo 'USE_NCAR) and the SOLPS-ITER Python made by install_python.'
+    exit
+  endif
+  if ("X${1}X" == "X-sX") then
+    shift
+    set opts=($opts:q -s)
+    goto argloop
+  endif
+  if ("X${1}X" == "X-dX") then
+    shift
+    set next=`printf '%s' "$1" | cut -c1`
+    if ("X${1}X" == "XX" || "X${next}X" == "X-X") then
+      set opts=($opts:q -d)
+    else
+      set opts=($opts:q -d "$1")
+      shift
+    endif
+    goto argloop
+  endif
+  if ($#argv != 0) then
+    echo "b2plot_gui: unknown argument $1 (b2plot_gui -h lists the options)"
+    exit 1
+  endif
+
+if ($?PYTHON) then
+  set py="$PYTHON"
+else
+  set py=python3
+endif
+$py -c "import sys" >& /dev/null
+if ($status != 0) then
+  echo "b2plot_gui: $py not found: the b2plot GUI needs the SOLPS-ITER Python, see install_python"
+  exit 2
+endif
+exec $py $SOLPSTOP/scripts/b2plotpy --gui $opts:q

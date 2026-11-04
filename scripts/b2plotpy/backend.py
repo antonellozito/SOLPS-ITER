@@ -1,4 +1,5 @@
-"""Run b2pl_py.exe as a child process with a FIFO for its messages.
+"""Run b2pl.exe (or a B2 post-processor) as a child process with a FIFO
+for its messages.
 
 Python never calls Fortran routines: b2plot command text goes to the
 child's stdin, binary messages come back on the FIFO named by
@@ -7,16 +8,17 @@ B2PLOT_PY_FIFO, console text on stdout.
 
 import os
 import queue
+import shlex
 import shutil
 import signal
 import subprocess
 import tempfile
 import threading
 
-from . import protocol
+from . import options, protocol
 
 
-def wrapper_command(standalone=False, targets=("b2pl_py",), debugger=None,
+def wrapper_command(standalone=False, targets=("b2pl",), debugger=None,
                     dry_run=False, tool="b2plot"):
     """The scripts/b2plot (or b2run) command that stages and runs the
     executable."""
@@ -28,14 +30,16 @@ def wrapper_command(standalone=False, targets=("b2pl_py",), debugger=None,
 
 
 def command(args):
-    """Child command for the b2plot.py options (--exe, or the wrapper:
-    b2run for a B2 post-processor, as it is run without b2plot.py)."""
+    """Child command for the options: --exe, the line of --exec (through
+    bash, as in the run targets, for time and the debuggers), or the
+    wrapper (b2run for a B2 post-processor, b2plot for b2pl)."""
     if args.exe:
         return [os.path.abspath(args.exe)]
-    if getattr(args, "program", None):
-        return wrapper_command(args.standalone, [args.program],
-                               args.debugger, tool="b2run")
-    return wrapper_command(args.standalone, args.targets, args.debugger)
+    if args.exec:
+        return ["/bin/bash", "-c", shlex.join(args.exec)]
+    prog = options.program(args)
+    return wrapper_command(args.standalone, [prog], args.debugger,
+                           tool="b2plot" if prog == "b2pl" else "b2run")
 
 
 class Backend:
@@ -54,7 +58,7 @@ class Backend:
 
     def start(self):
         self.tmp = tempfile.mkdtemp(prefix="b2plotpy-")
-        self.fifo = os.path.join(self.tmp, "b2pl_py.fifo")
+        self.fifo = os.path.join(self.tmp, "b2plot.fifo")
         os.mkfifo(self.fifo, 0o600)
         # the FIFO reader must wait for the writer before the child starts
         self._thread(self._read_fifo)

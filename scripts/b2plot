@@ -37,8 +37,9 @@ argloop:
     echo 'You can choose the type of output produced with the B2PLOT_DEV environment variable:'
     echo ' x11: Interactive window'
     echo ' ps : PostScript file b2plot.ps'
-    echo ' cgm: NCAR gmeta file'
+    echo ' cgm: NCAR gmeta file (B2.5 built with USE_NCAR only)'
     echo 'or any combination of the above.'
+    echo 'b2plot_gui opens the b2plot GUI (B2.5 built without USE_NCAR).'
     exit
   endif
   if ("X${1}X" == "X-nX") then

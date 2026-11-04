@@ -1,4 +1,5 @@
-"""Interpreter and module check of b2plot.py (no fallbacks).
+"""Interpreter and module check of the Python graphics of b2plot (no
+fallbacks).
 
 Runs on any Python 3 (no f-strings, standard library only), so that the
 error message is printed even by an old interpreter. The module list must
@@ -11,6 +12,9 @@ import sys
 
 REQUIRED_PYTHON = (3, 9)
 REQUIRED = [("PySide6", "6.4"), ("numpy", "1.21"), ("matplotlib", "3.8")]
+
+# Name in messages, set from the command line (options.name)
+NAME = "b2plot"
 
 
 def _tuple(version):
@@ -68,12 +72,12 @@ def fail(found):
     v = sys.version_info
     need = ", ".join("%s >= %s" % r for r in REQUIRED)
     lines = [
-        "b2plot.py: the Python of this SOLPS-ITER session cannot run "
-        "b2plot.py.",
+        "%s: the Python of this SOLPS-ITER session cannot run the Python "
+        "graphics of b2plot." % NAME,
         "  Interpreter: %s (Python %d.%d.%d)" % (sys.executable, v[0], v[1],
                                                  v[2]),
         "  Missing or too old: " + "; ".join(found),
-        "b2plot.py needs Python >= %d.%d with: %s"
+        "The Python graphics of b2plot need Python >= %d.%d with: %s"
         % (REQUIRED_PYTHON + (need,)),
     ]
     local = os.path.join(os.environ.get("SOLPSTOP", ""), "lib",
@@ -95,7 +99,7 @@ def fail(found):
                   "  2. close the shell, open a new one and source setup.csh "
                   "again."]
     lines.append("See the SOLPS-ITER manual, chapter \"b2plot manual\", "
-                 "section \"b2plot.py\".")
+                 "section \"Python graphics\".")
     sys.stderr.write("\n".join(lines) + "\n")
     sys.exit(2)
 
@@ -125,26 +129,47 @@ def build_dir(standalone, debug):
                                         env.get("COMPILER", ""), ext))
 
 
-def environment_problems(standalone, debug, targets, built=True):
-    """SOLPS environment and executables needed by scripts/b2plot."""
+def graphics(build):
+    """Graphics of a B2.5 build from its stamp file (modules/B2.5/Makefile):
+    "python", "ncar" or None (not built since the stamp exists)."""
+    for kind in ("python", "ncar"):
+        if os.path.isfile(os.path.join(build, ".graphics_" + kind)):
+            return kind
+    return None
+
+
+def environment_problems(standalone, debug, programs, built=True,
+                         tool="b2plot"):
+    """SOLPS environment, wrapper script and Python graphics executables
+    needed to run the programs through scripts/b2plot or scripts/b2run."""
     missing = [v for v in ("SOLPSTOP", "HOST_NAME", "COMPILER", "MAKE")
                if not os.environ.get(v)]
     if missing:
         return [", ".join(missing) + " not set: source setup.csh first"]
     found = []
-    wrapper = os.path.join(os.environ["SOLPSTOP"], "scripts", "b2plot")
+    wrapper = os.path.join(os.environ["SOLPSTOP"], "scripts", tool)
     if not os.access(wrapper, os.X_OK):
         found.append(wrapper + " not found")
+    if not built:
+        return found
     build = build_dir(standalone, debug)
-    for target in targets if built else []:
-        exe = os.path.join(build, target + ".exe")
+    kind = graphics(build)
+    if kind == "ncar":
+        return found + ["%s was built with NCAR Graphics (USE_NCAR): the "
+                        "Python graphics need a build without USE_NCAR"
+                        % build]
+    for prog in programs:
+        exe = os.path.join(build, prog + ".exe")
         if not os.path.isfile(exe):
             found.append("%s.exe not built: run make in modules/B2.5 "
-                         "(no %s)" % (target, exe))
+                         "(no %s)" % (prog, exe))
+    if kind is None and not found:
+        found.append("%s has no Python graphics yet: run make in "
+                     "modules/B2.5" % build)
     return found
 
 
 def fail_environment(found):
     for line in found:
-        sys.stderr.write("b2plot.py: " + line + "\n")
+        sys.stderr.write(NAME + ": " + line + "\n")
     sys.exit(2)

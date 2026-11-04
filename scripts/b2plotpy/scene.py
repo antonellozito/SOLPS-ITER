@@ -1,7 +1,7 @@
 """Scene model: rebuild NCAR frames, panels and primitives from messages.
 
 The Scene is a small GKS-like state machine fed with the decoded messages
-of b2pl_py.exe (protocol.py). Completed frames are kept in Scene.frames;
+of b2pl.exe (protocol.py). Completed frames are kept in Scene.frames;
 the frame being drawn is Scene.current.
 """
 
