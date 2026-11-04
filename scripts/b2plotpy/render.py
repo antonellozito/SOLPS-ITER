@@ -15,7 +15,8 @@ from matplotlib.figure import Figure
 from matplotlib.patches import PathPatch, Rectangle
 from matplotlib.path import Path
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.ticker import FixedFormatter, FixedLocator, NullLocator
+from matplotlib.ticker import (FixedFormatter, FixedLocator,
+                               NullFormatter, NullLocator)
 
 from . import labels
 from .scene import Contour, Fill, Image, Markers, Polyline, Text
@@ -31,14 +32,23 @@ LINE_WIDTH = 0.6
 
 FONT = {"family": "serif"}
 MARKERS = {1: ".", 2: "+", 3: "*", 4: "o", 5: "x"}
-LINESTYLES = {1: "-", 2: "--", 3: ":", 4: "-."}
+LINESTYLES = {1: "-", 2: (0, (13.0, 7.0)), 3: ":", 4: "-."}
 # Line patterns of the colour indices in black and white (Softfill TY)
 HATCHES = ["-", "|", "/", "\\", "+", "x", "--", "||", "//", "\\\\",
            "++", "xx"]
+# GKS hatch style indices 1 to 6 of NCAR (interior styles 2 and 3)
+GKS_HATCHES = {1: "-", 2: "|", 3: "/", 4: "\\", 5: "+", 6: "x"}
 
 
 def _rgb(colors, ci):
     return colors.get(ci, (0.0, 0.0, 0.0))
+
+
+def _decade(v):
+    """A single-precision window limit that is a power of ten within 1e-6
+    in log10, as that power (its decade tick stays inside the view)."""
+    e = np.log10(v)
+    return 10.0 ** round(e) if abs(e - round(e)) < 1e-6 else v
 
 
 def fortran_format(fmt):
@@ -130,14 +140,31 @@ class Renderer:
         vl, vr, vb, vt = panel.viewport
         wl, wr, wb, wt = panel.window
         ax = self._add_axes(vl, vr, vb, vt)
+        # a log axis over a window that is not positive, or a window of
+        # zero size, gives an empty frame (as in NCAR)
+        self.bad_log = set()
         if panel.lf in (3, 4):
-            ax.set_xscale("log")
+            if wl > 0 and wr > 0:
+                ax.set_xscale("log")
+                wl, wr = _decade(wl), _decade(wr)
+            else:
+                self.bad_log.add("x")
         if panel.lf in (2, 4):
-            ax.set_yscale("log")
-        ax.set_xlim(wl, wr)
-        ax.set_ylim(wb, wt)
+            if wb > 0 and wt > 0:
+                ax.set_yscale("log")
+                wb, wt = _decade(wb), _decade(wt)
+            else:
+                self.bad_log.add("y")
+        if wl == wr:
+            self.bad_log.add("x")
+        if wb == wt:
+            self.bad_log.add("y")
+        if wl != wr:
+            ax.set_xlim(wl, wr)
+        if wb != wt:
+            ax.set_ylim(wb, wt)
         self.ax, self.panel = ax, panel
-        items = panel.items
+        items = [] if (wl == wr or wb == wt) else panel.items
         i = 0
         while i < len(items):
             item = items[i]
@@ -164,9 +191,22 @@ class Renderer:
             self._axes(panel.axes)
         else:
             ax.set_axis_off()
+        for g in panel.grids:
+            self._grid_lines(g)
 
     # -------------------------------------------------------- primitives
     def _fills(self, fills):
+        gks = [f for f in fills if f.style != 1]
+        fills = [f for f in fills if f.style == 1]
+        for key in sorted({(f.style, f.ci, f.hatch) for f in gks}):
+            style, ci, hatch = key
+            verts = [np.column_stack((f.x, f.y)) for f in gks
+                     if (f.style, f.ci, f.hatch) == key]
+            color = _rgb(self.colors, ci)
+            self.ax.add_collection(PolyCollection(
+                verts, facecolors="none", edgecolors=color,
+                linewidths=LINE_WIDTH if style == 0 else 0.0,
+                hatch=None if style == 0 else GKS_HATCHES.get(hatch, "/")))
         solid = [f for f in fills if not f.pattern]
         if solid:
             verts = [np.column_stack((f.x, f.y)) for f in solid]
@@ -219,15 +259,19 @@ class Renderer:
                          markersize=max(m.scale * LINE_WIDTH, 0.1),
                          clip_on=True)
             return
+        # the GKS dot (type 1) is the smallest dot, whatever the scale
+        size = 1.5 if m.mtype == 1 else 4 * m.scale
         self.ax.plot(m.x, m.y, ls="none", marker=MARKERS.get(m.mtype, "*"),
-                     color=_rgb(self.colors, m.ci), markersize=4 * m.scale,
+                     color=_rgb(self.colors, m.ci), markersize=size,
                      clip_on=True)
 
     def _text(self, t):
         ha = "left" if t.cntr <= -0.5 else ("right" if t.cntr >= 0.5
                                             else "center")
         self.ax.text(t.x, t.y, labels.to_mathtext(t.text, t.fc),
-                     rotation=t.angd, ha=ha, va="center", clip_on=False,
+                     rotation=t.angd, ha=ha, va=t.va, clip_on=False,
+                     rotation_mode="anchor" if t.va == "baseline"
+                     else "default",
                      color=_rgb(self.colors, t.ci),
                      fontsize=self._font_pt(t.size),
                      fontweight="bold" if t.bold else "normal", **FONT)
@@ -384,16 +428,21 @@ class Renderer:
             spine.set_linewidth(width)
             spine.set_color(_rgb(self.colors, frame_ci))
         unit = self.ndc_pt / PLOTTER_UNITS
+        # TICK4 lengths in plotter units, negative ones pointing outwards
+        ticks = a.get("ticks") or (16, 8, 16, 8)
         # LABMOD: IYDC is the gap below the grid for X labels, IXDC the gap
         # left of the grid for Y labels
-        for axis, mjr, mnr, lab, fmt, isz, dec in (
+        for axis, mjr, mnr, lab, fmt, isz, dec, lmj, lmn in (
                 (ax.xaxis, a["mjrx"], a["mnrx"], a["ixlb"], a["fmtx"],
-                 a["iszx"], a["iydc"]),
+                 a["iszx"], a["iydc"], ticks[0], ticks[1]),
                 (ax.yaxis, a["mjry"], a["mnry"], a["iylb"], a["fmty"],
-                 a["iszy"], a["ixdc"])):
+                 a["iszy"], a["ixdc"], ticks[2], ticks[3])):
             lo, hi = (ax.get_xlim() if axis is ax.xaxis else ax.get_ylim())
-            if axis.get_scale() == "log" and lo > 0 and hi > lo:
-                self._log_ticks(axis, lo, hi, fmt, lab, isz * unit)
+            if ("x" if axis is ax.xaxis else "y") in self.bad_log:
+                axis.set_major_locator(NullLocator())
+                axis.set_minor_locator(NullLocator())
+            elif axis.get_scale() == "log" and lo > 0 and hi > lo:
+                self._log_ticks(axis, lo, hi, fmt, lab, isz * unit, mnr)
             elif axis.get_scale() == "linear" and mjr > 0:
                 major = np.linspace(lo, hi, mjr + 1)
                 axis.set_major_locator(FixedLocator(major))
@@ -406,30 +455,43 @@ class Renderer:
                 axis.set_ticklabels([f(v) for v in major] if lab > 0
                                     else [])
             size = max(isz, 4) * unit * TEXT_SCALE
-            axis.set_tick_params(which="major", direction="in",
-                                 length=16 * unit, width=width,
+            # LABMOD gaps count from the grid edge, also past outward ticks
+            if lmj < 0:
+                dec = max(dec - abs(lmj), 0)
+            axis.set_tick_params(which="major",
+                                 direction="in" if lmj >= 0 else "out",
+                                 length=abs(lmj) * unit, width=width,
                                  labelsize=size, pad=dec * unit,
                                  color=_rgb(self.colors, frame_ci),
                                  labelcolor=_rgb(self.colors, label_ci))
-            axis.set_tick_params(which="minor", direction="in",
-                                 length=8 * unit, width=width,
+            axis.set_tick_params(which="minor",
+                                 direction="in" if lmn >= 0 else "out",
+                                 length=abs(lmn) * unit, width=width,
                                  color=_rgb(self.colors, frame_ci))
             for t in axis.get_ticklabels():
                 t.set_fontfamily(FONT["family"])
         ax.tick_params(which="both", top=True, right=True, labeltop=False,
                        labelright=False)
 
-    def _log_ticks(self, axis, lo, hi, fmt, lab, size):
-        """NCAR log axis: a major tick and a label in the GRIDAL format at
-        every decade, minor ticks 2 to 9; labels thinned only where they
-        would overlap."""
-        e0, e1 = int(np.ceil(np.log10(lo) - 1e-9)), int(np.floor(
-            np.log10(hi) + 1e-9))
+    @staticmethod
+    def _log_positions(lo, hi, mnr):
+        """Decades and, unless MNR exceeds 10, the values 2 to 9 of each."""
+        # the window comes in single precision: decades within 1e-6
+        e0, e1 = int(np.ceil(np.log10(lo) - 1e-6)), int(np.floor(
+            np.log10(hi) + 1e-6))
         major = 10.0 ** np.arange(e0, e1 + 1)
         minor = [m * 10.0 ** e for e in range(e0 - 1, e1 + 1)
                  for m in range(2, 10) if lo <= m * 10.0 ** e <= hi]
+        return major, (minor if mnr <= 10 else [])
+
+    def _log_ticks(self, axis, lo, hi, fmt, lab, size, mnr=10):
+        """NCAR log axis: a major tick and a label in the GRIDAL format at
+        every decade, minor ticks 2 to 9; labels thinned only where they
+        would overlap."""
+        major, minor = self._log_positions(lo, hi, mnr)
         axis.set_major_locator(FixedLocator(major))
         axis.set_minor_locator(FixedLocator(minor))
+        axis.set_minor_formatter(NullFormatter())
         f = fortran_format(fmt)
         text = [f(v) for v in major]
         box = self.ax.get_position()
@@ -444,6 +506,39 @@ class Renderer:
         axis.set_major_formatter(FixedFormatter(
             [t if lab > 0 and (k % step == 0) else ""
              for k, t in enumerate(text)]))
+
+    def _grid_lines(self, g):
+        """GRIDAL grid lines at the major and minor ticks of the axes with
+        code 0 in IGPH, in the line style current at the call."""
+        ax = self.ax
+        segs = []
+        for code, mjr, mnr, vertical in ((g["igph"] // 4, g["mjrx"],
+                                          g["mnrx"], True),
+                                         (g["igph"] % 4, g["mjry"],
+                                          g["mnry"], False)):
+            if code != 0 or ("x" if vertical else "y") in self.bad_log:
+                continue
+            axis = ax.xaxis if vertical else ax.yaxis
+            lo, hi = ax.get_xlim() if vertical else ax.get_ylim()
+            if axis.get_scale() == "log" and lo > 0 and hi > lo:
+                major, minor = self._log_positions(lo, hi, mnr)
+                values = list(major) + list(minor)
+            elif mjr > 0:
+                values = list(np.linspace(lo, hi, mjr * max(mnr, 1) + 1))
+            else:
+                continue
+            other = ax.get_ylim() if vertical else ax.get_xlim()
+            for v in values:
+                segs.append([(v, other[0]), (v, other[1])] if vertical
+                            else [(other[0], v), (other[1], v)])
+        if not segs:
+            return
+        style = g["style"]
+        width = style.width if style.width > 0 else 1.0
+        ax.add_collection(LineCollection(
+            segs, colors=[_rgb(self.colors, style.ci)],
+            linewidths=width * LINE_WIDTH,
+            linestyles=[self._dashes(style)], capstyle="butt"))
 
     # ---------------------------------------------------------- colour bar
     def _colorbar(self, bar):

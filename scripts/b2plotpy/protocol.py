@@ -50,6 +50,9 @@ SPECS = {
     32: ("GASET", "pname:str kind:i4 ival:i4 rval:r4"),
     33: ("SFSET", "pname:str ival:i4"),
     34: ("CHATTR", "which:i4 a:r4 b:r4"),
+    35: ("TXCI", "ci:i4"),
+    36: ("FASI", "styli:i4"),
+    37: ("TICK4", "lmjx:i4 lmnx:i4 lmjy:i4 lmny:i4"),
     40: ("LINE", "xa:r4 ya:r4 xb:r4 yb:r4"),
     41: ("POLYLINE", "n:i4 x:r4[n] y:r4[n]"),
     42: ("LASTD", ""),
@@ -80,6 +83,10 @@ SPECS = {
     55: ("CONTOUR_INFO", "source:i4 ilt:str ilx:r4 ily:r4 ilp:i4 llp:i4 "
                          "llo:i4"),
     56: ("AREA_INIT", ""),
+    57: ("CONTOUR_LINES_UNMASKED", "source:i4 ncl:i4 clv:r4[ncl] "
+                                   "clu:i4[ncl] cll:r4[ncl] plci:i4 llp:i4 "
+                                   "llo:i4 xc1:r4 xcm:r4 yc1:r4 ycn:r4 "
+                                   "spv:r4 map:i4"),
     60: ("SEG_OPEN", "ib:i4"),
     61: ("SEG_CLOSE", ""),
     62: ("SEG_INSERT", "ib:i4"),

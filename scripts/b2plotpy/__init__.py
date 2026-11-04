@@ -3,4 +3,4 @@
 __version__ = "0.1.0"
 
 # Must match b2py_protocol_version in modules/B2.5/src/modules/b2mod_b2plot_py.F
-PROTOCOL_VERSION = 6
+PROTOCOL_VERSION = 7
