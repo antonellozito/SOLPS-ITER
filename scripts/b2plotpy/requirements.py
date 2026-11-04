@@ -30,6 +30,43 @@ FOREIGN = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE",
 SAVED = "B2PLOT_PY_ENV"
 STAGE = "B2PLOT_PY_REEXEC"
 
+# Qt platforms without windows, to which Qt falls back when it cannot use
+# the display
+WINDOWLESS = ("offscreen", "minimal", "minimalegl", "linuxfb", "eglfs",
+              "vkkhrdisplay")
+_PROBE = ("from PySide6.QtWidgets import QApplication; "
+          "a = QApplication(['b2plot']); "
+          "print('B2PLOT_QT_PLATFORM=' + a.platformName())")
+
+# Linux: system libraries for the Qt windows that the system lacks, put
+# there by install_python (provide_qt_libraries)
+QT_LIBS = os.path.join(sys.prefix, "qtlibs", "lib")
+
+# conda-forge package of each system library the Qt windows may need,
+# by start of the library name (more specific names first)
+CONDA_PACKAGES = (
+    ("libxcb-cursor.", "xcb-util-cursor"), ("libxcb-image.", "xcb-util-image"),
+    ("libxcb-keysyms.", "xcb-util-keysyms"),
+    ("libxcb-render-util.", "xcb-util-renderutil"),
+    ("libxcb-icccm.", "xcb-util-wm"), ("libxcb-ewmh.", "xcb-util-wm"),
+    ("libxcb-util.", "xcb-util"), ("libxcb", "libxcb"),
+    ("libxkbcommon", "libxkbcommon"), ("libX11", "xorg-libx11"),
+    ("libXau.", "xorg-libxau"), ("libXdmcp.", "xorg-libxdmcp"),
+    ("libXext.", "xorg-libxext"), ("libXrender.", "xorg-libxrender"),
+    ("libSM.", "xorg-libsm"), ("libICE.", "xorg-libice"),
+    ("libEGL.", "libegl"), ("libGLX.", "libglx"), ("libGLdispatch.", "libglvnd"),
+    ("libOpenGL.", "libopengl"), ("libGL.", "libgl"),
+    ("libfontconfig.", "fontconfig"), ("libfreetype.", "freetype"),
+    ("libdbus-1.", "dbus"), ("libglib-2.0.", "libglib"),
+    ("libgthread-2.0.", "libglib"), ("libpng16.", "libpng"),
+    ("libz.", "libzlib"), ("libzstd.", "zstd"), ("libexpat.", "libexpat"),
+    ("libbz2.", "bzip2"), ("liblzma.", "liblzma"), ("libuuid.", "libuuid"),
+    ("libpcre2-8.", "pcre2"), ("libbrotli", "brotli"),
+    ("libstdc++.", "libstdcxx"), ("libgcc_s.", "libgcc"))
+MICROMAMBA = ("https://micro.mamba.pm/api/micromamba/%s/latest",
+              "https://github.com/mamba-org/micromamba-releases/releases/"
+              "latest/download/micromamba-%s")
+
 
 def _tuple(version):
     out = []
@@ -71,7 +108,8 @@ def _other_python_lib(folder):
 def _library_path(path):
     """LD_LIBRARY_PATH for the Python graphics on Linux: the libraries of
     PySide6 first, since LD_LIBRARY_PATH comes before the RUNPATH of its
-    wheel, and without the library folders of other Python installations."""
+    wheel, then the system libraries of provide_qt_libraries, and without the
+    library folders of other Python installations."""
     first = []
     try:
         import importlib.util
@@ -82,7 +120,7 @@ def _library_path(path):
                 first += [os.path.join(root, d) if d else root for d in subs]
     except Exception:
         pass
-    first = [d for d in first if os.path.isdir(d)]
+    first = [d for d in first + [QT_LIBS] if os.path.isdir(d)]
     rest = [d for d in path.split(os.pathsep)
             if d and d not in first and not _other_python_lib(d)]
     return os.pathsep.join(first + rest)
@@ -147,6 +185,8 @@ def problems(gui):
     import importlib
     import importlib.metadata
     for name, minimum in REQUIRED:
+        if name == "PySide6" and not gui:
+            continue   # Qt only for windows: files need numpy and matplotlib
         try:
             version = importlib.metadata.version(name)
             importlib.import_module(name)
@@ -162,7 +202,194 @@ def problems(gui):
             import matplotlib.backends.backend_qtagg  # noqa: F401
         except Exception as err:
             found.append("Qt for matplotlib (" + str(err) + ")")
+        else:
+            problem = window_problem()
+            if problem:
+                found.append("Qt for matplotlib (" + problem + ")")
     return found
+
+
+def missing_qt_libraries(library_path=None):
+    """System libraries that the Qt of PySide6 needs for windows and that
+    the library loader cannot find (Linux, from ldd, with library_path as
+    LD_LIBRARY_PATH; the current one if None)."""
+    if not sys.platform.startswith("linux") or shutil.which("ldd") is None:
+        return []
+    import importlib.util
+    import subprocess
+    try:
+        spec = importlib.util.find_spec("PySide6")
+        root = os.path.join(list(spec.submodule_search_locations)[0], "Qt")
+    except Exception:
+        return []
+    env = dict(os.environ)
+    if library_path is not None:
+        env["LD_LIBRARY_PATH"] = library_path
+    missing = []
+    for pattern in ("plugins/platforms/libqxcb.so", "lib/libQt6XcbQpa.so.*",
+                    "lib/libQt6Gui.so.*", "lib/libQt6Widgets.so.*"):
+        for path in glob.glob(os.path.join(root, pattern)):
+            try:
+                out = subprocess.run(["ldd", path], stdout=subprocess.PIPE,
+                                     stderr=subprocess.DEVNULL, env=env,
+                                     universal_newlines=True,
+                                     timeout=60).stdout
+            except Exception:
+                continue
+            for line in out.splitlines():
+                if "not found" in line and line.split()[0] not in missing:
+                    missing.append(line.split()[0])
+    return missing
+
+
+def _conda_package(name):
+    for start, package in CONDA_PACKAGES:
+        if name.startswith(start):
+            return package
+    return None
+
+
+def _micromamba(folder):
+    """A private micromamba (one static binary) in folder/bin, downloaded
+    from conda-forge for this machine; None if not possible."""
+    import platform
+    import tarfile
+    exe = os.path.join(folder, "bin", "micromamba")
+    if os.access(exe, os.X_OK):
+        return exe
+    arch = {"x86_64": "linux-64", "aarch64": "linux-aarch64",
+            "arm64": "linux-aarch64", "ppc64le": "linux-ppc64le"}.get(
+                platform.machine())
+    if arch is None:
+        print("No prebuilt libraries for the machine type " + platform.machine())
+        return None
+    os.makedirs(os.path.dirname(exe), exist_ok=True)
+    archive = os.path.join(folder, "micromamba.download")
+    for url in MICROMAMBA:
+        if _download(url % arch, archive):
+            try:
+                if tarfile.is_tarfile(archive):
+                    with tarfile.open(archive, "r:bz2") as tar:
+                        src = tar.extractfile(tar.getmember("bin/micromamba"))
+                        with open(exe, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                else:
+                    shutil.move(archive, exe)
+                os.chmod(exe, 0o755)
+                return exe
+            except Exception:
+                pass
+            finally:
+                if os.path.exists(archive):
+                    os.remove(archive)
+    print("The download of micromamba failed (no internet access?)")
+    return None
+
+
+def _download(url, path):
+    """url into path, with urllib or else curl; True if it worked."""
+    import subprocess
+    try:
+        import urllib.request
+        urllib.request.urlretrieve(url, path)
+        return True
+    except Exception:
+        return subprocess.call(["curl", "-fsSL", "-o", path, url]) == 0
+
+
+def provide_qt_libraries():
+    """install_python on Linux: the system libraries that the Qt windows of
+    PySide6 need and that the system lacks, prebuilt from conda-forge by a
+    private micromamba (no root, no compiler, no conda of the user) and
+    copied into QT_LIBS: only the missing ones, so that the system libraries
+    are used where they exist. Returns 0 if nothing is missing any more."""
+    import subprocess
+    if not sys.platform.startswith("linux"):
+        return 0
+    folder = os.path.dirname(QT_LIBS)
+    env_dir = os.path.join(folder, "env")
+    path = os.pathsep.join([QT_LIBS] + [
+        d for d in os.environ.get("LD_LIBRARY_PATH", "").split(os.pathsep)
+        if d and not _other_python_lib(d)])
+    missing = missing_qt_libraries(path)
+    if not missing:
+        print("All system libraries needed by the Qt windows are present.")
+        return 0
+    print("System libraries needed by the Qt windows and not found: "
+          + ", ".join(missing))
+    env = dict((k, v) for k, v in os.environ.items()
+               if not k.startswith(("CONDA", "MAMBA", "_CONDA", "_MAMBA",
+                                    "PYTHON")))
+    env["MAMBA_ROOT_PREFIX"] = os.path.join(folder, "root")
+    tried = set()
+    try:
+        for _ in range(6):
+            packages = sorted(set(p for p in map(_conda_package, missing)
+                                  if p and p not in tried))
+            if not packages:
+                break
+            exe = _micromamba(folder)
+            if exe is None:
+                break
+            print("Fetching from conda-forge: " + " ".join(packages))
+            action = "install" if os.path.isdir(env_dir) else "create"
+            if subprocess.call([exe, action, "-y", "-q", "--no-rc",
+                                "-r", env["MAMBA_ROOT_PREFIX"], "-p", env_dir,
+                                "-c", "conda-forge", "--override-channels"]
+                               + packages, env=env) != 0:
+                print("micromamba could not fetch " + " ".join(packages))
+                break
+            tried.update(packages)
+            os.makedirs(QT_LIBS, exist_ok=True)
+            for name in missing:
+                source = os.path.join(env_dir, "lib", name)
+                if os.path.exists(source):
+                    shutil.copy2(os.path.realpath(source),
+                                 os.path.join(QT_LIBS, name))
+            missing = missing_qt_libraries(path)
+            if not missing:
+                break
+    finally:
+        for d in ("env", "root", "bin"):
+            shutil.rmtree(os.path.join(folder, d), ignore_errors=True)
+    if missing:
+        print("Still not found: " + ", ".join(missing)
+              + " (install them with the package manager of the system)")
+        return 1
+    print("The missing system libraries are in " + QT_LIBS)
+    return 0
+
+
+def window_problem():
+    """None if Qt can open windows here, else the reason. Checked in a
+    separate process: Qt stops a process that cannot use the display, or
+    falls back to a platform without windows (WINDOWLESS)."""
+    import subprocess
+    try:
+        r = subprocess.run([sys.executable, "-I", "-c", _PROBE],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           universal_newlines=True, timeout=120)
+    except Exception as err:
+        return "Qt could not be started (%s)" % err
+    platform = ""
+    for line in r.stdout.splitlines():
+        if line.startswith("B2PLOT_QT_PLATFORM="):
+            platform = line.split("=", 1)[1].strip()
+    wanted = os.environ.get("QT_QPA_PLATFORM", "")
+    if r.returncode == 0 and platform and (platform not in WINDOWLESS
+                                           or wanted.startswith(platform)):
+        return None
+    text = "Qt cannot open windows on this display"
+    if platform:
+        text += " (it fell back to its %s platform)" % platform
+    reasons = [l.strip() for l in r.stderr.splitlines()
+               if l.startswith("qt.") or "platform plugin" in l][:3]
+    if reasons:
+        text += ": " + " ".join(reasons)
+    missing = missing_qt_libraries()
+    if missing:
+        text += "; system libraries not found: " + ", ".join(missing)
+    return text
 
 
 def fail(found):
@@ -181,7 +408,14 @@ def fail(found):
                          "%s.%s" % (os.environ.get("HOST_NAME", ""),
                                     os.environ.get("COMPILER", "")),
                          "python")
-    if found and all(f.startswith("Qt for matplotlib") for f in found):
+    if found and "cannot open windows" in found[0]:
+        lines += ["The windows need a display that Qt can use (DISPLAY on "
+                  "Linux) and the system",
+                  "  libraries listed above; on Linux run install_python "
+                  "again, it provides the",
+                  "  missing ones. B2PLOT_DEV=ps writes the pages to "
+                  "b2plot.ps without windows."]
+    elif found and all(f.startswith("Qt for matplotlib") for f in found):
         lines += ["PySide6 is installed, but its Qt libraries cannot be "
                   "loaded: another Qt",
                   "  found first by the system library loader is the usual "

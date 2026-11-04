@@ -101,14 +101,14 @@ if ( "$PY_BUILD" == "1" ) then
   if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
 
     set PY_DEV_MISSING = ()
-    foreach pkg ( libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev libsqlite3-dev )
+    foreach pkg ( curl gcc make libssl-dev zlib1g-dev libffi-dev libbz2-dev liblzma-dev libsqlite3-dev libxcb-cursor0 )
       dpkg -s $pkg >& /dev/null
       if ( $status != 0 ) set PY_DEV_MISSING = ( $PY_DEV_MISSING $pkg )
     end
 
     if ( $#PY_DEV_MISSING != 0 ) then
       echo
-      echo Development packages needed to compile Python not locally installed: $PY_DEV_MISSING
+      echo Packages needed by the local Python installation and its Qt windows not locally installed: $PY_DEV_MISSING
       echo -n "Do you wish to install them? The apt package manager will be used. (y/n) [y] "
       set PY_DEV_INSTALL = $<
 
@@ -229,16 +229,30 @@ if ( "$PY_OK" == "1" ) then
   if ( $#PY_MISSING != 0 ) then
     echo
     echo Installing Python modules into the local SOLPS-ITER-specific Python installation: $PY_MISSING:q
-    "${PY_BIN}" -I -m pip --isolated install --no-cache-dir --disable-pip-version-check $PY_MISSING:q
-    if ( $status == 0 ) then
-      echo Python modules successfully installed.
-    else
-      echo Error: the installation of the Python modules failed.
-    endif
+    foreach spec ( $PY_MISSING:q )   # One by one: a module without a build for this system must not stop the others
+      "${PY_BIN}" -I -m pip --isolated install --no-cache-dir --disable-pip-version-check "$spec"
+      if ( $status == 0 ) then
+        echo Python module $spec successfully installed.
+      else
+        echo Error: the installation of the Python module $spec failed.
+      endif
+    end
     sleep 1
   else
     echo
     echo All required Python modules already installed in the local SOLPS-ITER-specific Python installation.
+    sleep 1
+  endif
+
+  # Linux: the system libraries needed by the Qt windows and missing on this system,
+  # prebuilt from conda-forge into the local Python installation (no root needed)
+
+  if ( `uname` == "Linux" ) then
+    echo
+    "${PY_BIN}" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from b2plotpy import requirements; sys.exit(requirements.provide_qt_libraries())' "${SOLPSTOP}/scripts"
+    if ( $status != 0 ) then
+      echo Warning: the windows of the b2plot graphics may not open on this system.
+    endif
     sleep 1
   endif
 
