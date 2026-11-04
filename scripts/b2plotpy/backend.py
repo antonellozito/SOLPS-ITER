@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import threading
 
-from . import options, protocol
+from . import options, protocol, requirements
 
 
 def wrapper_command(standalone=False, targets=("b2pl",), debugger=None,
@@ -62,8 +62,8 @@ class Backend:
         os.mkfifo(self.fifo, 0o600)
         # the FIFO reader must wait for the writer before the child starts
         self._thread(self._read_fifo)
-        env = dict(os.environ, B2PLOT_PY_FIFO=self.fifo,
-                   GFORTRAN_UNBUFFERED_PRECONNECTED="y")
+        env = requirements.child_environment(
+            B2PLOT_PY_FIFO=self.fifo, GFORTRAN_UNBUFFERED_PRECONNECTED="y")
         self.proc = subprocess.Popen(
             self.cmd, cwd=self.rundir, env=env, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,

@@ -84,7 +84,8 @@ def dry_run(args):
     cmd = backend.wrapper_command(args.standalone, [prog], args.debugger,
                                   dry_run=True, tool="b2plot"
                                   if prog == "b2pl" else "b2run")
-    return subprocess.call(cmd, cwd=args.rundir)
+    return subprocess.call(cmd, cwd=args.rundir,
+                           env=requirements.child_environment())
 
 
 def main(argv=None):
@@ -112,6 +113,10 @@ def main(argv=None):
                                        % args.rundir])
     if args.dry_run:
         return dry_run(args)
+    # matplotlib defaults, whatever matplotlibrc the user or the run
+    # directory has
+    import matplotlib
+    matplotlib.rcdefaults()
     if args.gui:
         from b2plotpy.gui import app
         return app.main(args)
