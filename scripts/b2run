@@ -99,6 +99,7 @@ argloop:
     echo ' b2mn_d: Main SOLPS-ITER run program differentiated in tangent mode'
     echo ' b2mn_b: Main SOLPS-ITER run program differentiated in adjoint mode'
     echo ' b2optim_tao: Parameter optimization with PETSc/TAO solver'
+    echo 'The pages of b2yg, b2yi, b2ym, b2yn, b2yp, b2yq and b2yr go to b2yX.pdf, or to b2yX.plt if B2.5 was built with USE_NCAR.'
     echo ' '
     exit
   endif

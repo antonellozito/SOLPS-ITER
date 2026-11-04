@@ -1,10 +1,11 @@
-"""CLI parity mode: b2plot commands on stdin, NCAR-like pages out.
+"""Command line of the Python graphics: b2plot commands on stdin,
+NCAR-like pages out.
 
-    echo "phys te surf" | b2plot.py [-s] [-o OUT]
-    b2plot.py --cli                      (commands typed at the terminal)
-    b2plot.py --program b2yq             (a B2 post-processor)
+    echo "phys te surf" | b2plot         (commands piped or redirected)
+    b2plot                               (commands typed at the terminal)
+    b2run b2yq                           (a B2 post-processor)
 
-The stdin lines go unchanged to b2pl_py.exe, followed by "1 sync" and
+The stdin lines go unchanged to b2pl.exe, followed by "1 sync" and
 "quit"; at a terminal each line goes at once, followed by a numbered sync.
 B2PLOT_DEV chooses the output as in b2plot: with x11 each page opens in a
 matplotlib window (NCAR-like; zoom, pan and save in any matplotlib format
@@ -40,7 +41,7 @@ def write_ps(figures, path):
     7.5 inch square on the letter page, i.e. at (36,126)-(576,666) pt.
     """
     with open(path, "w", encoding="latin-1") as out:
-        out.write("%!PS-Adobe-3.0\n%%Creator: b2plot.py\n"
+        out.write("%!PS-Adobe-3.0\n%%Creator: b2plot\n"
                   f"%%Pages: {len(figures)}\n%%BoundingBox: 0 0 612 792\n"
                   "%%DocumentPaperSizes: Letter\n%%EndComments\n")
         for i, fig in enumerate(figures, 1):
@@ -73,7 +74,7 @@ def write_output(figures, path, dpi):
 
 def run_commands(cmd, rundir, lines, record=None, console=sys.stdout,
                  commands=True):
-    """Run b2pl_py.exe on the command lines (or a B2 post-processor, which
+    """Run b2pl.exe on the command lines (or a B2 post-processor, which
     reads none); return the Scene and status."""
     sc = scene.Scene()
     be = backend.Backend(cmd, rundir, record)
@@ -89,7 +90,7 @@ def run_commands(cmd, rundir, lines, record=None, console=sys.stdout,
         elif event[0] == "console":
             console.write(event[1])
         elif event[0] == "error":
-            print(f"b2plot.py: protocol error: {event[1]}", file=sys.stderr)
+            print(f"b2plot: protocol error: {event[1]}", file=sys.stderr)
         elif event[0] == "exit":
             status = event[1]
     be.stop()
@@ -103,7 +104,7 @@ def _draw(frame, number, fig=None):
     try:
         return render.render_frame(frame, fig=fig)
     except Exception as err:
-        print(f"b2plot.py: page {number} could not be drawn: {err}",
+        print(f"b2plot: page {number} could not be drawn: {err}",
               file=sys.stderr)
         return fig
 
@@ -118,8 +119,8 @@ def _pyplot():
 
 def _window_name(frame, number):
     title = next((m["title"] for m in frame.meta if m["title"]), "")
-    return f"b2plot.py page {number}" + (f": {labels.plain_text(title)}"
-                                         if title else "")
+    return f"b2plot page {number}" + (f": {labels.plain_text(title)}"
+                                      if title else "")
 
 
 def show(frames):
@@ -135,28 +136,30 @@ def show(frames):
 
 def write_frames(frames, path, dpi):
     """Draw the frames off screen and write them to path (write_output)."""
+    sys.stdout.flush()
     figures = []
     for i, frame in enumerate(frames, 1):
         fig = _draw(frame, i)
         FigureCanvasAgg(fig)
         figures.append(fig)
     for name in write_output(figures, path, dpi):
-        print(f"b2plot.py: written {name}", file=sys.stderr)
+        print(f"b2plot: written {name}", file=sys.stderr)
 
 
 def write_files(frames, args):
     """The files of B2PLOT_DEV (b2plot.ps with ps) and of -o."""
     dev = options.devices()
     if dev["cgm"]:
-        print("b2plot.py: B2PLOT_DEV cgm: NCAR metafiles (gmeta) need the "
-              "NCAR build of b2plot, none written", file=sys.stderr)
+        print("b2plot: B2PLOT_DEV cgm: NCAR metafiles (gmeta) need the "
+              "NCAR Graphics build (USE_NCAR), none written",
+              file=sys.stderr)
     if frames and dev["ps"] and not args.replay:
         write_frames(frames, os.path.join(args.rundir, "b2plot.ps"),
                      args.dpi)
     if frames and args.output:
         write_frames(frames, args.output, args.dpi)
     if dev["x11"] and not args.no_show and not options.display_available():
-        print("b2plot.py: no display, page windows skipped", file=sys.stderr)
+        print("b2plot: no display, page windows skipped", file=sys.stderr)
 
 
 def deliver(frames, args):
@@ -176,7 +179,7 @@ def replay(path):
 
 
 def main(args):
-    """CLI parity mode for the parsed b2plot.py options (options.py)."""
+    """Commands from stdin, for the parsed options (options.py)."""
     if args.replay:
         sc, status, bye = replay(args.replay), 0, True
     else:
@@ -193,15 +196,16 @@ def main(args):
         frames.append(sc.current)
     deliver(frames, args)
     if not bye:
-        print(f"b2plot.py: b2pl_py.exe ended without BYE (exit status "
+        print(f"b2plot: b2pl.exe ended without BYE (exit status "
               f"{status})", file=sys.stderr)
         return 1
     return 0 if status == 0 else 1
 
 
 def run_program(args):
-    """A B2 post-processor (--program): its pages go to PROGRAM.pdf in the
-    run directory, or to -o; no windows."""
+    """A B2 post-processor: its pages go to PROGRAM.pdf in the run
+    directory, or to -o; no windows."""
+    prog = options.program(args)
     cmd = backend.command(args)
     record = open(args.record, "wb") if args.record else None
     try:
@@ -215,9 +219,9 @@ def run_program(args):
         frames.append(sc.current)
     if frames:
         write_frames(frames, args.output or os.path.join(
-            args.rundir, args.program + ".pdf"), args.dpi)
+            args.rundir, prog + ".pdf"), args.dpi)
     if not bye:
-        print(f"b2plot.py: {args.program}.exe ended without BYE (exit "
+        print(f"b2plot: {prog}.exe ended without BYE (exit "
               f"status {status})", file=sys.stderr)
         return 1
     return 0 if status == 0 else 1
@@ -268,14 +272,14 @@ class _Windows:
     def wait(self):
         """Keep the windows until they are closed."""
         if self.plt.get_fignums():
-            print("b2plot.py: close the page windows to end",
+            print("b2plot: close the page windows to end",
                   file=sys.stderr)
             self.plt.ioff()
             self.plt.show()
 
 
 def interactive(args):
-    """b2plot at a terminal: each typed line goes to b2pl_py.exe at once,
+    """b2plot at a terminal: each typed line goes to b2pl.exe at once,
     followed by a numbered sync; with B2PLOT_DEV x11 the pages open in
     windows as b2plot draws them and stay open after quit until closed;
     with ps they go to b2plot.ps at the end."""
@@ -317,7 +321,7 @@ def interactive(args):
                     sys.stdout.write(event[1])
                     sys.stdout.flush()
                 elif event[0] == "error":
-                    print(f"b2plot.py: protocol error: {event[1]}",
+                    print(f"b2plot: protocol error: {event[1]}",
                           file=sys.stderr)
                 elif event[0] == "exit":
                     status = event[1]
@@ -345,11 +349,7 @@ def interactive(args):
     if win is not None:
         win.wait()
     if not bye:
-        print(f"b2plot.py: b2pl_py.exe ended without BYE (exit status "
+        print(f"b2plot: b2pl.exe ended without BYE (exit status "
               f"{status})", file=sys.stderr)
         return 1
     return 0 if status == 0 else 1
-
-
-if __name__ == "__main__":
-    sys.exit(main(options.parse()))

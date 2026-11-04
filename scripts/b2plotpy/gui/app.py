@@ -1,6 +1,6 @@
-"""Main window of the b2plot.py GUI: run line, tabs, status bar.
+"""Main window of the b2plot GUI: run line, tabs, status bar.
 
-One b2pl_py.exe per open run serves the data (data.Run); a QTimer
+One b2pl.exe per open run serves the data (data.Run); a QTimer
 drains its events in the GUI thread and hands finished requests to the
 tabs. There is no console and no b2plot command input.
 """
@@ -34,7 +34,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.settings = QtCore.QSettings("SOLPS-ITER", "b2plot.py")
+        self.settings = QtCore.QSettings("SOLPS-ITER", "b2plot_gui")
         self.run = None
         self.record = open(args.record, "wb") if args.record else None
         self.waiting = {}           # request ident -> [(tab, want)]
@@ -106,7 +106,7 @@ class MainWindow(QtWidgets.QMainWindow):
         a.setShortcut(QtGui.QKeySequence("Ctrl+P"))
         a.triggered.connect(lambda *_: self._show_composer())
         m = self.menuBar().addMenu("&Help")
-        m.addAction("About b2plot.py").triggered.connect(
+        m.addAction("About the b2plot GUI").triggered.connect(
             lambda *_: self.about())
 
     # ---------------------------------------------------------------- run
@@ -263,9 +263,9 @@ class MainWindow(QtWidgets.QMainWindow):
         import matplotlib
         v = sys.version_info
         QtWidgets.QMessageBox.about(
-            self, "About b2plot.py",
-            "b2plot.py %s (protocol %d)\nPython %d.%d.%d, PySide6 %s, "
-            "matplotlib %s\nData from b2pl_py.exe; drawing by matplotlib."
+            self, "About the b2plot GUI",
+            "b2plot GUI %s (protocol %d)\nPython %d.%d.%d, PySide6 %s, "
+            "matplotlib %s\nData from b2pl.exe; drawing by matplotlib."
             % (__version__, PROTOCOL_VERSION, v[0], v[1], v[2],
                PYSIDE6_VERSION, matplotlib.__version__))
 
@@ -279,8 +279,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
 def main(args):
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(
-        ["b2plot.py"])
-    app.setApplicationName("b2plot.py")
+        ["b2plot_gui"])
+    app.setApplicationName("b2plot_gui")
     win = MainWindow(args)
     win.show()
     win.open_run(args.rundir)

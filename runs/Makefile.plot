@@ -47,20 +47,26 @@ else
 fort_lc = ftn
 endif
 
+# B2.5 built with the Python graphics (its stamp file): the graphical
+# programs run through b2plotpy, which writes b2plot.ps and b2yX.pdf
+ifneq ($(wildcard ${B2OBJ}/.graphics_python),)
+ifndef B2PLOT_PY_FIFO
+B2PY = $(if ${PYTHON},${PYTHON},python3) ${SOLPSTOP}/scripts/b2plotpy --exec
+endif
+PLT = pdf
+else
+PLT = plt
+endif
+
 prints = b2uf.prt b2fu.prt b2pl.prt b2yi.prt b2yn.prt b2md.prt b2rd.prt b2yi_gnuplot.prt
 
 target_uf = b2uf.prt
 target_fu = b2fu.prt
 target_pl = b2pl.prt
-target_plpy = b2pl_py.prt
-B2PL_EXE = b2pl.exe
-B2PL_DIR = b2pl.exe.dir
-$(target_plpy) : B2PL_EXE = b2pl_py.exe
-$(target_plpy) : B2PL_DIR = b2pl_py.exe.dir
 target_pl.dbx = b2pl.dbx
-target_yi = b2yi.prt b2yi.plt
+target_yi = b2yi.prt b2yi.${PLT}
 target_yi_gnuplot = b2yi_gnuplot.prt
-target_yn = b2yn.prt b2yn.plt
+target_yn = b2yn.prt b2yn.${PLT}
 target_md = b2md.prt
 target_md.dbx = b2md.dbx
 target_rd = b2rd.prt
@@ -121,28 +127,28 @@ $(target_fu) : b2fgmtry b2fparam b2fstate b2fplasmf
 	-rmdir b2fu.exe.dir
 
 ifndef STAND_ALONE
-$(target_pl) $(target_plpy) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
+$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
 else
-$(target_pl) $(target_plpy) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL
+$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL
 endif
-	rm -rf $(B2PL_DIR) >& /dev/null ; mkdir $(B2PL_DIR) ; cp $^ $(B2PL_DIR)
-	[ -e param.dg ] && cp param.dg $(B2PL_DIR)/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg $(B2PL_DIR)/ || echo > /dev/null )
+	rm -rf b2pl.exe.dir >& /dev/null ; mkdir b2pl.exe.dir ; cp $^ b2pl.exe.dir
+	[ -e param.dg ] && cp param.dg b2pl.exe.dir/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg b2pl.exe.dir/ || echo > /dev/null )
 ifndef STAND_ALONE
-	-cp ${fort_lc}44 ${fort_lc}46 $(B2PL_DIR)/
-	-cd $(B2PL_DIR)
+	-cp ${fort_lc}44 ${fort_lc}46 b2pl.exe.dir/
+	-cd b2pl.exe.dir
 endif
 ifeq (${NCAR_VERSION},3)
-	rm -f $@ gmeta
-	cd $(B2PL_DIR) ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${TIME} ${B2OBJ}/$(B2PL_EXE) ${RUN_OPTIONS} ; ( [ -e gmeta ] && mv -f gmeta .. ) ; rm -f $@ $(notdir $^) .quit param.dg >& /dev/null
+	rm -f $(target_pl) gmeta
+	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${TIME} ${B2OBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e gmeta ] && mv -f gmeta .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
 else
-	rm -f $@ b2plot.ps
-	cd $(B2PL_DIR) ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${TIME} ${B2OBJ}/$(B2PL_EXE) ${RUN_OPTIONS} ; ( [ -e b2plot.ps ] && mv -f b2plot.ps .. ) ; rm -f $@ $(notdir $^) .quit param.dg >& /dev/null
+	rm -f $(target_pl) b2plot.ps
+	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${B2PY} ${TIME} ${B2OBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e b2plot.ps ] && mv -f b2plot.ps .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
 endif
 ifndef STAND_ALONE
-	-rm $(B2PL_DIR)/${fort_lc}44 $(B2PL_DIR)/${fort_lc}46 $(B2PL_DIR)/${fort_lc}85
+	-rm b2pl.exe.dir/${fort_lc}44 b2pl.exe.dir/${fort_lc}46 b2pl.exe.dir/${fort_lc}85
 endif
-	-cd $(B2PL_DIR) ; rm -f HYDHEL METHANE SPUTER H2VIBR AMMONX ${fort_lc}21 ${fort_lc}22 ${fort_lc}1
-	-rmdir $(B2PL_DIR)
+	-cd b2pl.exe.dir ; rm -f HYDHEL METHANE SPUTER H2VIBR AMMONX ${fort_lc}21 ${fort_lc}22 ${fort_lc}1
+	-rmdir b2pl.exe.dir
 
 ifndef STAND_ALONE
 $(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
@@ -160,7 +166,7 @@ ifeq (${NCAR_VERSION},3)
 	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${DBX} ${INC} ${DBGOBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e gmeta ] && mv -f gmeta .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
 else
 	rm -f $(target_pl) b2plot.ps
-	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${DBX} ${INC} ${DBGOBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e b2plot.ps ] && mv -f b2plot.ps .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
+	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${B2PY} ${DBX} ${INC} ${DBGOBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e b2plot.ps ] && mv -f b2plot.ps .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
 endif
 ifndef STAND_ALONE
 	-rm b2pl.exe.dir/${fort_lc}44 b2pl.exe.dir/${fort_lc}46 b2pl.exe.dir/${fort_lc}85
@@ -216,7 +222,7 @@ $(target_yi) : b2yi.dat b2mn.dat b2fstate b2frates b2fgmtry
 	rm -rf b2yi.exe.dir >& /dev/null ; mkdir b2yi.exe.dir ; cp $^ b2yi.exe.dir
 	rm -f $(target_yi)
 	NCARG_GKS_OUTPUT=b2yi.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yi.exe.dir ; ${TIME} ${B2OBJ}/b2yi.exe ${RUN_OPTIONS} ; mv $(target_yi) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yi.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yi.exe ${RUN_OPTIONS} ; mv $(target_yi) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yi.exe.dir
 
 $(target_yi_gnuplot) : b2mn.dat b2fstate b2frates b2fgmtry
@@ -229,7 +235,7 @@ $(target_yn) : b2yn.dat b2mn.dat b2ftrack b2frates b2fstate
 	rm -rf b2yn.exe.dir >& /dev/null ; mkdir b2yn.exe.dir ; cp $^ b2yn.exe.dir
 	rm -f $(target_yn)
 	NCARG_GKS_OUTPUT=b2yn.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yn.exe.dir ; ${TIME} ${B2OBJ}/b2yn.exe ${RUN_OPTIONS} ; mv $(target_yn) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yn.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yn.exe ${RUN_OPTIONS} ; mv $(target_yn) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yn.exe.dir
 
 $(target_ymb) : b2ymb.dat wlld_trgi.dat wlld_trgo.dat wlly_trgi.dat wlly_trgo.dat

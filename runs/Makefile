@@ -89,6 +89,17 @@ else
 fort_lc = ftn
 endif
 
+# B2.5 built with the Python graphics (its stamp file): the graphical
+# programs run through b2plotpy, which writes b2plot.ps and b2yX.pdf
+ifneq ($(wildcard ${B2OBJ}/.graphics_python),)
+ifndef B2PLOT_PY_FIFO
+B2PY = $(if ${PYTHON},${PYTHON},python3) ${SOLPSTOP}/scripts/b2plotpy --exec
+endif
+PLT = pdf
+else
+PLT = plt
+endif
+
 prints = b2ab.prt b2ag.prt b2ah.prt b2ai.prt b2ar.prt b2mn.prt b2mnastra.prt \
  b2ye.prt b2yg.prt b2yh.prt b2yi.prt b2ym.prt b2yn.prt b2yp.prt b2yq.prt \
  b2yr.prt b2yt.prt b2yi_gnuplot.prt
@@ -110,15 +121,15 @@ target_co = b2co.prt b2co.files
 target_pl = b2pl.prt b2plot.ps
 target_ts = b2ts.prt
 target_ye = b2ye.prt
-target_yg = b2yg.prt b2yg.plt
+target_yg = b2yg.prt b2yg.${PLT}
 target_yh = b2yh.prt
-target_yi = b2yi.prt b2yi.plt
+target_yi = b2yi.prt b2yi.${PLT}
 target_yi_gnuplot = b2yi_gnuplot.prt
-target_ym = b2ym.prt b2ym.plt
-target_yn = b2yn.prt b2yn.plt
-target_yp = b2yp.prt b2yp.plt b2specp
-target_yq = b2yq.prt b2yq.plt
-target_yr = b2yr.prt b2yr.plt
+target_ym = b2ym.prt b2ym.${PLT}
+target_yn = b2yn.prt b2yn.${PLT}
+target_yp = b2yp.prt b2yp.${PLT} b2specp
+target_yq = b2yq.prt b2yq.${PLT}
+target_yr = b2yr.prt b2yr.${PLT}
 target_yt = b2yt.prt b2fstatt b2yt.files
 target_xd = B2SXDR
 target_rd = b2rd.prt
@@ -510,7 +521,7 @@ ifeq (${NCAR_VERSION},3)
 	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${TIME} ${B2OBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e gmeta ] && mv -f gmeta .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
 else
 	rm -f $(target_pl) b2plot.ps
-	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${TIME} ${B2OBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e b2plot.ps ] && mv -f b2plot.ps .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
+	cd b2pl.exe.dir ; ln -s ../HYDHEL ../METHANE ../SPUTER ../H2VIBR ../AMMONX ../${fort_lc}21 ../${fort_lc}22 ../${fort_lc}1 . ; ${B2PY} ${TIME} ${B2OBJ}/b2pl.exe ${RUN_OPTIONS} ; ( [ -e b2plot.ps ] && mv -f b2plot.ps .. ) ; rm -f $(target_pl) $(notdir $^) .quit param.dg >& /dev/null
 endif
 ifndef STAND_ALONE
 	-rm b2pl.exe.dir/${fort_lc}44 b2pl.exe.dir/${fort_lc}46 b2pl.exe.dir/${fort_lc}85
@@ -544,7 +555,7 @@ $(target_yg) : b2yg.dat b2fgmtry
 	rm -rf b2yg.exe.dir >& /dev/null ; mkdir b2yg.exe.dir ; cp $^ b2yg.exe.dir
 	rm -f $(target_yg)
 	NCARG_GKS_OUTPUT=b2yg.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yg.exe.dir ; ${TIME} ${B2OBJ}/b2yg.exe ${RUN_OPTIONS} ; mv $(target_yg) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yg.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yg.exe ${RUN_OPTIONS} ; mv $(target_yg) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yg.exe.dir
 
 $(target_yh) : b2yh.dat b2fpardf b2fgmtry
@@ -562,7 +573,7 @@ $(target_yi) : b2yi.dat b2fstati b2frates b2fgmtry
 	-[ -e b2mn.dat ] && cp b2mn.dat b2yi.exe.dir || echo > /dev/null
 	rm -f $(target_yi)
 	NCARG_GKS_OUTPUT=b2yi.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yi.exe.dir ; ${TIME} ${B2OBJ}/b2yi.exe ${RUN_OPTIONS} ; mv $(target_yi) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yi.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yi.exe ${RUN_OPTIONS} ; mv $(target_yi) .. ; rm -f $(notdir $^) >& /dev/null
 	-[ -e b2yi.exe.dir/b2fstate ] && rm b2yi.exe.dir/b2fstate || echo > /dev/null
 	-[ -e b2yi.exe.dir/b2mn.dat ] && rm b2yi.exe.dir/b2mn.dat || echo > /dev/null
 	-rmdir b2yi.exe.dir
@@ -581,35 +592,35 @@ $(target_ym) : b2ym.dat b2fmovie
 	rm -rf b2ym.exe.dir >& /dev/null ; mkdir b2ym.exe.dir ; cp $^ b2ym.exe.dir
 	rm -f $(target_ym)
 	NCARG_GKS_OUTPUT=b2ym.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2ym.exe.dir ; ${TIME} ${B2OBJ}/b2ym.exe ${RUN_OPTIONS} ; mv $(target_ym) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2ym.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2ym.exe ${RUN_OPTIONS} ; mv $(target_ym) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2ym.exe.dir
 
 $(target_yn) : b2yn.dat b2mn.dat b2ftrack b2frates b2fstate
 	rm -rf b2yn.exe.dir >& /dev/null ; mkdir b2yn.exe.dir ; cp $^ b2yn.exe.dir
 	rm -f $(target_yn)
 	NCARG_GKS_OUTPUT=b2yn.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yn.exe.dir ; ${TIME} ${B2OBJ}/b2yn.exe ${RUN_OPTIONS} ; mv $(target_yn) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yn.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yn.exe ${RUN_OPTIONS} ; mv $(target_yn) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yn.exe.dir
 
 $(target_yp) : b2yp.dat b2mn.dat b2fgmtry b2fparam b2fstate b2frates
 	rm -rf b2yp.exe.dir >& /dev/null ; mkdir b2yp.exe.dir ; cp $^ b2yp.exe.dir
 	rm -f $(target_yp)
 	NCARG_GKS_OUTPUT=b2yp.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yp.exe.dir ; ${TIME} ${B2OBJ}/b2yp.exe ${RUN_OPTIONS} ; mv $(target_yp) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yp.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yp.exe ${RUN_OPTIONS} ; mv $(target_yp) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yp.exe.dir
 
 $(target_yq) : b2yq.dat b2ftrace
 	rm -rf b2yq.exe.dir >& /dev/null ; mkdir b2yq.exe.dir ; cp $^ b2yq.exe.dir
 	rm -f $(target_yq)
 	NCARG_GKS_OUTPUT=b2yq.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yq.exe.dir ; ${TIME} ${B2OBJ}/b2yq.exe ${RUN_OPTIONS} ; mv $(target_yq) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yq.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yq.exe ${RUN_OPTIONS} ; mv $(target_yq) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yq.exe.dir
 
 $(target_yr) : b2yr.dat b2frates b2fpardf b2fgmtry
 	rm -rf b2yr.exe.dir >& /dev/null ; mkdir b2yr.exe.dir ; cp $^ b2yr.exe.dir
 	rm -f $(target_yr)
 	NCARG_GKS_OUTPUT=b2yr.plt ; export NCARG_GKS_OUTPUT ;\
-	cd b2yr.exe.dir ; ${TIME} ${B2OBJ}/b2yr.exe ${RUN_OPTIONS} ; mv $(target_yr) .. ; rm -f $(notdir $^) >& /dev/null
+	cd b2yr.exe.dir ; ${B2PY} ${TIME} ${B2OBJ}/b2yr.exe ${RUN_OPTIONS} ; mv $(target_yr) .. ; rm -f $(notdir $^) >& /dev/null
 	-rmdir b2yr.exe.dir
 
 ifndef STAND_ALONE
