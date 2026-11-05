@@ -1,6 +1,6 @@
 """Debug tool: run b2pl.exe (or replay a recording) and print its messages.
 
-    python3 -m b2plotpy.dump [options] [COMMANDS]
+    python3 $SOLPSTOP/lib/python/dump.py [options] [COMMANDS]
 
 COMMANDS is a file of b2plot commands, one batch per line (default: stdin).
 Each batch is followed by "<n> sync"; "quit" is sent at the end.
@@ -13,7 +13,19 @@ import sys
 
 import numpy as np
 
-from . import backend, protocol
+if not __package__:
+    # run as a file: load this directory as the package b2plotpy
+    import importlib.util
+    _here = os.path.dirname(os.path.realpath(__file__))
+    sys.path = [p for p in sys.path
+                if os.path.realpath(p or ".") != _here]
+    _spec = importlib.util.spec_from_file_location(
+        "b2plotpy", os.path.join(_here, "__init__.py"),
+        submodule_search_locations=[_here])
+    sys.modules["b2plotpy"] = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(sys.modules["b2plotpy"])
+
+from b2plotpy import backend, protocol  # noqa: E402
 
 
 def _short(value):
@@ -102,7 +114,7 @@ def run(cmd, rundir, batches, dumper, record=None, console=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="python3 -m b2plotpy.dump",
+    ap = argparse.ArgumentParser(prog="dump.py",
                                  description=__doc__.splitlines()[0])
     ap.add_argument("commands", nargs="?",
                     help="file of command batches (default: stdin)")

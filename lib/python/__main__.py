@@ -3,7 +3,7 @@
 Started by the run targets of b2plot and b2run (b2pl, b2yg ... b2yr) in a
 B2.5 build with the Python graphics (--exec), and by b2plot_gui (--gui);
 run it as
-python $SOLPSTOP/scripts/b2plotpy or python -m b2plotpy. All values are
+python $SOLPSTOP/lib/python. All values are
 computed by the Fortran b2plot (b2pl.exe); -h lists the options.
 
 Any Python 3 syntax up to the requirements check, so that an old
@@ -14,12 +14,17 @@ import os
 import sys
 
 if not __package__:
-    # run as a directory or file: import the package from its parent, and
-    # not its modules as top-level modules
+    # run as a directory or file: load this directory as the package
+    # b2plotpy, and not its modules as top-level modules
+    import importlib.util
     _here = os.path.dirname(os.path.realpath(__file__))
     sys.path = [p for p in sys.path
                 if os.path.realpath(p or ".") != _here]
-    sys.path.insert(0, os.path.dirname(_here))
+    _spec = importlib.util.spec_from_file_location(
+        "b2plotpy", os.path.join(_here, "__init__.py"),
+        submodule_search_locations=[_here])
+    sys.modules["b2plotpy"] = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(sys.modules["b2plotpy"])
 
 from b2plotpy import options, requirements  # noqa: E402
 

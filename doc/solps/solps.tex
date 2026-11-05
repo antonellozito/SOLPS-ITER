@@ -19335,7 +19335,7 @@ variables and check its libraries only when it is set.
 The Python graphics need Python 3.9 or newer with PySide6 (6.4 or newer),
 numpy (1.21) and matplotlib (3.8), as installed by the
 {\tt install\_python} script (Section~\ref{sec:localpython}); the
-programs build without them. {\tt python \$SOLPSTOP/\allowbreak scripts/\allowbreak b2plotpy --info}
+programs build without them. {\tt python \$SOLPSTOP/\allowbreak lib/\allowbreak python --info}
 prints the versions and the build that would be used.
 
 \subsection{Command-line use}
@@ -19356,7 +19356,7 @@ directory; {\tt cgm} gives a message, since metafiles need the NCAR
 Graphics build; without a display the windows are skipped.
 
 The Python package can also be run directly,
-{\tt python \$SOLPSTOP/\allowbreak scripts/\allowbreak b2plotpy -o pages.pdf < commands}, which
+{\tt python \$SOLPSTOP/\allowbreak lib/\allowbreak python -o pages.pdf < commands}, which
 runs \btwoplot through {\tt b2plot} and also writes the pages to the
 {\tt -o} file ({\tt .pdf} or {\tt .ps} with all pages, numbered
 {\tt .png}, {\tt .svg} or {\tt .eps}); {\tt -h} lists all its options.

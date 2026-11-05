@@ -249,7 +249,7 @@ if ( "$PY_OK" == "1" ) then
 
   if ( `uname` == "Linux" ) then
     echo
-    "${PY_BIN}" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); from b2plotpy import requirements; sys.exit(requirements.provide_qt_libraries())' "${SOLPSTOP}/scripts"
+    "${PY_BIN}" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import requirements; sys.exit(requirements.provide_qt_libraries())' "${SOLPSTOP}/lib/python"
     if ( $status != 0 ) then
       echo Warning: the windows of the b2plot graphics may not open on this system.
     endif
