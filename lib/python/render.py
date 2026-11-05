@@ -381,7 +381,9 @@ class Renderer:
         if not use:
             return
         levels = np.asarray(m.clv, float)[use]
-        widths = [max(m.cll[i], 0.1) * LINE_WIDTH for i in use]
+        # CLL 0: the GKS line width current at the call, as in Conpack
+        widths = [max(m.cll[i] if m.cll[i] > 0 else c.width, 0.1)
+                  * LINE_WIDTH for i in use]
         color = _rgb(self.colors, m.plci)
         if m.source == 1:
             cs = self.ax.tricontour(tri, f, levels=levels, colors=[color],

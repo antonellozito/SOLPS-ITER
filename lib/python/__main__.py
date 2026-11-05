@@ -1,7 +1,8 @@
 """Entry point of the Python graphics of b2plot.
 
 Started by the run targets of b2plot and b2run (b2pl, b2yg ... b2yr) in a
-B2.5 build with the Python graphics (--exec), and by b2plot_gui (--gui);
+B2.5 build with the Python graphics (--exec), by the carre2 scripts for
+carre.exe of a Carre2 build with them (--exec), and by b2plot_gui (--gui);
 run it as
 python $SOLPSTOP/lib/python. All values are
 computed by the Fortran b2plot (b2pl.exe); -h lists the options.
@@ -100,6 +101,17 @@ def main(argv=None):
     if args.info:
         return info(args)
     prog = options.program(args)
+    if prog == options.CARRE:
+        found = requirements.problems(False)
+        if found:
+            # Carre2 runs without pictures rather than not at all
+            print("carre2: Warning: no pictures, the Python graphics need "
+                  + "; ".join(found) + ". install_python installs the "
+                  "SOLPS-ITER Python with them (manual, section Python "
+                  "graphics).")
+            sys.stdout.flush()
+            os.execvpe(args.exec[0], args.exec,
+                       requirements.child_environment())
     requirements.check(args.gui or options.windows(args))
     if args.debugger == "":
         args.debugger = os.environ.get("DBX", "")
@@ -126,6 +138,8 @@ def main(argv=None):
         from b2plotpy.gui import app
         return app.main(args)
     from b2plotpy import batch
+    if prog == options.CARRE:
+        return batch.run_carre(args)
     if prog != "b2pl":
         return batch.run_program(args)
     if sys.stdin.isatty() and not args.replay:

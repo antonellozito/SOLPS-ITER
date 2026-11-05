@@ -85,6 +85,7 @@ class Contour:
     msg: protocol.Message
     data: protocol.Message = None  # CT_MESH or CP_RECT message
     edges: list = field(default_factory=list)  # AREA_EDGE messages
+    width: float = 1.0             # GKS line width scale at the call
 
 
 @dataclass
@@ -381,7 +382,7 @@ class Scene:
 
     def _contour(self, kind, m):
         data = self.mesh if m.source == 1 else self.rect
-        self._add(Contour(kind, m, data, list(self.edges)))
+        self._add(Contour(kind, m, data, list(self.edges), self.lwsc))
 
     def _on_contour_fill(self, m):
         self._contour("fill", m)
@@ -391,7 +392,7 @@ class Scene:
 
     def _on_contour_lines_unmasked(self, m):
         data = self.mesh if m.source == 1 else self.rect
-        self._add(Contour("lines", m, data, []))
+        self._add(Contour("lines", m, data, [], self.lwsc))
 
     def _on_contour_info(self, m):
         self._contour("info", m)

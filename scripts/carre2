@@ -43,6 +43,14 @@ SOLPSTOP=`determine_SOLPSTOP`
 }
 CARRE2_PATH=$SOLPSTOP/modules/Carre2/builds/$HOST_NAME.$COMPILER$EXT_DEBUG
 /bin/echo -e "CARRE2_PATH : $CARRE2_PATH"
+# Carre2 built with the Python graphics: carre.exe runs through them and
+# its pictures go to carre.pdf
+CARRE2_PY=
+[ -e $CARRE2_PATH/.graphics_python ] && {
+  py=`command -v ${PYTHON:-python3}`
+  [ -n "$py" ] && CARRE2_PY="$py $SOLPSTOP/lib/python --exec" || \
+    /bin/echo -e "Warning: no Python found, Carre2 runs without pictures. install_python installs the SOLPS-ITER Python for them."
+}
 
 [ "$DEVICE" = '' ] && {
   print -u2 -n -- "No DEVICE selected. Please provide a device name\n "
@@ -175,7 +183,7 @@ do {
             break;;
     ( g|G )                                               # create the grid:
 #            carre.exe; q=s; break;;
-            $CARRE2_PATH/carre.exe 2>carre.log
+            $CARRE2_PY $CARRE2_PATH/carre.exe 2>carre.log
             [ -s carre.out ] && {
               nfields=`grep -c -E 'fin|end' carre.out`
               [ $nfields -lt 2 ] && {
@@ -262,6 +270,11 @@ do {
                   ctrans -d ps.mono gmeta > $griddir/$grid_stem.v$m.ps && \
                   /bin/echo -e "You can view the grid in PostScript format as $griddir/$grid_stem.v$m.ps" && \
                   /bin/echo -e "You can view the grid in PostScript format as $griddir/$grid_stem.v$m.ps" >> CARRE.HISTORY
+                }
+                [ -n "$CARRE2_PY" ] && [ -s carre.pdf ] && {
+                  cp carre.pdf $griddir/$grid_stem.v$m.pdf && \
+                  /bin/echo -e "You can view the grid in PDF format as $griddir/$grid_stem.v$m.pdf" && \
+                  /bin/echo -e "You can view the grid in PDF format as $griddir/$grid_stem.v$m.pdf" >> CARRE.HISTORY
                 }
                 [ -n "$stordir" ] && {
                   [ -d "$stordir" ] || {

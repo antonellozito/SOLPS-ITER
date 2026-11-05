@@ -8,7 +8,8 @@ import sys
 DESCRIPTION = """\
 Python graphics of b2plot and of the B2 post-processors. In a B2.5 build
 with the Python graphics (the default), b2plot and b2run start it for the
-programs b2pl and b2yg ... b2yr, and b2plot_gui starts it with --gui. As
+programs b2pl and b2yg ... b2yr, carre2 for carre.exe of Carre2, and
+b2plot_gui starts it with --gui. As
 for the NCAR program, the b2plot commands come from stdin: typed at a
 terminal, each line is run at once; piped or redirected, all of them. All
 values are computed by the Fortran b2plot (b2pl.exe)."""
@@ -16,17 +17,22 @@ values are computed by the Fortran b2plot (b2pl.exe)."""
 EPILOG = """\
 B2PLOT_DEV chooses the output as for the NCAR b2plot: x11 page windows, ps
 the file b2plot.ps in the run directory (both when unset). -o writes one
-more file. A B2 post-processor writes PROGRAM.pdf in the run directory.
+more file. A B2 post-processor writes PROGRAM.pdf in the run directory,
+carre.exe (with the terminal of its caller) carre.pdf.
 See the SOLPS-ITER manual, chapter "b2plot manual", section "Python
 graphics"."""
 
 # The B2 post-processors that draw (they read their own input files)
 PROGRAMS = ("b2yg", "b2yi", "b2ym", "b2yn", "b2yp", "b2yq", "b2yr")
+# The grid generator of Carre2 (carre.exe), started by --exec only
+CARRE = "carre"
 
 
 def name(argv=None):
     """Name in messages: the script the user started."""
     argv = sys.argv[1:] if argv is None else argv
+    if any(os.path.basename(w) == CARRE + ".exe" for w in argv):
+        return "carre2"
     return "b2plot_gui" if "--gui" in argv else "b2plot"
 
 
@@ -87,7 +93,9 @@ def parse(argv=None):
     prog = program(args)
     if args.exec is not None and not args.exec:
         ap.error("--exec needs a command")
-    if prog != "b2pl" and prog not in PROGRAMS:
+    if prog == CARRE and not args.exec:
+        ap.error("carre.exe runs through --exec only")
+    if prog not in ("b2pl", CARRE) and prog not in PROGRAMS:
         ap.error("TARGET must be b2pl or one of " + ", ".join(PROGRAMS))
     if args.replay and (args.exe or args.record or args.dry_run
                         or args.exec or args.debugger is not None):
@@ -99,7 +107,7 @@ def parse(argv=None):
                      or args.no_show or args.replay):
         ap.error("--gui opens the GUI on b2pl: no other TARGET, "
                  "--exec, -o, --no-show or --replay")
-    if prog in PROGRAMS and args.replay:
+    if (prog in PROGRAMS or prog == CARRE) and args.replay:
         ap.error("a B2 post-processor reads its own input: no --replay")
     return args
 

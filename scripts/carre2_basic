@@ -11,6 +11,18 @@ fi
 CARRE2_PATH=${SOLPSTOP}/modules/Carre2/builds/$HOST_NAME.$COMPILER${EXT_DEBUG}
 /bin/echo -e "CARRE2_PATH : $CARRE2_PATH"
 
+# Carre2 built with the Python graphics: carre.exe runs through them and
+# its pictures go to carre.pdf
+CARRE2_PY=
+if [ -e ${CARRE2_PATH}/.graphics_python ]; then
+    py=`command -v ${PYTHON:-python3}`
+    if [ -n "$py" ]; then
+        CARRE2_PY="$py ${SOLPSTOP}/lib/python --exec"
+    else
+        echo "Warning: no Python found, Carre2 runs without pictures. install_python installs the SOLPS-ITER Python for them."
+    fi
+fi
+
 #check whether carre2 is available
 if [ ! -e ${CARRE2_PATH}/carre.exe ]; then
     echo "No carre2 program available"
@@ -32,7 +44,7 @@ for inputfile in $inputfiles; do
     rm -f $logfile
 
     # execute main carre2 program
-    ${CARRE2_PATH}/carre.exe >>$logfile 2>&1
+    ${CARRE2_PY} ${CARRE2_PATH}/carre.exe >>$logfile 2>&1
     if [ $? -ne 0 -o ! -f carre.out ]; then
         echo "Testcase $dir: CARRE2 failed"
 	continue

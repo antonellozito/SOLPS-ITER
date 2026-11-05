@@ -338,7 +338,7 @@ To best use the \SOLPSITER code suite, the user will need, locally installed:
 \item[MPI] Parallelization framework (optional)
 \item[NAG]\index{NAG} mathematical library (optional) (available from \href{http://www.nag.com/content/nag-library}{http://www.nag.com/content/nag-library})
 \item[BLAS/LAPACK] mathematical libraries (available from \href{http://www.netlib.org/}{http://www.netlib.org/})
-\item[NCAR] plotting library (optional, only for the NCAR Graphics versions of the {\tt B2.5} graphical programs, built with {\tt USE\_NCAR}, see Section~\ref{sec:b2plotpy}; available from \href{https://www.ncl.ucar.edu/Download/}{https://www.ncl.ucar.edu/Download/})
+\item[NCAR] plotting library (optional, only for the NCAR Graphics versions of the {\tt B2.5} graphical programs and of {\tt Carre2}, built with {\tt USE\_NCAR}, see Section~\ref{sec:b2plotpy}; available from \href{https://www.ncl.ucar.edu/Download/}{https://www.ncl.ucar.edu/Download/})
 \item[GR] plotting library (optional, developed at FZ-J{\"u}lich, available as an open-source package at \href{https://github.com/iterorganization/GR-Software}{https://github.com/iterorganization/GR-Software})
 \item[GKS] graphical kernel library (available from \href{http://ngwww.ucar.edu}{http://ngwww.ucar.edu})
 \item[HDF5] data storage library (available from \href{http://support.hdfgroup.org/HDF5/}{http://support.hdfgroup.org/HDF5/}). {\bf Note:} Do not use HDF5 version 1.14.3 as it contains a bug that will conflict with NetCDF file usage.
@@ -928,7 +928,7 @@ The {\tt setup.csh} file and its subsidiaries {\tt \$\{SOLPSTOP\}/SETUP/setup.cs
 \item {\tt NCDIR}\index{NCDIR}, the root of the {\tt NetCDF} tree, and {\tt LD\_NETCDF}, the appropriate loader instruction to load {\tt NetCDF}
 \item {\tt PERFMON}\index{PERFMON}, an environment variable used by the compiler to know whether to enable the performance monitoring libraries
 \item {\tt SOLPS\_CPP}\index{SOLPS\_CPP}, an environment variable containing the global "defines" to use during compilation of {\tt SOLPS} code components
-\item {\tt USE\_NCAR}\index{USE\_NCAR}, if set, builds the {\tt B2.5} graphical programs with {\tt NCAR} Graphics instead of the Python graphics (Section~\ref{sec:b2plotpy}); it must be set before {\tt setup.csh} is sourced
+\item {\tt USE\_NCAR}\index{USE\_NCAR}, if set, builds the {\tt B2.5} graphical programs and {\tt Carre2} with {\tt NCAR} Graphics instead of the Python graphics (Section~\ref{sec:b2plotpy}); it must be set before {\tt setup.csh} is sourced
 \item some aliases to move around the tree ({\tt sbb}, {\tt sei}, {\it etc.})
 \item some aliases for plotting ({\tt xyplot}, etc...)
 \item two aliases to swap between the debug and no\_debug versions of the code ({\tt set\_debug} and {\tt unset\_debug})
