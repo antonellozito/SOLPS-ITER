@@ -1,0 +1,138 @@
+"""Python versions of run plot scripts of scripts/: the same calls and the
+same pages as resco, resmo, reshe, reshi, plot_residuals, 2dt_tracing,
+particle_balance_tracing and energy_balance_tracing, drawn by matplotlib
+instead of gnuplot. The pages open in one window with a tab each and go to
+the PostScript file of the old script.
+
+Started by the launchers scripts/NAME.py through the package entry
+(--run-plot NAME ARGUMENTS). The helper scripts that know the run
+(climb_and_look_for, get_solps_fluids, chop_pwd, resopt) are called as
+they are (helpers.py).
+
+Standard library only up to the requirements check, so that a missing
+module gives the requirements message.
+"""
+
+import argparse
+import sys
+
+from .. import requirements
+
+RESIDUALS = {"resco": "co", "resmo": "mo", "reshe": "he", "reshi": "hi"}
+TRACING = ("2dt_tracing", "particle_balance_tracing",
+           "energy_balance_tracing")
+USAGE = {
+    "resco": "continuity residuals per species against the iteration",
+    "resmo": "parallel momentum residuals per species",
+    "reshe": "residual of the electron energy equation",
+    "reshi": "residual of the ion energy equation",
+    "plot_residuals": "the four residual pages, also in residuals.ps",
+    "2dt_tracing": "columns of tracing/*.trc against time",
+    "particle_balance_tracing": "particle balance of each element from "
+                                "tracing/blnn_SPb.trc, also in "
+                                "particle_balance.ps",
+    "energy_balance_tracing": "energy balance from tracing/blne.trc, also "
+                              "in energy_balance.ps",
+}
+
+
+def _parser(name):
+    p = argparse.ArgumentParser(
+        prog=name + ".py", allow_abbrev=False,
+        description="%s, as %s, drawn by the Python graphics of "
+                    "SOLPS-ITER: the pages open in a window with a tab "
+                    "each (on a display, with PySide6)." % (USAGE[name],
+                                                            name))
+    p.add_argument("--no-show", action="store_true",
+                   help="no window, files only")
+    return p
+
+
+def _averaging_options(p):
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--rolling", type=int, metavar="N",
+                       help="rolling average: mean over N//2 slices on "
+                            "either side (cut at the ends)")
+    group.add_argument("--batch", type=int, metavar="N",
+                       help="batch average: means of consecutive blocks "
+                            "of N slices from the first one")
+
+
+def _parse(name, argv):
+    p = _parser(name)
+    if name in RESIDUALS or name == "plot_residuals":
+        if name in RESIDUALS:
+            p.epilog = ("-m MOD (every MOD-th record), -l LAST (the last "
+                        "LAST records), -a AVE (means of AVE records) go "
+                        "to resopt, as for %s." % name)
+        args, rest = p.parse_known_args(argv)
+        args.resopt = rest if name in RESIDUALS else []
+        if name == "plot_residuals" and rest:
+            sys.stderr.write("plot_residuals.py: ignored: %s\n"
+                             % " ".join(rest))
+        return args
+    _averaging_options(p)
+    if name == "2dt_tracing":
+        p.add_argument("-lx", action="store_true", help="logarithmic time")
+        p.add_argument("-ly", action="store_true", help="logarithmic values")
+        p.add_argument("columns", nargs="*", metavar="NAME",
+                       help="tracing columns (e.g. ion_core_D tot_rad)")
+    args = p.parse_args(argv)
+    for n in (args.rolling, args.batch):
+        if n is not None and n < 1:
+            p.error("the averaging length must be at least 1")
+    return args
+
+
+def main(argv):
+    if not argv:
+        sys.stderr.write("--run-plot: no script name\n")
+        return 2
+    name, argv = argv[0], argv[1:]
+    if name not in USAGE:
+        sys.stderr.write("--run-plot: unknown script %s\n" % name)
+        return 2
+    requirements.NAME = name + ".py"
+    requirements.GRAPHICS_OF = name + ".py"
+    args = _parse(name, argv)
+    one_page = name in RESIDUALS or name == "2dt_tracing"
+    from .output import Output
+    out = Output(name, args, one_page)
+    if name in RESIDUALS or name == "plot_residuals":
+        return _residuals(name, args, out)
+    return _tracing(name, args, out)
+
+
+def _residuals(name, args, out):
+    from . import residuals
+    kinds = [RESIDUALS[name]] if name in RESIDUALS else ["co", "mo", "he",
+                                                          "hi"]
+    pages = [residuals.page(k, args.resopt, name) for k in kinds]
+    pages = [p for p in pages if p is not None]
+    title = pages[0].footer.split("    ")[0] if pages else ""
+    return out.deliver(title, pages,
+                       "residuals.ps" if name == "plot_residuals" else None)
+
+
+def _tracing(name, args, out):
+    from . import averaging, tracing
+    avg = averaging.Averaging(args.rolling, args.batch, name + ".py")
+    if name == "2dt_tracing":
+        if not args.columns:
+            sys.stderr.write("Error: You must provide at least one argument "
+                             "(1st, 2nd, etc. arguments will be plotted vs. "
+                             "time).\n")
+            return 1
+        trc = tracing.Tracing(name, avg)
+        page = trc.page("tracing", "Tracing data: " + ", ".join(args.columns),
+                        args.columns, logx=args.lx, logy=args.ly)
+        return out.deliver(trc.footer, [page] if page else [])
+    trc = tracing.Tracing(name, avg)
+    if name == "particle_balance_tracing":
+        return out.deliver(trc.footer, tracing.particle_pages(trc),
+                           "particle_balance.ps")
+    if "blne.trc" not in trc.files:
+        print("No blne.trc tracing file found. Cannot proceed.")
+        return 0
+    return out.deliver(trc.footer, tracing.energy_pages(trc),
+                       "energy_balance.ps")
