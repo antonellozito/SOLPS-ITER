@@ -15,8 +15,10 @@ import sys
 REQUIRED_PYTHON = (3, 9)
 REQUIRED = [("PySide6", "6.4"), ("numpy", "1.21"), ("matplotlib", "3.8")]
 
-# Name in messages, set from the command line (options.name)
+# Name in messages, set from the command line (options.name), and the
+# program whose Python graphics are checked (a run plot script sets both)
 NAME = "b2plot"
+GRAPHICS_OF = "b2plot"
 
 # Settings of other Python, Qt and matplotlib installations that would
 # reach the Python graphics: removed for its Python, given back to the
@@ -177,14 +179,15 @@ def child_environment(**extra):
     return env
 
 
-def problems(gui):
-    """List of missing or too old requirements (empty if all is fine)."""
+def problems(gui, extra=()):
+    """List of missing or too old requirements (empty if all is fine);
+    extra: (module, minimum version) needed on top of REQUIRED."""
     found = []
     if sys.version_info < REQUIRED_PYTHON:
         return ["Python (need >= %d.%d)" % REQUIRED_PYTHON]
     import importlib
     import importlib.metadata
-    for name, minimum in REQUIRED:
+    for name, minimum in REQUIRED + list(extra):
         if name == "PySide6" and not gui:
             continue   # Qt only for windows: files need numpy and matplotlib
         try:
@@ -392,18 +395,21 @@ def window_problem():
     return text
 
 
-def fail(found):
+def fail(found, extra=()):
     v = sys.version_info
-    need = ", ".join("%s >= %s" % r for r in REQUIRED)
+    need = ", ".join("%s >= %s" % r for r in REQUIRED + list(extra))
     lines = [
         "%s: the Python of this SOLPS-ITER session cannot run the Python "
-        "graphics of b2plot." % NAME,
+        "graphics of %s." % (NAME, GRAPHICS_OF),
         "  Interpreter: %s (Python %d.%d.%d)" % (sys.executable, v[0], v[1],
                                                  v[2]),
         "  Missing or too old: " + "; ".join(found),
-        "The Python graphics of b2plot need Python >= %d.%d with: %s"
-        % (REQUIRED_PYTHON + (need,)),
+        "The Python graphics of %s need Python >= %d.%d with: %s"
+        % ((GRAPHICS_OF,) + REQUIRED_PYTHON + (need,)),
     ]
+    no_window = ("B2PLOT_DEV=ps writes the pages to b2plot.ps without "
+                 "windows." if GRAPHICS_OF == "b2plot" else
+                 "--no-show writes the files without a window.")
     local = os.path.join(os.environ.get("SOLPSTOP", ""), "lib",
                          "%s.%s" % (os.environ.get("HOST_NAME", ""),
                                     os.environ.get("COMPILER", "")),
@@ -413,8 +419,7 @@ def fail(found):
                   "Linux) and the system",
                   "  libraries listed above; on Linux run install_python "
                   "again, it provides the",
-                  "  missing ones. B2PLOT_DEV=ps writes the pages to "
-                  "b2plot.ps without windows."]
+                  "  missing ones. " + no_window]
     elif found and all(f.startswith("Qt for matplotlib") for f in found):
         lines += ["PySide6 is installed, but its Qt libraries cannot be "
                   "loaded: another Qt",

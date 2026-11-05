@@ -2,7 +2,8 @@
 
 Started by the run targets of b2plot and b2run (b2pl, b2yg ... b2yr) in a
 B2.5 build with the Python graphics (--exec), by the carre2 scripts for
-carre.exe of a Carre2 build with them (--exec), and by b2plot_gui (--gui);
+carre.exe of a Carre2 build with them (--exec), by b2plot_gui (--gui),
+and by the run plot scripts scripts/*.py (--run-plot NAME, runplots);
 run it as
 python $SOLPSTOP/lib/python. All values are
 computed by the Fortran b2plot (b2pl.exe); -h lists the options.
@@ -97,6 +98,10 @@ def dry_run(args):
 def main(argv=None):
     requirements.NAME = options.name(argv)
     requirements.reexec_with_session_python()
+    words = sys.argv[1:] if argv is None else list(argv)
+    if words[:1] == ["--run-plot"]:
+        from b2plotpy import runplots
+        return runplots.main(words[1:])
     args = options.parse(argv)
     if args.info:
         return info(args)

@@ -1498,12 +1498,14 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
   \item[res\_D+C+He]\index{res\_D+C+He} non-species dependent residuals for a $D+C+He$ case
   \item[res\_D+C+Ar+Ne+He]\index{res\_D+C+Ar+Ne+He} non-species dependent residuals for a $D+C+Ar+Ne+He$ case
   \item[resco]\index{resco} continuity residuals per species
+  \item[resco.py]\index{resco.py} Python version of {\tt resco}
   \item[resco\_reg]\index{resco\_reg} continuity residuals per region
   \item[resco\_reg\_region \#1]\index{resco\_reg\_region} continuity residuals per region for species \#1 (default 0)
   \item[resco\_D+C]\index{resco\_D+C} continuity residuals for a $D+C$ case
   \item[resco\_D+O]\index{resco\_D+O} continuity residuals for a $D+O$ case
   \item[resco\_D+C+He]\index{resco\_D+C+He} continuity residuals for a $D+C+He$ case
   \item[resmo]\index{resmo} parallel momentum residuals per species
+  \item[resmo.py]\index{resmo.py} Python version of {\tt resmo}
   \item[resmo\_reg \#1]\index{resmo\_reg} parallel momentum residuals per species for region \#1 (default 0)
   \item[resmo\_reg\_region \#1]\index{resmo\_reg\_region} parallel momentum residuals per region for species \#1 (default 0)
   \item[resmo\_D+C]\index{resmo\_D+C} parallel momentum residuals for a $D+C$ case
@@ -1511,8 +1513,10 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
   \item[resmo\_D+C+He]\index{resmo\_D+C+He} parallel momentum residuals for a $D+C+He$ case
   \item[resmt\_reg]\index{resmt\_reg} residuals of the total parallel momentum equation
   \item[reshe]\index{reshe} residuals of the electron heat equation
+  \item[reshe.py]\index{reshe.py} Python version of {\tt reshe}
   \item[reshe\_reg]\index{reshe\_reg} residuals of the electron heat equation per region
   \item[reshi]\index{reshi} residuals of the ion heat equation
+  \item[reshi.py]\index{reshi.py} Python version of {\tt reshi}
   \item[reshi\_reg]\index{reshi\_reg} residuals of the ion heat equation per region
   \item[respo] \index{respo} residuals of the potential equation, including the internal iterations
   \item[respo\_num] \index{respo\_num} the number of internal potential equation iterations
@@ -1701,6 +1705,7 @@ rm GNUPLOT_COUNT gnuplot.*data
   A python version of this script also exists (Python 2.7 and 3.5 compatible).
   \item[2dt\_tallies.py]\index{2dt\_tallies.py} plots time-dependent quantities from {\tt b2tallies.nc} (Appendix~\ref{cha:b2tallies}) versus time (Python 3.5 compatible).
   \item[2dt\_tracing]\index{2dt\_tracing} plots time-dependent quantities from the run tracing files {\tt tracing/*.trc}.
+  \item[2dt\_tracing.py]\index{2dt\_tracing.py} Python version of {\tt 2dt\_tracing}.
   \item[2dt\_av]\index{2dt\_av} plots averaged time-dependent quantities from {\tt b2time.nc} (Appendix~\ref{cha:b2time}) versus time. Multi-species quantities should be called as {\tt \$\{name\}\allowbreak\$\{is\}}, where {\tt \$\{is\}} is the {\tt B2.5} species index (the species names can be retrieved using the {\bf species} command). E.g.:
   \begin{verbatim}
   > 2dt_av nesepm
@@ -1742,6 +1747,7 @@ rm GNUPLOT_COUNT gnuplot.*data
   \item[energy\_balance\_coupled]\index{energy\_balance\_coupled} Plots the energy balance, including sources from {\tt Eirene}.
   \item[energy\_balance\_extended]\index{energy\_balance\_extended} Plots an extended version including volumetric sources of the energy balance.
   \item[energy\_balance\_tracing]\index{energy\_balance\_tracing} prepares the {\tt energy\_balance.ps} file from {\tt tracing/blne.trc} containing the full energy balance of the run (in order: total energy balance, decomposition of radiation terms, decomposition of the energy load onto the inner target, decomposition of the energy load onto the outer target, decomposition of the energy load onto the main wall).
+  \item[energy\_balance\_tracing.py]\index{energy\_balance\_tracing.py} Python version of {\tt energy\_balance\_tracing}.
   \item[fchreg]\index{fchreg} Plots the electric current flow across important face-directed surfaces in {\tt B2.5}.
   \item[fhereg]\index{fhereg} Plots the electron energy flow across important face-directed surfaces in {\tt B2.5}.
   \item[fhireg]\index{fhireg} Plots the ion energy flow across important face-directed surfaces in {\tt B2.5}.
@@ -1770,8 +1776,10 @@ rm GNUPLOT_COUNT gnuplot.*data
   \item[nesepm\_feedback\_fluid]\index{nesepm\_feedback\_fluid} Plots in {\tt feedback.ps} the parameters of the {\em nesepm\_sol} feedback scheme for fluid runs.
   \item[nireg]\index{nireg} Shows averaged total ion density per region.
   \item[particle\_balance\_tracing]\index{particle\_balance\_tracing} prepares the {\tt particle\_balance.ps} file from {\tt tracing/blnn\_SPb.trc} containing the full particle balance of the run (in order: total particle balance and ion balance, both for all fluid species).
+  \item[particle\_balance\_tracing.py]\index{particle\_balance\_tracing.py} Python version of {\tt particle\_balance\_tracing}.
   \item[particle\_conservation\_coupled]\index{particle\_conservation\_coupled} Plots the particle balance for multi-species coupled runs
   \item[plot\_residuals]\index{plot\_residuals} prepares the {\tt residuals.ps} containing the time traces of all the run residuals.
+  \item[plot\_residuals.py]\index{plot\_residuals.py} Python version of {\tt plot\_residuals}.
   \item[print\_species]\index{print\_species} Prints the list of species included in the run.
   \item[reflection]\index{reflection} Shows reflected particle fluxes (for {\tt B2.5} standalone runs).
   \item[reflection\_energy]\index{reflection\_energy} Shows reflected energy fluxes (for {\tt B2.5} standalone runs).
