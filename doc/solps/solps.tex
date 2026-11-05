@@ -1823,6 +1823,7 @@ for the definitions of the regions and surfaces)\index{SOLPS\_FLUIDS}\index{NREG
   \item[blank]\index{blank} Dummy script that does nothing.
   \item[canonical \#1]\index{canonical} Provides the full absolute path to the filename given as argument.
   \item[check\_adas\_repository\_access]\index{check\_adas\_repository\_access}\index{ADAS} Tests whether the access-controlled ADAS repository can be contacted without prompting. It returns a successful status only when the repository is accessible and is used by {\tt solps-iter\_update\_wg\_release} to keep an optional ADAS connection failure from blocking required submodule updates. Setting {\tt SOLPS\_SKIP\_ADAS\_REPOSITORY} forces an unsuccessful status without testing the connection. For SSH repository addresses, {\tt SOLPS\_ADAS\_CONNECT\_TIMEOUT} sets the connection timeout in seconds and defaults to five.
+  \item[check\_python.py]\index{check\_python.py} Returns a successful status when the Python of the session can run the Python versions of the plot scripts; used by {\tt summarize\_run} and {\tt summarize\_run\_tracing}.
   \item[chop\_pwd \#1]\index{chop\_pwd} Truncates the name of the current directory to not exceed \#1 characters (default 60).
   \item[count]\index{count} Basic counting with advanced options ({\tt count -h} for help).
   \item[datestamp]\index{datestamp} Gets a date stamp from the machine.

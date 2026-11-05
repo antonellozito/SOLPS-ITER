@@ -7,6 +7,11 @@ setenv PRINT_PLOT resmo.ps ; resmo && rm -f gnuplot.data gnuplot.cmd PLOT_FROM_F
 setenv PRINT_PLOT rqahereg.ps ; rqahereg && rm -f gnuplot.data gnuplot.cmd PLOT_FROM_FILE
 setenv PRINT_PLOT energy_analysis_total.ps ; energy_analysis_total && rm -f gnuplot.data gnuplot.cmd PLOT_FROM_FILE
 setenv PRINT_PLOT density.ps ; density l && rm -f gnuplot.data gnuplot.cmd PLOT_FROM_FILE
-2d_profiles
-2d_plots
+if ( { check_python.py } ) then
+  2d_profiles.py --no-show
+  2d_plots.py --no-show
+else
+  2d_profiles
+  2d_plots
+endif
 last10
