@@ -8,7 +8,8 @@ to the PostScript file of the old script; b2time.nc and b2batch.nc are
 read with netCDF4.
 
 Started by the launchers scripts/NAME.py through the package entry
-(--run-plot NAME ARGUMENTS). The helper scripts that know the run
+(--run-plot NAME ARGUMENTS); check_python.py tells whether this Python
+can run them. The helper scripts that know the run
 (climb_and_look_for, get_solps_fluids, pipe_run.log, groups_species,
 chop_pwd, resopt) are called as they are (helpers.py).
 
@@ -128,6 +129,14 @@ def main(argv):
         sys.stderr.write("--run-plot: no script name\n")
         return 2
     name, argv = argv[0], argv[1:]
+    if name == "check_python":
+        argparse.ArgumentParser(
+            prog="check_python.py",
+            description="Exit status 0 when the Python of this session can "
+                        "run the Python versions of the plot scripts "
+                        "without windows, else 1 with the missing "
+                        "modules.").parse_args(argv)
+        return _check(EXTRA)
     if name not in USAGE:
         sys.stderr.write("--run-plot: unknown script %s\n" % name)
         return 2
@@ -149,6 +158,20 @@ def main(argv):
     if name in NETCDF:
         return _netcdf(name, args, out)
     return _tracing(name, args, out)
+
+
+def _check(extra):
+    """check_python.py: 0 when this Python has the modules of all the run
+    plots (no window), else 1 with the missing ones."""
+    found = requirements.problems(False, extra)
+    if found:
+        sys.stderr.write("check_python.py: %s cannot run the Python plot "
+                         "scripts, missing or too old: %s\n"
+                         % (sys.executable, "; ".join(found)))
+        return 1
+    print("check_python.py: %s can run the Python plot scripts"
+          % sys.executable)
+    return 0
 
 
 def _residuals(name, args, out):

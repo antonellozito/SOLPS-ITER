@@ -1,8 +1,16 @@
 #! /bin/tcsh -f
 
-2d_profiles
-2d_plots
-particle_balance_tracing
-energy_balance_tracing
-plot_residuals
+if ( { check_python.py } ) then
+  2d_profiles.py --no-show
+  2d_plots.py --no-show
+  particle_balance_tracing.py --no-show
+  energy_balance_tracing.py --no-show
+  plot_residuals.py --no-show
+else
+  2d_profiles
+  2d_plots
+  particle_balance_tracing
+  energy_balance_tracing
+  plot_residuals
+endif
 last10
