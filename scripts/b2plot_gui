@@ -55,4 +55,4 @@ if ($status != 0) then
   echo "b2plot_gui: $py not found: the b2plot GUI needs the SOLPS-ITER Python, see install_python"
   exit 2
 endif
-exec $py $SOLPSTOP/scripts/b2plotpy --gui $opts:q
+exec $py $SOLPSTOP/lib/python --gui $opts:q

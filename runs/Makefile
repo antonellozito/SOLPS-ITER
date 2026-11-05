@@ -90,10 +90,10 @@ fort_lc = ftn
 endif
 
 # B2.5 built with the Python graphics (its stamp file): the graphical
-# programs run through b2plotpy, which writes b2plot.ps and b2yX.pdf
+# programs run through lib/python, which writes b2plot.ps and b2yX.pdf
 ifneq ($(wildcard ${B2OBJ}/.graphics_python),)
 ifndef B2PLOT_PY_FIFO
-B2PY = $(if ${PYTHON},${PYTHON},python3) ${SOLPSTOP}/scripts/b2plotpy --exec
+B2PY = $(if ${PYTHON},${PYTHON},python3) ${SOLPSTOP}/lib/python --exec
 endif
 PLT = pdf
 else

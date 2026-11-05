@@ -69,7 +69,8 @@ unicos*/
 bin/
 bins/
 builds/
-lib/
+**/lib/*
+!/lib/python/
 libs/
  
 # temporary link files for scripts
