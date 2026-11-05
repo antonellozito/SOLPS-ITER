@@ -289,3 +289,73 @@ def species_of(base, index, names, neutrals):
         return "species %d" % index
     label = species_label(pool[index])
     return label + " atoms (EIRENE)" if base.startswith("dab") else label
+
+
+# b2time.nc profiles (stem 3d location): quantity, symbol and unit as the
+# old scripts plot them (temperatures te, ti in eV; tab, tmb stay in J)
+PROFILE_QUANTITY = {
+    "ne": ("electron density", "$n_e$", "m$^{-3}$"),
+    "na": ("density", "$n$", "m$^{-3}$"),
+    "dab": ("density", "$n$", "m$^{-3}$"),
+    "dmb": ("molecule density (EIRENE)", "$n_m$", "m$^{-3}$"),
+    "an": ("atom density (main species)", "$n_a$", "m$^{-3}$"),
+    "mn": ("molecule density", "$n_m$", "m$^{-3}$"),
+    "te": ("electron temperature", "$T_e$", "eV"),
+    "ti": ("ion temperature", "$T_i$", "eV"),
+    "tab": ("atom temperature (EIRENE)", "$T_a$", "J"),
+    "tmb": ("molecule temperature (EIRENE)", "$T_m$", "J"),
+    "po": ("potential", r"$\phi$", "V"),
+    "ke": ("electron thermal diffusivity", r"$\chi_e$", "m$^2$ s$^{-1}$"),
+    "ki": ("ion thermal diffusivity", r"$\chi_i$", "m$^2$ s$^{-1}$"),
+    "dn": ("particle diffusion coefficient", "$D_n$", "m$^2$ s$^{-1}$"),
+    "dp": ("pressure diffusion coefficient", "$D_p$", "m$^2$ s$^{-1}$"),
+    "vx": ("poloidal pinch velocity", "$v_x$", "m s$^{-1}$"),
+    "vy": ("radial pinch velocity", "$v_y$", "m s$^{-1}$"),
+    "vs": ("viscosity coefficient", r"$\eta$", "m kg$^{-1}$ s$^{-1}$"),
+    "lh": ("radial neutral heat flux limiter", "", ""),
+    "ln": ("radial neutral particle flux limiter", "", ""),
+}
+# poloidal fluxes: (quantity, symbol, unit per area, unit without area)
+PROFILE_FLUX = {
+    "fo": ("ion particle flux", r"$\Gamma_i$", "m$^{-2}$ s$^{-1}$",
+           "s$^{-1}$"),
+    "fn": ("atom particle flux", r"$\Gamma_a$", "m$^{-2}$ s$^{-1}$",
+           "s$^{-1}$"),
+    "fl": ("electron particle flux", r"$\Gamma_e$", "m$^{-2}$ s$^{-1}$",
+           "s$^{-1}$"),
+    "fe": ("electron energy flux", "$q_e$", "W m$^{-2}$", "W"),
+    "fi": ("ion energy flux", "$q_i$", "W m$^{-2}$", "W"),
+    "ft": ("total energy flux", "$q$", "W m$^{-2}$", "W"),
+    "fc": ("current", "$j$", "A m$^{-2}$", "A"),
+}
+
+
+def profile_location(suffix, config):
+    """Location of the profiles with this suffix (a, i, l, r, tl, tr)."""
+    if suffix == "a":
+        return config.midplane()
+    if suffix == "i":
+        return "inner midplane"
+    side = "i" if suffix.endswith("l") else "a"
+    return config.target(side, 1 if suffix.startswith("t") else 0)
+
+
+def profile_xlabel(suffix):
+    """Abscissa of the profiles: the ds coordinate of the location."""
+    if suffix in ("a", "i"):
+        return "distance from the separatrix [m]"
+    return "distance along the target from the separatrix [m]"
+
+
+def profile(stem, suffix, config, species="", divided=True, long_name=""):
+    """Label parts of a profile (stem: ne, na, fo, dab, ...)."""
+    where = profile_location(suffix, config)
+    if stem in PROFILE_FLUX:
+        q, s, per_area, plain = PROFILE_FLUX[stem]
+        if divided:
+            return Trace(q + " density", s, per_area, where, species)
+        return Trace(q, s, plain, where, species)
+    if stem in PROFILE_QUANTITY:
+        q, s, u = PROFILE_QUANTITY[stem]
+        return Trace(q, s, u, where, species)
+    return Trace(long_name or stem, "", "", where, species)

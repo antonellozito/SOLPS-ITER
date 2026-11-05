@@ -91,7 +91,12 @@ def nc2text(data, expression):
     name, subscripts = (m.group(1), m.group(2)) if m else (expression, None)
     if name not in data.variables:
         raise KeyError(name)
-    a = np.asarray(data.variables[name][:], dtype=float)
+    return nc2text_array(np.asarray(data.variables[name][:], dtype=float),
+                         subscripts)
+
+
+def nc2text_array(a, subscripts=None):
+    """nc2text_simple of an array in netCDF (C) order."""
     f = a.T.reshape(a.T.shape + (1,) * (3 - a.ndim)) if a.ndim else \
         a.reshape(1, 1, 1)
     b = [1, 0, 1, 0, 1, 0]

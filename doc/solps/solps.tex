@@ -1695,6 +1695,7 @@ rm GNUPLOT_COUNT gnuplot.*data
   > 2dds na3da1 na3da9
   \end{verbatim}
   By default, the plotted profiles will be averaged over the last 10 snapshots. If the number of available snapshots is less than 10, the default will be to average over all the snapshots available. The averaging limits can be adjusted with the two further arguments which should be added at end of the command (default values are 10 and 0 respectively).
+  \item[2dds.py]\index{2dds.py} Python version of {\tt 2dds}.
   \item[2dt]\index{2dt} plots time-dependent quantities from {\tt b2time.nc} (Appendix~\ref{cha:b2time}) versus time. Multi-species quantities should be called as {\tt \$\{name\}\allowbreak\$\{is\}}, where {\tt \$\{is\}} is the {\tt B2.5} species index (the species names can be retrieved using the {\bf species} command). E.g.:
   \begin{verbatim}
   > 2dt nesepm
@@ -1718,7 +1719,9 @@ rm GNUPLOT_COUNT gnuplot.*data
   \item[2d\_plots\_av]\index{2d\_plots\_av} prepares {\tt b2time2d\_time\_traces\_av.ps} from averaged values in {\tt b2time.nc} (Appendix~\ref{cha:b2time}) containing several relevant time traces. This uses the batch feature of the {\tt plot} command.
   \item[2d\_plots\_av.py]\index{2d\_plots\_av.py} Python version of {\tt 2d\_plots\_av}.
   \item[2d\_profiles]\index{2d\_profiles} creates {\tt *.last10} files containing several relevant plasma profiles at relevant locations (inner/outer midplane and divertor targets), and plots the important ones on {\tt b2time2d\_profiles.ps}. When processing fluxes, divides them by the area of contact to the neighbouring cell. By default, the printed profiles will be averaged over the last 10 snapshots. If the number of available snapshots is less than 10, the default will be to average over all the snapshots available. The averaging limits can be adjusted with the \#1 and \#2 arguments (default values are 10 and 0 respectively).
+  \item[2d\_profiles.py]\index{2d\_profiles.py} Python version of {\tt 2d\_profiles}.
   \item[2d\_profiles\_extended]\index{2d\_profiles\_extended} creates {\tt *.last10} files containing several relevant plasma profiles at relevant locations (inner/outer midplane and divertor targets). When processing fluxes, divides them by the area of contact to the neighbouring cell. The flux files ending in {\tt P.last10} are divided by the perpendicular area of the cell face. By default, the printed profiles will be averaged over the last 10 snapshots. If the number of available snapshots is less than 10, the default will be to average over all the snapshots available. The averaging number can be adjusted with the \#1 argument (default value is 10).
+  \item[2d\_profiles\_extended.py]\index{2d\_profiles\_extended.py} Python version of {\tt 2d\_profiles\_extended}.
   \item[2d.summarize]\index{2d.summarize} Outputs the time-dependent quantities from the last time point in {\tt b2time.nc}.
   \item[b2favere\_OK]\index{b2favere\_OK} Checks that the {\tt b2favere} file is of correct size and content.
   \item[b2fstate\_OK]\index{b2fstate\_OK} Checks that the {\tt b2fstate} file is of correct size and content.

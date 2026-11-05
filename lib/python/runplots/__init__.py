@@ -1,10 +1,11 @@
 """Python versions of run plot scripts of scripts/: the same calls and the
 same pages as resco, resmo, reshe, reshi, plot_residuals, 2dt_tracing,
 particle_balance_tracing, energy_balance_tracing, 2dt, 2dt_av, 2d,
-2d_plots and 2d_plots_av, drawn by matplotlib instead of gnuplot, and the
-same text as 2da. The pages open in one window with a tab
-each and go to the PostScript file of the old script; b2time.nc and
-b2batch.nc are read with netCDF4.
+2d_plots, 2d_plots_av, 2dds and 2d_profiles, drawn by matplotlib instead
+of gnuplot, and the same text as 2da, 2d_profiles and 2d_profiles_extended
+(the .last10 files). The pages open in one window with a tab each and go
+to the PostScript file of the old script; b2time.nc and b2batch.nc are
+read with netCDF4.
 
 Started by the launchers scripts/NAME.py through the package entry
 (--run-plot NAME ARGUMENTS). The helper scripts that know the run
@@ -23,8 +24,9 @@ from .. import requirements
 RESIDUALS = {"resco": "co", "resmo": "mo", "reshe": "he", "reshi": "hi"}
 TRACING = ("2dt_tracing", "particle_balance_tracing",
            "energy_balance_tracing")
-NETCDF = ("2dt", "2dt_av", "2d", "2da", "2d_plots", "2d_plots_av")
-TEXT = ("2da",)
+PROFILES = ("2dds", "2d_profiles", "2d_profiles_extended")
+NETCDF = ("2dt", "2dt_av", "2d", "2da", "2d_plots", "2d_plots_av") + PROFILES
+TEXT = ("2da", "2d_profiles_extended")
 EXTRA = [("netCDF4", "1.6")]
 USAGE = {
     "resco": "continuity residuals per species against the iteration",
@@ -46,6 +48,11 @@ USAGE = {
                 "b2time2d_time_traces.ps",
     "2d_plots_av": "the b2batch.nc averaged time traces, also in "
                    "b2time2d_time_traces_av.ps",
+    "2dds": "b2time.nc profiles against their ds coordinate, means over "
+            "the last NUM time slices (default 10) up to END (0: the last)",
+    "2d_profiles": "the profiles in 2d_profiles/*.last10, also in "
+                   "b2time2d_profiles.ps",
+    "2d_profiles_extended": "more profiles in *.last10 of the run folder",
 }
 
 
@@ -85,7 +92,7 @@ def _parse(name, argv):
                              % " ".join(rest))
         return args
     _averaging_options(p)
-    if name in ("2dt_tracing", "2dt", "2dt_av", "2d"):
+    if name in ("2dt_tracing", "2dt", "2dt_av", "2d", "2dds"):
         p.add_argument("-lx", action="store_true",
                        help="logarithmic abscissa")
         p.add_argument("-ly", action="store_true", help="logarithmic values")
@@ -98,6 +105,17 @@ def _parse(name, argv):
     if name in ("2dt", "2dt_av", "2d", "2da"):
         p.add_argument("names", nargs="*", metavar="NAME",
                        help="b2time.nc names (species: nasepm1, dabsepm0)")
+    elif name == "2dds":
+        p.add_argument("names", nargs="*", metavar="NAME",
+                       help="b2time.nc profiles (species: na3da1), then "
+                            "NUM and END as for 2dds")
+    elif name == "2d_profiles":
+        p.add_argument("window", nargs="*", type=int, metavar="NUM END",
+                       help="NUM time slices (default 10) up to END "
+                            "(default 0, the last)")
+    elif name == "2d_profiles_extended":
+        p.add_argument("window", nargs="*", type=int, metavar="NUM",
+                       help="NUM time slices (default 10)")
     args = p.parse_args(argv)
     for n in (args.rolling, args.batch):
         if n is not None and n < 1:
@@ -123,7 +141,7 @@ def main(argv):
             requirements.fail(found, extra)
         return _netcdf(name, args, None)
     one_page = name in RESIDUALS or name in ("2dt_tracing", "2dt", "2dt_av",
-                                             "2d")
+                                             "2d", "2dds")
     from .output import Output
     out = Output(name, args, one_page, extra)
     if name in RESIDUALS or name == "plot_residuals":
@@ -168,8 +186,46 @@ def _tracing(name, args, out):
                        "energy_balance.ps")
 
 
+def _profiles(name, args, out):
+    import os
+    from . import averaging, helpers, profiles
+    avg = averaging.Averaging(args.rolling, args.batch, name + ".py")
+    if name == "2dds":
+        names, num, end = profiles.dds_arguments(
+            [n for a in args.names for n in a.split()])
+        if not names:
+            sys.stderr.write("Error: You must provide at least one argument "
+                             "(1st, 2nd, etc. arguments will be plotted vs. "
+                             "ds*).\n")
+            return 1
+        prof = profiles.Profiles(name, avg)
+        page = profiles.dds_page(prof, names, num, end, args.lx, args.ly)
+        return out.deliver(helpers.chop_pwd(60), [page] if page else [])
+    window = list(args.window) + [10, 0][len(args.window):]
+    if name == "2d_profiles_extended":
+        num = 1 - window[0]
+        print(num, flush=True)
+        nreg = helpers.nreg(check=False)
+        prof = profiles.Profiles(name, avg, nreg)
+        profiles.write_extended(prof, nreg, num)
+        return 0
+    nreg_file = helpers.nreg_file()
+    nreg = helpers.nreg()
+    prof = profiles.Profiles(name, avg, nreg or nreg_file)
+    num, end = prof.window(1 + window[1] - window[0], window[1])
+    folder = os.environ.get("GNUPLOT_TMP") or "2d_profiles"
+    profiles.write_last10(prof, nreg if nreg is not None else nreg_file,
+                          num, end, folder)
+    if nreg is None:
+        return 1
+    pages = profiles.profile_pages(prof, nreg, abs(num) + 1, abs(end))
+    return out.deliver(helpers.chop_pwd(60), pages, "b2time2d_profiles.ps")
+
+
 def _netcdf(name, args, out):
     import os
+    if name in PROFILES:
+        return _profiles(name, args, out)
     from . import averaging, helpers, timetraces
     avg = averaging.Averaging(args.rolling, args.batch, name + ".py")
     names = timetraces.names_of(getattr(args, "names", []))
