@@ -84,17 +84,27 @@ def species_label(name):
     return r"%s$^{%s}$" % (element, sup)
 
 
+def surfaces(four_targets=False, swapped=False):
+    """Names of the blne.trc surfaces; swapped: il is the outer target
+    (geometry.first_target_outer, single null only)."""
+    if four_targets:
+        return SURFACE_FOUR
+    if swapped:
+        return dict(SURFACE, il=SURFACE["ol"], ol=SURFACE["il"])
+    return SURFACE
+
+
 def tracing_label(name, elements, four_targets=False, element=None,
-                  surface=None):
+                  surface=None, swapped=False):
     """Legend text of a tracing column, the element after a comma; the
     element or surface of the page title (element, surface) is left out."""
-    surfaces = SURFACE_FOUR if four_targets else SURFACE
+    surfaces_ = surfaces(four_targets, swapped)
     m = re.match(r"^pwr_(totl|plsm|neut|ionz|diss)_(il|ol|iu|ou|wl)$", name)
     if m:
         text = SURFACE_QUANTITY[m.group(1)]
         if m.group(2) == surface:
             return text
-        return "%s to the %s" % (text, surfaces[m.group(2)])
+        return "%s to the %s" % (text, surfaces_[m.group(2)])
     for e in elements:
         if name.endswith("_" + e):
             base = name[:-len(e) - 1]
@@ -134,3 +144,148 @@ RESIDUAL = {
     "hi": ("Residual norm of the ion energy equation",
            "norm of the ion energy residual"),
 }
+
+
+# b2time.nc and b2batch.nc time traces: quantity, symbol, unit by the start
+# of the name (units checked against the stored values)
+TRACE_QUANTITY = (
+    ("pwmx", "maximum total power flux density", "$q_{max}$", "W m$^{-2}$"),
+    ("dab", "density", "$n$", "m$^{-3}$"),
+    ("dmb", "molecule density (EIRENE)", "$n_m$", "m$^{-3}$"),
+    ("tab", "atom temperature (EIRENE)", "$T_a$", "eV"),
+    ("tmb", "molecule temperature (EIRENE)", "$T_m$", "eV"),
+    ("fni", "particle flux", r"$\Gamma$", "s$^{-1}$"),
+    ("fee", "electron energy flux", "$Q_e$", "W"),
+    ("fei", "ion energy flux", "$Q_i$", "W"),
+    ("fet", "total internal energy flux", "$Q$", "W"),
+    ("fch", "current", "$I$", "A"),
+    ("ne", "electron density", "$n_e$", "m$^{-3}$"),
+    ("na", "density", "$n$", "m$^{-3}$"),
+    ("te", "electron temperature", "$T_e$", "eV"),
+    ("ti", "ion temperature", "$T_i$", "eV"),
+    ("po", "potential", r"$\phi$", "V"),
+    ("kt", "turbulent kinetic energy", "$k$", "eV"),
+    ("dn", "particle diffusion coefficient", "$D_n$", "m$^2$ s$^{-1}$"),
+    ("dp", "pressure diffusion coefficient", "$D_p$", "m$^2$ s$^{-1}$"),
+    ("ke", "electron thermal diffusivity", r"$\chi_e$", "m$^2$ s$^{-1}$"),
+    ("ki", "ion thermal diffusivity", r"$\chi_i$", "m$^2$ s$^{-1}$"),
+    ("vx", "poloidal pinch velocity", "$v_x$", "m s$^{-1}$"),
+    ("vy", "radial pinch velocity", "$v_y$", "m s$^{-1}$"),
+    ("vs", "viscosity coefficient", r"$\eta$", "m kg$^{-1}$ s$^{-1}$"),
+)
+TRACE_TOTAL = {
+    "tmne": ("total number of particles", "$N$", ""),
+    "tmte": ("total electron energy", "$E_e$", "eV"),
+    "tmti": ("total ion energy", "$E_i$", "eV"),
+}
+_LOCATION = re.compile(r"^(sepm|sepi|sepa|mxip|mxap|xip|xap|yip|yap|sipp|"
+                       r"sapp|sip|sap|ip|ap)(_av|_std)?$")
+
+
+class Configuration:
+    """Location names from NREG (its first number); for a single null,
+    swapped tells whether the first target is the outer one
+    (geometry.first_target_outer; None: left and right)."""
+
+    def __init__(self, nreg, swapped=None):
+        try:
+            self.n = int(str(nreg).split()[0])
+        except (ValueError, IndexError, TypeError):
+            self.n = 0
+        self.swapped = swapped
+
+    def single_null(self):
+        return self.n in (4, 5)
+
+    def target(self, side, row=0):
+        """side i or a, row 0 or 1 of the nc rows."""
+        if self.single_null():
+            if self.swapped is None:
+                return {"i": "left target", "a": "right target"}[side]
+            inner = (side == "i") != self.swapped
+            return "inner target" if inner else "outer target"
+        if self.n == 8:
+            return "%s %s target" % (("bottom", "top")[min(row, 1)],
+                                     {"i": "inner", "a": "outer"}[side])
+        if self.n == 7:
+            names = (("inner target", "primary outer target"),
+                     ("far-SOL outer target", "secondary outer target"))
+            return names[min(row, 1)][side == "a"]
+        return {"i": "left target", "a": "right target"}[side]
+
+    def midplane(self, row=0):
+        if self.n in (1, 2):
+            return "midpoint"
+        if self.n == 8 and row == 1:
+            return "inner midplane"
+        return "outer midplane"
+
+    def radial(self, side, row=0):
+        where = {"i": "main chamber", "a": "divertor region"}[side]
+        if self.n == 8:
+            where += ", %s side" % ("outer", "inner")[min(row, 1)]
+        return where
+
+    def location(self, code, row=0, rows=1):
+        if code == "sepm":
+            return "separatrix, " + self.midplane(row)
+        if code in ("sepi", "sepa"):
+            return "separatrix, " + self.target(code[-1], row)
+        if code in ("mxip", "mxap"):
+            return "maximum, " + self.target(code[2], row)
+        if code in ("xip", "xap"):
+            return "poloidal, into the " + self.target(code[1], row)
+        if code in ("ip", "ap"):
+            return self.target(code[0], row)
+        if code in ("yip", "yap"):
+            return "radial, " + self.radial(code[1], row)
+        throat = {"sip": "into the inner divertor throat",
+                  "sap": "into the outer divertor throat",
+                  "sipp": "core X-point region",
+                  "sapp": "X-point private flux region"}[code]
+        return "poloidal, " + throat + ("" if rows == 1
+                                        else ", row %d" % (row + 1))
+
+
+class Trace:
+    """The parts of a time-trace label; the page puts the shared ones in
+    the title and the others in the legend."""
+
+    def __init__(self, quantity, symbol, unit, location="", species=""):
+        self.quantity, self.symbol, self.unit = quantity, symbol, unit
+        self.location, self.species = location, species
+
+    def parts(self):
+        return [self.quantity, self.species, self.location]
+
+
+def trace(name, config, row=0, rows=1, species=None, long_name=""):
+    """Label parts of a b2time.nc name (species: the label of the species
+    index of a species name such as nasepm1)."""
+    plain = re.sub(r"_(av|std)$", "", name)
+    average = name.endswith("_av") and " (batch average)" or \
+        (name.endswith("_std") and " (batch standard deviation)" or "")
+    if plain in TRACE_TOTAL:
+        q, s, u = TRACE_TOTAL[plain]
+        return Trace(q + average, s, u)
+    for start, q, s, u in TRACE_QUANTITY:
+        if plain.startswith(start):
+            m = _LOCATION.match(plain[len(start):])
+            if m:
+                return Trace(q + average, s, u,
+                             config.location(m.group(1), row, rows),
+                             species or "")
+    text = long_name or name
+    return Trace(text + ("" if rows == 1 else ", row %d" % (row + 1)),
+                 "", "", species=species or "")
+
+
+def species_of(base, index, names, neutrals):
+    """Legend label of the species index of a species name: EIRENE atom
+    and molecule names (dab, tab, dmb, tmb) count the neutral species."""
+    eirene = base[:3] in ("dab", "tab", "dmb", "tmb")
+    pool = neutrals if eirene else names
+    if index >= len(pool):
+        return "species %d" % index
+    label = species_label(pool[index])
+    return label + " atoms (EIRENE)" if base.startswith("dab") else label

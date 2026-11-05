@@ -1,49 +1,16 @@
-#!/usr/bin/env python
-#
-# run as, for example: 2dt.py "nesepa nesepm nesepi"
-#
-# Have not checked yet against >2d arrays
-#
-# JDL
-from netCDF4 import Dataset
-import numpy as np
-import matplotlib.pyplot as plt
+#!/usr/bin/env python3
+"""2dt.py [-lx] [-ly] [--rolling N | --batch N] [--no-show] NAME...
 
-def main(plotvars):
-    file_in = "b2time.nc"
+Python version of 2dt: b2time.nc time traces against time, in a window
+(lib/python/runplots); species as nasepm1 or dabsepm0, also several names
+in one argument ("nesepa nesepm"); -h for the options.
+"""
 
-    plotvars = plotvars.split()
+import os
+import sys
 
-    try:
-        ncIn = Dataset(file_in)
-    except:
-        print("Error: Could not open "+file_in)
-        exit(0)
-
-    timesa = ncIn.variables['timesa'][:]
-
-    myvar = {}
-    for item in plotvars:
-        try:
-            myvar[item] = ncIn.variables[item][:]
-        except:
-            print("Error: Could not load variable "+item)
-            exit(0)
-
-#    print(np.shape(myvar[plotvars[0]]))
-    plt.figure()
-    for i,item in enumerate(plotvars):
-        plt.plot(timesa,np.squeeze(myvar[plotvars[i]]),label=item,marker='x')
-
-    plt.xlabel("time (s)")
-    plt.legend(loc="best")
-    plt.show()
-
-if __name__ == '__main__':
-    import argparse
-    import textwrap
-    parser = argparse.ArgumentParser()
-    parser.add_argument('plotvars', help = 'List of variables to plot from b2time.nc', type = str)
-    args = parser.parse_args()
-
-    main(args.plotvars)
+ENTRY = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir,
+                     "lib", "python")
+os.execv(sys.executable,
+         [sys.executable, ENTRY, "--run-plot", "2dt"]
+         + sys.argv[1:])

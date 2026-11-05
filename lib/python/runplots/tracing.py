@@ -15,6 +15,18 @@ MISSING = {"blnn_SPb.trc": "No blnn_SPb.trc tracing file found.",
            "blne.trc": "No blne.trc tracing file found."}
 
 
+def _first_target_outer():
+    """il of blne.trc is the first target of b2time.nc: True when it is the
+    outer one (geometry.py); without netCDF4 or b2time.nc the names of
+    B2.5 (il inner) are kept, since only the labels depend on it."""
+    try:
+        from . import geometry, ncdata
+        data = ncdata.open_file("b2time.nc")
+    except (ImportError, OSError):
+        return None
+    return geometry.first_target_outer(data)
+
+
 class Tracing:
     """The tracing files of the run and the elements of SOLPS_FLUIDS."""
 
@@ -25,6 +37,9 @@ class Tracing:
         self._reported = set()
         blne = self.files.get("blne.trc")
         self.four_targets = bool(blne and blne.has("pwr_totl_iu"))
+        self.swapped = False
+        if blne is not None and not self.four_targets:
+            self.swapped = bool(_first_target_outer())
         self.footer = helpers.chop_pwd(60)
 
     def _file_of(self, column):
@@ -56,7 +71,7 @@ class Tracing:
             x, y = self.averaging.apply(*trc.series(column))
             curves.append(Curve(x, y, quantities.tracing_label(
                 column, self.elements, self.four_targets, element,
-                surface)))
+                surface, self.swapped)))
         if not curves:
             return None
         footer = "%s    %s" % (self.footer, stamp())
@@ -87,8 +102,7 @@ def particle_pages(tracing):
 def energy_pages(tracing):
     """Five pages, as energy_balance_tracing (impurities: the elements
     after the first)."""
-    surfaces = (quantities.SURFACE_FOUR if tracing.four_targets
-                else quantities.SURFACE)
+    surfaces = quantities.surfaces(tracing.four_targets, tracing.swapped)
     spec = [("balance", "Total energy balance",
              ["tot_core", "pwr_totl_il", "pwr_totl_ol", "pwr_totl_wl",
               "tot_rad", "pwr_totl"]),

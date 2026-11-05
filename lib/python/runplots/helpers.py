@@ -32,8 +32,49 @@ def run(name, args=(), stdin=None):
     return done.stdout
 
 
+def shell(command):
+    """Standard output of a pipeline of helper scripts (run by sh)."""
+    done = subprocess.run(command, shell=True, stdout=subprocess.PIPE,
+                          env=_environment(), universal_newlines=True,
+                          encoding="latin-1")
+    return done.stdout
+
+
 def _nonempty(path):
     return os.path.isfile(path) and os.path.getsize(path) > 0
+
+
+def _first_field(path):
+    with open(path, encoding="latin-1") as stream:
+        return stream.readline().strip().split(" ")[0]
+
+
+def nreg_file():
+    """First number of the NREG file found by climb_and_look_for, or
+    None (no run.log reading)."""
+    path = run("climb_and_look_for", ["NREG"]).strip()
+    return _first_field(path) if _nonempty(path) else None
+
+
+def nreg():
+    """NREG as 2d_plots finds it, with its messages: the NREG file, else
+    the nnreg line of run.log (pipe_run.log); None when they disagree."""
+    path = run("climb_and_look_for", ["NREG"]).strip()
+    log = shell("pipe_run.log | grep -a ^nnreg | head -1").split()
+    if _nonempty(path):
+        value, where = _first_field(path), path
+    else:
+        value, where = (log[1] if len(log) > 1 else "4"), "log file"
+    print("Set NREG to %s (based on %s)" % (value, where), flush=True)
+    if len(log) > 1 and value != log[1]:
+        print("NREG in file (%s) does not match %s" % (log[1], value))
+        return None
+    return value
+
+
+def groups_species():
+    """Number of species of each isonuclear sequence (groups_species)."""
+    return [int(n) for n in run("groups_species").split()]
 
 
 def solps_fluids(message=False):
