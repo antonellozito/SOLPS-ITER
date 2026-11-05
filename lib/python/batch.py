@@ -134,7 +134,7 @@ def show(frames):
     return figures
 
 
-def write_frames(frames, path, dpi):
+def write_frames(frames, path, dpi, stream=None, prefix="b2plot"):
     """Draw the frames off screen and write them to path (write_output)."""
     sys.stdout.flush()
     figures = []
@@ -143,7 +143,7 @@ def write_frames(frames, path, dpi):
         FigureCanvasAgg(fig)
         figures.append(fig)
     for name in write_output(figures, path, dpi):
-        print(f"b2plot: written {name}", file=sys.stderr)
+        print(f"{prefix}: written {name}", file=stream or sys.stderr)
 
 
 def write_files(frames, args):
@@ -225,6 +225,42 @@ def run_program(args):
               f"status {status})", file=sys.stderr)
         return 1
     return 0 if status == 0 else 1
+
+
+def run_carre(args):
+    """carre.exe of Carre2, with the terminal and the output streams of the
+    caller (it asks for missing input at the terminal): its pages go to
+    carre.pdf in the run directory, or to -o; messages on stdout, since
+    the carre2 script sends stderr to carre.log."""
+    path = args.output or os.path.join(args.rundir, "carre.pdf")
+    if os.path.exists(path):
+        os.remove(path)
+    sc = scene.Scene()
+    record = open(args.record, "wb") if args.record else None
+    be = backend.Backend(backend.command(args), args.rundir, record,
+                         terminal=True)
+    status = None
+    try:
+        be.start()
+        for event in be.iter_events():
+            if event[0] == "message":
+                sc.feed(event[1], event[2])
+            elif event[0] == "error":
+                print(f"carre2: protocol error: {event[1]}")
+            elif event[0] == "exit":
+                status = event[1]
+    except KeyboardInterrupt:
+        status = be.proc.wait() if be.proc is not None else 1
+    finally:
+        be.stop()
+        if record is not None:
+            record.close()
+    frames = list(sc.frames)
+    if not sc.current.is_empty():
+        frames.append(sc.current)
+    if frames:
+        write_frames(frames, path, args.dpi, sys.stdout, "carre2")
+    return status if status is not None and status >= 0 else 1
 
 
 def _terminal(lines):

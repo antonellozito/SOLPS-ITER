@@ -45,10 +45,13 @@ def command(args):
 class Backend:
     """One b2plot child process and its message and console streams."""
 
-    def __init__(self, cmd, rundir=".", record=None):
+    def __init__(self, cmd, rundir=".", record=None, terminal=False):
         self.cmd = cmd
         self.rundir = rundir
         self.record = record
+        # terminal: the child keeps the terminal and the output streams of
+        # this process (carre.exe asks for missing input at the terminal)
+        self.terminal = terminal
         self.events = queue.Queue()
         self.proc = None
         self.tmp = None
@@ -64,11 +67,15 @@ class Backend:
         self._thread(self._read_fifo)
         env = requirements.child_environment(
             B2PLOT_PY_FIFO=self.fifo, GFORTRAN_UNBUFFERED_PRECONNECTED="y")
-        self.proc = subprocess.Popen(
-            self.cmd, cwd=self.rundir, env=env, stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            bufsize=1, start_new_session=True)
-        self._thread(self._read_stdout)
+        if self.terminal:
+            self.proc = subprocess.Popen(self.cmd, cwd=self.rundir, env=env)
+            self.events.put(("console_eof",))
+        else:
+            self.proc = subprocess.Popen(
+                self.cmd, cwd=self.rundir, env=env, stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                bufsize=1, start_new_session=True)
+            self._thread(self._read_stdout)
         self._thread(self._watch_exit)
 
     def _thread(self, target):
@@ -103,6 +110,8 @@ class Backend:
 
     def send(self, text):
         """Write command text to the child; False if it has stopped."""
+        if self.proc.stdin is None:
+            return False
         try:
             self.proc.stdin.write(text)
             self.proc.stdin.flush()
@@ -111,6 +120,8 @@ class Backend:
             return False
 
     def close_input(self):
+        if self.proc.stdin is None:
+            return
         try:
             self.proc.stdin.close()
         except (BrokenPipeError, ValueError):
@@ -133,7 +144,10 @@ class Backend:
             except subprocess.TimeoutExpired:
                 for sig in (signal.SIGTERM, signal.SIGKILL):
                     try:
-                        os.killpg(self.proc.pid, sig)
+                        if self.terminal:
+                            self.proc.send_signal(sig)
+                        else:
+                            os.killpg(self.proc.pid, sig)
                         self.proc.wait(2.0)
                         break
                     except (ProcessLookupError, subprocess.TimeoutExpired):
@@ -142,6 +156,8 @@ class Backend:
             for t in self._threads:
                 t.join(2.0)
             for stream in (self.proc.stdin, self.proc.stdout):
+                if stream is None:
+                    continue
                 try:
                     stream.close()
                 except (BrokenPipeError, ValueError):
