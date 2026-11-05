@@ -56,17 +56,21 @@ def nreg_file():
     return _first_field(path) if _nonempty(path) else None
 
 
-def nreg():
+def nreg(check=True):
     """NREG as 2d_plots finds it, with its messages: the NREG file, else
-    the nnreg line of run.log (pipe_run.log); None when they disagree."""
+    the nnreg line of run.log (pipe_run.log); None when they disagree.
+    Without check (2d_profiles_extended) run.log is read only without the
+    file."""
     path = run("climb_and_look_for", ["NREG"]).strip()
-    log = shell("pipe_run.log | grep -a ^nnreg | head -1").split()
+    log = []
+    if check or not _nonempty(path):
+        log = shell("pipe_run.log | grep -a ^nnreg | head -1").split()
     if _nonempty(path):
         value, where = _first_field(path), path
     else:
         value, where = (log[1] if len(log) > 1 else "4"), "log file"
     print("Set NREG to %s (based on %s)" % (value, where), flush=True)
-    if len(log) > 1 and value != log[1]:
+    if check and len(log) > 1 and value != log[1]:
         print("NREG in file (%s) does not match %s" % (log[1], value))
         return None
     return value
