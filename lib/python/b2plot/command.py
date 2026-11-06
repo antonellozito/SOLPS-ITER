@@ -10,7 +10,7 @@ interpreter still prints the requirements message.
 import os
 import sys
 
-from . import PROTOCOL_VERSION, __version__, options
+from . import __version__, options
 from . import build as b2build
 from .. import requirements
 
@@ -27,8 +27,7 @@ def info(args):
     """--info: versions, paths and the build that would be used."""
     v = sys.version_info
     prog = options.program(args)
-    rows = [("Python graphics", "%s (protocol %d)" % (__version__,
-                                                      PROTOCOL_VERSION)),
+    rows = [("Python graphics", __version__),
             ("Python", "%d.%d.%d  %s" % (v[0], v[1], v[2], sys.executable))]
     for name, minimum in requirements.REQUIRED:
         rows.append((name, "%s (need >= %s)" % (_version(name), minimum)))
