@@ -11,12 +11,12 @@ import sys
 from ..b2plot import PROTOCOL_VERSION, __version__, backend, labels
 from . import data
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
-from .composer import Composer
+from .output.composer import Composer
 from .tab2d import Tab2D
 
 POLL_MS = 20
 POLL_BUDGET = 0.05
-PLACEHOLDERS = ["Profiles", "Chords", "Wall and targets", "Time traces"]
+PLACEHOLDERS = ["Profiles", "Chords", "Time traces"]
 
 
 def _placeholder(name):

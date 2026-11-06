@@ -3,8 +3,8 @@ plot, the cells shown and the labels."""
 
 import numpy as np
 
-from .plot2d import LabelStyle, OverlayStyle
-from ..qt import QtGui, QtWidgets, Qt, Signal
+from ..plot.styles import LabelStyle, OverlayStyle
+from ...qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
 
 LEVEL_MODES = [("Number of levels", "number"), ("Step", "step"),

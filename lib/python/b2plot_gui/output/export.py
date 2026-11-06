@@ -4,7 +4,7 @@ and the values of a quantity (written by b2plot mprt, mtab or eprt)."""
 import os
 
 from . import page
-from ..qt import QtWidgets
+from ...qt import QtWidgets
 
 FIGURE_EXTS = (".pdf", ".png", ".svg", ".eps")
 

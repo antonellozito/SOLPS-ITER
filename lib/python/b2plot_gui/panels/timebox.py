@@ -2,7 +2,7 @@
 (b2movies.nc, eirenemovies.nc), one frame or the means b2plot computes
 over a range, a rolling window or consecutive blocks of frames."""
 
-from ..qt import QtCore, QtWidgets, Qt, Signal
+from ...qt import QtCore, QtWidgets, Qt, Signal
 
 MODES = [("One frame", "frame"), ("Mean over frames", "range"),
          ("Rolling mean", "rolling"), ("Batch mean", "batch")]

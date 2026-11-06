@@ -1,20 +1,25 @@
 """2D tab: quantity panel, one fixed plot, layers panel."""
 
 import json
-import os
 import socket
 from dataclasses import replace
 
 import numpy as np
 from matplotlib.figure import Figure
 
-from . import catalog, page, plot2d
-from .data import split_unit
-from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore, QtGui,
+from . import catalog
+from .output import page
+from .plot.canvas import Plot2D
+from .plot.snapshot import Snapshot
+from .plot.styles import KINDS_SCALAR, LAYERS
+from .model import split_unit
+from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore,
                   QtWidgets, Qt, Signal)
-from .export import FigureDialog, ValuesDialog
-from .layers import LayersPanel, from_dict
-from .quantity import QuantityPanel
+from .output.export import FigureDialog, ValuesDialog
+from .panels.layers import LayersPanel, from_dict
+from .panels.quantity import QuantityPanel
+from .panels.views import ViewBar
+from .output.frames import FrameExport
 
 
 def _scrolled(widget, width):
@@ -32,7 +37,7 @@ class Tab2D(QtWidgets.QWidget):
     request = Signal(object)        # (role, Quantity, operations, source)
     export = Signal(object)         # (Quantity, names, paths, ops, table,
                                     #  source)
-    add_to_page = Signal(object)    # plot2d.Snapshot
+    add_to_page = Signal(object)    # Snapshot
     status = Signal(str)
 
     def __init__(self, settings, parent=None):
@@ -46,7 +51,7 @@ class Tab2D(QtWidgets.QWidget):
         self.figure = Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
         self.canvas.setMinimumSize(420, 420)
-        self.plot = plot2d.Plot2D(self.figure)
+        self.plot = Plot2D(self.figure)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
 
         self.quantity = QuantityPanel()
@@ -56,48 +61,26 @@ class Tab2D(QtWidgets.QWidget):
         self.time_box = self.quantity.time_box
         self.time_box.source_changed.connect(self._source_changed)
         self.time_box.frames_changed.connect(self._fetch)
-        self.time_box.export_frames.connect(lambda: self.export_frames())
+        self.frames = FrameExport(self)
+        self.time_box.export_frames.connect(lambda: self.frames.start())
         self.time_box.ready = self._shown
-        self._frames_job = None
         self.final_quantities, self.movie_quantities = [], []
         self.layers = LayersPanel(self._saved_layers())
         self.layers.changed.connect(self._layer_changed)
         for key, st in self.layers.styles().items():
             self.plot.layer_styles[key] = st
 
-        self.views = QtWidgets.QComboBox()
-        self.views.setToolTip("View presets and saved views")
-        self.views.activated.connect(self._view_chosen)
-        save = QtWidgets.QToolButton()
-        save.setText("Save view")
-        save.clicked.connect(lambda *_: self._save_view())
+        self.viewbar = ViewBar(self.plot, self.toolbar, settings)
+        self.viewbar.moved.connect(self._view_moved)
         add = QtWidgets.QToolButton()
         add.setText("Add to page")
         add.setToolTip("Add this plot with all its settings to the page "
                        "composer")
         add.clicked.connect(lambda *_: self._add_to_page())
-        self.box = []
-        for tip in ("R min (m)", "R max (m)", "Z min (m)", "Z max (m)"):
-            e = QtWidgets.QLineEdit()
-            e.setValidator(QtGui.QDoubleValidator())
-            e.setToolTip(tip + "; the box is widened to the equal aspect")
-            e.setMaximumWidth(64)
-            e.editingFinished.connect(self._box_edited)
-            self.box.append(e)
         top = QtWidgets.QHBoxLayout()
         top.addWidget(self.toolbar, 1)
         second = QtWidgets.QHBoxLayout()
-        second.addWidget(QtWidgets.QLabel("View"))
-        second.addWidget(self.views)
-        second.addWidget(save)
-        second.addSpacing(12)
-        second.addWidget(QtWidgets.QLabel("R"))
-        second.addWidget(self.box[0])
-        second.addWidget(self.box[1])
-        second.addWidget(QtWidgets.QLabel("Z"))
-        second.addWidget(self.box[2])
-        second.addWidget(self.box[3])
-        second.addStretch(1)
+        second.addWidget(self.viewbar, 1)
         second.addWidget(add)
         self.hover = QtWidgets.QLabel(" ")
         self.hover.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -135,7 +118,7 @@ class Tab2D(QtWidgets.QWidget):
         except ValueError:
             saved = {}
         return {k: from_dict(saved.get(k, {}), default)
-                for k, (_, default) in plot2d.LAYERS.items()}
+                for k, (_, default) in LAYERS.items()}
 
     def _layer_changed(self, key, style):
         self.plot.set_layer(key, style)
@@ -147,9 +130,7 @@ class Tab2D(QtWidgets.QWidget):
     def set_run(self, run):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.plot.set_run(run)
-        for signal in ("xlim_changed", "ylim_changed"):
-            self.plot.ax.callbacks.connect(signal, self._view_moved)
-        self._view_moved()
+        self.viewbar.set_run()
         available = {"structure", "device", "separatrices", "boundary"}
         available = (available & set(k for k, v in run.layers.items()
                                      if len(v))) | {"grid"}
@@ -169,7 +150,6 @@ class Tab2D(QtWidgets.QWidget):
             [q for q in quantities if q.source in ("vector", "evector")],
             [q for q in quantities if q.source in ("matrix", "eirene")],
             run.geometry)
-        self._fill_views()
         self.setEnabled(True)
         self.toolbar.update()
         self.canvas.draw_idle()
@@ -224,7 +204,7 @@ class Tab2D(QtWidgets.QWidget):
 
     def _overlays_needed(self):
         """[(role, Quantity)] of the active overlays (scalar plots only)."""
-        if self.quantity.kind() not in plot2d.KINDS_SCALAR:
+        if self.quantity.kind() not in KINDS_SCALAR:
             return []
         return self.quantity.overlay_box.wanted()
 
@@ -336,8 +316,8 @@ class Tab2D(QtWidgets.QWidget):
                              self.label_values())
         if self._shown():
             self._prefetch()
-            if self._frames_job is not None:
-                QtCore.QTimer.singleShot(0, self._frame_ready)
+            if self.frames.job is not None:
+                QtCore.QTimer.singleShot(0, self.frames.ready)
         if self.plot.mappable is not None:
             norm = self.plot.mappable.norm
             self.quantity.set_range(norm.vmin, norm.vmax)
@@ -348,7 +328,7 @@ class Tab2D(QtWidgets.QWidget):
         """The plot shown with all its settings, or None."""
         if self.run is None or not self._current():
             return None
-        return plot2d.Snapshot(
+        return Snapshot(
             run=self.run, data=self.data, style=self.quantity.style(),
             unit=self._unit(), overlays=self._overlay_data(),
             layers={k: replace(s) for k, s in self.layers.styles().items()},
@@ -409,134 +389,14 @@ class Tab2D(QtWidgets.QWidget):
                           self._source(q)))
 
     def export_frames(self, path=None, shape="shown", dpi=150):
-        """Every slider position of the movie as numbered image files
-        (name_0001.png, ...) or as the pages of one PDF (dialog unless
-        path is given); the frames are drawn one after the other."""
-        if self.run is None or self.wanted is None or \
-                not self._source(self.wanted):
-            self.status.emit("Export frames needs movie frames: Time > "
-                             "Movie frames")
-            return
-        if path is None:
-            dlg = FigureDialog(self.settings, self.wanted.name.replace(
-                " ", "_") + "_frames.png", parent=self)
-            dlg.setWindowTitle("Export frames")
-            if dlg.exec() != QtWidgets.QDialog.Accepted:
-                return
-            path, dpi = dlg.path(), dlg.dpi.value()
-            shape = dlg.shape.currentData()
-        self.time_box.play.setChecked(False)
-        self._frames_job = dict(path=path, shape=shape, dpi=dpi,
-                                todo=self.time_box.positions(), snaps=[],
-                                files=[], start=self.time_box.pos.value())
-        self._next_frame()
-
-    def _next_frame(self):
-        job = self._frames_job
-        if not job["todo"]:
-            self._finish_frames()
-            return
-        p = job["todo"][0]
-        if p == self.time_box.pos.value() and self._shown():
-            QtCore.QTimer.singleShot(0, self._frame_ready)
-        else:
-            self.time_box.set_position(p)
-
-    def _frame_ready(self):
-        """Save the frame drawn (PNG, SVG) or keep it for the PDF."""
-        job = self._frames_job
-        if job is None or not job["todo"] or not self._shown() or \
-                self.time_box.pos.value() != job["todo"][0]:
-            return
-        p = job["todo"].pop(0)
-        stem, ext = os.path.splitext(job["path"])
-        size = page.SHAPES[job["shape"]][1]
-        try:
-            if ext.lower() == ".pdf":
-                snap = self.snapshot()
-                if size is None:
-                    size = tuple(self.figure.get_size_inches())
-                job["size"] = size
-                job["snaps"].append(snap)
-            else:
-                name = "%s_%04d%s" % (stem, p, ext)
-                if size is None:
-                    self.figure.savefig(name, dpi=job["dpi"])
-                else:
-                    page.save(name, [self.snapshot()], size, job["dpi"],
-                              own=True)
-                job["files"].append(name)
-        except Exception as err:
-            self._frames_job = None
-            self.status.emit("Cannot export the frames: %s" % err)
-            return
-        self.status.emit("Exporting frames: %d left" % len(job["todo"]))
-        self._next_frame()
-
-    def _finish_frames(self):
-        job, self._frames_job = self._frames_job, None
-        if job["snaps"]:
-            try:
-                job["files"] = page.save(job["path"], job["snaps"],
-                                         job["size"], job["dpi"], own=True)
-            except Exception as err:
-                self.status.emit("Cannot export the frames: %s" % err)
-                return
-        self.time_box.set_position(job["start"])
-        n = len(job["snaps"]) or len(job["files"])
-        self.status.emit("%d frames written to %s" % (
-            n, job["files"][0] if len(job["files"]) == 1 else
-            "%s ... %s" % (job["files"][0], job["files"][-1])))
+        """Every movie frame as image files or one PDF (output.frames)."""
+        self.frames.start(path, shape, dpi)
 
     # -------------------------------------------------------------- views
-    def _fill_views(self):
-        self.views.clear()
-        for name, box in self.plot.views().items():
-            self.views.addItem(name, box)
-        saved = self._saved_views()
-        if saved:
-            self.views.insertSeparator(self.views.count())
-            for name, box in saved.items():
-                self.views.addItem(name, tuple(box))
-
-    def _saved_views(self):
-        try:
-            return json.loads(self.settings.value("views2d", "") or "{}")
-        except ValueError:
-            return {}
-
-    def _view_chosen(self, index):
-        box = self.views.itemData(index)
-        if box:
-            self.plot.set_view(box)
-            self.toolbar.push_current()
-            self.canvas.draw_idle()
-
-    def _save_view(self):
-        name, ok = QtWidgets.QInputDialog.getText(self, "Save view",
-                                                  "Name of this view")
-        if ok and name.strip():
-            saved = self._saved_views()
-            saved[name.strip()] = list(self.plot.get_view())
-            self.settings.setValue("views2d", json.dumps(saved))
-            self._fill_views()
-
-    def _view_moved(self, *_):
-        for e, v in zip(self.box, self.plot.get_view()):
-            e.setText("%.4g" % v)
+    def _view_moved(self):
         vectors = self.data is not None and hasattr(self.data, "vr")
         if vectors or "arrows" in self.odata:
             self._vector_timer.start()
-
-    def _box_edited(self):
-        try:
-            box = [float(e.text()) for e in self.box]
-        except ValueError:
-            return
-        if box[1] > box[0] and box[3] > box[2]:
-            self.plot.set_view(box)
-            self.toolbar.push_current()
-            self.canvas.draw_idle()
 
     def _redraw_vectors(self):
         self.redraw()
@@ -558,7 +418,7 @@ class Tab2D(QtWidgets.QWidget):
         self._seed_points.append((event.xdata, event.ydata))
         if len(self._seed_points) == 2:
             (x0, y0), (x1, y1) = self._seed_points
-            n = self.quantity.nseeds.value()
+            n = self.quantity.streams.nseeds.value()
             t = np.linspace(0.0, 1.0, n)
             self._seed_points = None
             self.status.emit("Seed line set")
