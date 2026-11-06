@@ -2,7 +2,7 @@
 """2d.py [-lx] [-ly] [--rolling N | --batch N] [--no-show] X NAME...
 
 Python version of 2d: b2time.nc quantities against the quantity X, in a
-window (lib/python/runplots); -h for the options.
+window (lib/python/run_plots); -h for the options.
 """
 
 import os

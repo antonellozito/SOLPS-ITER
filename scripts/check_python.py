@@ -4,7 +4,7 @@
 Exit status 0 when the Python of this SOLPS-ITER session (the local
 installation of install_python, else $PYTHON, else this python3) can run
 the Python versions of the plot scripts without windows, else 1 with the
-missing modules (lib/python/runplots); used by summarize_run.
+missing modules (lib/python/run_plots); used by summarize_run.
 """
 
 import os

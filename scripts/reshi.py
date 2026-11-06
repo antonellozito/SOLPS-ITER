@@ -2,7 +2,7 @@
 """reshi.py [-m MOD] [-l LAST] [-a AVE] [--no-show]
 
 Python version of reshi: norm of the residual of the ion energy equation
-of b2ftrace against the iteration, in a window (lib/python/runplots); -h
+of b2ftrace against the iteration, in a window (lib/python/run_plots); -h
 for the options.
 """
 

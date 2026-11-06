@@ -13,7 +13,6 @@ from its toolbar), with ps the pages go to b2plot.ps in the run
 directory; -o writes one more file. A post-processor writes PROGRAM.pdf.
 """
 
-import io
 import os
 import queue
 import sys
@@ -25,35 +24,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 
 from . import backend, labels, options, protocol, render, scene
-
-
-def _ps_page(fig, orientation="portrait"):
-    buf = io.BytesIO()
-    with matplotlib.rc_context({"ps.papersize": "letter"}):
-        fig.savefig(buf, format="ps", orientation=orientation)
-    return buf.getvalue().decode("latin-1")
-
-
-def write_ps(figures, path, orientation="portrait", creator="b2plot"):
-    """Multi-page PostScript, each page a matplotlib page on US letter.
-
-    The NCAR frame lands where NCAR puts it: matplotlib centres the
-    7.5 inch square on the letter page, i.e. at (36,126)-(576,666) pt.
-    The run plots use landscape pages, as gnuplot.
-    """
-    with open(path, "w", encoding="latin-1") as out:
-        out.write(f"%!PS-Adobe-3.0\n%%Creator: {creator}\n"
-                  f"%%Pages: {len(figures)}\n%%BoundingBox: 0 0 612 792\n"
-                  + ("%%Orientation: Landscape\n"
-                     if orientation == "landscape" else "")
-                  + "%%DocumentPaperSizes: Letter\n%%EndComments\n")
-        for i, fig in enumerate(figures, 1):
-            body = [l for l in _ps_page(fig, orientation).splitlines()
-                    if not l.startswith(("%%", "%!"))]
-            out.write(f"%%Page: {i} {i}\n/b2plotpy_page save def\n")
-            out.write("\n".join(body))
-            out.write("\nclear b2plotpy_page restore\n")
-        out.write("%%Trailer\n%%EOF\n")
+from .. import requirements
+from ..postscript import write_ps
 
 
 def write_output(figures, path, dpi):
@@ -65,7 +37,7 @@ def write_output(figures, path, dpi):
                 pdf.savefig(fig)
         return [path]
     if ext.lower() == ".ps":
-        write_ps(figures, path)
+        write_ps(figures, path, creator="b2plot")
         return [path]
     names = []
     for i, fig in enumerate(figures, 1):
@@ -161,7 +133,8 @@ def write_files(frames, args):
                      args.dpi)
     if frames and args.output:
         write_frames(frames, args.output, args.dpi)
-    if dev["x11"] and not args.no_show and not options.display_available():
+    if (dev["x11"] and not args.no_show
+            and not requirements.display_available()):
         print("b2plot: no display, page windows skipped", file=sys.stderr)
 
 

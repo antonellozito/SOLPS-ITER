@@ -2,7 +2,7 @@
 """2dt_av.py [-lx] [-ly] [--rolling N | --batch N] [--no-show] NAME...
 
 Python version of 2dt_av: the averaged time traces of b2batch.nc (b2time.nc
-without it) against time, in a window (lib/python/runplots); -h for the
+without it) against time, in a window (lib/python/run_plots); -h for the
 options.
 """
 

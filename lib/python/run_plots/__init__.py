@@ -142,6 +142,7 @@ def main(argv):
         return 2
     requirements.NAME = name + ".py"
     requirements.GRAPHICS_OF = name + ".py"
+    requirements.NO_WINDOW = "--no-show writes the files without a window."
     args = _parse(name, argv)
     extra = EXTRA if name in NETCDF else []
     if name in TEXT:

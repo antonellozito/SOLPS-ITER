@@ -4,7 +4,7 @@
 
 Python version of 2dds: b2time.nc profiles against their ds coordinate,
 means over the last NUM time slices up to END, in a window
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os

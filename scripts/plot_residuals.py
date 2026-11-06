@@ -3,7 +3,7 @@
 
 Python version of plot_residuals: the pages of resco, resmo, reshe and
 reshi in residuals.ps and in a window with a tab each
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os

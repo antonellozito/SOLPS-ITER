@@ -1,6 +1,6 @@
 """Debug tool: run b2pl.exe (or replay a recording) and print its messages.
 
-    python3 $SOLPSTOP/lib/python/dump.py [options] [COMMANDS]
+    python3 $SOLPSTOP/lib/python/b2plot/dump.py [options] [COMMANDS]
 
 COMMANDS is a file of b2plot commands, one batch per line (default: stdin).
 Each batch is followed by "<n> sync"; "quit" is sent at the end.
@@ -14,18 +14,19 @@ import sys
 import numpy as np
 
 if not __package__:
-    # run as a file: load this directory as the package b2plotpy
+    # run as a file: load lib/python as the package solpspy
     import importlib.util
     _here = os.path.dirname(os.path.realpath(__file__))
+    _top = os.path.dirname(_here)
     sys.path = [p for p in sys.path
-                if os.path.realpath(p or ".") != _here]
+                if os.path.realpath(p or ".") not in (_here, _top)]
     _spec = importlib.util.spec_from_file_location(
-        "b2plotpy", os.path.join(_here, "__init__.py"),
-        submodule_search_locations=[_here])
-    sys.modules["b2plotpy"] = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(sys.modules["b2plotpy"])
+        "solpspy", os.path.join(_top, "__init__.py"),
+        submodule_search_locations=[_top])
+    sys.modules["solpspy"] = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(sys.modules["solpspy"])
 
-from b2plotpy import backend, protocol  # noqa: E402
+from solpspy.b2plot import backend, protocol  # noqa: E402
 
 
 def _short(value):

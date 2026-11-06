@@ -2,7 +2,7 @@
 """2da.py [-s FILE] [--rolling N | --batch N] NAME...
 
 Python version of 2da: a table of b2time.nc quantities on standard output,
-as 2da writes it (lib/python/runplots); -h for the options.
+as 2da writes it (lib/python/run_plots); -h for the options.
 """
 
 import os

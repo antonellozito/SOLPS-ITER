@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .. import backend, protocol
+from ..b2plot import backend, protocol
 
 CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 

@@ -10,7 +10,7 @@ import os
 
 from matplotlib.figure import Figure
 
-from .. import labels
+from ..b2plot import labels
 from .plot2d import fit_size, render_snapshot
 
 SHAPES = {                      # inches; None: the size shown on screen

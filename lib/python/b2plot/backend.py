@@ -15,7 +15,8 @@ import subprocess
 import tempfile
 import threading
 
-from . import options, protocol, requirements
+from . import options, protocol
+from .. import requirements
 
 
 def wrapper_command(standalone=False, targets=("b2pl",), debugger=None,

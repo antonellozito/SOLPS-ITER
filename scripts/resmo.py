@@ -3,7 +3,7 @@
 
 Python version of resmo: norms of the parallel momentum residuals of
 b2ftrace per species against the iteration, in a window
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os
