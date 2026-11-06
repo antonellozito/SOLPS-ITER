@@ -2,8 +2,8 @@
 
 from dataclasses import replace
 
-from .plot2d import LAYERS, LayerStyle
-from ..qt import QtGui, QtWidgets, Signal
+from ..plot.styles import LAYERS, LayerStyle
+from ...qt import QtGui, QtWidgets, Signal
 
 # Why a layer can be missing in a run
 MISSING = {"device": "No structure.dat found for this run",

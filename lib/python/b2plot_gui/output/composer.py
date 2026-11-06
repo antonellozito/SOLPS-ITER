@@ -5,9 +5,9 @@ interactive plot of the tab stays one."""
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-from ..b2plot import labels
+from ...b2plot import labels
 from . import page
-from ..qt import QtCore, QtGui, QtWidgets, Qt, Signal
+from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
 from .export import FigureDialog
 
 PREVIEW_DPI = 60

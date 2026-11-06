@@ -1,5 +1,5 @@
 """Pages of 2D plots for export: shapes as b2plot sq, a4p and a4l, and the
-nx by ny layout of b2plot page, filled with snapshots (plot2d.Snapshot).
+nx by ny layout of b2plot page, filled with snapshots (plot.snapshot.Snapshot).
 
 Only matplotlib, no Qt: the page composer of the GUI and the tests use
 the same functions.
@@ -10,8 +10,9 @@ import os
 
 from matplotlib.figure import Figure
 
-from ..b2plot import labels
-from .plot2d import fit_size, render_snapshot
+from ...b2plot import labels
+from ..plot.snapshot import render_snapshot
+from ..plot.texts import fit_size
 
 SHAPES = {                      # inches; None: the size shown on screen
     "shown": ("As shown", None),
