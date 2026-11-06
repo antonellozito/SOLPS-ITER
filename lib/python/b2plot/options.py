@@ -5,6 +5,8 @@ import argparse
 import os
 import sys
 
+from .. import requirements
+
 DESCRIPTION = """\
 Python graphics of b2plot and of the B2 post-processors. In a B2.5 build
 with the Python graphics (the default), b2plot and b2run start it for the
@@ -121,16 +123,8 @@ def devices():
             "cgm": "cgm" in dev or "CGM" in dev}
 
 
-def display_available():
-    """A screen for the page windows (on Linux an X11 or Wayland display)."""
-    if sys.platform.startswith("linux"):
-        return bool(os.environ.get("DISPLAY")
-                    or os.environ.get("WAYLAND_DISPLAY"))
-    return True
-
-
 def windows(args):
     """True if the command line opens page windows for these options."""
     return (not args.gui and not args.no_show and program(args) == "b2pl"
             and not args.info and not args.dry_run and devices()["x11"]
-            and display_available())
+            and requirements.display_available())

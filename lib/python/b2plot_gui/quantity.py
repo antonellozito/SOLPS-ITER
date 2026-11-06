@@ -1,6 +1,6 @@
 """Quantity panel of the 2D tab: what to plot and how."""
 
-from .. import labels
+from ..b2plot import labels
 from .plot2d import KINDS_SCALAR, KINDS_VECTOR, PlotStyle
 from ..qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo

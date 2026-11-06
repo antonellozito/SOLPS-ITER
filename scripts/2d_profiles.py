@@ -3,7 +3,7 @@
 
 Python version of 2d_profiles: the profiles in 2d_profiles/*.last10 and
 the pages in b2time2d_profiles.ps and in a window with a tab per page
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os

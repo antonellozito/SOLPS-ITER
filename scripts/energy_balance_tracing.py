@@ -3,7 +3,7 @@
 
 Python version of energy_balance_tracing: the energy balance from
 tracing/blne.trc in energy_balance.ps and in a window with a tab per page
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os

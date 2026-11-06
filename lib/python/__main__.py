@@ -1,12 +1,13 @@
-"""Entry point of the Python graphics of b2plot.
+"""Entry point of the Python tools of SOLPS-ITER, run as
+python $SOLPSTOP/lib/python OPTIONS:
 
-Started by the run targets of b2plot and b2run (b2pl, b2yg ... b2yr) in a
-B2.5 build with the Python graphics (--exec), by the carre2 scripts for
-carre.exe of a Carre2 build with them (--exec), by b2plot_gui (--gui),
-and by the run plot scripts scripts/*.py (--run-plot NAME, runplots);
-run it as
-python $SOLPSTOP/lib/python. All values are
-computed by the Fortran b2plot (b2pl.exe); -h lists the options.
+    --run-plot NAME ARGS   the run plot scripts scripts/NAME.py (run_plots)
+    --gui ...              b2plot_gui (b2plot_gui, on the checks of b2plot)
+    anything else          b2plot, b2run (b2pl, b2yg ... b2yr) and carre2
+                           (carre.exe) with the Python graphics (b2plot)
+
+-h lists the options of b2plot. All b2plot values are computed by the
+Fortran b2plot (b2pl.exe).
 
 Any Python 3 syntax up to the requirements check, so that an old
 interpreter still prints the requirements message.
@@ -17,139 +18,35 @@ import sys
 
 if not __package__:
     # run as a directory or file: load this directory as the package
-    # b2plotpy, and not its modules as top-level modules
+    # solpspy, and not its modules as top-level modules
     import importlib.util
     _here = os.path.dirname(os.path.realpath(__file__))
     sys.path = [p for p in sys.path
                 if os.path.realpath(p or ".") != _here]
     _spec = importlib.util.spec_from_file_location(
-        "b2plotpy", os.path.join(_here, "__init__.py"),
+        "solpspy", os.path.join(_here, "__init__.py"),
         submodule_search_locations=[_here])
-    sys.modules["b2plotpy"] = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(sys.modules["b2plotpy"])
+    sys.modules["solpspy"] = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(sys.modules["solpspy"])
 
-from b2plotpy import options, requirements  # noqa: E402
-
-
-def _version(name):
-    try:
-        import importlib.metadata
-        return importlib.metadata.version(name)
-    except Exception:
-        return "missing"
-
-
-def info(args):
-    """--info: versions, paths and the build that would be used."""
-    import b2plotpy
-    v = sys.version_info
-    prog = options.program(args)
-    rows = [("b2plotpy", "%s (protocol %d)" % (b2plotpy.__version__,
-                                               b2plotpy.PROTOCOL_VERSION)),
-            ("Python", "%d.%d.%d  %s" % (v[0], v[1], v[2], sys.executable))]
-    for name, minimum in requirements.REQUIRED:
-        rows.append((name, "%s (need >= %s)" % (_version(name), minimum)))
-    found = requirements.problems(False)
-    rows.append(("Requirements", "; ".join(found) if found else "complete"))
-    for name in ("SOLPSTOP", "HOST_NAME", "COMPILER", "MAKE", "PYTHON"):
-        rows.append((name, os.environ.get(name, "(not set)")))
-    if os.environ.get("SOLPSTOP"):
-        tool = "b2plot" if prog == "b2pl" else "b2run"
-        wrapper = os.path.join(os.environ["SOLPSTOP"], "scripts", tool)
-        rows.append(("Wrapper", wrapper + ("" if os.path.isfile(wrapper)
-                                           else " (not found)")))
-        build = requirements.build_dir(args.standalone,
-                                       args.debugger is not None)
-        rows.append(("Build", build))
-        kind = requirements.graphics(build)
-        rows.append(("Graphics", {"python": "Python", "ncar":
-                                  "NCAR Graphics (USE_NCAR)"}.get(
-                                      kind, "unknown (no stamp file)")))
-        exe = os.path.join(build, prog + ".exe")
-        rows.append((prog + ".exe", "found" if os.path.isfile(exe)
-                     else "not built (run make in modules/B2.5)"))
-    rows.append(("Run directory", os.path.abspath(args.rundir)))
-    if args.gui:
-        mode = "GUI"
-    elif prog != "b2pl":
-        mode = prog + ".pdf"
-    else:
-        mode = ("interactive" if sys.stdin.isatty() and not args.replay
-                else "commands from stdin")
-    rows.append(("Mode", mode))
-    width = max(len(key) for key, _ in rows)
-    for key, value in rows:
-        print("%-*s  %s" % (width, key, value))
-    return 0
-
-
-def dry_run(args):
-    """-n: the make commands of the wrapper, nothing is run."""
-    import subprocess
-    from b2plotpy import backend
-    prog = options.program(args)
-    cmd = backend.wrapper_command(args.standalone, [prog], args.debugger,
-                                  dry_run=True, tool="b2plot"
-                                  if prog == "b2pl" else "b2run")
-    return subprocess.call(cmd, cwd=args.rundir,
-                           env=requirements.child_environment())
+from solpspy import requirements  # noqa: E402
 
 
 def main(argv=None):
-    requirements.NAME = options.name(argv)
-    requirements.reexec_with_session_python()
     words = sys.argv[1:] if argv is None else list(argv)
     if words[:1] == ["--run-plot"]:
-        from b2plotpy import runplots
-        return runplots.main(words[1:])
-    args = options.parse(argv)
-    if args.info:
-        return info(args)
-    prog = options.program(args)
-    if prog == options.CARRE:
-        found = requirements.problems(False)
-        if found:
-            # Carre2 runs without pictures rather than not at all
-            print("carre2: Warning: no pictures, the Python graphics need "
-                  + "; ".join(found) + ". install_python installs the "
-                  "SOLPS-ITER Python with them (manual, section Python "
-                  "graphics).")
-            sys.stdout.flush()
-            os.execvpe(args.exec[0], args.exec,
-                       requirements.child_environment())
-    requirements.check(args.gui or options.windows(args))
-    if args.debugger == "":
-        args.debugger = os.environ.get("DBX", "")
-        if not args.debugger:
-            requirements.fail_environment(["-d: no debugger given and DBX "
-                                           "is not set"])
-    if not args.replay and not args.exe and not args.exec:
-        found = requirements.environment_problems(
-            args.standalone, args.debugger is not None, [prog],
-            built=not args.dry_run,
-            tool="b2plot" if prog == "b2pl" else "b2run")
-        if found:
-            requirements.fail_environment(found)
-    if not args.replay and not os.path.isdir(args.rundir):
-        requirements.fail_environment(["run directory %s not found"
-                                       % args.rundir])
-    if args.dry_run:
-        return dry_run(args)
-    # matplotlib defaults, whatever matplotlibrc the user or the run
-    # directory has
-    import matplotlib
-    matplotlib.rcdefaults()
+        requirements.NAME = (words[1:2] or ["run_plots"])[0] + ".py"
+        requirements.reexec_with_session_python()
+        from solpspy import run_plots
+        return run_plots.main(words[1:])
+    from solpspy.b2plot import command
+    args = command.prepare(argv)
+    if isinstance(args, int):
+        return args
     if args.gui:
-        from b2plotpy.gui import app
+        from solpspy.b2plot_gui import app
         return app.main(args)
-    from b2plotpy import batch
-    if prog == options.CARRE:
-        return batch.run_carre(args)
-    if prog != "b2pl":
-        return batch.run_program(args)
-    if sys.stdin.isatty() and not args.replay:
-        return batch.interactive(args)
-    return batch.main(args)
+    return command.run(args)
 
 
 if __name__ == "__main__":

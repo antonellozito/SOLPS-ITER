@@ -2,7 +2,7 @@
 """2dt_tracing.py [-lx] [-ly] [--rolling N | --batch N] [--no-show] NAME...
 
 Python version of 2dt_tracing: columns of tracing/blnn_SPb.trc and
-tracing/blne.trc against time, in a window (lib/python/runplots); -h for
+tracing/blne.trc against time, in a window (lib/python/run_plots); -h for
 the options.
 """
 

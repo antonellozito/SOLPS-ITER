@@ -1,5 +1,6 @@
-"""Interpreter and module check of the Python graphics of b2plot (no
-fallbacks).
+"""Interpreter and module check of the Python tools of SOLPS-ITER (b2plot,
+b2plot_gui, the run plot scripts; no fallbacks), the Python they run with
+and the Qt libraries of its windows.
 
 Runs on any Python 3 (no f-strings, standard library only), so that the
 error message is printed even by an old interpreter. The module list must
@@ -15,10 +16,11 @@ import sys
 REQUIRED_PYTHON = (3, 9)
 REQUIRED = [("PySide6", "6.4"), ("numpy", "1.21"), ("matplotlib", "3.8")]
 
-# Name in messages, set from the command line (options.name), and the
-# program whose Python graphics are checked (a run plot script sets both)
+# Name in messages, the program whose Python graphics are checked and
+# how to run it without windows, set by the program started
 NAME = "b2plot"
 GRAPHICS_OF = "b2plot"
+NO_WINDOW = ""
 
 # Settings of other Python, Qt and matplotlib installations that would
 # reach the Python graphics: removed for its Python, given back to the
@@ -29,16 +31,16 @@ FOREIGN = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE",
            "MATPLOTLIBRC", "LD_PRELOAD", "DYLD_LIBRARY_PATH",
            "DYLD_FRAMEWORK_PATH", "DYLD_FALLBACK_LIBRARY_PATH",
            "DYLD_FALLBACK_FRAMEWORK_PATH", "DYLD_INSERT_LIBRARIES")
-SAVED = "B2PLOT_PY_ENV"
-STAGE = "B2PLOT_PY_REEXEC"
+SAVED = "SOLPS_PY_ENV"
+STAGE = "SOLPS_PY_REEXEC"
 
 # Qt platforms without windows, to which Qt falls back when it cannot use
 # the display
 WINDOWLESS = ("offscreen", "minimal", "minimalegl", "linuxfb", "eglfs",
               "vkkhrdisplay")
 _PROBE = ("from PySide6.QtWidgets import QApplication; "
-          "a = QApplication(['b2plot']); "
-          "print('B2PLOT_QT_PLATFORM=' + a.platformName())")
+          "a = QApplication(['solps']); "
+          "print('SOLPS_QT_PLATFORM=' + a.platformName())")
 
 # Linux: system libraries for the Qt windows that the system lacks, put
 # there by install_python (provide_qt_libraries)
@@ -363,6 +365,14 @@ def provide_qt_libraries():
     return 0
 
 
+def display_available():
+    """A screen for windows (on Linux an X11 or Wayland display)."""
+    if sys.platform.startswith("linux"):
+        return bool(os.environ.get("DISPLAY")
+                    or os.environ.get("WAYLAND_DISPLAY"))
+    return True
+
+
 def window_problem():
     """None if Qt can open windows here, else the reason. Checked in a
     separate process: Qt stops a process that cannot use the display, or
@@ -376,7 +386,7 @@ def window_problem():
         return "Qt could not be started (%s)" % err
     platform = ""
     for line in r.stdout.splitlines():
-        if line.startswith("B2PLOT_QT_PLATFORM="):
+        if line.startswith("SOLPS_QT_PLATFORM="):
             platform = line.split("=", 1)[1].strip()
     wanted = os.environ.get("QT_QPA_PLATFORM", "")
     if r.returncode == 0 and platform and (platform not in WINDOWLESS
@@ -407,9 +417,6 @@ def fail(found, extra=()):
         "The Python graphics of %s need Python >= %d.%d with: %s"
         % ((GRAPHICS_OF,) + REQUIRED_PYTHON + (need,)),
     ]
-    no_window = ("B2PLOT_DEV=ps writes the pages to b2plot.ps without "
-                 "windows." if GRAPHICS_OF == "b2plot" else
-                 "--no-show writes the files without a window.")
     local = os.path.join(os.environ.get("SOLPSTOP", ""), "lib",
                          "%s.%s" % (os.environ.get("HOST_NAME", ""),
                                     os.environ.get("COMPILER", "")),
@@ -419,7 +426,7 @@ def fail(found, extra=()):
                   "Linux) and the system",
                   "  libraries listed above; on Linux run install_python "
                   "again, it provides the",
-                  "  missing ones. " + no_window]
+                  "  missing ones." + (" " + NO_WINDOW if NO_WINDOW else "")]
     elif found and all(f.startswith("Qt for matplotlib") for f in found):
         lines += ["PySide6 is installed, but its Qt libraries cannot be "
                   "loaded: another Qt",
@@ -454,66 +461,3 @@ def check(gui):
     found = problems(gui)
     if found:
         fail(found)
-
-
-def build_dir(standalone, debug):
-    """B2.5 build directory used by runs/Makefile.plot (B2OBJ)."""
-    env = os.environ
-    ext = ""
-    for name, suffix in (("SOLPS_OPENMP", ".openmp"), ("SOLPS_MPI", ".mpi"),
-                         ("USE_IMPGYRO", ".ig")):
-        if env.get(name):
-            ext += suffix
-    if debug or env.get("SOLPS_DEBUG"):
-        ext += ".debug"
-    kind = ("standalone" if standalone or env.get("STAND_ALONE")
-            else "couple_SOLPS-ITER")
-    return os.path.join(env.get("SOLPSTOP", ""), "modules", "B2.5", "builds",
-                        "%s.%s.%s%s" % (kind, env.get("HOST_NAME", ""),
-                                        env.get("COMPILER", ""), ext))
-
-
-def graphics(build):
-    """Graphics of a B2.5 build from its stamp file (modules/B2.5/Makefile):
-    "python", "ncar" or None (not built since the stamp exists)."""
-    for kind in ("python", "ncar"):
-        if os.path.isfile(os.path.join(build, ".graphics_" + kind)):
-            return kind
-    return None
-
-
-def environment_problems(standalone, debug, programs, built=True,
-                         tool="b2plot"):
-    """SOLPS environment, wrapper script and Python graphics executables
-    needed to run the programs through scripts/b2plot or scripts/b2run."""
-    missing = [v for v in ("SOLPSTOP", "HOST_NAME", "COMPILER", "MAKE")
-               if not os.environ.get(v)]
-    if missing:
-        return [", ".join(missing) + " not set: source setup.csh first"]
-    found = []
-    wrapper = os.path.join(os.environ["SOLPSTOP"], "scripts", tool)
-    if not os.access(wrapper, os.X_OK):
-        found.append(wrapper + " not found")
-    if not built:
-        return found
-    build = build_dir(standalone, debug)
-    kind = graphics(build)
-    if kind == "ncar":
-        return found + ["%s was built with NCAR Graphics (USE_NCAR): the "
-                        "Python graphics need a build without USE_NCAR"
-                        % build]
-    for prog in programs:
-        exe = os.path.join(build, prog + ".exe")
-        if not os.path.isfile(exe):
-            found.append("%s.exe not built: run make in modules/B2.5 "
-                         "(no %s)" % (prog, exe))
-    if kind is None and not found:
-        found.append("%s has no Python graphics yet: run make in "
-                     "modules/B2.5" % build)
-    return found
-
-
-def fail_environment(found):
-    for line in found:
-        sys.stderr.write(NAME + ": " + line + "\n")
-    sys.exit(2)

@@ -16,7 +16,7 @@ from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.colors import LogNorm, Normalize, SymLogNorm
 from matplotlib.ticker import LogFormatterSciNotation, LogLocator
 
-from .. import labels
+from ..b2plot import labels
 
 KINDS_SCALAR = ("patch", "contourf", "contour")
 KINDS_VECTOR = ("quiver", "stream", "quiverstream")

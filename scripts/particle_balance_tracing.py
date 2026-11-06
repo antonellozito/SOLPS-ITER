@@ -3,7 +3,7 @@
 
 Python version of particle_balance_tracing: the particle balance of each
 element from tracing/blnn_SPb.trc in particle_balance.ps and in a window
-with a tab per page (lib/python/runplots); -h for the options.
+with a tab per page (lib/python/run_plots); -h for the options.
 """
 
 import os

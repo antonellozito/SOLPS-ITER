@@ -9,7 +9,7 @@ script, which then writes PostScript instead of opening a window).
 import os
 import sys
 
-from .. import options, requirements
+from .. import requirements
 
 
 def output_path(name):
@@ -23,7 +23,7 @@ class Output:
         self.name, self.one_page = name, one_page
         self.print_plot = os.environ.get("PRINT_PLOT") if one_page else None
         self.wanted = not args.no_show and not self.print_plot
-        self.show = self.wanted and options.display_available()
+        self.show = self.wanted and requirements.display_available()
         found = requirements.problems(self.show, extra)
         if found:
             requirements.fail(found, extra)
@@ -33,13 +33,13 @@ class Output:
         if not pages:
             sys.stderr.write("%s.py: nothing to draw\n" % self.name)
             return 1
-        from .. import batch
+        from .. import postscript
         from . import pages as page_module
         figures = [page_module.draw(p) for p in pages]
         target = self.print_plot or ps
         if target:
-            batch.write_ps(figures, output_path(target),
-                           orientation="landscape", creator=self.name)
+            postscript.write_ps(figures, output_path(target),
+                                orientation="landscape", creator=self.name)
         if self.show:
             from . import window
             window.show("%s.py: %s" % (self.name, title), pages, figures)

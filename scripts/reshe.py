@@ -3,7 +3,7 @@
 
 Python version of reshe: norm of the residual of the electron energy
 equation of b2ftrace against the iteration, in a window
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os

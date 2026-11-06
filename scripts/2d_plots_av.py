@@ -3,7 +3,7 @@
 
 Python version of 2d_plots_av: the averaged time traces of b2batch.nc in
 b2time2d_time_traces_av.ps and in a window with a tab per page
-(lib/python/runplots); -h for the options.
+(lib/python/run_plots); -h for the options.
 """
 
 import os

@@ -2,7 +2,7 @@
 """resco.py [-m MOD] [-l LAST] [-a AVE] [--no-show]
 
 Python version of resco: norms of the continuity residuals of b2ftrace per
-species against the iteration, in a window (lib/python/runplots); -h for
+species against the iteration, in a window (lib/python/run_plots); -h for
 the options.
 """
 
