@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import PROTOCOL_VERSION
 
 MAGIC = 1110593607
 
@@ -20,7 +19,7 @@ MAGIC = 1110593607
 # optionally followed by [count], where count is a field name or a
 # product of field names already decoded.
 SPECS = {
-    1: ("HELLO", "magic:i4 version:i4 producer:str"),
+    1: ("HELLO", "magic:i4 producer:str"),
     2: ("RUNINFO", "nCv:i4 nCi:i4 nFc:i4 nVx:i4 isClassicalGrid:i4 nx:i4 "
                    "ny:i4 ns:i4 natm:i4 nmol:i4 nion:i4 ntrii:i4 nbnd:i4 "
                    "with_eirene:i4 time:r8 label:str nsp:i4 "
@@ -233,9 +232,6 @@ def decode(op, payload):
     if op == 1:
         if msg.magic != MAGIC:
             raise ProtocolError("byte-order mismatch in HELLO")
-        if msg.version != PROTOCOL_VERSION:
-            raise ProtocolError(f"protocol version {msg.version}, "
-                                f"expected {PROTOCOL_VERSION}")
     return msg
 
 

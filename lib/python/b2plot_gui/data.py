@@ -21,7 +21,8 @@ CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 
 OP = protocol.OPCODES
 LAYER_ROLES = {1: "structure", 2: "separatrices", 3: "boundary",
-               4: "device"}
+               4: "device", 5: "wall", 7: "trajectories"}
+CHORDS = 6                      # overlay role of a chord set (named)
 
 
 @dataclass
@@ -46,6 +47,7 @@ class Run:
         self.catalog = []
         self.geometry = None
         self.layers = {}            # role name -> (n, 4) segments
+        self.layer_colours = {}     # role name -> colour index per segment
         self.trimesh = None
         self.psimap = None
         self.movies = {}            # 1, 2 -> MovieFile
@@ -57,7 +59,7 @@ class Run:
         self.exit_status = None
         self.console = []
         self._layer = None
-        self._segments = []
+        self._segments, self._colours, self._colour = [], [], 1
         self._result = None
         self._levels = None
 
@@ -201,13 +203,17 @@ class Run:
         return done
 
     def _message(self, op, payload):
-        if self._layer is not None and op in (40, 41):
-            if op == 40:
+        if self._layer is not None and op in (21, 40, 41):
+            n = len(self._segments)
+            if op == 21:
+                self._colour = protocol.decode(op, payload).ci
+            elif op == 40:
                 self._segments.append(struct.unpack_from("=4f", payload))
             else:
                 m = protocol.decode(op, payload)
                 pts = np.column_stack((m.x, m.y))
                 self._segments.extend(np.hstack((pts[:-1], pts[1:])))
+            self._colours += [self._colour] * (len(self._segments) - n)
             return None
         if op not in (1, 2, 3, 4, 5, 70, 71, 72, 73, 74, 75, 77, 78, 79,
                       80):
@@ -220,11 +226,14 @@ class Run:
         elif op == OP["GEOMETRY"]:
             self.geometry = make_geometry(m)
         elif op == OP["OVERLAY_BEGIN"]:
-            self._layer = LAYER_ROLES.get(m.role, m.name)
-            self._segments = []
+            name = m.fields["name"]       # m.name is the message name
+            self._layer = ("chords: " + name if m.role == CHORDS else
+                           LAYER_ROLES.get(m.role, name))
+            self._segments, self._colours, self._colour = [], [], 1
         elif op == OP["OVERLAY_END"]:
             self.layers[self._layer] = np.asarray(self._segments,
                                                   float).reshape(-1, 4)
+            self.layer_colours[self._layer] = np.asarray(self._colours)
             self._layer = None
         elif op == OP["TRIMESH"]:
             self.trimesh = TriMesh(np.asarray(m.x, float),

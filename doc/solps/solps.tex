@@ -18339,6 +18339,7 @@ are not met, an error is returned and no action is taken.
                                    &   &   &   &   &   &   &   &   & \hspace{1cm} magnetic flux ($\psi$) value \\
     nese \index{b2plot, nese}      & 0 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nese}  & Overwrite onto electron density array \\
     nspe, nspec \index{b2plot, nspe}\index{b2plot, nspec} & 3 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nspe}  & New spectrometer \\
+    npec    & 4 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nspe}  & Photon emission coefficients \\
     over \index{b2plot, over}      & 0 & 0 & 0 & 2 & 0 & 0 & 0 & \ref{sec:over}  & Copy over second top element of \\
                                    &   &   &   &   &   &   &   &  & \hspace{1cm} matrix stack \\
     pne \index{b2plot, pne}        & 0 & 0 & 0 & 1 & 0 & 0 & 0 & \ref{sec:pne}   & Divide by electron density \\
@@ -18633,6 +18634,8 @@ commands take one value off the "string" stack.
   \endlastfoot
     adas \index{b2plot, adas}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:adas}     & Access {\tt ADAS} data \\
     amju \index{b2plot, amju}, amjuel \index{b2plot, anjuel} & 0 & 0 & 4 & 0 & 0 & 0 & 0 & \ref{sec:amju} & Access {\tt AMJUEL} data \\
+    samju   & 0 & 0 & 4 & 1 & 0 & 0 & 0 & \ref{sec:amju} & {\tt AMJUEL} data at stack fields \\
+    eamju   & 0 & 0 & 4 & 0 & 1 & 0 & 0 & \ref{sec:amju} & {\tt AMJUEL} data at Eirene fields \\
     cam \index{b2plot, cam}      & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:cam}      & Camera plot \\
     chbx \index{b2plot, chbx}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:chbx}     & Boxcar average of chords \\
     chmp \index{b2plot, chmp}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:chmp}     & Chord contributions to the mesh element \\
@@ -21112,6 +21115,9 @@ Generates the spectral line emissivities according to the {\tt ADAS} database \c
 or {\tt \$\{SOLPSTOP\}/data.local/adas}, for species index $\langle${\tt is}$\rangle$, centered around wavelength $\langle${\tt lambda}$\rangle$ (in {\em \AA}),
 with width $\langle${\tt delta}$\rangle$ (in {\em \AA}).
 {\bf nspec} is an alias for {\bf nspe}.
+{\bf npec}\index{b2plot, npec}, with a fourth integer 1 or 2 after
+$\langle${\tt delta}$\rangle$, gives instead the excitation (1) or
+recombination (2) photon emission coefficient of these lines (m$^3$/s).
 
 \subsubsection{$<$n,{\bf I}$>$ mvsk}\index{b2plot, mvsk}\label{sec:mvsk}
 Sets the movie skip factor to $\langle${\tt n}$\rangle$ (default is {\tt 1}).
@@ -21200,15 +21206,17 @@ still drop them.
 Sends the grid (cell polygons, regions, {\tt ix} and {\tt iy} on
 classical grids, X-points), the overlays drawn by the vessel, separatrix
 and outline routines, the device structure read from {\tt structure.dat},
-the {\tt Eirene} triangles and, when {\tt rzpsi.dat} is present, the
+the wall elements of \btwoplot, the chord sets of the {\tt *.chords}
+files, the {\tt Eirene} triangles and, when {\tt rzpsi.dat} is present, the
 normalised flux $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$ on its
 $(R,Z)$ box, with the O-point taken at the minimum of $|\nabla\psi|$
 inside the separatrix and $\psi_S$ at the primary X-point.
 
-\subsubsection{guifield, guiefld}\index{b2plot, guifield}\label{sec:guifield}\index{b2plot, guiefld}\label{sec:guiefld}
+\subsubsection{guifield, guiefld, guiwfld}\index{b2plot, guifield}\label{sec:guifield}\index{b2plot, guiefld}\label{sec:guiefld}\index{b2plot, guiwfld}
 Send and drop the field on top of the matrix stack ({\bf guifield}, at
-the cell centres, with values at the vertices from {\tt intvertex}) or
-of the Eirene stack ({\bf guiefld}, on the triangles).
+the cell centres, with values at the vertices from {\tt intvertex}), of
+the Eirene stack ({\bf guiefld}, on the triangles) or of the wall stack
+({\bf guiwfld}, at the wall elements).
 
 \subsubsection{guivect, guievect}\index{b2plot, guivect}\label{sec:guivect}\index{b2plot, guievect}\label{sec:guievect}
 Send and drop the two fields on top of the matrix stack (poloidal below,
@@ -21224,6 +21232,10 @@ Send the contour levels set by {\bf clvs}, {\bf clvd}, {\bf clvn} or
 Sends the movie files found by {\bf mvframe} (\ref{sec:mvframe}), their
 frame times and, for every variable that {\bf mvframe} can read, its
 name, {\tt long\_name}, {\tt units}, location and number of columns.
+
+\subsubsection{guitraj}\index{b2plot, guitraj}\label{sec:guitraj}
+The next {\bf traj} (lines mode) sends its tracks, with their colours of
+the flight time, as an overlay instead of drawing a page.
 
 \subsection{Still need to do}
 
@@ -21493,7 +21505,7 @@ Pushes the mean of the frames $\langle${\tt k1}$\rangle$ to
 $\langle${\tt k2}$\rangle$ (one frame if they are equal) of the variable
 $\langle${\tt varname}$\rangle$ of a movie file: file 1 is
 {\tt b2movies.nc}, file 2 {\tt eirenemovies.nc}
-(Chapter~\ref{cha:b2movies}), found as the other input files of
+(Chapter~\ref{cha:b2movies}), file 3 {\tt b2tallies.nc}, found as the other input files of
 \btwoplot (the run directory or its baserun) and opened once per
 session. Every variable with the time as last dimension can be read, with
 all its species columns:
@@ -21504,8 +21516,12 @@ all its species columns:
   (names ending in {\tt y}) and go on the matrix stack;
 \item {\tt Eirene} variables, stored on the {\tt Eirene} tally cells, are
   mapped to the triangles as the {\tt fort.46} data and go on the Eirene
-  stack.
+  stack;
+\item {\tt b2tallies.nc} variables of the volume regions go on the matrix
+  stack, each cell with the value of its region ({\tt cvReg}).
 \end{itemize}
+{\bf mvfrstd}\index{b2plot, mvfrstd}, with the same arguments, pushes the
+standard deviation over the frames instead of the mean.
 The label is the {\tt long\_name} with the frames and the {\tt units}.
 The mean is a running sum per variable: when the frames change, only the
 frames that enter or leave the range are read, so rolling and block
@@ -21539,6 +21555,13 @@ direction by an amount of $\langle z_{shift} \rangle$ metres.
 Computes a reaction rate as per the {\tt Eirene} specification. Consult the
 {\tt Eirene} manual for details.
 {\bf amjuel} is an alias for {\bf amju}.
+{\bf samju}\index{b2plot, samju} (matrix stack) and
+{\bf eamju}\index{b2plot, eamju} (Eirene stack) take the same strings and
+evaluate the fit at the fields on top of the stack instead of the plasma
+$n_e$ and $T_e$: the temperature (eV) for fits in one variable; for fits in
+two variables the density (m$^{-3}$; H.4, H.7, H.10, H.12) or the energy
+(eV; H.3, H.6, H.9) on top of the temperature. The fields used are replaced
+by the result.
 
 \subsubsection{$<$reac$>$ adas}\index{b2plot, adas}\label{sec:adas}\index{ADAS}
 Computes a reaction rate as per the {\tt ADAS} specification. The $\langle${\tt reac}$\rangle$ string should be something of the

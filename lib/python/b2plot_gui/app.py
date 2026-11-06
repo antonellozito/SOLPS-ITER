@@ -8,7 +8,7 @@ tabs. There is no console and no b2plot command input.
 import os
 import sys
 
-from ..b2plot import PROTOCOL_VERSION, __version__, backend, labels
+from ..b2plot import __version__, backend, labels
 from . import data
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
 from .output.composer import Composer
@@ -264,9 +264,9 @@ class MainWindow(QtWidgets.QMainWindow):
         v = sys.version_info
         QtWidgets.QMessageBox.about(
             self, "About the b2plot GUI",
-            "b2plot GUI %s (protocol %d)\nPython %d.%d.%d, PySide6 %s, "
+            "b2plot GUI %s\nPython %d.%d.%d, PySide6 %s, "
             "matplotlib %s\nData from b2pl.exe; drawing by matplotlib."
-            % (__version__, PROTOCOL_VERSION, v[0], v[1], v[2],
+            % (__version__, v[0], v[1], v[2],
                PYSIDE6_VERSION, matplotlib.__version__))
 
     def closeEvent(self, event):

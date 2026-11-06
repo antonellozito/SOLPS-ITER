@@ -85,7 +85,7 @@ class Field:
     """One b2plot quantity, all species columns."""
     name: str
     label: str
-    location: str               # "cells" or "triangles"
+    location: str               # "cells", "triangles" or "wall"
     columns: list
     values: np.ndarray          # (ncol, n)
     vertex: np.ndarray = None   # (ncol, nVx) for cell fields
@@ -160,11 +160,14 @@ def make_geometry(m):
         tri_cell=cell, visible=visible)
 
 
+LOCATIONS = {1: "cells", 2: "triangles", 3: "wall"}
+
+
 def make_field(name, m, ops=()):
     ncol, n = m.ncol, m.n
     vertex = (np.asarray(m.vertex).reshape(ncol, m.nvx) if m.nvx else None)
     return Field(name=name, label=m.label, columns=list(m.columns),
-                 location="cells" if m.location == 1 else "triangles",
+                 location=LOCATIONS.get(m.location, "triangles"),
                  values=np.asarray(m.values).reshape(ncol, n),
                  vertex=vertex, ops=tuple(ops))
 

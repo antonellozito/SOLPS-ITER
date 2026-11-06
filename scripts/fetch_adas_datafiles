@@ -443,6 +443,64 @@ foreach relfile (`cat "$adf15_manifest"`)
 end
 
 # ---------------------------------------------------------------------------
+# File list of the adf15 data, read by the b2plot spectrometer (nspe, npec):
+# the filelist.adas.adf15 of the ADAS repository, with the data root of this
+# script and the '93 B files fetched above instead of the '95 ones
+# ---------------------------------------------------------------------------
+
+set adf15_filelist = "$data_root/filelist.adas.adf15"
+cat >! "$adf15_filelist" << END_OF_LIST
+'SOLPSTOP/data.local/adas'
+42
+'pec12#h ' 'pju' '1 ' '1 ' '  '
+'pec96#he' 'pju' 'T ' '+T' '  '
+'pec96#li' 'pju' 'T ' '+T' '  '
+'pec93#be' 'pju' 'T ' '+T' '  '
+'pec93#b ' 'llu' 'T ' '+T' '  '
+'pec93#c ' 'pju' 'T ' '+T' '  '
+'pec96#n ' 'pju' 'T ' '+T' '  '
+'pec96#o ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'pec96#ne' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'pec96#si' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'pec40#ar' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'pec93#cr' 'llu' 'T'  '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'none    ' 'pju' 'T ' '+T' '  '
+'pec93#mo' 'llu' 'T'  '+T' '  '
+END_OF_LIST
+if ($status != 0) then
+  echo "ERROR: Cannot write $adf15_filelist"
+  @ errors = $errors + 1
+endif
+
+# ---------------------------------------------------------------------------
 # Fetch the adas_bundled archive
 # ---------------------------------------------------------------------------
 
