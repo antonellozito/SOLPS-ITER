@@ -155,7 +155,7 @@ def _coefficient(p, g, t):
 
 
 def _s0(p, g):
-    return "(%s/10.374*1e6)" % _coefficient(p, g, "0*%s + 1" % _pden(g))
+    return "(%s/10.374*1e6)" % _coefficient(p, g, "rtoe(1)")
 
 
 PAIR = (("Projectile", "neutral"), ("Background gas", "neutral"))

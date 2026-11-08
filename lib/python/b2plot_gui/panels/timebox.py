@@ -1,11 +1,17 @@
 """Time group of the 2D quantity panel: final state or movie frames
-(b2movies.nc, eirenemovies.nc), one frame or the means b2plot computes
-over a range, a rolling window or consecutive blocks of frames."""
+(b2movies.nc, eirenemovies.nc, b2tallies.nc), one frame, the means b2plot
+computes over a range, a rolling window or consecutive blocks of frames,
+the standard deviation over a range, each minus a reference."""
 
 from ...qt import QtCore, QtWidgets, Qt, Signal
 
 MODES = [("One frame", "frame"), ("Mean over frames", "range"),
-         ("Rolling mean", "rolling"), ("Batch mean", "batch")]
+         ("Rolling mean", "rolling"), ("Batch mean", "batch"),
+         ("Standard deviation over frames", "std")]
+MINUS = [("nothing", None), ("the first frame", "first"),
+         ("the last frame", "last"), ("the mean of all frames", "all"),
+         ("the final state", "final")]
+RANGE = ("range", "std")            # modes over the frames first to last
 
 
 class TimeBox(QtWidgets.QGroupBox):
@@ -24,14 +30,20 @@ class TimeBox(QtWidgets.QGroupBox):
         self.source = QtWidgets.QComboBox()
         self.source.addItem("Final state (b2fstate)", False)
         self.source.addItem("Movie frames", True)
-        self.source.setToolTip("Movie frames: b2movies.nc and "
-                               "eirenemovies.nc of the run directory")
+        self.source.setToolTip("Movie frames: b2movies.nc, eirenemovies.nc "
+                               "and b2tallies.nc of the run directory")
         self.mode = QtWidgets.QComboBox()
         for text, key in MODES:
             self.mode.addItem(text, key)
         self.mode.setToolTip("Means are computed by b2plot over the frames "
                              "(rolling: a window moved frame by frame; "
                              "batch: consecutive blocks of frames)")
+        self.minus = QtWidgets.QComboBox()
+        for text, key in MINUS:
+            self.minus.addItem(text, key)
+        self.minus.setToolTip("Reference subtracted from what is shown "
+                              "(b2plot m-); the final state needs a movie "
+                              "variable that is also a b2plot label")
         self.slider = QtWidgets.QSlider(Qt.Horizontal)
         self.slider.setTracking(False)
         self.pos = QtWidgets.QSpinBox()
@@ -72,6 +84,7 @@ class TimeBox(QtWidgets.QGroupBox):
             return box
         form.addRow("Data", self.source)
         form.addRow("Show", self.mode)
+        form.addRow("Minus", self.minus)
         form.addRow("Position", row(self.slider, self.pos))
         form.addRow("Frames", row(self.first, QtWidgets.QLabel("to"),
                                   self.last))
@@ -83,6 +96,7 @@ class TimeBox(QtWidgets.QGroupBox):
         self._timer.timeout.connect(self._tick)
         self.source.currentIndexChanged.connect(self._source_changed)
         self.mode.currentIndexChanged.connect(lambda *_: self._layout())
+        self.minus.currentIndexChanged.connect(lambda *_: self._layout())
         self.slider.valueChanged.connect(self.pos.setValue)
         self.pos.valueChanged.connect(self._moved)
         for w in (self.first, self.last, self.window):
@@ -151,7 +165,7 @@ class TimeBox(QtWidgets.QGroupBox):
         key = self.key()
         if key == "frame":
             k1 = k2 = p
-        elif key == "range":
+        elif key in RANGE:
             k1, k2 = sorted((self.first.value(), self.last.value()))
         elif key == "rolling":
             h = w // 2 if self.align.currentData() == "centred" else w - 1
@@ -164,16 +178,24 @@ class TimeBox(QtWidgets.QGroupBox):
     def frames(self, f=None):
         return self.frames_at(self.pos.value(), f)
 
-    def source_of(self, q):
-        """(file, first, last) of a movie quantity, None for the final
-        state."""
+    def source_of(self, q, p=None):
+        """(file, first, last[, statistic, reference]) of a movie quantity
+        at slider position p (default the current one), None for the
+        final state."""
         if not getattr(q, "movie", 0) or not self.movie():
             return None
-        return (q.movie,) + self.frames(q.movie)
+        source = (q.movie,) + (self.frames(q.movie) if p is None else
+                               self.frames_at(p, q.movie))
+        nt = self.nt(q.movie)
+        ref = {"first": (1, 1), "last": (nt, nt), "all": (1, nt),
+               "final": "final"}.get(self.minus.currentData())
+        stat = "std" if self.key() == "std" else "mean"
+        return source if stat == "mean" and ref is None else \
+            source + (stat, ref)
 
     def positions(self):
         """Slider positions shown by Play and by Export frames."""
-        if self.key() == "range":
+        if self.key() in RANGE:
             return [self.pos.value()]
         lo, hi = self._span()
         return list(range(lo, hi + 1))
@@ -184,10 +206,14 @@ class TimeBox(QtWidgets.QGroupBox):
         if not t:
             return ""
         k1, k2 = self.frames(f)
-        if k1 == k2:
-            return "frame %d of %d, t = %.4g s" % (k1, len(t), t[k1 - 1])
-        return "mean of frames %d\u2013%d of %d, t = %.4g\u2013%.4g s" % (
-            k1, k2, len(t), t[k1 - 1], t[k2 - 1])
+        minus = "" if self.minus.currentData() is None else \
+            ", minus " + self.minus.currentText()
+        if k1 == k2 and self.key() != "std":
+            return "frame %d of %d, t = %.4g s%s" % (k1, len(t), t[k1 - 1],
+                                                     minus)
+        return "%s of frames %d\u2013%d of %d, t = %.4g\u2013%.4g s%s" % (
+            "standard deviation" if self.key() == "std" else "mean", k1, k2,
+            len(t), t[k1 - 1], t[k2 - 1], minus)
 
     def time_value(self, f=None):
         """Time of the frame, or the middle of the frames averaged."""
@@ -209,14 +235,14 @@ class TimeBox(QtWidgets.QGroupBox):
     def _layout(self, emit=True):
         movie = self.movie()
         key = self.key()
-        for i in range(1, 7):
+        for i in range(1, 8):
             self.form.setRowVisible(i, movie)
         if movie:
-            self.form.setRowVisible(2, key != "range")
-            self.form.setRowVisible(3, key == "range")
-            self.form.setRowVisible(4, key in ("rolling", "batch"))
+            self.form.setRowVisible(3, key not in RANGE)
+            self.form.setRowVisible(4, key in RANGE)
+            self.form.setRowVisible(5, key in ("rolling", "batch"))
             self.align.setVisible(key == "rolling")
-            self.play.setEnabled(key != "range")
+            self.play.setEnabled(key not in RANGE)
             lo, hi = self._span()
             hi = max(hi, lo)
             for w in (self.slider, self.pos):

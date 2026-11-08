@@ -18639,6 +18639,7 @@ commands take one value off the "string" stack.
     cam \index{b2plot, cam}      & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:cam}      & Camera plot \\
     chbx \index{b2plot, chbx}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:chbx}     & Boxcar average of chords \\
     chmp \index{b2plot, chmp}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:chmp}     & Chord contributions to the mesh element \\
+    chmf \index{b2plot, chmf}    & 2 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:chmp}     & Chord contribution to the cells (field) \\
     chor \index{b2plot, chor}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:chor}     & Filename containing chords \\
                                  &   &   &   &   &   &   &   &  & \hspace{1cm} (for integration) \\
     chpl \index{b2plot, chpl}    & 0 & 0 & 1 & 0 & 0 & 0 & 0 & \ref{sec:chpl}     & Filename containing chords (to plot) \\
@@ -18651,6 +18652,8 @@ commands take one value off the "string" stack.
                                  &   &   &   &   &   &   &   &  & \hspace{1cm} Eirene stack data \\
     echmp \index{b2plot, echmp}  & 0 & 0 & 1 & 0 & 1 & 0 & 0 & \ref{sec:echmp}    & Chord contributions to the mesh element \\
                                  &   &   &   &   &   &   &   &  & \hspace{1cm} from Eirene stack data \\
+    echmf \index{b2plot, echmf}  & 2 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:echmp}    & Chord contribution to the triangles \\
+                                 &   &   &   &   &   &   &   &  & \hspace{1cm} (Eirene field) \\
     echor \index{b2plot, echor}  & 0 & 0 & 1 & 0 & 1 & 0 & 0 & \ref{sec:echor}    & Filename containing chords for \\
                                  &   &   &   &   &   &   &   &  & \hspace{1cm} integration of Eirene stack data \\
     echvl \index{b2plot, echvl}  & 0 & 0 & 1 & 0 & 1 & 0 & 0 & \ref{sec:echvl}    & Value at positions of Eirene stack data \\
@@ -21469,6 +21472,8 @@ equilibrium for this shot to overlay subsequent plots.
 
 \subsubsection{$<$chord file$>$ chmp}\index{b2plot, chmp}\label{sec:chmp}
 Plots a contour plot of the chord contribution from the mesh elements.
+{\bf chmf}\index{b2plot, chmf} ($<$set,{\bf I}$>$ $<$chord,{\bf I}$>$) puts the
+contribution of a chord of the {\tt *.chords} files of the run on the matrix stack.
 
 \subsubsection{$<$chord file$>$ cam}\index{b2plot, cam}\label{sec:cam}
 Camera plot.  The chord file needs to contain some additional
@@ -21483,6 +21488,7 @@ The Eirene stack data value is plotted at the specified positions.
 
 \subsubsection{$<$chord file$>$ echmp}\index{b2plot, echmp}\label{sec:echmp}
 Plots a contour plot of the chord contribution from the triangles.
+{\bf echmf}\index{b2plot, echmf} ($<$set,{\bf I}$>$ $<$chord,{\bf I}$>$) puts it on the Eirene stack.
 
 \subsubsection{$<$chord file$>$ ecam}\index{b2plot, ecam}\label{sec:ecam}
 Camera plot of Eirene data. The chord file needs to contain some additional

@@ -67,6 +67,8 @@ class Tab2D(QtWidgets.QWidget):
         self.quantity.style_changed.connect(self._options_changed)
         self.quantity.seed_line.connect(self._start_seed_line)
         self.quantity.streams.seed_preset.connect(self._seed_preset)
+        self.quantity.traj_box.draw.connect(self._draw_trajectories)
+        self.quantity.traj_box.clear.connect(self._clear_trajectories)
         self.quantity.calculator.connect(self.open_calculator)
         self.time_box = self.quantity.time_box
         self.time_box.source_changed.connect(self._source_changed)
@@ -140,12 +142,10 @@ class Tab2D(QtWidgets.QWidget):
     def set_run(self, run):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.plot.set_run(run)
+        self.quantity.traj_box.set_species(column_names(
+            self._species() or []))
         self.viewbar.set_run()
-        available = {k for k, a in self.plot.layer_artists.items()
-                     if a is not None and (not isinstance(a, list) or a)}
-        if run.psimap is not None:
-            available.add("flux")
-        self.layers.set_available(available)
+        self._set_available()
         self.translate = catalog.translator(run.catalog)
         self.time_box.set_movies(run.movies)
         self.quantity.cells_box.set_geometry(run.geometry)
@@ -179,7 +179,8 @@ class Tab2D(QtWidgets.QWidget):
         for text in errors:
             self.status.emit("Derived quantity not available: " + text)
         self.final_quantities = derived + catalog.quantities(
-            self.run.catalog)
+            self.run.catalog) + catalog.chord_quantities(
+            self.run.layers, self.run.trimesh is not None)
         self.movie_quantities = catalog.movie_quantities(self.run.movies,
                                                          derived)
         quantities = self.movie_quantities if self.time_box.movie() else \
@@ -187,7 +188,8 @@ class Tab2D(QtWidgets.QWidget):
         self.quantity.set_quantities(quantities)
         self.quantity.overlay_box.set_choices(
             [q for q in quantities if q.source in ("vector", "evector")],
-            [q for q in quantities if q.source in ("matrix", "eirene")])
+            [q for q in quantities if q.source in ("matrix", "eirene")],
+            walls=catalog.wall_quantities(self.run.catalog))
         self.quantity.cells_box.set_conditions(
             [q for q in quantities if q.expr and q.source == "matrix"])
 
@@ -280,8 +282,8 @@ class Tab2D(QtWidgets.QWidget):
             (r, q, ()) for r, q in self._overlays_needed()]
         for role, q, ops in wants:
             if q.movie:
-                src = (q.movie,) + self.time_box.frames_at(p, q.movie)
-                self.request.emit(("prefetch", q, ops, src))
+                self.request.emit(("prefetch", q, ops,
+                                   self.time_box.source_of(q, p)))
 
     def _options_changed(self):
         self._fetch()
@@ -296,6 +298,9 @@ class Tab2D(QtWidgets.QWidget):
             self.status.emit("Values of %s written to %s" % (
                 q.name, ", ".join(data)) if data is not None else
                 "b2plot did not write the values of %s. %s" % (q.name, tail))
+            return
+        if role == "traj":
+            self._show_trajectories(data)
             return
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
@@ -319,6 +324,8 @@ class Tab2D(QtWidgets.QWidget):
                 if role in box.ROLES:
                     box.vectors[box.ROLES.index(role)].set_species(
                         column_names(data.columns, self._species()))
+                elif role == "wall":
+                    box.set_wall_species(column_names(data.columns))
                 self.redraw()
             return
         if q is not self.wanted or ops != self.quantity.ops(q) or \
@@ -328,6 +335,14 @@ class Tab2D(QtWidgets.QWidget):
         if not self.quantity.reduced():
             self.quantity.set_columns(data.columns, self._species())
         self.redraw()
+
+    def _set_available(self):
+        """Layers the run has (those built, flux surfaces with a psi map)."""
+        available = {k for k, a in self.plot.layer_artists.items()
+                     if a is not None and (not isinstance(a, list) or a)}
+        if self.run.psimap is not None:
+            available.add("flux")
+        self.layers.set_available(available)
 
     def _species(self):
         return (self.run.info or {}).get("species")
@@ -376,6 +391,40 @@ class Tab2D(QtWidgets.QWidget):
             self.run.marks[text] = tuple(g.centres[rows[pick(
                 g.centres[rows, 0])]])
             self.plot._build_layer("labels")
+            self.canvas.draw_idle()
+
+    def _draw_trajectories(self):
+        """b2plot traj with the settings of the box: weighting by the
+        quantity shown (matrix ones), start cells from the Only where
+        mask."""
+        box = self.quantity.traj_box
+        if self.run is None or not box.chosen():
+            self.status.emit("Trajectories: choose at least one species")
+            return
+        q = self.wanted
+        weight = self.run._head(q.name, None) if q is not None and \
+            q.source == "matrix" else ""
+        mask = self.quantity.cells_box.where.currentData()
+        self.status.emit("Computing trajectories\u2026")
+        self.request.emit(("traj", q, (box.words(weight, self.run._head(
+            mask.name, None) if mask is not None else ""),), None))
+
+    def _show_trajectories(self, seg):
+        if seg is None or not len(seg):
+            self.status.emit("b2plot drew no trajectories")
+            return
+        self.plot._build_layer("trajectories")
+        self._set_available()
+        self.layers.rows["trajectories"]["check"].setChecked(True)
+        self.status.emit("%d trajectory segments" % len(seg))
+        self.canvas.draw_idle()
+
+    def _clear_trajectories(self):
+        if self.run is not None:
+            self.run.layers.pop("trajectories", None)
+            self.plot._build_layer("trajectories")
+            self.layers.rows["trajectories"]["check"].setChecked(False)
+            self._set_available()
             self.canvas.draw_idle()
 
     def _seed_preset(self, key):

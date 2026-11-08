@@ -44,11 +44,16 @@ LAYERS = {
                 LayerStyle(False, "#ffffff")),
     "labels": ("Labels: regions, X, O, midplanes, targets",
                LayerStyle(False, "#000000", 8.0)),
+    "chords": ("Chords (*.chords files), numbered",
+               LayerStyle(False, "#9467bd", 0.8)),
+    "trajectories": ("Trajectories (colours of b2plot)",
+                     LayerStyle(False, "#000000", 0.6)),
 }
 ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2, "boundary": 3.3,
           "outside": 3.35, "filled": 3.38, "structure": 3.4,
           "device": 3.45, "separatrices": 3.5, "targets": 3.55,
-          "xpoints": 3.6, "zero": 3.65, "labels": 6.0}
+          "xpoints": 3.6, "zero": 3.65, "chords": 3.7, "trajectories": 3.75,
+          "labels": 6.0}
 FILLS = ("filled", "outside")   # layers drawn as areas (no line style)
 PWN = ((0.15, 0.45, 0.68), (1.0, 1.0, 1.0), (0.72, 0.15, 0.15))
 
@@ -120,6 +125,16 @@ class VectorStyle:
     column: int = -1            # species, -1: as the plot
     same: bool = False          # all arrows equally long
     stream: bool = False        # streamlines instead of arrows
+
+
+@dataclass
+class WallStyle:
+    """A wall quantity drawn as a strip along the wall elements."""
+    column: int = 0
+    cmap: str = "viridis"
+    log: bool = False
+    width: float = 6.0          # points
+    colorbar: bool = True
 
 
 @dataclass

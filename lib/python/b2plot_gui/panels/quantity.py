@@ -10,6 +10,7 @@ from ..plot.styles import (KINDS_FLAT, KINDS_SCALAR, KINDS_VECTOR,
 from ...qt import QtWidgets, Qt, Signal
 from .options import CellsBox, LabelsBox, LevelsBox
 from .overlays import OverlayBox
+from .trajectories import TrajBox
 from .plotopts import ArrowsBox, ColourBox, LinesBox, StreamBox
 from .timebox import TimeBox
 
@@ -103,6 +104,8 @@ class QuantityPanel(QtWidgets.QWidget):
         self.cells_box = CellsBox()
         self.cells_box.changed.connect(self._changed)
         lay.addWidget(self.cells_box)
+        self.traj_box = TrajBox()
+        lay.addWidget(self.traj_box)
         self.labels_box = LabelsBox()
         self.labels_box.changed.connect(self._changed)
         lay.addWidget(self.labels_box)

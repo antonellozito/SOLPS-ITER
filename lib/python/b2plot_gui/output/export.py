@@ -7,6 +7,8 @@ from . import page
 from ...qt import QtWidgets
 
 FIGURE_EXTS = (".pdf", ".png", ".svg", ".eps")
+MOVIE_EXTS = (".gif", ".mp4")
+MOVIE_FORMATS = ";;GIF movie (*.gif);;MP4 movie (*.mp4, needs ffmpeg)"
 
 
 def component_paths(path, q):
@@ -67,12 +69,14 @@ class FigureDialog(QtWidgets.QDialog):
     """File, shape and resolution of an exported figure or page."""
 
     def __init__(self, settings, default="b2plot.pdf", shape=True,
-                 parent=None):
+                 parent=None, movies=False):
         super().__init__(parent)
         self.setWindowTitle("Export figure" if shape else "Export pages")
         self.settings = settings
+        self.exts = FIGURE_EXTS + MOVIE_EXTS * movies
         form = QtWidgets.QFormLayout(self)
-        self.where = PathRow(settings, page.FORMATS, default)
+        self.where = PathRow(settings, page.FORMATS + MOVIE_FORMATS * movies,
+                             default)
         form.addRow("File", self.where)
         self.shape = QtWidgets.QComboBox()
         for key, (text, _) in page.SHAPES.items():
@@ -91,7 +95,7 @@ class FigureDialog(QtWidgets.QDialog):
 
     def accept(self):
         path = self.path()
-        if os.path.splitext(path)[1].lower() not in FIGURE_EXTS:
+        if os.path.splitext(path)[1].lower() not in self.exts:
             path += ".pdf"
             self.where.edit.setText(path)
         if not _confirm(self, [path], self.where.chosen):

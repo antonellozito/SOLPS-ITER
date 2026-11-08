@@ -50,6 +50,7 @@ class Run:
         self.layers = {}            # role name -> (n, 4) segments
         self.layer_colours = {}     # role name -> colour index per segment
         self.marks = {}             # label text -> (R, Z), e.g. midplanes
+        self.palette = {}           # colour index -> (r, g, b) of b2plot
         self.trimesh = None
         self.psimap = None
         self.movies = {}            # 1, 2 -> MovieFile
@@ -95,9 +96,23 @@ class Run:
 
     @staticmethod
     def _movie(name, source):
-        """b2plot tokens pushing a movie variable: frames first to last
-        of file 1 (b2movies.nc), 2 (eirenemovies.nc) or 3 (b2tallies.nc)."""
-        return "'%s' %d %d %d mvframe" % ((name,) + tuple(source))
+        """b2plot tokens pushing a movie variable: the mean (or with "std"
+        in source the standard deviation) of frames first to last of file
+        1 (b2movies.nc), 2 (eirenemovies.nc) or 3 (b2tallies.nc)."""
+        cmd = "mvfrstd" if source[3:4] == ("std",) else "mvframe"
+        return "'%s' %d %d %d %s" % ((name,) + tuple(source[:3]) + (cmd,))
+
+    @classmethod
+    def _push(cls, name, source, ops, eirene):
+        """Tokens of a quantity with its operations, minus the reference of
+        source (frames, or "final": the final state) when it has one."""
+        words = [cls._head(name, source)] + list(ops)
+        ref = source[4] if source and len(source) > 4 else None
+        if ref is not None:
+            back = None if ref == "final" else source[:1] + tuple(ref)
+            words += [cls._head(name, back)] + list(ops) + [
+                "em-" if eirene else "m-"]
+        return words
 
     @classmethod
     def _head(cls, name, source):
@@ -108,22 +123,29 @@ class Run:
         return re.sub(r"\{([^}]+)\}", lambda m: cls._movie(
             m.group(1), source) if source else m.group(1), name)
 
-    def field(self, name, eirene=False, ops=(), source=None):
+    def field(self, name, eirene=False, ops=(), source=None, wall=False):
         """Cached Field, or a Request whose result arrives later.
 
         ops are b2plot operations applied after the label, e.g.
         ("0 -1 sumz",) for the sum over the species; source (file,
         first, last) takes the mean of movie frames instead of the
-        final state.
+        final state; wall: a field of the wall stack (at the wall
+        elements).
         """
         source = tuple(source) if source else None
-        kind = "efield" if eirene else "field"
+        kind = "wfield" if wall else "efield" if eirene else "field"
         found = self._lookup(kind, name, ops, source)
         if found is not None:
             return found
-        cmd = "guiefld" if eirene else "guifield"
-        text = " ".join((self._head(name, source),) + tuple(ops) + (cmd,))
+        cmd = "guiwfld" if wall else "guiefld" if eirene else "guifield"
+        text = " ".join(self._push(name, source, ops, eirene) + [cmd])
         return self._request(kind, name, text + "\n", ops, source)
+
+    def overlay(self, layer, text):
+        """Request running the b2plot commands text, whose result is the
+        overlay layer they send (e.g. trajectories); never cached."""
+        self.layers.pop(layer, None)
+        return self._request("overlay", layer, text + "\n")
 
     def vector(self, first, second, eirene=False, ops=(), source=None):
         """Vector from two quantities (poloidal and radial for B2.5,
@@ -135,14 +157,14 @@ class Run:
         if found is not None:
             return found
         cmd = "guievect" if eirene else "guivect"
-        if source and "{" not in first + second:
+        if source and len(source) == 3 and "{" not in first + second:
             swap = "eswap" if eirene else "swap"
             words = ("'%s' '%s' %d %d %d mvframev" % ((first, second)
                                                      + source),) \
                 + tuple(ops) + (swap,) + tuple(ops) + (swap, cmd)
         else:
-            words = (self._head(first, source),) + tuple(ops) + (
-                self._head(second, source),) + tuple(ops) + (cmd,)
+            words = self._push(first, source, ops, eirene) + self._push(
+                second, source, ops, eirene) + [cmd]
         return self._request(kind, name, " ".join(words) + "\n", ops,
                              source)
 
@@ -214,6 +236,10 @@ class Run:
         return done
 
     def _message(self, op, payload):
+        if op == OP["COLOR_REP"]:
+            m = protocol.decode(op, payload)
+            self.palette[m.ci] = (m.r, m.g, m.b)
+            return None
         if self._layer is not None and op in (21, 40, 41):
             n = len(self._segments)
             if op == 21:
@@ -277,7 +303,7 @@ class Run:
         req = self.pending.pop(0)
         m, self._result = self._result, None
         levels, self._levels = self._levels, None
-        if req.kind in ("field", "efield") and m is not None \
+        if req.kind in ("field", "efield", "wfield") and m is not None \
                 and m.op == OP["FIELD"]:
             req.result = make_field(req.name, m, req.ops)
             req.result.levels = levels
@@ -288,10 +314,13 @@ class Run:
             req.result.source = req.source
         elif req.kind == "init":
             req.result = self.geometry
+        elif req.kind == "overlay":
+            req.result = self.layers.get(req.name)
         elif req.kind == "export":
             ok = all(os.path.isfile(p) for p in req.paths)
             req.result = list(req.paths) if ok else None
-        if req.result is not None and req.kind not in ("init", "export"):
+        if req.result is not None and req.kind not in ("init", "export",
+                                                       "overlay"):
             self.cache[(req.kind, req.name, req.ops, req.source)] = \
                 req.result
             self._trim_cache()

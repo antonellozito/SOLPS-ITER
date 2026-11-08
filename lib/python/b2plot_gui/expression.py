@@ -26,10 +26,14 @@ MATRIX_ONLY = ("pvol", "pne", "psx", "psy", "psxperp", "ddx", "ddy", "sumft",
 EIRENE_ONLY = ("psta", "pstv")
 FITS = {"amju": ("matrix", 0), "samju": ("matrix", 2),
         "eamju": ("eirene", 2)}        # 4 strings, then up to n fields
-INTEGERS = {"nspe": 3, "npec": 4}      # integer arguments, matrix result
+INTEGERS = {"nspe": (3, "matrix"), "npec": (4, "matrix"),
+            "chmf": (2, "matrix"), "echmf": (2, "eirene")}  # integer args
+CONSTANT = {"rtom": "matrix", "itom": "matrix", "rtoe": "eirene",
+            "itoe": "eirene"}           # a number as a field
 FUNCTIONS = (UNARY + MATRIX_ONLY + EIRENE_ONLY + tuple(FITS)
-             + tuple(INTEGERS) + ("adas", "cora", "coni", "sel", "sumz",
-                                  "min", "max", "etos", "stoe"))
+             + tuple(INTEGERS) + tuple(CONSTANT)
+             + ("adas", "cora", "coni", "spec", "sel", "sumz", "zrng", "min",
+                "max", "etos", "stoe", "evac", "etal"))
 
 
 class ExpressionError(ValueError):
@@ -197,13 +201,37 @@ class Translator:
             return sum((w for w, _ in fields), []) + sum(
                 (w for w, _ in strings), []) + [name], kind
         if name in INTEGERS:
-            return self._ints(args, INTEGERS[name], name) + [name], "matrix"
+            count, kind = INTEGERS[name]
+            return self._ints(args, count, name) + [name], kind
         if name == "adas":
             if len(args) != 1 or self._node(args[0])[1] != "str":
                 raise ExpressionError("adas needs one string")
             return self._node(args[0])[0] + ["adas"], "matrix"
-        if name in ("cora", "coni") and not args:
+        if name in ("cora", "coni", "spec") and not args:
             return [name], "matrix"
+        if name in CONSTANT:
+            k = self._node(args[0])[1] if len(args) == 1 else None
+            if not (isinstance(k, tuple) and k[1] is not None):
+                raise ExpressionError("%s takes one number" % name)
+            value = ("%d" % round(k[1]) if name[0] == "i" else
+                     real_token(k[1]))
+            return [value, name], CONSTANT[name]
+        if name == "zrng":
+            w, k = self._node(args[0]) if args else ([], None)
+            k = self._field(k)
+            return w + self._ints(args[1:], 2, name) + [self._op(name, k)], k
+        if name == "evac":
+            w, k = self._node(args[0]) if len(args) == 2 else ([], None)
+            v = self._node(args[1])[1] if len(args) == 2 else None
+            if k != "eirene" or not (isinstance(v, tuple) and v[1] is not
+                                     None):
+                raise ExpressionError("evac takes an Eirene field and a "
+                                      "number")
+            return w + [real_token(v[1]), name], k
+        if name == "etal":
+            if len(args) != 1 or self._node(args[0])[1] != "str":
+                raise ExpressionError("etal needs the tally file name")
+            return self._node(args[0])[0] + [name], "eirene"
         raise ExpressionError("unknown function %s" % name)
 
 
