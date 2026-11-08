@@ -9,20 +9,20 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from . import catalog, presets
-from .output import page
 from .plot import shapes
 from .plot.canvas import Plot2D
-from .plot.snapshot import Snapshot
 from .plot.styles import KINDS_FLAT, LAYERS
 from .model import split_unit
 from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore,
                   QtWidgets, Qt, Signal)
-from .output.export import FigureDialog, ValuesDialog
 from .panels.layers import LayersPanel, from_dict
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
 from .panels.views import ViewBar
+from .output import state
+from .output.actions import TabOutput
 from .output.frames import FrameExport
+from .tools.control import Tools
 
 MASSES = {"massa": "a", "massm": "m"}   # b2plot label: Eirene stack
 MARKS = {"iimp": ("IMP", np.argmin), "iomp": ("OMP", np.argmax)}
@@ -39,7 +39,7 @@ def _scrolled(widget, width):
     return area
 
 
-class Tab2D(QtWidgets.QWidget):
+class Tab2D(TabOutput, QtWidgets.QWidget):
     """The 2D plots tab; data requests go through the main window."""
 
     request = Signal(object)        # (role, Quantity, operations, source)
@@ -55,7 +55,6 @@ class Tab2D(QtWidgets.QWidget):
         self.data = None
         self.wanted = None
         self.odata = {}                 # overlay role -> Field or Vector
-        self._seed_points = None
         self.figure = Figure()
         self.canvas = FigureCanvasQTAgg(self.figure)
         self.canvas.setMinimumSize(420, 420)
@@ -65,7 +64,8 @@ class Tab2D(QtWidgets.QWidget):
         self.quantity = QuantityPanel()
         self.quantity.quantity_chosen.connect(self._chosen)
         self.quantity.style_changed.connect(self._options_changed)
-        self.quantity.seed_line.connect(self._start_seed_line)
+        self.quantity.seed_line.connect(
+            lambda: self.tools.bar.set_mode("seeds"))
         self.quantity.streams.seed_preset.connect(self._seed_preset)
         self.quantity.traj_box.draw.connect(self._draw_trajectories)
         self.quantity.traj_box.clear.connect(self._clear_trajectories)
@@ -74,6 +74,7 @@ class Tab2D(QtWidgets.QWidget):
         self.time_box.source_changed.connect(self._source_changed)
         self.time_box.frames_changed.connect(self._fetch)
         self.frames = FrameExport(self)
+        self.maps = state.MapsJob(self)
         self.time_box.export_frames.connect(lambda: self.frames.start())
         self.time_box.ready = self._shown
         self.final_quantities, self.movie_quantities = [], []
@@ -94,6 +95,7 @@ class Tab2D(QtWidgets.QWidget):
         second = QtWidgets.QHBoxLayout()
         second.addWidget(self.viewbar, 1)
         second.addWidget(add)
+        self.tools = Tools(self)
         self.hover = QtWidgets.QLabel(" ")
         self.hover.setTextInteractionFlags(Qt.TextSelectableByMouse)
         centre = QtWidgets.QWidget()
@@ -101,8 +103,10 @@ class Tab2D(QtWidgets.QWidget):
         cl.setContentsMargins(0, 0, 0, 0)
         cl.addLayout(top)
         cl.addLayout(second)
+        cl.addWidget(self.tools.bar)
         cl.addWidget(self.canvas, 1)
         cl.addWidget(self.hover)
+        cl.addWidget(self.tools.panel)
 
         split = QtWidgets.QSplitter(Qt.Horizontal)
         split.addWidget(_scrolled(self.quantity, 300))
@@ -119,7 +123,6 @@ class Tab2D(QtWidgets.QWidget):
         self._vector_timer.setSingleShot(True)
         self._vector_timer.setInterval(150)
         self._vector_timer.timeout.connect(self._redraw_vectors)
-        self.canvas.mpl_connect("button_press_event", self._click)
         self.setEnabled(False)
 
     # ----------------------------------------------------------- settings
@@ -142,6 +145,8 @@ class Tab2D(QtWidgets.QWidget):
     def set_run(self, run):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.plot.set_run(run)
+        self.tools.panel.hide()
+        self.tools.last = None
         self.quantity.traj_box.set_species(column_names(
             self._species() or []))
         self.viewbar.set_run()
@@ -301,6 +306,9 @@ class Tab2D(QtWidgets.QWidget):
             return
         if role == "traj":
             self._show_trajectories(data)
+            return
+        if role == "tools":
+            self.tools.deliver(data)
             return
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
@@ -474,81 +482,13 @@ class Tab2D(QtWidgets.QWidget):
                              self.label_values())
         if self._shown():
             self._prefetch()
-            if self.frames.job is not None:
-                QtCore.QTimer.singleShot(0, self.frames.ready)
+            for job in (self.frames, self.maps):
+                if job.job is not None:
+                    QtCore.QTimer.singleShot(0, job.ready)
         if self.plot.mappable is not None:
             norm = self.plot.mappable.norm
             self.quantity.set_range(norm.vmin, norm.vmax)
         self.canvas.draw_idle()
-
-    # ------------------------------------------------------------- export
-    def snapshot(self):
-        """The plot shown with all its settings, or None."""
-        if self.run is None or not self._current():
-            return None
-        return Snapshot(
-            run=self.run, data=self.data, style=self.quantity.style(),
-            unit=self._unit(), overlays=self._overlay_data(),
-            layers={k: replace(s) for k, s in self.layers.styles().items()},
-            view=self.plot.get_view(),
-            labels=self.quantity.labels_box.style(), title=self._title(),
-            values=self.label_values())
-
-    def _add_to_page(self):
-        snap = self.snapshot()
-        if snap is None:
-            self.status.emit("No plot to add to the page")
-            return
-        self.add_to_page.emit(snap)
-
-    def export_figure(self, path=None, shape="shown", dpi=150):
-        """Write the plot (dialog unless path is given); returns files."""
-        snap = self.snapshot()
-        if snap is None:
-            self.status.emit("No plot to export")
-            return []
-        if path is None:
-            dlg = FigureDialog(self.settings, self.wanted.name.replace(
-                " ", "_") + ".pdf", parent=self)
-            if dlg.exec() != QtWidgets.QDialog.Accepted:
-                return []
-            path, dpi = dlg.path(), dlg.dpi.value()
-            shape = dlg.shape.currentData()
-        size = page.SHAPES[shape][1]
-        try:
-            if size is None:            # as shown: the figure of the tab
-                self.figure.savefig(path, dpi=dpi)
-                files = [path]
-            else:
-                files = page.save(path, [snap], size, dpi, own=True)
-        except Exception as err:
-            self.status.emit("Cannot export the figure: %s" % err)
-            return []
-        self.status.emit("Figure written to %s" % ", ".join(files))
-        return files
-
-    def export_values(self, paths=None, table=False, all_species=False):
-        """Ask b2plot to write the values of the quantity shown (dialog
-        unless paths are given)."""
-        q = self.wanted
-        if self.run is None or q is None:
-            return
-        if paths is None:
-            dlg = ValuesDialog(self.settings, q,
-                               self.quantity.species.currentText(), self)
-            if dlg.exec() != QtWidgets.QDialog.Accepted:
-                return
-            paths, table = dlg.paths(), dlg.table()
-            all_species = dlg.all_species()
-        names = [q.poloidal, q.radial] if q.source in ("vector", "evector") \
-            else [q.name]
-        self.export.emit((q, names, list(paths),
-                          self.quantity.value_ops(q, all_species), table,
-                          self._source(q)))
-
-    def export_frames(self, path=None, shape="shown", dpi=150):
-        """Every movie frame as image files or one PDF (output.frames)."""
-        self.frames.start(path, shape, dpi)
 
     # -------------------------------------------------------------- views
     def _view_moved(self):
@@ -567,21 +507,3 @@ class Tab2D(QtWidgets.QWidget):
             self.hover.setText(self.plot.lookup(event.xdata, event.ydata))
         else:
             self.hover.setText(" ")
-
-    def _start_seed_line(self):
-        self._seed_points = []
-        self.status.emit("Click the start and the end of the seed line")
-
-    def _click(self, event):
-        if self._seed_points is None or event.inaxes is not self.plot.ax:
-            return
-        self._seed_points.append((event.xdata, event.ydata))
-        if len(self._seed_points) == 2:
-            (x0, y0), (x1, y1) = self._seed_points
-            n = self.quantity.streams.nseeds.value()
-            t = np.linspace(0.0, 1.0, n)
-            self._seed_points = None
-            self.status.emit("Seed line set")
-            self.quantity.set_seeds(list(zip(x0 + t * (x1 - x0),
-                                             y0 + t * (y1 - y0))))
-

@@ -19393,8 +19393,9 @@ runs \btwoplot through {\tt b2plot} and also writes the pages to the
 and {\tt -h} as for {\tt b2plot}), opens a window
 without any command input: everything is chosen with lists, buttons and
 toggles. The run line shows the run directory, the grid and the species;
-{\tt File} opens another run, reloads the run (after a crash of
-\btwoplotns) and exports. The {\tt 2D plots} tab is complete; the
+{\tt File} opens another run, reloads the run with all plot settings
+(after a crash of \btwoplotns, or with {\tt Live update} each time its
+{\tt b2fstate} changes) and exports. The {\tt 2D plots} tab is complete; the
 {\tt Profiles}, {\tt Chords} and {\tt Time traces}
 tabs follow in later versions. The 2D tab has three parts.
 
@@ -19441,6 +19442,23 @@ the view; the cursor shows the cell (and its {\tt ix}, {\tt iy} on
 classical grids) or the triangle and the value. Arrows are binned over the
 current view and redrawn after zoom and pan.
 
+The {\tt Mouse} bar sets what a click on the plot does. {\tt Inspect}
+lists the cell (index, {\tt ix}, {\tt iy}, region, centre) and the EIRENE
+triangle under the cursor, with the values there of every quantity loaded
+({\tt ne}, {\tt te}, {\tt ti}, {\tt na}, {\tt po}, {\tt ua}, {\tt vol}
+and {\tt triavol} always). {\tt Line} (two clicks) gives the profile of
+the quantity shown along the line (linear in the vertex values, as the
+contours), its integral and average over the part inside the cells shown
+and, for a flux density (unit m$^{-2}$), the flux
+$\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the surface the
+line sweeps around the axis ($\mathbf{n}$ to the right of the line).
+{\tt Box}, {\tt Polygon} (double-click the last corner) and
+{\tt Statistics of the cells shown} give the number of cells or
+triangles, their volume ({\tt vol}, {\tt triavol}), the volume integral
+and average, the minimum, the maximum and a histogram of the quantity
+shown. {\tt Seeds} draws the seed line of the streamlines. The results
+appear under the plot and can be exported as CSV.
+
 The {\bf layers panel} (right) shows and styles the device structure
 (from {\tt structure.dat}), the vessel ({\tt mesh.extra}), the
 separatrices, the X-points, the grid boundary, the B2.5 grid, the EIRENE
@@ -19457,6 +19475,15 @@ Export:
   quantity plotted (species shown or all, with the scale factor) with
   {\tt mprt} or {\tt mtab}, or {\tt eprt} for EIRENE quantities; a vector
   gives one file per component;
+\item {\tt File > Export field with geometry}: the quantity shown with its
+  cells or triangles, as CSV (centres, {\tt ix}, {\tt iy}, region), VTK
+  (polygons in the plane $x = R$, $z = Z$, for ParaView) or netCDF (corners
+  and values);
+\item {\tt File > Copy figure}: the plot as an image on the clipboard;
+\item {\tt File > Save plot settings} and {\tt Load plot settings}: the
+  quantity, species, plot type, every option, the layers and the view in a
+  JSON file, which works for any run; {\tt Page > Maps from plot settings
+  files} adds the plot of each file to the page composer;
 \item {\tt Page > Page composer}: plots added with {\tt Add to page} keep
   all their settings and are laid out $n_x \times n_y$ on pages (as
   {\tt page}) with a global header; a PDF holds all pages, other formats

@@ -7,16 +7,21 @@ tabs. There is no console and no b2plot command input.
 
 import os
 import sys
+import time
 
 from ..b2plot import __version__, backend, labels
 from . import data
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
+from .output import state
 from .output.composer import Composer
 from .tab2d import Tab2D
 
 POLL_MS = 20
 POLL_BUDGET = 0.05
 PLACEHOLDERS = ["Profiles", "Chords", "Time traces"]
+LIVE = ((0, "Off"), (10, "Every 10 s"), (30, "Every 30 s"),
+        (60, "Every minute"), (300, "Every 5 minutes"))
+STATE_FILES = ("b2fstate", os.path.join("b2mn.exe.dir", "b2fstate"))
 
 
 def _placeholder(name):
@@ -39,6 +44,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.record = open(args.record, "wb") if args.record else None
         self.waiting = {}           # request ident -> [(tab, want)]
         self.crash_shown = False
+        self._keep = None           # plot settings kept over a reload
+        self._stamp = None          # time of b2fstate (live update)
 
         self.runline = QtWidgets.QLabel()
         self.runline.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -74,6 +81,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
+        self._live = QtCore.QTimer(self)
+        self._live.timeout.connect(self._live_check)
 
     def _menus(self):
         keys = QtGui.QKeySequence.StandardKey
@@ -94,6 +103,29 @@ class MainWindow(QtWidgets.QMainWindow):
         a.setShortcut(QtGui.QKeySequence("Ctrl+E"))
         a.setToolTip("Values of the quantity shown, written by b2plot")
         a.triggered.connect(lambda *_: self.tab2d.export_values())
+        a = m.addAction("Export field with geometry\u2026")
+        a.setShortcut(QtGui.QKeySequence("Ctrl+Shift+E"))
+        a.triggered.connect(lambda *_: self.tab2d.export_field())
+        a = m.addAction("Copy figure")
+        a.setShortcut(QtGui.QKeySequence("Ctrl+Shift+C"))
+        a.triggered.connect(lambda *_: self.tab2d.copy_figure())
+        m.addSeparator()
+        m.addAction("Save plot settings\u2026").triggered.connect(
+            lambda *_: self.tab2d.save_settings())
+        m.addAction("Load plot settings\u2026").triggered.connect(
+            lambda *_: self.tab2d.load_settings())
+        live = m.addMenu("Live update")
+        live.setToolTip("Reload the run, with the plot settings, when its "
+                        "b2fstate changes")
+        group = QtGui.QActionGroup(self)
+        self.live_actions = {}
+        for secs, text in LIVE:
+            a = live.addAction(text)
+            a.setCheckable(True)
+            a.setChecked(secs == 0)
+            group.addAction(a)
+            a.triggered.connect(lambda *_, t=secs: self.set_live(t))
+            self.live_actions[secs] = a
         m.addSeparator()
         a = m.addAction("Quit")
         a.setShortcut(QtGui.QKeySequence(keys.Quit))
@@ -105,6 +137,8 @@ class MainWindow(QtWidgets.QMainWindow):
         a = m.addAction("Page composer\u2026")
         a.setShortcut(QtGui.QKeySequence("Ctrl+P"))
         a.triggered.connect(lambda *_: self._show_composer())
+        m.addAction("Maps from plot settings files\u2026").triggered.connect(
+            lambda *_: self.tab2d.maps_to_page())
         m = self.menuBar().addMenu("&Help")
         m.addAction("About the b2plot GUI").triggered.connect(
             lambda *_: self.about())
@@ -123,8 +157,37 @@ class MainWindow(QtWidgets.QMainWindow):
                 lambda *_, p=path: self.open_run(p))
 
     def reload(self):
+        """The run read again, with the plot settings shown."""
         if self.run is not None:
+            keep = state.capture(self.tab2d) if self.tab2d.run is not None \
+                else None
             self.open_run(self.run.rundir)
+            self._keep = keep
+
+    def set_live(self, secs):
+        """Check b2fstate every secs seconds (0: never)."""
+        self._live.stop()
+        self.live_actions[secs].setChecked(True)
+        if secs:
+            self._stamp = self._state_time()
+            self._live.start(int(secs * 1000))
+            self._status("Live update every %d s: the run is reloaded when "
+                         "its b2fstate changes" % secs)
+
+    def _state_time(self):
+        if self.run is None:
+            return None
+        times = [os.path.getmtime(p) for p in (os.path.join(
+            self.run.rundir, f) for f in STATE_FILES) if os.path.isfile(p)]
+        return max(times) if times else None
+
+    def _live_check(self):
+        if self.run is None or self.run.pending:
+            return
+        t = self._state_time()
+        if t is not None and t != self._stamp:
+            self._stamp = t
+            self.reload()
 
     def open_run(self, path):
         path = os.path.abspath(path)
@@ -139,6 +202,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.run = None
             return
         self.waiting[req.ident] = []
+        self._keep = None
         self.tab2d.setEnabled(False)
         recent = [path] + [p for p in (self.settings.value("recent", [])
                                        or []) if p != path]
@@ -171,7 +235,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                  wall=q.source == "wall")
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
-            if role not in ("prefetch", "species", "marks", "traj"):
+            if role not in ("prefetch", "species", "marks", "traj",
+                            "tools"):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)
@@ -240,9 +305,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 run.rundir, len(run.geometry.cells),
                 "classical" if run.geometry.classical else "unstructured",
                 sp, "" if run.trimesh is None else
-                ", EIRENE triangles: %d" % len(run.trimesh.triangles)))
+                ", EIRENE triangles: %d" % len(run.trimesh.triangles)) + (
+                "   \u2014   live update, b2fstate of %s" % time.strftime(
+                    "%H:%M:%S", time.localtime(self._stamp))
+                if self._live.isActive() and self._stamp else ""))
         self.tab2d.set_run(run)
-        self._status("Ready")
+        keep, self._keep = self._keep, None
+        if keep is not None:
+            state.restore(self.tab2d, keep)
+        self._status("Reloaded, with the plot settings" if keep is not None
+                     else "Ready")
 
     def _crashed(self, run):
         self._status("b2plot stopped (exit status %s)" % run.exit_status)
