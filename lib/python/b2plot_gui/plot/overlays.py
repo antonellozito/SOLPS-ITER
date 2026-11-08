@@ -1,6 +1,6 @@
 """Overlays of the 2D plot: the layers of the run (structure, grids,
-separatrices, flux surfaces) and further quantities over the field
-(arrows, contour lines)."""
+separatrices, flux surfaces, chords, trajectories) and further quantities
+over the field (vectors, contour lines, the wall strip)."""
 
 from dataclasses import replace
 
@@ -8,10 +8,14 @@ import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path
+from matplotlib.text import Text
 
+from ...b2plot import labels
+from ..catalog import CHORD_POINTS
 from . import shapes
 from .scalar import node_values
-from .styles import FILLS, ZORDER, PlotStyle, even_levels, norm_for
+from .styles import (FILLS, ZORDER, PlotStyle, cmap_for, even_levels,
+                     norm_for)
 
 FAR = 1.0e4                     # metres: lines and masks beyond any view
 
@@ -49,6 +53,13 @@ class LayerMixin:
                 [Path.MOVETO], [Path.LINETO] * (len(loop) - 2),
                 [Path.CLOSEPOLY]))))
             self.ax.add_patch(art)
+        elif key == "chords":
+            art = self._chords(run.layers)
+        elif key == "trajectories" and len(run.layers.get(key, [])):
+            seg = run.layers[key]
+            art = LineCollection(seg.reshape(-1, 2, 2), colors=[
+                run.palette.get(c, (0.5, 0.5, 0.5)) for c in
+                run.layer_colours.get(key, [1] * len(seg))])
         elif key == "labels":
             art = [self.ax.text(r, z, text, ha="center", va="center",
                                 clip_on=True, bbox=dict(
@@ -76,6 +87,49 @@ class LayerMixin:
             self.layer_artists[key] = art
             self._restyle(key)
 
+    def _wall_strip(self, data, o):
+        """A wall field (one value per wall element, WallStyle o) along the
+        wall elements, with its own colour scale and colour bar."""
+        seg = self.run.layers.get("wall", np.zeros((0, 4)))
+        v = np.asarray(data.values[min(o.column, len(data.columns) - 1)],
+                       float)[:len(seg)]
+        if o.log:
+            v = np.where(v > 0, v, np.nan)
+        if not len(v) or not np.isfinite(v).any():
+            return
+        st = replace(PlotStyle(), cmap=o.cmap,
+                     scale="log" if o.log else "linear")
+        norm = norm_for(v, st)
+        strip = LineCollection(seg[:len(v)].reshape(-1, 2, 2),
+                               cmap=cmap_for(st, norm), norm=norm,
+                               linewidths=o.width, capstyle="butt",
+                               zorder=5.2)
+        strip.set_array(np.ma.masked_invalid(v))
+        self.ax.add_collection(strip, autolim=False)
+        if o.colorbar:      # removed before its strip (clear_field order)
+            cax = self.ax.inset_axes([0.5, 0.035, 0.46, 0.022])
+            bar = self.fig.colorbar(strip, cax=cax, orientation="horizontal")
+            bar.ax.tick_params(labelsize=6)
+            bar.set_label(labels.any_to_mathtext(data.label), fontsize=6.5)
+            self.field_artists.append(bar)
+        self.field_artists.append(strip)
+
+    def _chords(self, layers):
+        """Chords of every set, each numbered set.chord at its end."""
+        art = []
+        sets = [k for k in layers if k.startswith("chords: ")]
+        for i, key in enumerate(sets, 1):
+            seg = layers[key].reshape(-1, CHORD_POINTS - 1, 4)
+            if not len(seg):
+                continue
+            line = LineCollection(seg.reshape(-1, 2, 2))
+            self.ax.add_collection(line, autolim=False)
+            art.append(line)
+            art += [self.ax.text(c[-1, 2], c[-1, 3], "%d.%d" % (i, j),
+                                 clip_on=True, ha="left", va="center")
+                    for j, c in enumerate(seg, 1)]
+        return art or None
+
     def _flux_surfaces(self, st):
         try:
             lev = sorted(float(v) for v in st.levels.replace(",", " ").split())
@@ -91,10 +145,20 @@ class LayerMixin:
         art, st = self.layer_artists.get(key), self.layer_styles[key]
         if art is None:
             return
-        if key == "labels":
+        if isinstance(art, list):
             for a in art:
-                a.set(color=st.color, fontsize=st.width, alpha=st.alpha,
-                      visible=st.visible, zorder=ZORDER[key])
+                if isinstance(a, Text):
+                    a.set(color=st.color, fontsize=st.width if key ==
+                          "labels" else 7.0, alpha=st.alpha,
+                          visible=st.visible, zorder=ZORDER[key] + 0.01)
+                else:
+                    a.set(edgecolor=st.color, linewidth=st.width,
+                          linestyle=st.style, alpha=st.alpha,
+                          visible=st.visible, zorder=ZORDER[key])
+            return
+        if key == "trajectories":
+            art.set(linewidth=st.width, linestyle=st.style, alpha=st.alpha,
+                    visible=st.visible, zorder=ZORDER[key])
             return
         if key == "xpoints":
             art.set(color=st.color, markersize=st.width,
@@ -125,6 +189,9 @@ class LayerMixin:
         """A vector as arrows or streamlines (VectorStyle o, species column
         o.column) or contour lines of a second quantity (species column of
         the main plot where it exists)."""
+        if role == "wall":
+            self._wall_strip(data, o)
+            return
         col = min(max(st.column, 0), len(data.columns) - 1)
         box = self.vector_box()
         if role.startswith("arrows") and hasattr(data, "vr"):

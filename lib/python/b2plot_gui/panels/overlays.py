@@ -1,10 +1,14 @@
 """Overlays of the 2D quantity panel: two vector quantities (arrows or
-streamlines) and the contour lines of a second quantity over the plot."""
+streamlines), the contour lines of a second quantity and a wall quantity
+as a strip along the wall."""
 
-from ..plot.styles import OverlayStyle, VectorStyle
+from dataclasses import replace
+
+from ..plot.styles import OverlayStyle, VectorStyle, WallStyle
 from ...qt import QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
 from .options import _row
+from .plotopts import CMAPS
 
 AS_PLOT = "as the plot"
 
@@ -100,8 +104,81 @@ class OverlayBox(QtWidgets.QGroupBox):
         for w in (self.line_width, self.line_levels):
             w.valueChanged.connect(lambda *_: self.changed.emit())
         self.line_color.changed.connect(lambda *_: self.changed.emit())
+        self._wall_rows(form)
 
-    def set_choices(self, vectors, scalars, default_vector="up vv"):
+    def _wall_rows(self, form):
+        """Wall strip: a wall quantity, or a plasma quantity at the wall
+        (b2plot stow), per ne or per area (pwne, pswa)."""
+        self.wall = QtWidgets.QCheckBox("Wall strip")
+        self.wall_from = QtWidgets.QComboBox()
+        self.wall_from.addItems(["wall quantity", "plasma at the wall"])
+        self.wall_from.setToolTip("Plasma at the wall: the values of the "
+                                  "boundary cells next to each wall element "
+                                  "(b2plot stow)")
+        self.wall_q = QtWidgets.QComboBox()
+        self.wall_species = QtWidgets.QComboBox()
+        self.wall_per = QtWidgets.QComboBox()
+        for text, op in (("", ""), ("per ne", "pwne"),
+                         ("per area", "pswa")):
+            self.wall_per.addItem(text, op)
+        self.wall_cmap = QtWidgets.QComboBox()
+        self.wall_cmap.addItems([c for c in CMAPS if c != "pwn"])
+        self.wall_cmap.setCurrentText("viridis")
+        self.wall_log = QtWidgets.QCheckBox("log")
+        self.wall_width = spin(1.0, 30.0, 1.0, 6.0, 1, "Strip width (pt)")
+        self.wall_bar = QtWidgets.QCheckBox("colour bar")
+        self.wall_bar.setChecked(True)
+        form.addRow(self.wall, self.wall_from)
+        form.addRow("   quantity", self.wall_q)
+        form.addRow("   species", _row(self.wall_species, self.wall_per))
+        form.addRow("   colours", _row(self.wall_cmap, self.wall_log,
+                                       self.wall_width, self.wall_bar))
+        self.walls, self.plasma = [], []
+        self.wall_from.currentIndexChanged.connect(
+            lambda *_: self._fill_wall())
+        for w in (self.wall, self.wall_log, self.wall_bar):
+            w.toggled.connect(lambda *_: self.changed.emit())
+        for w in (self.wall_q, self.wall_species, self.wall_per,
+                  self.wall_cmap):
+            w.currentIndexChanged.connect(lambda *_: self.changed.emit())
+        self.wall_width.valueChanged.connect(lambda *_: self.changed.emit())
+
+    def _fill_wall(self):
+        old = self.wall_q.currentText()
+        self.wall_q.blockSignals(True)
+        self.wall_q.clear()
+        for q in self.walls if self.wall_from.currentIndex() == 0 else \
+                self.plasma:
+            self.wall_q.addItem(q.label, q)
+            self.wall_q.setItemData(self.wall_q.count() - 1, q.text,
+                                    Qt.ToolTipRole)
+        self.wall_q.setCurrentIndex(max(self.wall_q.findText(old), 0))
+        self.wall_q.blockSignals(False)
+        self.changed.emit()
+
+    def set_wall_species(self, names):
+        old = self.wall_species.currentText()
+        self.wall_species.blockSignals(True)
+        self.wall_species.clear()
+        for i, n in enumerate(names):
+            self.wall_species.addItem(n, i)
+        self.wall_species.setCurrentIndex(
+            max(self.wall_species.findText(old), 0))
+        self.wall_species.blockSignals(False)
+
+    def wall_quantity(self):
+        """The wall strip as a quantity of the wall stack: the label or the
+        plasma quantity with stow, then pwne or pswa."""
+        q = self.wall_q.currentData()
+        if q is None:
+            return None
+        ops = (["stow"] if self.wall_from.currentIndex() else []) + [
+            op for op in [self.wall_per.currentData()] if op]
+        return replace(q, name=" ".join([q.name] + ops), source="wall",
+                       movie=0)
+
+    def set_choices(self, vectors, scalars, default_vector="up vv",
+                    walls=()):
         """Quantities offered (final state or movie), keeping the names
         chosen where they exist."""
         combos = [v.vector for v in self.vectors] + [self.scalar]
@@ -125,6 +202,9 @@ class OverlayBox(QtWidgets.QGroupBox):
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
         self.scalar.setCompleter(completer)
+        self.walls = list(walls)
+        self.plasma = [q for q in scalars if q.source == "matrix"]
+        self._fill_wall()
 
     def wanted(self):
         """[(role, Quantity)] of the active overlays."""
@@ -135,11 +215,20 @@ class OverlayBox(QtWidgets.QGroupBox):
             i = self.scalar.findText(self.scalar.currentText())
             if i >= 0:
                 out.append(("lines", self.scalar.itemData(i)))
+        wall = self.wall_quantity() if self.wall.isChecked() else None
+        if wall is not None:
+            out.append(("wall", wall))
         return out
 
     def style(self, role="lines"):
         if role in self.ROLES:
             return self.vectors[self.ROLES.index(role)].style()
+        if role == "wall":
+            return WallStyle(column=max(self.wall_species.currentIndex(), 0),
+                             cmap=self.wall_cmap.currentText(),
+                             log=self.wall_log.isChecked(),
+                             width=self.wall_width.value(),
+                             colorbar=self.wall_bar.isChecked())
         return OverlayStyle(
             line_levels=self.line_levels.value(),
             line_log=self.line_log.isChecked(),

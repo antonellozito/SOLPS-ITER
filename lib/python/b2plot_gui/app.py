@@ -159,16 +159,19 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.run is None or not self.run.alive():
             self._status("b2plot is not running: File > Reload run")
             return
-        if q.source in ("vector", "evector"):
+        if role == "traj":
+            res = self.run.overlay("trajectories", ops[0])
+        elif q.source in ("vector", "evector"):
             res = self.run.vector(q.poloidal, q.radial,
                                   eirene=q.source == "evector", ops=ops,
                                   source=source)
         else:
             res = self.run.field(q.name, eirene=q.source == "eirene",
-                                 ops=ops, source=source)
+                                 ops=ops, source=source,
+                                 wall=q.source == "wall")
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
-            if role not in ("prefetch", "species", "marks"):
+            if role not in ("prefetch", "species", "marks", "traj"):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)

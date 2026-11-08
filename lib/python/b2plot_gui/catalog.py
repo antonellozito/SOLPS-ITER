@@ -57,13 +57,15 @@ OTHER = "Other matrix quantities"
 NEUTRALS = "Neutrals (EIRENE)"
 NEUTRAL_VECTORS = "Neutral fluxes and velocities (EIRENE vectors)"
 DERIVED = "Derived quantities"
+CHORDS = "Chord contributions (*.chords files)"
+CHORD_POINTS = 33               # points of each chord sent by guigeom
 ORDER = [DERIVED, "Plasma state", VECTORS, "Fluxes", "Velocities",
          "Sources and sinks", "Sources by origin", "Atomic physics and "
          "radiation", "Momentum terms", "Heating terms", "Transport "
          "coefficients", "Neoclassical, collisionality, plasma frequencies",
          "Flux limiters", "Balances", "Convergence (residuals, corrections)",
          "Previous time step", NEUTRALS, NEUTRAL_VECTORS, "Geometry and "
-         "magnetic field", FAMILIES[-1][0], OTHER]
+         "magnetic field", FAMILIES[-1][0], OTHER, CHORDS]
 
 
 @dataclass
@@ -160,6 +162,30 @@ def quantities(categories):
     out += [Quantity(x + " " + y, d, NEUTRAL_VECTORS, "evector", x, y)
             for x, y, d in _epairs(eirene)]
     out.sort(key=lambda q: (ORDER.index(q.group), q.name.lower()))
+    return out
+
+
+def wall_quantities(categories):
+    """Quantities of the wall stack (b2plot wall labels), for the strip."""
+    return [Quantity(n.strip(), d.strip() or n.strip(), "Wall", "wall")
+            for n, d, _ in dict(categories).get("Wall quantities", [])
+            if n.strip()]
+
+
+def chord_quantities(layers, eirene):
+    """Contribution maps of every chord of the chord sets of the run (b2plot
+    chmf on the cells, echmf on the EIRENE triangles)."""
+    out = []
+    sets = [k.split(": ", 1)[1] for k in layers if k.startswith("chords: ")]
+    for i, label in enumerate(sets, 1):
+        n = len(layers["chords: " + label]) // (CHORD_POINTS - 1)
+        for j in range(1, n + 1):
+            for fn, where in (("chmf", "cells"), ("echmf", "triangles"))[
+                    :1 + bool(eirene)]:
+                out.append(Quantity(
+                    "%d %d %s" % (i, j, fn), "Contribution of chord %d of %s "
+                    "to the %s" % (j, label, where), CHORDS, "matrix" if fn ==
+                    "chmf" else "eirene", expr="%s(%d, %d)" % (fn, i, j)))
     return out
 
 
