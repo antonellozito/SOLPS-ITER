@@ -12,15 +12,18 @@ from dataclasses import replace
 import numpy as np
 import matplotlib.tri as mtri
 
+from ...b2plot import labels
 from .overlays import LayerMixin
 from .scalar import ScalarMixin
 from .styles import LAYERS, LabelStyle, PlotStyle
+from .surface import SurfaceMixin
 from .texts import TextMixin
 from .vector import VectorMixin
 
 
-class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin):
-    """One fixed axes with a fixed colour-bar slot."""
+class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
+    """One fixed axes (a 3D one for surfaces) with a fixed colour-bar
+    slot."""
 
     def __init__(self, fig, rect=(0.0, 0.0, 1.0, 1.0)):
         self.fig, self.rect = fig, tuple(rect)
@@ -29,6 +32,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin):
         self._top_pts = 0.0         # header and extra label
         ax_box, cax_box = self._positions()
         self.ax = fig.add_axes(ax_box)
+        self.ax3d = None
         self.cax = fig.add_axes(cax_box)
         self.cax.set_visible(False)
         fig.canvas.mpl_connect("resize_event", self._place)
@@ -68,6 +72,8 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin):
             self.ax.set_position(ax_box)
             self.cax.set_position(cax_box)
             self._keep_aspect()
+        if self.ax3d is not None:
+            self.ax3d.set_position(ax_box)
 
     def _reset_axes(self):
         self.ax.set_aspect("equal", adjustable="datalim")
@@ -114,15 +120,21 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin):
     def show(self, data, style, unit=None, overlays=None):
         """Draw a Field or Vector with a PlotStyle (unit: colour-bar label,
         default the unit in the label b2plot sent). overlays maps "arrows"
-        and "lines" to (data, OverlayStyle) drawn over it."""
+        and "lines" to (data, OverlayStyle) drawn over it, "mask" to a cell
+        field shown where it is positive."""
         self.clear_field()
         self.data, self.style = data, replace(style)
         self.unit = data.unit if unit is None else unit
         if data is None:
             return
-        self.mask = self._cell_mask(style)
+        cond = (overlays or {}).get("mask", (None, None))[0]
+        self.mask = self._cell_mask(style, cond)
+        self._mask_name = getattr(cond, "name", None)
+        self._axes3d(style.kind == "surface" and not hasattr(data, "vr"))
         if hasattr(data, "vr"):
             self._vectors(data, style)
+        elif style.kind == "surface":
+            self._surface(data, style)
         elif data.location == "cells":
             self._cell_field(data, style)
         else:
@@ -212,7 +224,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin):
         if d is None:
             return out
         col = self._column(d, self.style)
-        unit = d.unit
+        unit = labels.any_to_plain(d.unit)
         if hasattr(d, "vr") and d.location == "cells":
             if it >= 0:
                 i = g.cells[g.tri_cell[it]] - 1

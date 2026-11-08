@@ -1,23 +1,32 @@
 """Quantity panel of the 2D tab: what to plot and how."""
 
+import re
+
 from ...b2plot import labels
-from ..plot.styles import KINDS_SCALAR, KINDS_VECTOR, PlotStyle
+from ..catalog import INTEGER
+from ..expression import real_token
+from ..plot.styles import (KINDS_FLAT, KINDS_SCALAR, KINDS_VECTOR,
+                           PlotStyle)
 from ...qt import QtWidgets, Qt, Signal
-from .options import CellsBox, LabelsBox, LevelsBox, OverlayBox
+from .options import CellsBox, LabelsBox, LevelsBox
+from .overlays import OverlayBox
 from .plotopts import ArrowsBox, ColourBox, LinesBox, StreamBox
 from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
-             "contour": "Contour lines", "quiver": "Quiver",
+             "contour": "Contour lines", "surface": "3D surface",
+             "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
 SUM = "Sum over species"
 
 
-def real_token(x):
-    """A b2plot real: short (b2plot reads tokens of limited length) and
-    with a point or an exponent, so that it is not read as an integer."""
-    t = "%.6g" % x
-    return t if ("." in t or "e" in t or "n" in t) else t + ".0"
+def column_names(columns, species=None):
+    """Species names of the field columns (the run species where b2plot
+    sends no name)."""
+    names = [labels.species_text(c) or (
+        labels.species_text(species[i]) if species and i < len(species)
+        else "") for i, c in enumerate(columns)]
+    return [n or "column %d" % (i + 1) for i, n in enumerate(names)]
 
 
 class QuantityPanel(QtWidgets.QWidget):
@@ -26,6 +35,7 @@ class QuantityPanel(QtWidgets.QWidget):
     quantity_chosen = Signal(object)
     style_changed = Signal()
     seed_line = Signal()
+    calculator = Signal(str)        # open the calculator with this text
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,6 +49,14 @@ class QuantityPanel(QtWidgets.QWidget):
         self.search.setPlaceholderText("Search quantities (te, flux, ...)")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filter)
+        calc = QtWidgets.QToolButton()
+        calc.setText("Calculator\u2026")
+        calc.setToolTip("Derived quantities: expressions of b2plot "
+                        "quantities, presets")
+        calc.clicked.connect(lambda *_: self.calculator.emit(""))
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.search, 1)
+        row.addWidget(calc)
         self.tree = QtWidgets.QTreeWidget()
         self.tree.setHeaderLabels(["Quantity", "Description"])
         self.tree.setRootIsDecorated(True)
@@ -46,7 +64,7 @@ class QuantityPanel(QtWidgets.QWidget):
         self.tree.setMinimumHeight(220)
         self.tree.itemActivated.connect(self._activated)
         self.tree.itemClicked.connect(self._activated)
-        lay.addWidget(self.search)
+        lay.addLayout(row)
         lay.addWidget(self.tree, 1)
 
         form = QtWidgets.QFormLayout()
@@ -62,7 +80,8 @@ class QuantityPanel(QtWidgets.QWidget):
             b = QtWidgets.QRadioButton(KIND_TEXT[kind])
             b.setProperty("kind", kind)
             self.kind_buttons.addButton(b, i)
-            kgrid.addWidget(b, i % 3, i // 3)
+            vector = kind in KINDS_VECTOR
+            kgrid.addWidget(b, i - len(KINDS_SCALAR) * vector, int(vector))
         self.kind_buttons.button(0).setChecked(True)
         self.kind_buttons.idToggled.connect(
             lambda i, on: on and self._kind_changed())
@@ -100,7 +119,7 @@ class QuantityPanel(QtWidgets.QWidget):
                 top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
                 groups[q.group] = top
                 self.tree.addTopLevelItem(top)
-            item = QtWidgets.QTreeWidgetItem([q.name, q.text])
+            item = QtWidgets.QTreeWidgetItem([q.label, q.text])
             item.setToolTip(0, q.text)
             item.setToolTip(1, q.text)
             item.setData(0, Qt.UserRole, q)
@@ -116,7 +135,7 @@ class QuantityPanel(QtWidgets.QWidget):
             for j in range(top.childCount()):
                 item = top.child(j)
                 q = item.data(0, Qt.UserRole)
-                hit = (not text or text in q.name.lower()
+                hit = (not text or text in q.label.lower()
                        or text in q.text.lower())
                 item.setHidden(not hit)
                 shown += hit
@@ -127,13 +146,17 @@ class QuantityPanel(QtWidgets.QWidget):
         q = item.data(0, Qt.UserRole)
         if q is None or q is self.current:
             return
+        if INTEGER.fullmatch(q.name):           # needs an integer argument
+            self.calculator.emit("%s(1)" % q.name)
+            return
         self.current = q
         vector = q.source in ("vector", "evector")
         for b in self.kind_buttons.buttons():
             b.setEnabled((b.property("kind") in KINDS_VECTOR) == vector)
         kind = self.kind()
         if (kind in KINDS_VECTOR) != vector:
-            self.kind_buttons.button(3 if vector else 0).setChecked(True)
+            self.kind_buttons.button(len(KINDS_SCALAR) if vector else 0
+                                     ).setChecked(True)
         self.colour.edges.setEnabled(not vector)
         self._kind_changed(emit=False)
         self.quantity_chosen.emit(q)
@@ -152,14 +175,18 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def set_columns(self, columns, species=None):
         """Species names of the field columns (keeps the choice if it can)."""
-        names = [labels.species_text(c) or (
-            labels.species_text(species[i]) if species and i < len(species)
-            else "") for i, c in enumerate(columns)]
-        names = [n or "column %d" % (i + 1) for i, n in enumerate(names)]
+        names = column_names(columns, species)
         if len(columns) == 1 and not columns[0].strip():
             names = ["\u2014"]
+        self.partial = {}
         if len(names) > 1:
             names.append(SUM)
+            elements = [re.match(r"[A-Za-z]*", n).group(0) for n in names]
+            for e in dict.fromkeys(elements[:-1]):
+                cols = [i for i, x in enumerate(elements[:-1]) if x == e]
+                if e and 1 < len(cols) < len(names) - 1:
+                    names.append("Sum %s" % e)
+                    self.partial[names[-1]] = (cols[0], cols[-1])
         old = self.species.currentText()
         self.species.blockSignals(True)
         self.species.clear()
@@ -171,7 +198,15 @@ class QuantityPanel(QtWidgets.QWidget):
 
     # -------------------------------------------------------------- style
     def summed(self):
-        return self.species.currentText() == SUM
+        """True for the sum over all species or over one element."""
+        return self.species.currentText() == SUM or self._partial()
+
+    def _partial(self):
+        return getattr(self, "partial", {}).get(self.species.currentText())
+
+    def _sum_op(self, eirene):
+        lo, hi = self._partial() or (0, -1)
+        return "%d %d %s" % (lo, hi, "esumz" if eirene else "sumz")
 
     def factor_value(self):
         return self.colour.factor_value()
@@ -197,7 +232,7 @@ class QuantityPanel(QtWidgets.QWidget):
         prop = self.proportion() if q.source in ("matrix", "eirene") \
             else None
         if self.summed():
-            ops.append("0 -1 esumz" if eirene else "0 -1 sumz")
+            ops.append(self._sum_op(eirene))
         elif prop is not None:
             col = max(self.species.currentIndex(), 0)
             ops.append("%d %s" % (col, "ezsel" if eirene else "zsel"))
@@ -218,7 +253,7 @@ class QuantityPanel(QtWidgets.QWidget):
         eirene = q.source in ("eirene", "evector")
         ops = []
         if self.summed():
-            ops.append("0 -1 esumz" if eirene else "0 -1 sumz")
+            ops.append(self._sum_op(eirene))
         elif not all_species and self.species.count() > 1:
             ops.append("%d %s" % (max(self.species.currentIndex(), 0),
                                   "ezsel" if eirene else "zsel"))
@@ -239,7 +274,7 @@ class QuantityPanel(QtWidgets.QWidget):
         self.arrows.setVisible(kind in ("quiver", "quiverstream"))
         self.streams.setVisible(kind in ("stream", "quiverstream"))
         self.levels_box.setVisible(kind in ("contourf", "contour"))
-        self.overlay_box.setVisible(kind in KINDS_SCALAR)
+        self.overlay_box.setVisible(kind in KINDS_FLAT)
         self.cells_box.setVisible(source in ("matrix", "vector"))
         if emit:
             self._changed()
@@ -249,11 +284,6 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def set_seeds(self, seeds):
         self.streams.set_seeds(seeds)
-
-    def set_run_choices(self, vectors, scalars, geometry):
-        """Overlay quantities and cell groups of a new run."""
-        self.overlay_box.set_choices(vectors, scalars)
-        self.cells_box.set_geometry(geometry)
 
     def style(self):
         fields = {}

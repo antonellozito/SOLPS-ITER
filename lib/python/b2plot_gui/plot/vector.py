@@ -1,13 +1,17 @@
 """Vector fields: arrows and streamlines (the field resampled on a
 regular grid for streamplot), following zoom and pan."""
 
+import inspect
+
 import numpy as np
 import matplotlib.tri as mtri
+from matplotlib.axes import Axes
 
 from .scalar import node_values
 from .styles import cmap_for, norm_for
 
 STREAM_GRID = 400
+NUM_ARROWS = "num_arrows" in inspect.signature(Axes.streamplot).parameters
 AUTO_ARROWS = 2000              # arrows shown when the spacing is automatic
 ARROW_PERCENTILE = 98.0         # magnitude drawn with the arrow length
 ARROW_CAP = 1.5                 # longest arrow, in arrow lengths
@@ -48,7 +52,7 @@ class VectorMixin:
         return (g.centres[rows], u, w, self._cell_tri(),
                 np.asarray(v.vxr[col], float), np.asarray(v.vxz[col], float))
 
-    def _quiver(self, pos, u, w, st, cmap, box):
+    def _quiver(self, pos, u, w, st, box):
         """Arrows at pos, the longest (or each) st.arrow_length long."""
         mag = np.hypot(u, w)
         x0, x1, y0, y1 = box
@@ -73,9 +77,10 @@ class VectorMixin:
         kw = dict(angles="xy", scale_units="xy", scale=1.0,
                   width=0.0022 * st.arrow_width, zorder=5.0)
         if st.color_by_magnitude:
+            norm = norm_for(m, st)
             q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
-                               w[keep] * scale, m, cmap=cmap,
-                               norm=norm_for(m, st), **kw)
+                               w[keep] * scale, m, cmap=cmap_for(st, norm),
+                               norm=norm, **kw)
         else:
             q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
                                w[keep] * scale, color=st.arrow_color, **kw)
@@ -94,15 +99,14 @@ class VectorMixin:
         col = self._column(v, st)
         pos, u, w, tri, nu, nw = self._vector_data(v, col)
         box = self.vector_box()
-        cmap = cmap_for(st)
         if st.kind in ("quiver", "quiverstream"):
-            q = self._quiver(pos, u, w, st, cmap, box)
+            q = self._quiver(pos, u, w, st, box)
             if q is not None and st.color_by_magnitude:
                 self.mappable = q
         if st.kind in ("stream", "quiverstream"):
-            self._streamlines(tri, nu, nw, st, cmap, box)
+            self._streamlines(tri, nu, nw, st, box)
 
-    def _streamlines(self, tri, nu, nw, st, cmap, box):
+    def _streamlines(self, tri, nu, nw, st, box, zorder=4.0):
         x0, x1, y0, y1 = box
         ny = STREAM_GRID
         nx = max(int(STREAM_GRID * (x1 - x0) / max(y1 - y0, 1e-9)), 2)
@@ -114,7 +118,9 @@ class VectorMixin:
         if speed.count() == 0:
             return
         kw = dict(density=st.density, linewidth=st.stream_width,
-                  arrowsize=0.8, zorder=4.0)
+                  arrowsize=0.8, zorder=zorder)
+        if st.num_arrows != 1 and NUM_ARROWS:
+            kw["num_arrows"] = st.num_arrows
         seeds = np.asarray(st.seeds, float).reshape(-1, 2)
         if len(seeds):
             inside = ((seeds[:, 0] > x0) & (seeds[:, 0] < x1)
@@ -123,11 +129,15 @@ class VectorMixin:
                 kw["start_points"] = seeds[inside]
                 kw["integration_direction"] = "both"
                 kw["broken_streamlines"] = False
+                if st.seed_markers:
+                    self.field_artists += self.ax.plot(
+                        seeds[inside, 0], seeds[inside, 1], "o",
+                        mfc="none", mec="red", ms=4.0, zorder=zorder + 0.1)
         before = set(self.ax.patches)
         if st.color_by_magnitude and st.kind == "stream":
             norm = norm_for(speed.compressed(), st)
             sp = self.ax.streamplot(xs, ys, U, V, color=speed.filled(0.0),
-                                    cmap=cmap, norm=norm, **kw)
+                                    cmap=cmap_for(st, norm), norm=norm, **kw)
             self.mappable = sp.lines
         else:
             sp = self.ax.streamplot(xs, ys, U, V, color=st.stream_color,

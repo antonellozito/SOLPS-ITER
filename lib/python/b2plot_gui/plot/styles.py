@@ -5,9 +5,11 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from matplotlib import colormaps
-from matplotlib.colors import LogNorm, Normalize, SymLogNorm
+from matplotlib.colors import (LinearSegmentedColormap, LogNorm, Normalize,
+                               SymLogNorm)
 
-KINDS_SCALAR = ("patch", "contourf", "contour")
+KINDS_FLAT = ("patch", "contourf", "contour")   # on the R, Z axes
+KINDS_SCALAR = KINDS_FLAT + ("surface",)
 KINDS_VECTOR = ("quiver", "stream", "quiverstream")
 
 
@@ -34,10 +36,21 @@ LAYERS = {
     "flux": ("Flux surfaces",
              LayerStyle(False, "#2ca02c", 0.6, ":", 1.0,
                         "0.90 0.95 1.00 1.02 1.04 1.06")),
+    "targets": ("Divertor targets", LayerStyle(False, "#ff7f0e", 2.0)),
+    "zero": ("Zero lines (R = 0, Z = 0)",
+             LayerStyle(False, "#000000", 0.6, ":")),
+    "filled": ("Device structure filled", LayerStyle(False, "#e0e0e0")),
+    "outside": ("Mask outside the EIRENE mesh",
+                LayerStyle(False, "#ffffff")),
+    "labels": ("Labels: regions, X, O, midplanes, targets",
+               LayerStyle(False, "#000000", 8.0)),
 }
 ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2, "boundary": 3.3,
-          "structure": 3.4, "device": 3.45, "separatrices": 3.5,
-          "xpoints": 3.6}
+          "outside": 3.35, "filled": 3.38, "structure": 3.4,
+          "device": 3.45, "separatrices": 3.5, "targets": 3.55,
+          "xpoints": 3.6, "zero": 3.65, "labels": 6.0}
+FILLS = ("filled", "outside")   # layers drawn as areas (no line style)
+PWN = ((0.15, 0.45, 0.68), (1.0, 1.0, 1.0), (0.72, 0.15, 0.15))
 
 
 @dataclass
@@ -64,6 +77,10 @@ class PlotStyle:
     every: int = 0              # one arrow every n cells, 0 = automatic
     color_by_magnitude: bool = True
     arrow_color: str = "#000000"
+    bw: bool = False            # black and white (b2plot bw)
+    cell_values: bool = False   # values written in the cells when few
+    num_arrows: int = 1         # arrows along each streamline
+    seed_markers: bool = False
     density: float = 1.5
     stream_width: float = 0.8
     stream_color: str = "#1f77b4"
@@ -95,11 +112,19 @@ class LabelStyle:
 
 
 @dataclass
+class VectorStyle:
+    """A vector quantity drawn over the plot as arrows or streamlines."""
+    length: float = 0.0         # arrow length (m), 0 = automatic
+    width: float = 1.0
+    color: str = "#000000"
+    column: int = -1            # species, -1: as the plot
+    same: bool = False          # all arrows equally long
+    stream: bool = False        # streamlines instead of arrows
+
+
+@dataclass
 class OverlayStyle:
-    """Arrows and contour lines of further quantities over the plot."""
-    arrow_length: float = 0.0
-    arrow_width: float = 1.0
-    arrow_color: str = "#000000"
+    """Contour lines of a further quantity over the plot."""
     line_levels: int = 10
     line_log: bool = False
     line_color: str = "#ffffff"
@@ -159,7 +184,7 @@ def levels_for(st, norm, given=None):
         lev = np.unique(_floats(st.level_list))
     elif st.level_mode == "step" and st.level_step > 0:
         n = min(int((norm.vmax - norm.vmin) / st.level_step), 1000)
-        lev = norm.vmin + st.level_step * np.arange(n + 1)
+        lev = np.unique(norm.vmin + st.level_step * np.arange(n + 1))
     else:
         lev = even_levels(norm, st.levels)
     if isinstance(norm, LogNorm):
@@ -167,6 +192,31 @@ def levels_for(st, norm, given=None):
     return lev if len(lev) >= 2 else even_levels(norm, st.levels)
 
 
-def cmap_for(style):
-    cmap = colormaps[style.cmap]
+def cmap_for(style, norm=None):
+    """Colormap of a style: grey in black and white, pwn for the norm."""
+    if style.cmap == "pwn" and norm is not None and not style.bw:
+        return pwn(norm, style.reverse)
+    cmap = colormaps["Greys" if style.bw else style.cmap.replace(
+        "pwn", "RdBu_r")]
     return cmap.reversed() if style.reverse else cmap
+
+
+def pwn(norm, reverse=False):
+    """Red (positive), white (zero), blue (negative) as MATLAB colorbarpwn
+    (reverse: its rev, blue positive): white at the minimum when all values
+    are positive, at the maximum when all are negative, else at zero with
+    the same colour step per unit on both sides."""
+    lo, hi = float(norm(norm.vmin)), float(norm(norm.vmax))
+    zero = float(norm(0.0)) if norm.vmin < 0.0 < norm.vmax else None
+    blue, white, red = (np.array(c) for c in PWN)
+    if reverse:
+        blue, red = red, blue
+    if zero is None:
+        ends = [(0.0, white), (1.0, red)] if norm.vmin >= 0.0 else [
+            (0.0, blue), (1.0, white)]
+    else:
+        span = max(zero - lo, hi - zero)
+        ends = [(0.0, white + (blue - white) * (zero - lo) / span),
+                (zero, white),
+                (1.0, white + (red - white) * (hi - zero) / span)]
+    return LinearSegmentedColormap.from_list("pwn", ends)

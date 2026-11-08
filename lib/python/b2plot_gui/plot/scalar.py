@@ -5,7 +5,10 @@ import numpy as np
 import matplotlib.tri as mtri
 from matplotlib.collections import PolyCollection
 
+from ...b2plot.render import HATCHES
 from .styles import cmap_for, levels_for, norm_for
+
+CELL_TEXTS = 400                # most cells with their values written
 
 
 def node_values(trimesh, values):
@@ -25,9 +28,10 @@ def node_values(trimesh, values):
 class ScalarMixin:
     """Patches and contours of Plot2D."""
 
-    def _cell_mask(self, st):
+    def _cell_mask(self, st, cond=None):
         """Geometry rows shown: cells with an area, inside the index
-        intervals (classical grids) and in the chosen regions."""
+        intervals (classical grids), in the chosen regions and where the
+        cell field cond (a mask) is positive."""
         g = self.run.geometry
         m = g.visible.copy()
         if g.classical and st.ix_range is not None:
@@ -36,6 +40,8 @@ class ScalarMixin:
             m &= (g.iy >= st.iy_range[0]) & (g.iy <= st.iy_range[1])
         if st.regions is not None:
             m &= np.isin(g.region, st.regions)
+        if cond is not None and cond.location == "cells":
+            m &= np.asarray(cond.values[0], float)[g.cells - 1] > 0
         return m
 
     def _cell_tri(self):
@@ -55,9 +61,10 @@ class ScalarMixin:
         col = self._column(f, st)
         rows = np.flatnonzero(self.mask)
         cell_values = f.values[col][g.cells[rows] - 1]
-        norm, cmap = norm_for(cell_values, st), cmap_for(st)
+        norm = norm_for(cell_values, st)
+        cmap = cmap_for(st, norm)
         if st.kind == "patch":
-            key = (st.ix_range, st.iy_range, st.regions)
+            key = (st.ix_range, st.iy_range, st.regions, self._mask_name)
             if self._cell_pc is None or self._cell_key != key:
                 if self._cell_pc is not None:
                     self._cell_pc.remove()
@@ -73,11 +80,13 @@ class ScalarMixin:
             pc.set_edgecolor("k" if st.edges else "face")
             pc.set_linewidth(0.15 if st.edges else 0.3)
             self.mappable = pc
-            return
-        z = np.asarray(f.vertex[col], float)
-        tri = self._cell_tri()
-        used = np.unique(tri.get_masked_triangles())
-        self._contours(tri, z, norm_for(z[used], st), cmap, st, f.levels)
+        else:
+            z = np.asarray(f.vertex[col], float)
+            tri = self._cell_tri()
+            used = np.unique(tri.get_masked_triangles())
+            self._contours(tri, z, norm_for(z[used], st), st, f.levels)
+        if st.cell_values:
+            self._cell_texts(g.centres[rows], cell_values)
 
     def _tri_field(self, f, st):
         t = self.run.trimesh
@@ -85,7 +94,8 @@ class ScalarMixin:
             return
         col = self._column(f, st)
         values = np.asarray(f.values[col], float)
-        norm, cmap = norm_for(values, st), cmap_for(st)
+        norm = norm_for(values, st)
+        cmap = cmap_for(st, norm)
         if st.kind == "patch":
             if self._tri_pc is None:
                 xy = np.column_stack((t.x, t.y))
@@ -99,15 +109,41 @@ class ScalarMixin:
             pc.set_edgecolor("k" if st.edges else "face")
             pc.set_linewidth(0.1 if st.edges else 0.3)
             self.mappable = pc
-            return
-        self._contours(self.etri, node_values(t, values), norm, cmap, st,
-                       f.levels)
+        else:
+            self._contours(self.etri, node_values(t, values), norm, st,
+                           f.levels)
+        if st.cell_values:
+            self._cell_texts(self.ecentres, values)
 
-    def _contours(self, tri, z, norm, cmap, st, given=None):
+    def _cell_texts(self, centres, values):
+        """Values written at the cell centres when at most CELL_TEXTS cells
+        are in the view, with a font size from the cell spacing."""
+        x0, x1, y0, y1 = self.get_view()
+        inside = np.flatnonzero((centres[:, 0] > x0) & (centres[:, 0] < x1)
+                                & (centres[:, 1] > y0) & (centres[:, 1] < y1)
+                                & np.isfinite(values))
+        if not 0 < inside.size <= CELL_TEXTS:
+            return
+        bb = self.ax.get_window_extent()
+        spacing = np.sqrt(bb.width * bb.height / max(
+            inside.size, 1)) * 72.0 / self.fig.dpi
+        size = float(np.clip(0.22 * spacing, 4.0, 9.0))
+        for i in inside:
+            self.field_artists.append(self.ax.text(
+                centres[i, 0], centres[i, 1], "%.3g" % values[i],
+                fontsize=size, ha="center", va="center", zorder=5.8,
+                clip_on=True))
+
+    def _contours(self, tri, z, norm, st, given=None):
         lev = levels_for(st, norm, given)
+        cmap = cmap_for(st, norm)
         if st.scale == "log":
             z = np.where(z > 0, z, norm.vmin)
-        if st.kind == "contourf":
+        if st.kind == "contourf" and st.bw:
+            cs = self.ax.tricontourf(tri, z, levels=lev, colors="white",
+                                     hatches=HATCHES, extend="both",
+                                     zorder=1.0)
+        elif st.kind == "contourf":
             cs = self.ax.tricontourf(tri, z, levels=lev, cmap=cmap,
                                      norm=norm, extend="both", zorder=1.0)
             if st.fill_lines:
@@ -120,8 +156,8 @@ class ScalarMixin:
                                    fmt=lambda v: f"{v:.3g}")
                 self.field_artists.append(lines)
         else:
-            kw = dict(colors=st.line_color) if st.line_mono else dict(
-                cmap=cmap, norm=norm)
+            kw = dict(colors="black" if st.bw else st.line_color) if (
+                st.line_mono or st.bw) else dict(cmap=cmap, norm=norm)
             cs = self.ax.tricontour(tri, z, levels=lev, zorder=2.0,
                                     linewidths=st.line_width,
                                     linestyles=st.line_style, **kw)
@@ -129,5 +165,5 @@ class ScalarMixin:
                 self.ax.clabel(cs, fontsize="x-small",
                                fmt=lambda v: f"{v:.3g}")
         self.field_artists.append(cs)
-        self.mappable = cs if not (st.kind == "contour" and st.line_mono) \
-            else None
+        self.mappable = cs if not (st.kind == "contour" and (
+            st.line_mono or st.bw)) else None
