@@ -41,6 +41,7 @@ class QuantityPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current = None
+        self.wanted_species = None      # species name to choose next
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
         self.time_box = TimeBox()
@@ -190,7 +191,8 @@ class QuantityPanel(QtWidgets.QWidget):
                 if e and 1 < len(cols) < len(names) - 1:
                     names.append("Sum %s" % e)
                     self.partial[names[-1]] = (cols[0], cols[-1])
-        old = self.species.currentText()
+        old = self.wanted_species or self.species.currentText()
+        self.wanted_species = None
         self.species.blockSignals(True)
         self.species.clear()
         self.species.addItems(names)
