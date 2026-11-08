@@ -1,12 +1,14 @@
 """Option groups of the plot: colour scale, contour lines, arrows and
 streamlines; each gives its part of the PlotStyle (style_fields)."""
 
-from ...qt import QtGui, QtWidgets, Signal
+from ..plot.shapes import SEEDS
+from ..plot.vector import NUM_ARROWS
+from ...qt import QtGui, QtWidgets, Qt, Signal
 from .layers import ColorButton, spin, style_combo
 
 CMAPS = ["turbo", "viridis", "plasma", "inferno", "magma", "cividis",
          "jet", "hot", "coolwarm", "RdBu_r", "seismic", "bwr", "Spectral_r",
-         "gray"]
+         "gray", "pwn"]
 
 
 def _number(text, default):
@@ -44,6 +46,9 @@ class ColourBox(_Box):
         row = QtWidgets.QHBoxLayout()
         self.cmap = QtWidgets.QComboBox()
         self.cmap.addItems(CMAPS)
+        self.cmap.setItemData(len(CMAPS) - 1, "Red positive, white zero, "
+                              "blue negative (MATLAB colorbarpwn)",
+                              Qt.ToolTipRole)
         self.reverse = QtWidgets.QCheckBox("reversed")
         row.addWidget(self.cmap, 1)
         row.addWidget(self.reverse)
@@ -88,8 +93,20 @@ class ColourBox(_Box):
         row.addWidget(self.colorbar)
         row.addWidget(self.edges)
         cf.addRow(row)
+        row = QtWidgets.QHBoxLayout()
+        self.bw = QtWidgets.QCheckBox("black and white")
+        self.bw.setToolTip("Grey patches, hatched filled contours, black "
+                           "lines (b2plot bw)")
+        self.cell_values = QtWidgets.QCheckBox("values in cells")
+        self.cell_values.setToolTip("Values written in the cells when at "
+                                    "most 400 are in the view")
+        row.addWidget(self.bw)
+        row.addWidget(self.cell_values)
+        cf.addRow(row)
         self._watch((self.cmap, self.scale), (self.reverse, self.colorbar,
-                                              self.edges), (self.decades,))
+                                              self.edges, self.bw,
+                                              self.cell_values),
+                    (self.decades,))
         self.auto.toggled.connect(self._auto_toggled)
 
     def _auto_toggled(self, on):
@@ -114,7 +131,8 @@ class ColourBox(_Box):
                     vmax=_number(self.vmax.text(), 1.0),
                     colorbar=self.colorbar.isChecked(),
                     edges=self.edges.isChecked(),
-                    decades=self.decades.value())
+                    decades=self.decades.value(), bw=self.bw.isChecked(),
+                    cell_values=self.cell_values.isChecked())
 
 
 class LinesBox(_Box):
@@ -197,9 +215,11 @@ class ArrowsBox(_Box):
 
 
 class StreamBox(_Box):
-    """Streamline density, line and seed points (drawn on the plot)."""
+    """Streamline density, line, arrows and seed points (a line drawn on
+    the plot or a preset of the run geometry)."""
 
     seed_line = Signal()
+    seed_preset = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__("Streamlines", parent)
@@ -214,24 +234,53 @@ class StreamBox(_Box):
         row.addWidget(self.stream_style)
         row.addWidget(self.stream_color)
         sf.addRow("Line", row)
+        self.num_arrows = QtWidgets.QSpinBox()
+        self.num_arrows.setRange(1, 20)
+        self.num_arrows.setEnabled(NUM_ARROWS)
+        self.num_arrows.setToolTip("Arrows along each streamline" + (
+            "" if NUM_ARROWS else " (needs matplotlib 3.10)"))
+        sf.addRow("Arrows per line", self.num_arrows)
         row = QtWidgets.QHBoxLayout()
-        self.seed_button = QtWidgets.QPushButton("Draw seed line")
-        self.seed_button.setToolTip("Click two points on the plot")
-        self.seed_button.clicked.connect(lambda *_: self.seed_line.emit())
+        self.seed_kind = QtWidgets.QComboBox()
+        for text, key in SEEDS:
+            self.seed_kind.addItem(text, key)
+        self.seed_kind.setToolTip("Where the streamlines start")
+        self.seed_kind.activated.connect(lambda *_: self._seed_kind())
         self.nseeds = QtWidgets.QSpinBox()
         self.nseeds.setRange(2, 500)
         self.nseeds.setValue(30)
         self.nseeds.setToolTip("Seeds along the line")
+        self.nseeds.valueChanged.connect(lambda *_: self._seed_kind(False))
+        row.addWidget(self.seed_kind, 1)
+        row.addWidget(self.nseeds)
+        sf.addRow("Seeds", row)
+        row = QtWidgets.QHBoxLayout()
+        self.seed_button = QtWidgets.QPushButton("Draw seed line")
+        self.seed_button.setToolTip("Click two points on the plot")
+        self.seed_button.clicked.connect(lambda *_: self.seed_line.emit())
         self.clear_seeds = QtWidgets.QPushButton("Clear")
         self.clear_seeds.clicked.connect(lambda *_: self.set_seeds([]))
+        self.markers = QtWidgets.QCheckBox("markers")
+        self.markers.setToolTip("Red circles at the seeds")
         row.addWidget(self.seed_button)
-        row.addWidget(self.nseeds)
         row.addWidget(self.clear_seeds)
+        row.addWidget(self.markers)
+        row.addStretch(1)
         sf.addRow(row)
         self.seeds = []
-        self._watch((self.stream_style,), (), (self.density,
-                                               self.stream_width),
+        self._watch((self.stream_style,), (self.markers,),
+                    (self.density, self.stream_width, self.num_arrows),
                     (self.stream_color,))
+
+    def _seed_kind(self, line=True):
+        """A preset gives its seeds at once (and with each new number);
+        the drawn line waits for the clicks of Draw seed line."""
+        key = self.seed_kind.currentData()
+        self.seed_button.setEnabled(key == "line")
+        if key != "line":
+            self.seed_preset.emit(key)
+        elif line:
+            self.seed_line.emit()
 
     def set_seeds(self, seeds):
         self.seeds = list(seeds)
@@ -242,4 +291,5 @@ class StreamBox(_Box):
                     stream_width=self.stream_width.value(),
                     stream_color=self.stream_color.color(),
                     stream_style=self.stream_style.currentData(),
-                    seeds=self.seeds)
+                    seeds=self.seeds, num_arrows=self.num_arrows.value(),
+                    seed_markers=self.markers.isChecked())

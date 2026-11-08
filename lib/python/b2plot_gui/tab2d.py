@@ -1,25 +1,33 @@
 """2D tab: quantity panel, one fixed plot, layers panel."""
 
 import json
+import re
 import socket
 from dataclasses import replace
 
 import numpy as np
 from matplotlib.figure import Figure
 
-from . import catalog
+from . import catalog, presets
 from .output import page
+from .plot import shapes
 from .plot.canvas import Plot2D
 from .plot.snapshot import Snapshot
-from .plot.styles import KINDS_SCALAR, LAYERS
+from .plot.styles import KINDS_FLAT, LAYERS
 from .model import split_unit
 from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore,
                   QtWidgets, Qt, Signal)
 from .output.export import FigureDialog, ValuesDialog
 from .panels.layers import LayersPanel, from_dict
-from .panels.quantity import QuantityPanel
+from .panels.calculator import CalculatorDialog
+from .panels.quantity import QuantityPanel, column_names
 from .panels.views import ViewBar
 from .output.frames import FrameExport
+
+MASSES = {"massa": "a", "massm": "m"}   # b2plot label: Eirene stack
+MARKS = {"iimp": ("IMP", np.argmin), "iomp": ("OMP", np.argmax)}
+WARNINGS = ("no data found", "not found", "no adas file", "faulty",
+            "not recognized", "error")      # in what b2plot prints
 
 
 def _scrolled(widget, width):
@@ -58,6 +66,8 @@ class Tab2D(QtWidgets.QWidget):
         self.quantity.quantity_chosen.connect(self._chosen)
         self.quantity.style_changed.connect(self._options_changed)
         self.quantity.seed_line.connect(self._start_seed_line)
+        self.quantity.streams.seed_preset.connect(self._seed_preset)
+        self.quantity.calculator.connect(self.open_calculator)
         self.time_box = self.quantity.time_box
         self.time_box.source_changed.connect(self._source_changed)
         self.time_box.frames_changed.connect(self._fetch)
@@ -131,25 +141,16 @@ class Tab2D(QtWidgets.QWidget):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.plot.set_run(run)
         self.viewbar.set_run()
-        available = {"structure", "device", "separatrices", "boundary"}
-        available = (available & set(k for k, v in run.layers.items()
-                                     if len(v))) | {"grid"}
-        if run.trimesh is not None:
-            available.add("eirene")
-        if len(run.geometry.xpoints):
-            available.add("xpoints")
+        available = {k for k, a in self.plot.layer_artists.items()
+                     if a is not None and (not isinstance(a, list) or a)}
         if run.psimap is not None:
             available.add("flux")
         self.layers.set_available(available)
-        self.final_quantities = catalog.quantities(run.catalog)
-        self.movie_quantities = catalog.movie_quantities(run.movies)
+        self.translate = catalog.translator(run.catalog)
         self.time_box.set_movies(run.movies)
-        quantities = self.final_quantities
-        self.quantity.set_quantities(quantities)
-        self.quantity.set_run_choices(
-            [q for q in quantities if q.source in ("vector", "evector")],
-            [q for q in quantities if q.source in ("matrix", "eirene")],
-            run.geometry)
+        self.quantity.cells_box.set_geometry(run.geometry)
+        self._set_quantities()
+        self._ask_species(run)
         self.setEnabled(True)
         self.toolbar.update()
         self.canvas.draw_idle()
@@ -157,17 +158,62 @@ class Tab2D(QtWidgets.QWidget):
         if not self.quantity.select(last):
             self.quantity.select("te")
 
-    def _source_changed(self):
-        """Final state or movie frames: the quantities of that source,
-        the same quantity again where it exists."""
-        movie = self.time_box.movie()
-        quantities = self.movie_quantities if movie else \
+    def _ask_species(self, run):
+        """Species of the run for the calculator: B2.5 ones from the run
+        information, EIRENE atoms and molecules with their masses from
+        b2plot (massa, massm)."""
+        self.species = presets.Species((run.info or {}).get("species", []))
+        self.mp = next((float(v) for n, v, _ in dict(run.catalog).get(
+            "Constants", []) if n.strip() == "mp"), 1.6726219e-27)
+        for q in self.final_quantities:
+            if q.name in MASSES:
+                self.request.emit(("species", q, (), None))
+            elif q.name in MARKS:
+                self.request.emit(("marks", q, (), None))
+
+    def _set_quantities(self):
+        """Quantities of the run (derived ones first), of the source shown
+        (final state or movie frames), in the panel lists."""
+        derived, errors = catalog.derived(self._derived_specs(),
+                                          self.translate)
+        for text in errors:
+            self.status.emit("Derived quantity not available: " + text)
+        self.final_quantities = derived + catalog.quantities(
+            self.run.catalog)
+        self.movie_quantities = catalog.movie_quantities(self.run.movies,
+                                                         derived)
+        quantities = self.movie_quantities if self.time_box.movie() else \
             self.final_quantities
-        name = self.wanted.name if self.wanted else "te"
         self.quantity.set_quantities(quantities)
         self.quantity.overlay_box.set_choices(
             [q for q in quantities if q.source in ("vector", "evector")],
             [q for q in quantities if q.source in ("matrix", "eirene")])
+        self.quantity.cells_box.set_conditions(
+            [q for q in quantities if q.expr and q.source == "matrix"])
+
+    def _derived_specs(self):
+        try:
+            return json.loads(self.settings.value("derived2d", "") or "[]")
+        except ValueError:
+            return []
+
+    def open_calculator(self, text=""):
+        """The calculator dialog; the saved derived quantities after it."""
+        if self.run is None:
+            return
+        specs = self._derived_specs()
+        names = [q.name for q in self.final_quantities if not q.expr]
+        CalculatorDialog(specs, self.translate, names, self.species, text,
+                         self).exec()
+        self.settings.setValue("derived2d", json.dumps(specs))
+        self._source_changed()
+
+    def _source_changed(self):
+        """Final state or movie frames: the quantities of that source,
+        the same quantity again where it exists."""
+        movie = self.time_box.movie()
+        name = self.wanted.name if self.wanted else "te"
+        self._set_quantities()
         self.odata = {}
         if not self.quantity.select(name) and not self.quantity.select("te"):
             self.status.emit("No %s in the %s" % (name, "movie files" if
@@ -204,9 +250,11 @@ class Tab2D(QtWidgets.QWidget):
 
     def _overlays_needed(self):
         """[(role, Quantity)] of the active overlays (scalar plots only)."""
-        if self.quantity.kind() not in KINDS_SCALAR:
-            return []
-        return self.quantity.overlay_box.wanted()
+        cells = self.quantity.cells_box.wanted() if self.wanted is not None \
+            and self.wanted.source in ("matrix", "vector") else []
+        if self.quantity.kind() not in KINDS_FLAT:
+            return cells
+        return self.quantity.overlay_box.wanted() + cells
 
     def _fetch(self):
         """Ask for the chosen quantity (with the current b2plot operations)
@@ -238,23 +286,39 @@ class Tab2D(QtWidgets.QWidget):
     def _options_changed(self):
         self._fetch()
 
-    def deliver(self, want, data, error=""):
-        """Result of a request (data None and an error text on failure)."""
+    def deliver(self, want, data, console=""):
+        """Result of a request (data None on failure) and what b2plot
+        printed for it (warnings go to the status bar)."""
         role, q, ops, source = want
+        lines = [x.strip() for x in console.splitlines() if x.strip()]
+        tail = " ".join(lines[-3:])
         if role == "export":
             self.status.emit("Values of %s written to %s" % (
                 q.name, ", ".join(data)) if data is not None else
-                "b2plot did not write the values of %s. %s" % (q.name,
-                                                                error))
+                "b2plot did not write the values of %s. %s" % (q.name, tail))
             return
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
-                             % (q.name, error))
+                             % (q.name, tail))
             return
+        if role == "species":
+            self.species.set_neutrals(MASSES[q.name], data.columns,
+                                      data.values[:, 0] / self.mp)
+            return
+        if role == "marks":
+            self._mark(q.name, data)
+            return
+        warn = [x for x in lines if any(w in x.lower() for w in WARNINGS)]
+        if warn and role != "prefetch":
+            self.status.emit("b2plot: " + warn[-1])
         if role != "main":
             if (role, q) in self._overlays_needed() and \
                     source == self._source(q):
                 self.odata[role] = data
+                box = self.quantity.overlay_box
+                if role in box.ROLES:
+                    box.vectors[box.ROLES.index(role)].set_species(
+                        column_names(data.columns, self._species()))
                 self.redraw()
             return
         if q is not self.wanted or ops != self.quantity.ops(q) or \
@@ -262,9 +326,11 @@ class Tab2D(QtWidgets.QWidget):
             return
         self.data = data
         if not self.quantity.reduced():
-            species = (self.run.info or {}).get("species")
-            self.quantity.set_columns(data.columns, species)
+            self.quantity.set_columns(data.columns, self._species())
         self.redraw()
+
+    def _species(self):
+        return (self.run.info or {}).get("species")
 
     def _unit(self):
         unit = split_unit(self.wanted.description)[1] if self.wanted else None
@@ -274,12 +340,55 @@ class Tab2D(QtWidgets.QWidget):
         return unit or None
 
     def _overlay_data(self):
-        ostyle = self.quantity.overlay_box.style()
+        box = self.quantity.overlay_box
         overlays = {}
         for role, q in self._overlays_needed():
             if self._loaded(role, q):
-                overlays[role] = (self.odata[role], ostyle)
+                d, o = self.odata[role], box.style(role)
+                if role in box.ROLES:
+                    o = replace(o, column=self._arrow_column(o.column, d))
+                overlays[role] = (d, o)
         return overlays
+
+    def _arrow_column(self, chosen, vec):
+        """Species column of a vector overlay: the one chosen, else the
+        species of the plot, else the first ion (of the element summed)."""
+        names = column_names(vec.columns, self._species())
+        if 0 <= chosen < len(names):
+            return chosen
+        plot = self.quantity.species.currentText()
+        if plot in names:
+            return names.index(plot)
+        element = re.sub(r"^Sum ", "", plot)
+        ions = [i for i, n in enumerate(names) if "+" in n]
+        same = [i for i in ions
+                if re.match(r"[A-Za-z]*", names[i]).group(0) == element]
+        return (same + ions + [0])[0]
+
+    def _mark(self, name, data):
+        """Label position of a midplane (b2plot iimp, iomp): its cell of
+        smallest R (inner) or largest R (outer)."""
+        g = self.run.geometry
+        rows = np.flatnonzero(np.asarray(data.values[0], float)[
+            g.cells - 1] > 0)
+        if rows.size:
+            text, pick = MARKS[name]
+            self.run.marks[text] = tuple(g.centres[rows[pick(
+                g.centres[rows, 0])]])
+            self.plot._build_layer("labels")
+            self.canvas.draw_idle()
+
+    def _seed_preset(self, key):
+        """Streamline seeds along a curve of the run (plot.shapes.SEEDS)."""
+        if self.run is None:
+            return
+        n = self.quantity.streams.nseeds.value()
+        pts = shapes.seed_points(self.run, key, n, lambda p: np.asarray(
+            self.plot.tri.get_trifinder()(p[:, 0], p[:, 1])) >= 0)
+        text = dict((k, t) for t, k in shapes.SEEDS)[key]
+        self.status.emit("%d seeds along the %s" % (len(pts), text)
+                         if len(pts) else "No %s in this run" % text)
+        self.quantity.set_seeds([tuple(p) for p in pts])
 
     def _title(self):
         q = self.wanted
@@ -394,8 +503,10 @@ class Tab2D(QtWidgets.QWidget):
 
     # -------------------------------------------------------------- views
     def _view_moved(self):
-        vectors = self.data is not None and hasattr(self.data, "vr")
-        if vectors or "arrows" in self.odata:
+        """Arrows, streamlines and cell values follow zoom and pan."""
+        if (self.data is not None and hasattr(self.data, "vr")) or any(
+                r.startswith("arrows") for r in self.odata) or \
+                self.quantity.colour.cell_values.isChecked():
             self._vector_timer.start()
 
     def _redraw_vectors(self):

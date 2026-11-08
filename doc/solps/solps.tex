@@ -21204,7 +21204,8 @@ Sends the grid (cell polygons, regions, {\tt ix} and {\tt iy} on
 classical grids, X-points), the overlays drawn by the vessel, separatrix
 and outline routines, the device structure read from {\tt structure.dat},
 the wall elements of \btwoplot, the chord sets of the {\tt *.chords}
-files, the {\tt Eirene} triangles and, when {\tt rzpsi.dat} is present, the
+files, the divertor target faces of the grid,
+the {\tt Eirene} triangles and, when {\tt rzpsi.dat} is present, the
 normalised flux $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$ on its
 $(R,Z)$ box, with the O-point taken at the minimum of $|\nabla\psi|$
 inside the separatrix and $\psi_S$ at the primary X-point.
@@ -21551,6 +21552,8 @@ direction by an amount of $\langle z_{shift} \rangle$ metres.
 \subsubsection{$<$filename$>$ $<$H123$>$ $<$reac$>$ $<$crc$>$ amju}\index{b2plot, amju}\label{sec:amju}
 Computes a reaction rate as per the {\tt Eirene} specification. Consult the
 {\tt Eirene} manual for details.
+The data file is the one {\tt Eirene} reads: the path of its {\tt CFILE} card
+in the {\tt Eirene} input of the run, without one the file of that name in the run.
 {\bf amjuel} is an alias for {\bf amju}.
 {\bf samju}\index{b2plot, samju} (matrix stack) and
 {\bf eamju}\index{b2plot, eamju} (Eirene stack) take the same strings and
@@ -21562,7 +21565,8 @@ by the result.
 
 \subsubsection{$<$reac$>$ adas}\index{b2plot, adas}\label{sec:adas}\index{ADAS}
 Computes a reaction rate as per the {\tt ADAS} specification. The $\langle${\tt reac}$\rangle$ string should be something of the
-form 'acd89'. The matrix obtained contains then all the rates from these files, for all species in the run, extracted
+form 'acd89'; without the year ('acd'), the year of each element is taken from {\tt ratadas.filelist}, as for the run.
+The matrix obtained contains then all the rates from these files, for all species in the run, extracted
 from the files stored in {\tt \$\{SOLPSTOP\}/modules/adas} or
 {\tt \$\{SOLPSTOP\}/data.local/adas}.
 

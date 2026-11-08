@@ -1,11 +1,11 @@
-"""Option groups of the 2D quantity panel: contour levels, overlays on the
-plot, the cells shown and the labels."""
+"""Option groups of the 2D quantity panel: contour levels, the cells shown
+and the labels."""
 
 import numpy as np
 
-from ..plot.styles import LabelStyle, OverlayStyle
-from ...qt import QtGui, QtWidgets, Qt, Signal
-from .layers import ColorButton, spin, style_combo
+from ..plot.styles import LabelStyle
+from ...qt import QtGui, QtWidgets, Signal
+from .layers import ColorButton, spin
 
 LEVEL_MODES = [("Number of levels", "number"), ("Step", "step"),
                ("List of values", "list"),
@@ -94,107 +94,6 @@ class LevelsBox(QtWidgets.QGroupBox):
                     level_step=step, level_list=self.values.text())
 
 
-class OverlayBox(QtWidgets.QGroupBox):
-    """Arrows of a vector quantity and contour lines of a second quantity
-    over a scalar plot (b2plot arow and same)."""
-
-    changed = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__("Overlay on the plot", parent)
-        form = QtWidgets.QFormLayout(self)
-        self.arrows = QtWidgets.QCheckBox("Arrows of")
-        self.vector = QtWidgets.QComboBox()
-        self.vector.setToolTip("Vector quantity drawn as arrows, for the "
-                               "species of the plot where it exists")
-        self.arrow_length = spin(0.0, 10.0, 0.005, 0.0, 3,
-                                 "Arrow length in m (0: automatic)")
-        self.arrow_width = spin(0.1, 10.0, 0.1, 1.0, tip="Relative width")
-        self.arrow_color = ColorButton("#000000")
-        form.addRow(self.arrows, self.vector)
-        form.addRow("   length, width",
-                    _row(self.arrow_length, self.arrow_width,
-                         self.arrow_color))
-        self.lines = QtWidgets.QCheckBox("Contours of")
-        self.scalar = QtWidgets.QComboBox()
-        self.scalar.setEditable(True)
-        self.scalar.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
-        self.scalar.setToolTip("Second quantity drawn as contour lines")
-        self.line_levels = QtWidgets.QSpinBox()
-        self.line_levels.setRange(2, 100)
-        self.line_levels.setValue(10)
-        self.line_log = QtWidgets.QCheckBox("log")
-        self.line_color = ColorButton("#ffffff")
-        self.line_width = spin(0.1, 10.0, 0.1, 0.6, tip="Line width")
-        self.line_style = style_combo("-")
-        self.line_labels = QtWidgets.QCheckBox("labels")
-        form.addRow(self.lines, self.scalar)
-        form.addRow("   levels", _row(self.line_levels, self.line_log,
-                                      self.line_labels))
-        form.addRow("   line", _row(self.line_width, self.line_style,
-                                    self.line_color))
-        for w in (self.arrows, self.lines, self.line_log, self.line_labels):
-            w.toggled.connect(lambda *_: self.changed.emit())
-        for w in (self.vector, self.line_style):
-            w.currentIndexChanged.connect(lambda *_: self.changed.emit())
-        self.scalar.activated.connect(lambda *_: self.changed.emit())
-        for w in (self.arrow_length, self.arrow_width, self.line_width,
-                  self.line_levels):
-            w.valueChanged.connect(lambda *_: self.changed.emit())
-        for w in (self.arrow_color, self.line_color):
-            w.changed.connect(lambda *_: self.changed.emit())
-
-    def set_choices(self, vectors, scalars, default_vector="up vv"):
-        """Quantities offered (final state or movie), keeping the names
-        chosen where they exist."""
-        old = (self.vector.currentText() or default_vector,
-               self.scalar.currentText())
-        for combo, items in ((self.vector, vectors), (self.scalar, scalars)):
-            combo.blockSignals(True)
-            combo.clear()
-            for q in items:
-                combo.addItem(q.name, q)
-                combo.setItemData(combo.count() - 1, q.text, Qt.ToolTipRole)
-            combo.blockSignals(False)
-        for combo, name in zip((self.vector, self.scalar), old):
-            i = combo.findText(name)
-            if i >= 0:
-                combo.blockSignals(True)
-                combo.setCurrentIndex(i)
-                combo.blockSignals(False)
-        if self.vector.findText(old[0]) < 0:
-            i = self.vector.findText(default_vector)
-            if i >= 0:
-                self.vector.setCurrentIndex(i)
-        completer = QtWidgets.QCompleter([q.name for q in scalars], self)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        completer.setFilterMode(Qt.MatchContains)
-        self.scalar.setCompleter(completer)
-
-    def wanted(self):
-        """[(role, Quantity)] of the active overlays."""
-        out = []
-        if self.arrows.isChecked() and self.vector.currentData() is not None:
-            out.append(("arrows", self.vector.currentData()))
-        if self.lines.isChecked():
-            i = self.scalar.findText(self.scalar.currentText())
-            if i >= 0:
-                out.append(("lines", self.scalar.itemData(i)))
-        return out
-
-    def style(self):
-        return OverlayStyle(
-            arrow_length=self.arrow_length.value(),
-            arrow_width=self.arrow_width.value(),
-            arrow_color=self.arrow_color.color(),
-            line_levels=self.line_levels.value(),
-            line_log=self.line_log.isChecked(),
-            line_color=self.line_color.color(),
-            line_width=self.line_width.value(),
-            line_style=self.line_style.currentData(),
-            line_labels=self.line_labels.isChecked())
-
-
 class CellsBox(QtWidgets.QGroupBox):
     """B2.5 cells shown: index intervals on classical grids and regions."""
 
@@ -215,6 +114,12 @@ class CellsBox(QtWidgets.QGroupBox):
         self.region_layout = QtWidgets.QHBoxLayout(self.regions)
         self.region_layout.setContentsMargins(0, 0, 0, 0)
         self.form.addRow("Regions", self.regions)
+        self.where = QtWidgets.QComboBox()
+        self.where.setToolTip("Cells where a derived quantity (a mask, e.g. "
+                              "te > 10, made with the Calculator) is "
+                              "positive")
+        self.where.currentIndexChanged.connect(lambda *_: self.changed.emit())
+        self.form.addRow("Only where", self.where)
         self.checks = []
         self.full = None
 
@@ -247,6 +152,22 @@ class CellsBox(QtWidgets.QGroupBox):
                 s.setRange(lo, hi)
                 s.setValue(v)
                 s.blockSignals(False)
+
+    def set_conditions(self, quantities):
+        """Derived B2.5 quantities offered as masks (keeps the choice)."""
+        old = self.where.currentText()
+        self.where.blockSignals(True)
+        self.where.clear()
+        self.where.addItem("all cells", None)
+        for q in quantities:
+            self.where.addItem(q.label, q)
+        self.where.setCurrentIndex(max(self.where.findText(old), 0))
+        self.where.blockSignals(False)
+
+    def wanted(self):
+        """[("mask", Quantity)] when a mask is chosen."""
+        q = self.where.currentData()
+        return [("mask", q)] if q is not None else []
 
     def style_fields(self):
         """ix_range, iy_range and regions, None where nothing is hidden."""

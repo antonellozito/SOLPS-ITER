@@ -69,12 +69,13 @@ class TextMixin:
         mid = 0.5 * (box.x0 + box.x1)   # the title is centred on the axes
         half = min(mid - self.rect[0], self.rect[0] + self.rect[2] - mid)
         s = text(ls.title or title)
-        self.ax.set_title(s, fontsize=fit_size(s, 1.1 * fs, 1.96 * half * pw,
-                                               ls.bold), **kw)
-        self.ax.set_xlabel(text(ls.xlabel or "R (m)"), fontsize=fs, **kw)
-        self.ax.set_ylabel(text(ls.ylabel or "Z (m)"), fontsize=fs, **kw)
-        self.ax.tick_params(labelsize=0.9 * fs, labelcolor=ls.color)
-        self.ax.axis("on" if ls.axes else "off")
+        for ax in [a for a in (self.ax, self.ax3d) if a is not None]:
+            ax.set_title(s, fontsize=fit_size(s, 1.1 * fs, 1.96 * half * pw,
+                                              ls.bold), **kw)
+            ax.set_xlabel(text(ls.xlabel or "R (m)"), fontsize=fs, **kw)
+            ax.set_ylabel(text(ls.ylabel or "Z (m)"), fontsize=fs, **kw)
+            ax.tick_params(labelsize=0.9 * fs, labelcolor=ls.color)
+            ax.axis("on" if ls.axes else "off")
         x, y, w, h = self.rect
         if ls.extra.strip():
             s = text(ls.extra)

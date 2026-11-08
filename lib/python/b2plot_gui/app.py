@@ -168,8 +168,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                  ops=ops, source=source)
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
-            if role != "prefetch":
-                self._status("Loading %s\u2026" % q.name)
+            if role not in ("prefetch", "species", "marks"):
+                self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)
 
@@ -186,7 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tab2d.deliver(want, None, str(err))
             return
         self.waiting.setdefault(req.ident, []).append((self.tab2d, want))
-        self._status("b2plot writes the values of %s\u2026" % q.name)
+        self._status("b2plot writes the values of %s\u2026" % q.label)
 
     def _add_to_page(self, snap):
         self.composer.add(snap, snap.values)
@@ -211,7 +211,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._status("")
             for tab, want in receivers:
                 tab.deliver(want, req.result,
-                            "".join(req.console[-3:]).strip())
+                            "".join(req.console))
         self.busy.setVisible(bool(run.pending))
         ended = run.ended >= {"eof", "console_eof", "exit"}
         if ended and not self.crash_shown:

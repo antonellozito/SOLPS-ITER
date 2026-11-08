@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from ..plot.styles import LAYERS, LayerStyle
+from ..plot.styles import FILLS, LAYERS, LayerStyle
 from ...qt import QtGui, QtWidgets, Signal
 
 # Why a layer can be missing in a run
@@ -10,7 +10,11 @@ MISSING = {"device": "No structure.dat found for this run",
            "structure": "No mesh.extra found for this run",
            "flux": "No rzpsi.dat found for this run",
            "eirene": "No EIRENE triangles in this run",
-           "xpoints": "No X-point in this grid"}
+           "xpoints": "No X-point in this grid",
+           "targets": "No divertor targets sent by b2plot",
+           "filled": "No closed polygon in structure.dat",
+           "outside": "No EIRENE triangles in this run"}
+NO_STYLE = FILLS + ("xpoints", "labels")    # rows without a line style
 LINESTYLES = [("solid", "-"), ("dashed", "--"), ("dotted", ":"),
               ("dash-dot", "-.")]
 
@@ -84,12 +88,15 @@ class LayersPanel(QtWidgets.QWidget):
             check = QtWidgets.QCheckBox(name)
             check.setChecked(st.visible)
             color = ColorButton(st.color)
-            width = spin(0.05, 20.0, 0.1, st.width, tip="Line width (pt)"
-                         if key != "xpoints" else "Marker size (pt)")
+            width = spin(0.05, 20.0, 0.1, st.width, tip={
+                "xpoints": "Marker size (pt)", "labels": "Font size (pt)"}
+                .get(key, "Line width (pt)"))
             style = style_combo(st.style)
             alpha = spin(0.05, 1.0, 0.1, st.alpha, tip="Opacity")
-            if key == "xpoints":
+            if key in NO_STYLE:
                 style.setEnabled(False)
+            if key in FILLS:
+                width.setEnabled(False)
             row = dict(check=check, color=color, width=width, style=style,
                        alpha=alpha, levels=None, rho=None, base=st)
             for c, w in enumerate((check, color, width, style, alpha)):
@@ -139,8 +146,9 @@ class LayersPanel(QtWidgets.QWidget):
         for key, row in self.rows.items():
             on = key in available
             for w in ("check", "color", "width", "style", "alpha"):
-                row[w].setEnabled(on and not (key == "xpoints"
-                                              and w == "style"))
+                row[w].setEnabled(on and not (
+                    (key in NO_STYLE and w == "style")
+                    or (key in FILLS and w == "width")))
             row["check"].setToolTip("" if on else MISSING.get(
                 key, "Not available in this run"))
 

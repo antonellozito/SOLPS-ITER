@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 
 from ..b2plot import labels
+from .expression import ExpressionError, Translator, names_of
 
 VECTORS = "Fluxes and velocities (vectors)"
 GROUPS = [
@@ -27,12 +28,42 @@ GROUPS = [
      ("density", "temperature", "pressure", "potential", "energy",
       "charge", "z_{eff}", "zeff")),
 ]
+# Labels with an integer argument (masks): written ixeq(10) as derived
+INTEGER = re.compile(r"i[xysc](lt|le|eq|ne|ge|gt)|nreg|freg|clbl|flbl|tlbl|"
+                     r"ifeq|iveq|fteq")
+# Families of labels, checked before the description keywords of GROUPS
+FAMILIES = [
+    ("Convergence (residuals, corrections)",
+     r"r(co|mo|mt|ee|ei|po|en|kt|zt)|c(pa|ua|ut|te|ti|po|kt|zt|tn)"),
+    ("Previous time step", r"(na|ne|ni|te|ti|ua|po|tn|kt|zt)0"),
+    ("Balances", r"ebld|ebls|ebal|pbal"),
+    ("Sources by origin",
+     r"(br|bc|bm|ex)(na|ne|mo|he|hi|ch|hn|kt|zt)|s(na|ne|he|hi|ch|hn|kt|zt)"),
+    ("Atomic physics and radiation", r"rqae|rsa[inm]|rra[nim]|rcx[nim]|"
+     r"b2br|b2ra|[am]hal|neutrad|molrad|ionrad|srcml|edissml"),
+    ("Momentum terms", r"sm(pr|pt|fr|p|o|q|af|ag|av|th|cf)"),
+    ("Heating terms", r"dvue|dvua|exbe|exba|visa|joul|fraa|str"),
+    ("Transport coefficients",
+     r"d|dp|ky[ei]|kyi0|kyn0|vla[xy]|visc|sig|alf|dkt|dzt"),
+    ("Flux limiters", r"fle|fli|nflf..x?y?|flvisc|fluc.|flk.|flalc?"),
+    ("Neoclassical, collisionality, plasma frequencies",
+     r"dnneo|chineo|vnneo|vwneo|lnn|ltt|nuab|nua|nustar|vth|rhol|deltal|wb|"
+     r"deltaw[nt]?|omega|deltab|deltapar|chhichii|colle|colli|lnlam|wpe|wce|"
+     r"wci|vthe|vthi|valfven"),
+    ("Cell masks and indices (integer argument: ixeq(10))", INTEGER.pattern
+     + r"|rlcl|gdcl|bdcl|npcl|iimp|iomp|ix|iy|iix|iiy|ic|ift|xymap|bc|rc"),
+]
 OTHER = "Other matrix quantities"
 NEUTRALS = "Neutrals (EIRENE)"
 NEUTRAL_VECTORS = "Neutral fluxes and velocities (EIRENE vectors)"
-ORDER = ["Plasma state", VECTORS, "Fluxes", "Velocities",
-         "Sources and sinks", "Transport coefficients", NEUTRALS,
-         NEUTRAL_VECTORS, "Geometry and magnetic field", OTHER]
+DERIVED = "Derived quantities"
+ORDER = [DERIVED, "Plasma state", VECTORS, "Fluxes", "Velocities",
+         "Sources and sinks", "Sources by origin", "Atomic physics and "
+         "radiation", "Momentum terms", "Heating terms", "Transport "
+         "coefficients", "Neoclassical, collisionality, plasma frequencies",
+         "Flux limiters", "Balances", "Convergence (residuals, corrections)",
+         "Previous time step", NEUTRALS, NEUTRAL_VECTORS, "Geometry and "
+         "magnetic field", FAMILIES[-1][0], OTHER]
 
 
 @dataclass
@@ -44,13 +75,22 @@ class Quantity:
     poloidal: str = ""
     radial: str = ""
     movie: int = 0              # 1 b2movies.nc, 2 eirenemovies.nc
+    expr: str = ""              # derived: the expression (name: tokens)
 
     @property
     def text(self):
         return labels.tex_to_plain(self.description)
 
+    @property
+    def label(self):
+        """What the lists show: the expression of a derived quantity."""
+        return self.expr or self.name
 
-def _group(description):
+
+def _group(name, description):
+    for group, pattern in FAMILIES:
+        if re.fullmatch(pattern, name):
+            return group
     d = description.lower()
     for name, keys in GROUPS:
         if any(k in d for k in keys):
@@ -111,8 +151,8 @@ def quantities(categories):
     cats = dict(categories)
     matrix = [e for e in cats.get("Matrix quantities", []) if e[0].strip()]
     eirene = [e for e in cats.get("Eirene quantities", []) if e[0].strip()]
-    out = [Quantity(n.strip(), d.strip() or n.strip(), _group(d), "matrix")
-           for n, d, _ in matrix]
+    out = [Quantity(n.strip(), d.strip() or n.strip(),
+                    _group(n.strip(), d), "matrix") for n, d, _ in matrix]
     out += [Quantity(p + " " + r, d, VECTORS, "vector", p.strip(),
                      r.strip()) for p, r, d in _pairs(matrix)]
     out += [Quantity(n.strip(), d.strip() or n.strip(), NEUTRALS, "eirene")
@@ -128,6 +168,34 @@ MOVIE_GROUPS = {(1, 1): "Movie: B2.5 cells", (1, 2): "Movie: B2.5 faces "
 MOVIE_VECTORS = {1: "Movie: B2.5 vectors", 2: "Movie: EIRENE vectors"}
 MOVIE_ORDER = [MOVIE_GROUPS[1, 1], MOVIE_GROUPS[1, 2], MOVIE_VECTORS[1],
                MOVIE_GROUPS[2, 3], MOVIE_VECTORS[2], "Movie"]
+
+
+def translator(categories):
+    """Translator of expressions with the quantities and constants of a
+    CATALOG message."""
+    cats = dict(categories)
+    kinds = {n.strip(): k for cat, k in (("Matrix quantities", "matrix"),
+                                         ("Eirene quantities", "eirene"))
+             for n, _, _ in cats.get(cat, []) if n.strip()}
+    return Translator(kinds, [n.strip() for n, _, _ in
+                              cats.get("Constants", [])])
+
+
+def derived(specs, translate):
+    """Quantities of the derived quantities saved by the user (dicts with
+    expr, name, unit), and the messages of those that do not translate."""
+    out, errors = [], []
+    for spec in specs:
+        try:
+            tokens, kind = translate(spec["expr"])
+        except ExpressionError as err:
+            errors.append("%s: %s" % (spec["expr"], err))
+            continue
+        text = spec.get("name") or spec["expr"]
+        if spec.get("unit"):
+            text += " (%s)" % spec["unit"]
+        out.append(Quantity(tokens, text, DERIVED, kind, expr=spec["expr"]))
+    return out, errors
 
 
 def units_tex(units):
@@ -150,10 +218,18 @@ def _movie_partner(v, names):
     return None
 
 
-def movie_quantities(movies):
+def movie_quantities(movies, derived_quantities=()):
     """Quantities of the movie files (data.MovieFile per file): every
-    variable, and x/y component pairs as vectors."""
+    variable, x/y component pairs as vectors, and the derived quantities
+    whose operands are all variables of one file."""
     out, vectors = [], []
+    for q in derived_quantities:
+        names = names_of(q.name)
+        for f in sorted(movies):
+            if names <= {v.name for v in movies[f].variables}:
+                out.append(Quantity(q.name, q.description, DERIVED,
+                                    q.source, movie=f, expr=q.expr))
+                break
     for f in sorted(movies):
         variables = movies[f].variables
         names = {v.name: v for v in variables}
@@ -172,5 +248,6 @@ def movie_quantities(movies):
                 MOVIE_VECTORS[f], "evector" if f == 2 else "vector",
                 v.name, y, movie=f))
     out += vectors
-    out.sort(key=lambda q: MOVIE_ORDER.index(q.group))      # stable
+    out.sort(key=lambda q: -1 if q.group == DERIVED else
+             MOVIE_ORDER.index(q.group))                    # stable
     return out

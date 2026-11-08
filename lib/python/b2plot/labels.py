@@ -111,6 +111,14 @@ def tex_to_plain(s):
     return _TEX.sub(lambda m: m.group(1) + m.group(2), s)
 
 
+def any_to_plain(s):
+    """Plain text from b2plot labels in either form: 'm^-3'."""
+    if re.search(r"@[SBNFG]", s):
+        return "".join({"S": "^", "B": "_"}.get(v.strip(), "") if k == "code"
+                       else v for k, v in _codes(s, "@"))
+    return tex_to_plain(s)
+
+
 def any_to_mathtext(s):
     """Mathtext from b2plot labels in either form: Plotchar function codes
     (FIELD labels, 'm@S@-3@N@') or the catalogue form ('m^{-3}')."""

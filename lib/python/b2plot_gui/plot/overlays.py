@@ -5,10 +5,15 @@ separatrices, flux surfaces) and further quantities over the field
 from dataclasses import replace
 
 import numpy as np
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PolyCollection
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path
 
+from . import shapes
 from .scalar import node_values
-from .styles import ZORDER, PlotStyle, even_levels, norm_for
+from .styles import FILLS, ZORDER, PlotStyle, even_levels, norm_for
+
+FAR = 1.0e4                     # metres: lines and masks beyond any view
 
 
 class LayerMixin:
@@ -17,13 +22,39 @@ class LayerMixin:
     def _build_layer(self, key):
         run, st = self.run, self.layer_styles[key]
         old = self.layer_artists.pop(key, None)
-        if old is not None:
-            old.remove()
+        for a in old if isinstance(old, list) else (
+                [] if old is None else [old]):
+            a.remove()
         art = None
-        if key in ("structure", "device", "separatrices", "boundary"):
-            seg = run.layers.get(key)
+        if key in ("structure", "device", "separatrices", "boundary",
+                   "targets"):
+            seg = run.layers.get(key) if key != "targets" else np.vstack(
+                [np.zeros((0, 4))] + [v for k, v in run.layers.items()
+                                      if k.startswith("target: ")])
             if seg is not None and len(seg):
                 art = LineCollection(seg.reshape(-1, 2, 2))
+        elif key == "zero":
+            art = LineCollection([[(-FAR, 0.0), (FAR, 0.0)],
+                                  [(0.0, -FAR), (0.0, FAR)]])
+        elif key == "filled":
+            polys = shapes.solid(run.layers.get("device", []),
+                                 run.geometry.centres)
+            art = PolyCollection(polys) if polys else None
+        elif key == "outside" and run.trimesh is not None:
+            loop = shapes.outline(run.trimesh)
+            box = np.array([[-FAR, -FAR], [-FAR, FAR], [FAR, FAR],
+                            [FAR, -FAR], [-FAR, -FAR]])
+            art = PathPatch(Path(np.vstack((box, loop)), np.concatenate((
+                [Path.MOVETO], [Path.LINETO] * 3, [Path.CLOSEPOLY],
+                [Path.MOVETO], [Path.LINETO] * (len(loop) - 2),
+                [Path.CLOSEPOLY]))))
+            self.ax.add_patch(art)
+        elif key == "labels":
+            art = [self.ax.text(r, z, text, ha="center", va="center",
+                                clip_on=True, bbox=dict(
+                                    boxstyle="round,pad=0.15", fc="white",
+                                    ec="none", alpha=0.6))
+                   for text, r, z in shapes.label_points(run)]
         elif key == "grid":
             art = LineCollection([np.vstack((p, p[:1]))
                                   for p in run.geometry.polygons])
@@ -39,7 +70,7 @@ class LayerMixin:
             art, = self.ax.plot(xp[:, 0], xp[:, 1], ls="none", marker="x")
         elif key == "flux" and st.visible and run.psimap is not None:
             art = self._flux_surfaces(st)
-        if isinstance(art, LineCollection):
+        if isinstance(art, (LineCollection, PolyCollection)):
             self.ax.add_collection(art, autolim=False)
         if art is not None:
             self.layer_artists[key] = art
@@ -60,10 +91,18 @@ class LayerMixin:
         art, st = self.layer_artists.get(key), self.layer_styles[key]
         if art is None:
             return
+        if key == "labels":
+            for a in art:
+                a.set(color=st.color, fontsize=st.width, alpha=st.alpha,
+                      visible=st.visible, zorder=ZORDER[key])
+            return
         if key == "xpoints":
             art.set(color=st.color, markersize=st.width,
                     markeredgewidth=max(st.width / 5.0, 1.0),
                     alpha=st.alpha, visible=st.visible)
+        elif key in FILLS:
+            art.set(facecolor=st.color, edgecolor="none", alpha=st.alpha,
+                    visible=st.visible)
         else:
             art.set(edgecolor=st.color, facecolor="none", linewidth=st.width,
                     linestyle=st.style, alpha=st.alpha, visible=st.visible)
@@ -83,16 +122,24 @@ class LayerMixin:
             self._restyle(key)
 
     def _overlay(self, role, data, o, st):
-        """Arrows of a vector or contour lines of a second quantity, for
-        the species column of the main plot where it exists."""
+        """A vector as arrows or streamlines (VectorStyle o, species column
+        o.column) or contour lines of a second quantity (species column of
+        the main plot where it exists)."""
         col = min(max(st.column, 0), len(data.columns) - 1)
         box = self.vector_box()
-        if role == "arrows" and hasattr(data, "vr"):
-            pos, u, w = self._vector_data(data, col)[:3]
-            ast = replace(PlotStyle(), arrow_length=o.arrow_length,
-                          arrow_width=o.arrow_width, every=0,
-                          color_by_magnitude=False, arrow_color=o.arrow_color)
-            q = self._quiver(pos, u, w, ast, None, box)
+        if role.startswith("arrows") and hasattr(data, "vr"):
+            col = min(max(o.column, 0), len(data.columns) - 1)
+            pos, u, w, tri, nu, nw = self._vector_data(data, col)
+            if o.stream:
+                self._streamlines(tri, nu, nw, replace(
+                    PlotStyle(), kind="stream", stream_width=o.width,
+                    stream_color=o.color, color_by_magnitude=False), box,
+                    zorder=5.4)
+                return
+            ast = replace(PlotStyle(), arrow_length=o.length,
+                          arrow_width=o.width, every=0, normalize=o.same,
+                          color_by_magnitude=False, arrow_color=o.color)
+            q = self._quiver(pos, u, w, ast, box)
             if q is not None:
                 q.set_zorder(5.5)
         elif role == "lines" and not hasattr(data, "vr"):

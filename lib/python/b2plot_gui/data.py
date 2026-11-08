@@ -8,6 +8,7 @@ this module only decodes and caches what b2plot sends.
 
 import os
 import queue
+import re
 import struct
 from dataclasses import dataclass, field
 
@@ -22,7 +23,7 @@ CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 OP = protocol.OPCODES
 LAYER_ROLES = {1: "structure", 2: "separatrices", 3: "boundary",
                4: "device", 5: "wall", 7: "trajectories"}
-CHORDS = 6                      # overlay role of a chord set (named)
+NAMED = {6: "chords: ", 8: "target: "}  # overlay roles sent per name
 
 
 @dataclass
@@ -48,6 +49,7 @@ class Run:
         self.geometry = None
         self.layers = {}            # role name -> (n, 4) segments
         self.layer_colours = {}     # role name -> colour index per segment
+        self.marks = {}             # label text -> (R, Z), e.g. midplanes
         self.trimesh = None
         self.psimap = None
         self.movies = {}            # 1, 2 -> MovieFile
@@ -94,8 +96,17 @@ class Run:
     @staticmethod
     def _movie(name, source):
         """b2plot tokens pushing a movie variable: frames first to last
-        of file 1 (b2movies.nc) or 2 (eirenemovies.nc)."""
+        of file 1 (b2movies.nc), 2 (eirenemovies.nc) or 3 (b2tallies.nc)."""
         return "'%s' %d %d %d mvframe" % ((name,) + tuple(source))
+
+    @classmethod
+    def _head(cls, name, source):
+        """Tokens pushing a label or a derived quantity ({name} operands,
+        expression.py), the movie frames standing for them with source."""
+        if "{" not in name:
+            return cls._movie(name, source) if source else name
+        return re.sub(r"\{([^}]+)\}", lambda m: cls._movie(
+            m.group(1), source) if source else m.group(1), name)
 
     def field(self, name, eirene=False, ops=(), source=None):
         """Cached Field, or a Request whose result arrives later.
@@ -111,8 +122,7 @@ class Run:
         if found is not None:
             return found
         cmd = "guiefld" if eirene else "guifield"
-        head = self._movie(name, source) if source else name
-        text = " ".join((head,) + tuple(ops) + (cmd,))
+        text = " ".join((self._head(name, source),) + tuple(ops) + (cmd,))
         return self._request(kind, name, text + "\n", ops, source)
 
     def vector(self, first, second, eirene=False, ops=(), source=None):
@@ -125,13 +135,14 @@ class Run:
         if found is not None:
             return found
         cmd = "guievect" if eirene else "guivect"
-        if source:
+        if source and "{" not in first + second:
             swap = "eswap" if eirene else "swap"
             words = ("'%s' '%s' %d %d %d mvframev" % ((first, second)
                                                      + source),) \
                 + tuple(ops) + (swap,) + tuple(ops) + (swap, cmd)
         else:
-            words = (first,) + tuple(ops) + (second,) + tuple(ops) + (cmd,)
+            words = (self._head(first, source),) + tuple(ops) + (
+                self._head(second, source),) + tuple(ops) + (cmd,)
         return self._request(kind, name, " ".join(words) + "\n", ops,
                              source)
 
@@ -157,8 +168,8 @@ class Run:
                         "isClassicalGrid") else "0 0", quoted)
             else:
                 cmd = "%s mprt drop" % quoted
-            head = self._movie(name, source) if source else name
-            lines.append(" ".join((head,) + tuple(ops) + (cmd,)))
+            lines.append(" ".join((self._head(name, source),) + tuple(ops)
+                                  + (cmd,)))
         req = self._request("export", " ".join(names), "\n".join(lines)
                             + "\n", ops)
         req.paths = list(paths)
@@ -227,7 +238,7 @@ class Run:
             self.geometry = make_geometry(m)
         elif op == OP["OVERLAY_BEGIN"]:
             name = m.fields["name"]       # m.name is the message name
-            self._layer = ("chords: " + name if m.role == CHORDS else
+            self._layer = (NAMED[m.role] + name if m.role in NAMED else
                            LAYER_ROLES.get(m.role, name))
             self._segments, self._colours, self._colour = [], [], 1
         elif op == OP["OVERLAY_END"]:
