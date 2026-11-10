@@ -1,13 +1,14 @@
-"""Output of the 2D tab: snapshots for the page composer, figure, values,
-frames, the field with its geometry, the clipboard and the plot
-settings files (mixed into Tab2D)."""
+"""Output of the 2D tab: snapshots for the page composer, Print figure,
+figure, values, frames, the field with its geometry, the clipboard and the
+plot settings files (mixed into Tab2D)."""
 
 import io
 import os
 import re
 from dataclasses import replace
 
-from . import fieldfile, page, state
+from . import fieldfile, page, printfig, state
+from .. import theme
 from .export import FigureDialog, ValuesDialog
 from ..plot.snapshot import Snapshot
 from ...qt import QtGui, QtWidgets
@@ -60,6 +61,42 @@ class TabOutput:
             return []
         self.status.emit("Figure written to %s" % ", ".join(files))
         return files
+
+    def print_figure(self, path=None, options=None):
+        """Print figure, as AUGVIEW (output.printfig): the options dialog
+        and the file dialog unless options and path are given. Returns
+        the path written or None."""
+        if self.run is None or not self._current():
+            self.status.emit("No plot to print")
+            return None
+        if options is None:
+            dlg = printfig.PrintDialog(theme.is_dark(), self)
+            if dlg.exec() != QtWidgets.QDialog.Accepted:
+                return None
+            options = dlg.options()
+        fmt = options["format"]
+        if path is None:
+            path = self._file("Print figure", re.sub(
+                r"[^A-Za-z0-9_.+-]+", "_", self.wanted.label) + "." + fmt,
+                printfig.FILTERS[fmt])
+            if path is None:
+                return None
+        path = printfig.with_suffix(path, fmt)
+        dark = theme.is_dark()
+        try:
+            theme.set_dark(options.get("theme", theme.name().lower())
+                           == "dark")
+            if theme.is_dark() != dark:
+                self.apply_theme()
+            note = printfig.save(self.figure, path, options)
+        except (OSError, ValueError, RuntimeError) as err:
+            self.status.emit("Cannot print the figure: %s" % err)
+            return None
+        finally:            # the plot of the GUI theme again
+            theme.set_dark(dark)
+            self.apply_theme()
+        self.status.emit(("Figure printed to %s. %s" % (path, note)).strip())
+        return path
 
     def export_values(self, paths=None, table=False, all_species=False):
         """Ask b2plot to write the values of the quantity shown (dialog

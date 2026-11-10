@@ -1,6 +1,7 @@
 """Quantity panel of the 2D tab: what to plot and how."""
 
 import re
+import time
 
 from ...b2plot import labels
 from ..catalog import INTEGER
@@ -42,6 +43,7 @@ class QuantityPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.current = None
         self.wanted_species = None      # species name to choose next
+        self._last_click = (None, 0.0)  # item, time (double clicks)
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
         self.time_box = TimeBox()
@@ -60,12 +62,18 @@ class QuantityPanel(QtWidgets.QWidget):
         row.addWidget(self.search, 1)
         row.addWidget(calc)
         self.tree = QtWidgets.QTreeWidget()
-        self.tree.setHeaderLabels(["Quantity", "Description"])
+        self.tree.setHeaderLabels(["Quantity", "Name"])
         self.tree.setRootIsDecorated(True)
         self.tree.setUniformRowHeights(True)
         self.tree.setMinimumHeight(220)
-        self.tree.itemActivated.connect(self._activated)
-        self.tree.itemClicked.connect(self._activated)
+        head = self.tree.header()
+        head.setStretchLastSection(False)
+        head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        head.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        self.tree.setToolTip("Click a quantity to plot it, click it again "
+                             "to clear the plot")
+        self.tree.itemActivated.connect(self._clicked)
+        self.tree.itemClicked.connect(self._clicked)
         lay.addLayout(row)
         lay.addWidget(self.tree, 1)
 
@@ -123,12 +131,11 @@ class QuantityPanel(QtWidgets.QWidget):
                 top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
                 groups[q.group] = top
                 self.tree.addTopLevelItem(top)
-            item = QtWidgets.QTreeWidgetItem([q.label, q.text])
+            item = QtWidgets.QTreeWidgetItem([q.text, q.label])
             item.setToolTip(0, q.text)
-            item.setToolTip(1, q.text)
+            item.setToolTip(1, q.label)
             item.setData(0, Qt.UserRole, q)
             top.addChild(item)
-        self.tree.resizeColumnToContents(0)
         self._filter(self.search.text())
 
     def _filter(self, text):
@@ -145,6 +152,29 @@ class QuantityPanel(QtWidgets.QWidget):
                 shown += hit
             top.setHidden(shown == 0)
             top.setExpanded(bool(text) and shown > 0)
+
+    def _clicked(self, item, *_):
+        """A click (or Return) on a quantity: plot it, or clear the plot
+        if it is the one plotted; the second click of a double click is
+        no new click."""
+        last, when = self._last_click
+        now = time.monotonic()
+        self._last_click = (item, now)
+        if item is last and now - when < \
+                QtWidgets.QApplication.doubleClickInterval() / 1000.0:
+            return
+        q = item.data(0, Qt.UserRole)
+        if q is not None and q is self.current:
+            self.unselect()
+            self.quantity_chosen.emit(None)
+            return
+        self._activated(item)
+
+    def unselect(self):
+        """No quantity chosen (the state at the start)."""
+        self.current = None
+        self.tree.clearSelection()
+        self.tree.setCurrentItem(None)
 
     def _activated(self, item, *_):
         q = item.data(0, Qt.UserRole)

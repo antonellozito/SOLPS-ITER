@@ -19397,7 +19397,13 @@ toggles. The run line shows the run directory, the grid and the species;
 (after a crash of \btwoplotns, or with {\tt Live update} each time its
 {\tt b2fstate} changes) and exports. The {\tt 2D plots} tab is complete; the
 {\tt Profiles}, {\tt Chords} and {\tt Time traces}
-tabs follow in later versions. The 2D tab has three parts.
+tabs follow in later versions. The window opens on the whole screen and
+keeps that aspect ratio (texts and the plot scale with it); the selector
+at the top right switches between a light and a dark theme (in the dark
+one the plot colours are dimmed). Nothing is saved on the system: each
+start begins with nothing plotted, the default layers and no derived
+quantities. The 2D tab has three columns of fixed width: 30, 50 and 20 \%
+of the window.
 
 The {\bf quantity panel} (left):
 \begin{itemize}
@@ -19411,8 +19417,9 @@ The {\bf quantity panel} (left):
   next one is read, and {\tt Export frames} writes every position as
   numbered image files or as the pages of one PDF; all options of the tab
   apply to movie data;
-\item the quantity tree of the \btwoplot labels, with a search field;
-  vector quantities pair the poloidal and radial components (B2.5) or the
+\item the quantity tree (description and \btwoplot name), with a search
+  field; a click plots a quantity, a second click clears the plot; vector
+  quantities pair the poloidal and radial components (B2.5) or the
   Cartesian components (EIRENE);
 \item the species, including the sum over the species (\btwoplot
   {\tt sumz}, {\tt esumz});
@@ -19436,13 +19443,20 @@ The {\bf quantity panel} (left):
   other shell commands are not run.
 \end{itemize}
 
-The {\bf plot} (centre) shows the physical domain only. View presets
-(full, outer midplane, divertors), saved views and the R and Z limits set
-the view; the cursor shows the cell (and its {\tt ix}, {\tt iy} on
-classical grids) or the triangle and the value. Arrows are binned over the
-current view and redrawn after zoom and pan.
+The {\bf plot} (centre) shows the physical domain only, in a box that
+keeps its place; the colour bar is at its right (an empty frame when
+nothing is plotted), the colour bar of the wall strip under it. Over the
+plot: {\tt Zoom}, {\tt Unzoom}, {\tt Rezoom}, {\tt Restore} (the full
+view) and {\tt Pan}, the mouse tools, {\tt Add to page} and
+{\tt Print figure} (png, jpg, eps, pdf or svg; vector or raster content
+at a resolution; colour space rgb, cmyk or gray; light or dark theme).
+Under them, view presets (full, outer midplane, divertors), saved views
+and the R and Z limits set the view; the readout shows the position, the
+cell (and its {\tt ix}, {\tt iy} on classical grids) or the triangle and
+the value under the cursor. Arrows are binned over the current view and
+redrawn after zoom and pan.
 
-The {\tt Mouse} bar sets what a click on the plot does. {\tt Inspect}
+The mouse tools set what a click on the plot does. {\tt Inspect}
 lists the cell (index, {\tt ix}, {\tt iy}, region, centre) and the EIRENE
 triangle under the cursor, with the values there of every quantity loaded
 ({\tt ne}, {\tt te}, {\tt ti}, {\tt na}, {\tt po}, {\tt ua}, {\tt vol}
@@ -19453,11 +19467,11 @@ and, for a flux density (unit m$^{-2}$), the flux
 $\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the surface the
 line sweeps around the axis ($\mathbf{n}$ to the right of the line).
 {\tt Box}, {\tt Polygon} (double-click the last corner) and
-{\tt Statistics of the cells shown} give the number of cells or
+{\tt Statistics} (the cells shown) give the number of cells or
 triangles, their volume ({\tt vol}, {\tt triavol}), the volume integral
 and average, the minimum, the maximum and a histogram of the quantity
 shown. {\tt Seeds} draws the seed line of the streamlines. The results
-appear under the plot and can be exported as CSV.
+appear in a small window and can be exported as CSV.
 
 The {\bf layers panel} (right) shows and styles the device structure
 (from {\tt structure.dat}), the vessel ({\tt mesh.extra}), the
@@ -19468,9 +19482,7 @@ primary X-point found from the $\psi$ map).
 
 Export:
 \begin{itemize}
-\item {\tt File > Export figure}: PDF, PNG, SVG or EPS, as shown on the
-  screen or square, A4 portrait or A4 landscape (as {\tt sq},
-  {\tt a4p}, {\tt a4l});
+\item {\tt File > Print figure}: as {\tt Print figure} over the plot;
 \item {\tt File > Export values}: \btwoplot writes the values of the
   quantity plotted (species shown or all, with the scale factor) with
   {\tt mprt} or {\tt mtab}, or {\tt eprt} for EIRENE quantities; a vector
@@ -19486,8 +19498,9 @@ Export:
   files} adds the plot of each file to the page composer;
 \item {\tt Page > Page composer}: plots added with {\tt Add to page} keep
   all their settings and are laid out $n_x \times n_y$ on pages (as
-  {\tt page}) with a global header; a PDF holds all pages, other formats
-  give one file per page.
+  {\tt page}) with a global header, square, A4 portrait or A4 landscape
+  (as {\tt sq}, {\tt a4p}, {\tt a4l}); a PDF holds all pages, other
+  formats give one file per page.
 \end{itemize}
 
 The GUI talks to {\tt b2pl.exe} with the commands of

@@ -10,7 +10,7 @@ from matplotlib.patches import PathPatch
 from matplotlib.path import Path
 from matplotlib.text import Text
 
-from ...b2plot import labels
+from .. import theme
 from ..catalog import CHORD_POINTS
 from . import shapes
 from .scalar import node_values
@@ -57,9 +57,9 @@ class LayerMixin:
             art = self._chords(run.layers)
         elif key == "trajectories" and len(run.layers.get(key, [])):
             seg = run.layers[key]
-            art = LineCollection(seg.reshape(-1, 2, 2), colors=[
-                run.palette.get(c, (0.5, 0.5, 0.5)) for c in
-                run.layer_colours.get(key, [1] * len(seg))])
+            art = LineCollection(seg.reshape(-1, 2, 2), colors=theme.rgb_array(
+                [run.palette.get(c, (0.5, 0.5, 0.5)) for c in
+                 run.layer_colours.get(key, [1] * len(seg))]))
         elif key == "labels":
             art = [self.ax.text(r, z, text, ha="center", va="center",
                                 clip_on=True, bbox=dict(
@@ -106,13 +106,9 @@ class LayerMixin:
                                zorder=5.2)
         strip.set_array(np.ma.masked_invalid(v))
         self.ax.add_collection(strip, autolim=False)
-        if o.colorbar:      # removed before its strip (clear_field order)
-            cax = self.ax.inset_axes([0.5, 0.035, 0.46, 0.022])
-            bar = self.fig.colorbar(strip, cax=cax, orientation="horizontal")
-            bar.ax.tick_params(labelsize=6)
-            bar.set_label(labels.any_to_mathtext(data.label), fontsize=6.5)
-            self.field_artists.append(bar)
         self.field_artists.append(strip)
+        if o.colorbar:
+            self.bottom_colorbar(strip, data.label)
 
     def _chords(self, layers):
         """Chords of every set, each numbered set.chord at its end."""
@@ -148,11 +144,12 @@ class LayerMixin:
         if isinstance(art, list):
             for a in art:
                 if isinstance(a, Text):
-                    a.set(color=st.color, fontsize=st.width if key ==
-                          "labels" else 7.0, alpha=st.alpha,
+                    a.set(color=theme.rgb(st.color),
+                          fontsize=st.width if key == "labels" else 7.0,
+                          alpha=st.alpha,
                           visible=st.visible, zorder=ZORDER[key] + 0.01)
                 else:
-                    a.set(edgecolor=st.color, linewidth=st.width,
+                    a.set(edgecolor=theme.rgb(st.color), linewidth=st.width,
                           linestyle=st.style, alpha=st.alpha,
                           visible=st.visible, zorder=ZORDER[key])
             return
@@ -161,14 +158,16 @@ class LayerMixin:
                     visible=st.visible, zorder=ZORDER[key])
             return
         if key == "xpoints":
-            art.set(color=st.color, markersize=st.width,
+            art.set(color=theme.rgb(st.color), markersize=st.width,
                     markeredgewidth=max(st.width / 5.0, 1.0),
                     alpha=st.alpha, visible=st.visible)
         elif key in FILLS:
-            art.set(facecolor=st.color, edgecolor="none", alpha=st.alpha,
+            art.set(facecolor=theme.rgb(st.color), edgecolor="none",
+                    alpha=st.alpha,
                     visible=st.visible)
         else:
-            art.set(edgecolor=st.color, facecolor="none", linewidth=st.width,
+            art.set(edgecolor=theme.rgb(st.color), facecolor="none",
+                    linewidth=st.width,
                     linestyle=st.style, alpha=st.alpha, visible=st.visible)
         art.set_zorder(ZORDER[key])
 
@@ -228,7 +227,7 @@ class LayerMixin:
                 lev = lev[lev > 0]
                 z = np.where(z > 0, z, norm.vmin)
             cs = self.ax.tricontour(tri, z, levels=lev, zorder=4.5,
-                                    colors=o.line_color,
+                                    colors=[theme.rgb(o.line_color)],
                                     linewidths=o.line_width,
                                     linestyles=o.line_style)
             if o.line_labels:

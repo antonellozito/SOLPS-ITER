@@ -8,6 +8,8 @@ from matplotlib import colormaps
 from matplotlib.colors import (LinearSegmentedColormap, LogNorm, Normalize,
                                SymLogNorm)
 
+from .. import theme
+
 KINDS_FLAT = ("patch", "contourf", "contour")   # on the R, Z axes
 KINDS_SCALAR = KINDS_FLAT + ("surface",)
 KINDS_VECTOR = ("quiver", "stream", "quiverstream")
@@ -208,12 +210,13 @@ def levels_for(st, norm, given=None):
 
 
 def cmap_for(style, norm=None):
-    """Colormap of a style: grey in black and white, pwn for the norm."""
+    """Colormap of a style: grey in black and white, pwn for the norm; as
+    drawn in the current theme."""
     if style.cmap == "pwn" and norm is not None and not style.bw:
-        return pwn(norm, style.reverse)
+        return theme.cmap(pwn(norm, style.reverse))
     cmap = colormaps["Greys" if style.bw else style.cmap.replace(
         "pwn", "RdBu_r")]
-    return cmap.reversed() if style.reverse else cmap
+    return theme.cmap(cmap.reversed() if style.reverse else cmap)
 
 
 def pwn(norm, reverse=False):
