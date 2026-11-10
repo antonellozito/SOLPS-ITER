@@ -141,7 +141,7 @@ class ValuesDialog(QtWidgets.QDialog):
             note += "\nOne file per component: name_%s and name_%s." % (
                 q.poloidal, q.radial)
         hint = QtWidgets.QLabel(note)
-        hint.setStyleSheet("color: palette(mid);")
+        hint.setProperty("muted", True)
         form.addRow(hint)
         form.addRow(_buttons(self))
 

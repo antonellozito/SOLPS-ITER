@@ -8,6 +8,7 @@ import matplotlib.tri as mtri
 from matplotlib.axes import Axes
 
 from .scalar import node_values
+from .. import theme
 from .styles import cmap_for, norm_for
 
 STREAM_GRID = 400
@@ -83,7 +84,8 @@ class VectorMixin:
                                norm=norm, **kw)
         else:
             q = self.ax.quiver(c[:, 0], c[:, 1], u[keep] * scale,
-                               w[keep] * scale, color=st.arrow_color, **kw)
+                               w[keep] * scale,
+                               color=theme.rgb(st.arrow_color), **kw)
         self.field_artists.append(q)
         return q
 
@@ -132,7 +134,8 @@ class VectorMixin:
                 if st.seed_markers:
                     self.field_artists += self.ax.plot(
                         seeds[inside, 0], seeds[inside, 1], "o",
-                        mfc="none", mec="red", ms=4.0, zorder=zorder + 0.1)
+                        mfc="none", mec=theme.rgb("red"), ms=4.0,
+                        zorder=zorder + 0.1)
         before = set(self.ax.patches)
         if st.color_by_magnitude and st.kind == "stream":
             norm = norm_for(speed.compressed(), st)
@@ -140,7 +143,8 @@ class VectorMixin:
                                     cmap=cmap_for(st, norm), norm=norm, **kw)
             self.mappable = sp.lines
         else:
-            sp = self.ax.streamplot(xs, ys, U, V, color=st.stream_color,
+            sp = self.ax.streamplot(xs, ys, U, V,
+                                    color=theme.rgb(st.stream_color),
                                     **kw)
         sp.lines.set_linestyle(st.stream_style)
         self.field_artists.append(sp.lines)

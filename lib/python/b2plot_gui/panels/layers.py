@@ -66,21 +66,24 @@ def spin(lo, hi, step, value, decimals=2, tip=""):
     return box
 
 
-class LayersPanel(QtWidgets.QWidget):
-    """One row per overlay: shown, colour, width, line style, opacity."""
+class LayersPanel(QtWidgets.QGroupBox):
+    """Two lines per overlay: shown (with its name), then colour, width,
+    line style and opacity under the column heads."""
 
     changed = Signal(str, object)
 
     def __init__(self, styles=None, parent=None):
-        super().__init__(parent)
+        super().__init__("Layers", parent)
         self.rows = {}
         grid = QtWidgets.QGridLayout(self)
         grid.setContentsMargins(6, 6, 6, 6)
         grid.setHorizontalSpacing(6)
-        for col, text in enumerate(("Layer", "", "Width", "Style",
+        grid.setColumnMinimumWidth(0, 14)
+        grid.setColumnStretch(3, 1)
+        for col, text in enumerate(("", "Colour", "Width", "Style",
                                     "Opacity")):
             head = QtWidgets.QLabel(text)
-            head.setStyleSheet("color: palette(mid);")
+            head.setProperty("muted", True)
             grid.addWidget(head, 0, col)
         r = 1
         for key, (name, default) in LAYERS.items():
@@ -92,16 +95,22 @@ class LayersPanel(QtWidgets.QWidget):
                 "xpoints": "Marker size (pt)", "labels": "Font size (pt)"}
                 .get(key, "Line width (pt)"))
             style = style_combo(st.style)
+            style.setSizeAdjustPolicy(
+                QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            style.setMinimumContentsLength(5)
             alpha = spin(0.05, 1.0, 0.1, st.alpha, tip="Opacity")
+            for w in (width, alpha):
+                w.setMinimumWidth(44)
             if key in NO_STYLE:
                 style.setEnabled(False)
             if key in FILLS:
                 width.setEnabled(False)
             row = dict(check=check, color=color, width=width, style=style,
                        alpha=alpha, levels=None, rho=None, base=st)
-            for c, w in enumerate((check, color, width, style, alpha)):
-                grid.addWidget(w, r, c)
-            r += 1
+            grid.addWidget(check, r, 0, 1, 5)
+            for c, w in enumerate((color, width, style, alpha), 1):
+                grid.addWidget(w, r + 1, c)
+            r += 2
             if key == "flux":
                 levels = QtWidgets.QLineEdit(st.levels)
                 levels.setToolTip("Levels, separated by blanks")
@@ -109,8 +118,8 @@ class LayersPanel(QtWidgets.QWidget):
                 rho.addItem("\u03c8N", False)
                 rho.addItem("\u03c1pol", True)
                 rho.setCurrentIndex(1 if st.rho else 0)
-                grid.addWidget(QtWidgets.QLabel("   levels"), r, 0)
-                grid.addWidget(levels, r, 1, 1, 3)
+                grid.addWidget(QtWidgets.QLabel("levels"), r, 1)
+                grid.addWidget(levels, r, 2, 1, 2)
                 grid.addWidget(rho, r, 4)
                 r += 1
                 row.update(levels=levels, rho=rho)

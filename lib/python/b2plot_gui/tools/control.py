@@ -21,7 +21,7 @@ class Tools:
     def __init__(self, tab):
         self.tab = tab
         self.bar = MouseTools(tab.canvas, tab.plot, tab.toolbar)
-        self.panel = ResultsPanel(tab.settings)
+        self.panel = ResultsPanel(tab.settings, tab)
         self.bar.done.connect(self._done)
         self.bar.shown.connect(lambda: self._done("shown", None))
         self.bar.hint.connect(tab.status)

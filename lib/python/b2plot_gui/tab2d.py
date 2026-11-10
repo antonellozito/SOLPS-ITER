@@ -1,4 +1,5 @@
-"""2D tab: quantity panel, one fixed plot, layers panel."""
+"""2D tab: quantity panel, one plot with its commands, layers panel, in
+columns of fixed width (30, 50 and 20 % of the window)."""
 
 import json
 import re
@@ -8,14 +9,14 @@ from dataclasses import replace
 import numpy as np
 from matplotlib.figure import Figure
 
-from . import catalog, presets
+from . import catalog, presets, theme
 from .plot import shapes
 from .plot.canvas import Plot2D
 from .plot.styles import KINDS_FLAT, LAYERS
 from .model import split_unit
-from ..qt import (FigureCanvasQTAgg, NavigationToolbar2QT, QtCore,
-                  QtWidgets, Qt, Signal)
+from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Signal
 from .panels.layers import LayersPanel, from_dict
+from .panels.plotarea import READOUT, Columns, PlotCommands, ScaledCanvas
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
 from .panels.views import ViewBar
@@ -28,13 +29,13 @@ MASSES = {"massa": "a", "massm": "m"}   # b2plot label: Eirene stack
 MARKS = {"iimp": ("IMP", np.argmin), "iomp": ("OMP", np.argmax)}
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
             "not recognized", "error")      # in what b2plot prints
+COLUMNS = (0.3, 0.5, 0.2)       # quantity panel, plot, layers
 
 
-def _scrolled(widget, width):
+def _scrolled(widget):
     area = QtWidgets.QScrollArea()
     area.setWidget(widget)
     area.setWidgetResizable(True)
-    area.setMinimumWidth(width)
     area.setFrameShape(QtWidgets.QFrame.NoFrame)
     return area
 
@@ -56,10 +57,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.wanted = None
         self.odata = {}                 # overlay role -> Field or Vector
         self.figure = Figure()
-        self.canvas = FigureCanvasQTAgg(self.figure)
-        self.canvas.setMinimumSize(420, 420)
-        self.plot = Plot2D(self.figure)
+        self.canvas = ScaledCanvas(self.figure, self._keep_view)
+        self.plot = Plot2D(self.figure, fixed=True)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.toolbar.hide()             # PlotCommands does its work
 
         self.quantity = QuantityPanel()
         self.quantity.quantity_chosen.connect(self._chosen)
@@ -85,44 +86,27 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
         self.viewbar = ViewBar(self.plot, self.toolbar, settings)
         self.viewbar.moved.connect(self._view_moved)
-        add = QtWidgets.QToolButton()
-        add.setText("Add to page")
-        add.setToolTip("Add this plot with all its settings to the page "
-                       "composer")
-        add.clicked.connect(lambda *_: self._add_to_page())
-        top = QtWidgets.QHBoxLayout()
-        top.addWidget(self.toolbar, 1)
-        second = QtWidgets.QHBoxLayout()
-        second.addWidget(self.viewbar, 1)
-        second.addWidget(add)
         self.tools = Tools(self)
-        self.hover = QtWidgets.QLabel(" ")
-        self.hover.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.commands = PlotCommands(self)
+        self.hover = self.commands.readout
         centre = QtWidgets.QWidget()
         cl = QtWidgets.QVBoxLayout(centre)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.addLayout(top)
-        cl.addLayout(second)
-        cl.addWidget(self.tools.bar)
+        cl.setContentsMargins(6, 0, 6, 0)
+        cl.addWidget(self.commands)
         cl.addWidget(self.canvas, 1)
-        cl.addWidget(self.hover)
-        cl.addWidget(self.tools.panel)
-
-        split = QtWidgets.QSplitter(Qt.Horizontal)
-        split.addWidget(_scrolled(self.quantity, 300))
-        split.addWidget(centre)
-        split.addWidget(_scrolled(self.layers, 330))
-        split.setStretchFactor(1, 1)
-        split.setCollapsible(1, False)
+        self.columns = Columns((_scrolled(self.quantity), centre,
+                                _scrolled(self.layers)), COLUMNS)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.addWidget(split)
+        lay.addWidget(self.columns)
 
         self.canvas.mpl_connect("motion_notify_event", self._motion)
+        self.canvas.mpl_connect("button_release_event", self._nav_done)
         self._vector_timer = QtCore.QTimer(self)
         self._vector_timer.setSingleShot(True)
         self._vector_timer.setInterval(150)
         self._vector_timer.timeout.connect(self._redraw_vectors)
+        self._show_empty()
         self.setEnabled(False)
 
     # ----------------------------------------------------------- settings
@@ -145,8 +129,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
     def set_run(self, run):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.plot.set_run(run)
+        self._show_empty()
         self.tools.panel.hide()
         self.tools.last = None
+        self.quantity.unselect()
         self.quantity.traj_box.set_species(column_names(
             self._species() or []))
         self.viewbar.set_run()
@@ -159,9 +145,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.setEnabled(True)
         self.toolbar.update()
         self.canvas.draw_idle()
-        last = self.settings.value("quantity2d", "te")
-        if not self.quantity.select(last):
-            self.quantity.select("te")
 
     def _ask_species(self, run):
         """Species of the run for the calculator: B2.5 ones from the run
@@ -217,21 +200,30 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _source_changed(self):
         """Final state or movie frames: the quantities of that source,
-        the same quantity again where it exists."""
+        the same quantity again where it exists (nothing if nothing was
+        plotted)."""
         movie = self.time_box.movie()
-        name = self.wanted.name if self.wanted else "te"
         self._set_quantities()
         self.odata = {}
-        if not self.quantity.select(name) and not self.quantity.select("te"):
+        if self.wanted is None:
+            return
+        name = self.wanted.name
+        if not self.quantity.select(name):
+            self.quantity.unselect()
             self.status.emit("No %s in the %s" % (name, "movie files" if
                                                   movie else "final state"))
 
     def _chosen(self, q):
+        """A quantity chosen in the tree, None: nothing plotted (as at the
+        start)."""
         self.wanted = q
+        if q is None:
+            self.data, self.odata = None, {}
+            self.quantity.set_columns([""])
+            self._show_empty()
+            return
         if q.movie:
             self.time_box.set_file(q.movie)
-        else:
-            self.settings.setValue("quantity2d", q.name)
         self._fetch()
 
     def _source(self, q):
@@ -468,6 +460,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                 "TIME": "%.6g" % t}
 
     def redraw(self):
+        if self.wanted is None:
+            self._show_empty()
         if self.run is None or self.data is None or not self._current():
             return
         try:
@@ -506,4 +500,44 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if event.inaxes is self.plot.ax and event.xdata is not None:
             self.hover.setText(self.plot.lookup(event.xdata, event.ydata))
         else:
-            self.hover.setText(" ")
+            self.hover.setText(READOUT)
+
+    # -------------------------------------------------------------- theme
+    def apply_theme(self):
+        """The plot and the tool results in the colours of the theme."""
+        self.canvas.setStyleSheet("background-color: %s;"
+                                  % theme.figure_bg())
+        self.plot.apply_theme()
+        if self.wanted is None:
+            self._show_empty()
+        else:
+            self.redraw()
+        panel = self.tools.panel
+        if panel.isVisible() and panel.canvas.isVisible():
+            panel.apply_theme()
+        self.canvas.draw_idle()
+
+    def _show_empty(self):
+        """Nothing plotted: the layers, the colour-bar placeholder and the
+        axis labels."""
+        self.plot.show_empty()
+        self.plot.set_labels(self.quantity.labels_box.style(), "",
+                             self.label_values())
+        self.canvas.draw_idle()
+
+    def _keep_view(self):
+        """After a resize the view asked for, not the one matplotlib
+        widened to the new shape of the axes."""
+        if self.run is not None and self.plot.requested is not None:
+            self.plot.set_view(self.plot.requested)
+
+    def _nav_done(self, event):
+        """A zoom or pan with the mouse: that view is the one kept."""
+        if str(self.toolbar.mode):
+            self.plot.requested = self.plot.get_view()
+
+    def freeze_scale(self):
+        """The present size of the plot is its reference: it scales with
+        the window from now on."""
+        self.canvas.freeze()
+        self.plot.freeze()

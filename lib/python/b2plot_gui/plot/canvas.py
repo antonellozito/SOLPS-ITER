@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.tri as mtri
 
 from ...b2plot import labels
+from .. import theme
 from .overlays import LayerMixin
 from .scalar import ScalarMixin
 from .styles import LAYERS, LabelStyle, PlotStyle
@@ -22,19 +23,28 @@ from .vector import VectorMixin
 
 
 class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
-    """One fixed axes (a 3D one for surfaces) with a fixed colour-bar
-    slot."""
+    """One axes (a 3D one for surfaces) with a colour-bar slot at its right
+    and a bar under it for the wall strip. fixed: the boxes do not depend
+    on the texts (the plot of the GUI), and an empty colour-bar slot shows
+    a placeholder."""
 
-    def __init__(self, fig, rect=(0.0, 0.0, 1.0, 1.0)):
-        self.fig, self.rect = fig, tuple(rect)
+    def __init__(self, fig, rect=(0.0, 0.0, 1.0, 1.0), fixed=False):
+        self.fig, self.rect, self.fixed = fig, tuple(rect), fixed
         self.label_artists = []
         self.label_style = LabelStyle()
         self._top_pts = 0.0         # header and extra label
-        ax_box, cax_box = self._positions()
+        self.bottom_bar = False     # wall strip colour bar under the plot
+        self.bbar = None
+        self.reference = None       # size (inches) the fixed boxes keep
+        self.requested = None       # the view last asked for (R, Z box)
+        ax_box, cax_box, bax_box = self._positions()
         self.ax = fig.add_axes(ax_box)
         self.ax3d = None
         self.cax = fig.add_axes(cax_box)
         self.cax.set_visible(False)
+        self.bax = fig.add_axes(bax_box)
+        self.bax.set_visible(False)
+        fig.set_facecolor(theme.figure_bg())
         fig.canvas.mpl_connect("resize_event", self._place)
         self.run = None
         self.layer_styles = {k: replace(s) for k, (_, s) in LAYERS.items()}
@@ -50,35 +60,65 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         self._reset_axes()
 
     def _positions(self):
-        """Axes and colour-bar boxes in the rectangle of the figure; the
-        margins are in points, scaled with the label size."""
+        """Boxes of the axes, of the colour bar at its right and of the
+        bar under it, in the rectangle of the figure. Margins in points:
+        scaled with the label size, or (fixed) those of the default size
+        with room for the header and the extra label, so that the plot
+        box never moves; the bar under the plot takes its room only when
+        shown."""
         x, y, w, h = self.rect
-        pw, ph = np.maximum(self.fig.get_size_inches() * 72.0, 1.0)
-        fs = 10.0 * self.label_style.size
+        pw, ph = np.maximum(self.inches() * 72.0, 1.0)
+        fs = 10.0 if self.fixed else 10.0 * self.label_style.size
+        top = (6.3 * fs if self.fixed else 3.0 * fs + self._top_pts) / ph
         left, bottom = 6.0 * fs / pw, 4.2 * fs / ph
-        top = (3.0 * fs + self._top_pts) / ph
-        gap, bar, right = 1.5 * fs / pw, 1.6 * fs / pw, 6.5 * fs / pw
+        under = 3.6 * fs / ph if self.bottom_bar else 0.0
+        gap, bar, right = 1.2 * fs / pw, 1.8 * fs / pw, 4.6 * fs / pw
         aw = max(w - left - gap - bar - right, 0.1 * w)
-        ah = max(h - bottom - top, 0.1 * h)
-        ax = [x + left, y + bottom, aw, ah]
-        return ax, [x + left + aw + gap, y + bottom + 0.05 * ah, bar,
-                    0.9 * ah]
+        ah = max(h - bottom - under - top, 0.1 * h)
+        ax = [x + left, y + bottom + under, aw, ah]
+        return ax, [x + left + aw + gap, y + bottom + under, bar, ah], [
+            x + left, y + 1.8 * fs / ph, aw, 1.2 * fs / ph]
+
+    def inches(self):
+        """Size of the figure for the boxes: the reference size of a fixed
+        plot (its boxes are fractions of the figure from then on)."""
+        if self.fixed and self.reference is not None:
+            return np.asarray(self.reference, float)
+        return self.fig.get_size_inches()
+
+    def freeze(self):
+        """The present size becomes the reference of a fixed plot."""
+        self.reference = tuple(self.fig.get_size_inches())
+        self._place()
 
     def _place(self, *_):
-        """Axes and colour bar to their boxes (labels or figure size
+        """Axes and bars to their boxes (labels, bottom bar or figure size
         changed), keeping the equal aspect."""
-        ax_box, cax_box = self._positions()
+        ax_box, cax_box, bax_box = self._positions()
+        self.cax.set_position(cax_box)
+        self.bax.set_position(bax_box)
         if not np.allclose(self.ax.get_position().bounds, ax_box):
             self.ax.set_position(ax_box)
-            self.cax.set_position(cax_box)
             self._keep_aspect()
         if self.ax3d is not None:
             self.ax3d.set_position(ax_box)
 
     def _reset_axes(self):
         self.ax.set_aspect("equal", adjustable="datalim")
+        self.ax.set_facecolor(theme.axes_bg())
         self.ax.set_xlabel("R (m)")
         self.ax.set_ylabel("Z (m)")
+
+    def apply_theme(self):
+        """Backgrounds and layer colours of the current theme (the field is
+        drawn again by show)."""
+        self.fig.set_facecolor(theme.figure_bg())
+        self.ax.set_facecolor(theme.axes_bg())
+        if self.ax3d is not None:
+            self.ax3d.set_facecolor(theme.figure_bg())
+        if self.run is not None:
+            for key in LAYERS:
+                self._build_layer(key)
 
     # --------------------------------------------------------------- run
     def set_run(self, run, hover=True):
@@ -107,6 +147,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
     # ------------------------------------------------------------- field
     def clear_field(self):
         self._drop_colorbar()
+        self._drop_bottom_bar()
         for a in self.field_artists:
             a.remove()
         self.field_artists = []
@@ -116,6 +157,15 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         if self._tri_pc is not None:
             self._tri_pc.set_visible(False)
         self.cax.set_visible(False)
+
+    def show_empty(self):
+        """Nothing plotted: the layers, an empty colour-bar slot and no
+        title."""
+        self.clear_field()
+        self._axes3d(False)
+        self.data = None
+        self._placeholder()
+        self.ax.set_title("")
 
     def show(self, data, style, unit=None, overlays=None):
         """Draw a Field or Vector with a PlotStyle (unit: colour-bar label,
@@ -180,7 +230,9 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         return out
 
     def set_view(self, box):
-        """Show at least this box, widened to the equal aspect of the axes."""
+        """Show at least this box, widened to the equal aspect of the axes
+        (and again so after a resize)."""
+        self.requested = tuple(box)
         x0, x1, y0, y1 = box
         bb = self.ax.get_window_extent()
         if bb.width > 0 and bb.height > 0 and x1 > x0 and y1 > y0:
@@ -210,10 +262,11 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
 
     # -------------------------------------------------------------- hover
     def lookup(self, x, y):
-        """Text describing the cell or triangle at (x, y), or ''."""
+        """Two lines on the cell or triangle at (x, y): the position, then
+        the cell and the value; '' without a run."""
         if self.run is None:
             return ""
-        out = "R %.4f m  Z %.4f m" % (x, y)
+        out = "R %.4f m  Z %.4f m\n" % (x, y)
         g, d = self.run.geometry, self.data
         it = int(self.finder(x, y))
         if it >= 0:
@@ -222,7 +275,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
             if g.classical and g.ix[row] >= 0:
                 out += " (ix %d, iy %d)" % (g.ix[row], g.iy[row])
         if d is None:
-            return out
+            return out.strip()
         col = self._column(d, self.style)
         unit = labels.any_to_plain(d.unit)
         if hasattr(d, "vr") and d.location == "cells":
@@ -243,4 +296,4 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
             if jt >= 0:
                 out += "  triangle %d  %s %.4g %s" % (
                     jt + 1, d.name, d.values[col][jt], unit)
-        return out
+        return "\n".join(line.strip() for line in out.split("\n"))

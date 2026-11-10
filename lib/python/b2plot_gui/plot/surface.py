@@ -5,6 +5,7 @@ log scale gives log10 heights); the 3D axes takes the place of the map."""
 import numpy as np
 from matplotlib.colors import LogNorm
 
+from .. import theme
 from .scalar import node_values
 from .styles import cmap_for, norm_for
 
@@ -17,6 +18,7 @@ class SurfaceMixin:
         if on and self.ax3d is None:
             self.ax3d = self.fig.add_axes(self.ax.get_position(),
                                           projection="3d")
+            self.ax3d.set_facecolor(theme.figure_bg())
         if self.ax3d is not None:
             self.ax3d.set_visible(on)
         self.ax.set_visible(not on)

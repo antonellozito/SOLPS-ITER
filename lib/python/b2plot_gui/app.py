@@ -1,8 +1,11 @@
-"""Main window of the b2plot GUI: run line, tabs, status bar.
+"""Main window of the b2plot GUI: run line, tabs, theme switch, status
+bar.
 
 One b2pl.exe per open run serves the data (data.Run); a QTimer
 drains its events in the GUI thread and hands finished requests to the
-tabs. There is no console and no b2plot command input.
+tabs. There is no console and no b2plot command input. The window opens
+on the whole screen and keeps that aspect ratio; nothing is saved on the
+system: every start begins from the same state.
 """
 
 import os
@@ -10,7 +13,7 @@ import sys
 import time
 
 from ..b2plot import __version__, backend, labels
-from . import data
+from . import data, theme
 from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
 from .output import state
 from .output.composer import Composer
@@ -29,9 +32,22 @@ def _placeholder(name):
     lay = QtWidgets.QVBoxLayout(w)
     label = QtWidgets.QLabel("%s: coming in a later version." % name)
     label.setAlignment(Qt.AlignCenter)
-    label.setStyleSheet("color: palette(mid);")
+    label.setEnabled(False)
     lay.addWidget(label)
     return w
+
+
+class SessionSettings:
+    """Settings of one session (QSettings interface), in memory only."""
+
+    def __init__(self):
+        self.values = {}
+
+    def value(self, key, default=None):
+        return self.values.get(key, default)
+
+    def setValue(self, key, value):
+        self.values[key] = value
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -39,13 +55,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.settings = QtCore.QSettings("SOLPS-ITER", "b2plot_gui")
+        self.settings = SessionSettings()
+        theme.install_frames(QtWidgets.QApplication.instance())
         self.run = None
         self.record = open(args.record, "wb") if args.record else None
         self.waiting = {}           # request ident -> [(tab, want)]
         self.crash_shown = False
         self._keep = None           # plot settings kept over a reload
         self._stamp = None          # time of b2fstate (live update)
+        self._aspect = None         # width / height, fixed at the start
+        self._sizing = False
+        self._base = None           # (width, font size) at the start
+        self._font = ""             # font size of the stylesheet
+        self._fonts = QtCore.QTimer(self)
+        self._fonts.setSingleShot(True)
+        self._fonts.setInterval(120)
+        self._fonts.timeout.connect(self._scale_fonts)
 
         self.runline = QtWidgets.QLabel()
         self.runline.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -62,6 +87,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.tab2d, "2D plots")
         for name in PLACEHOLDERS:
             self.tabs.addTab(_placeholder(name), name)
+        self.theme_combo = QtWidgets.QComboBox()
+        self.theme_combo.addItems(theme.NAMES)
+        self.theme_combo.setToolTip("Switch between Light and Dark mode")
+        self.theme_combo.currentTextChanged.connect(self.apply_theme)
+        self.tabs.setCornerWidget(self.theme_combo, Qt.TopRightCorner)
         body = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(body)
         lay.setContentsMargins(6, 4, 6, 0)
@@ -78,6 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().addPermanentWidget(self.busy)
         self._menus()
         self.resize(1500, 950)
+        self.apply_theme("Light")
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
@@ -96,9 +127,9 @@ class MainWindow(QtWidgets.QMainWindow):
         a.setShortcut(QtGui.QKeySequence("Ctrl+R"))
         a.triggered.connect(lambda *_: self.reload())
         m.addSeparator()
-        a = m.addAction("Export figure\u2026")
+        a = m.addAction("Print figure\u2026")
         a.setShortcut(QtGui.QKeySequence(keys.Save))
-        a.triggered.connect(lambda *_: self.tab2d.export_figure())
+        a.triggered.connect(lambda *_: self.tab2d.print_figure())
         a = m.addAction("Export values\u2026")
         a.setShortcut(QtGui.QKeySequence("Ctrl+E"))
         a.setToolTip("Values of the quantity shown, written by b2plot")
@@ -343,6 +374,86 @@ class MainWindow(QtWidgets.QMainWindow):
             "matplotlib %s\nData from b2pl.exe; drawing by matplotlib."
             % (__version__, v[0], v[1], v[2],
                PYSIDE6_VERSION, matplotlib.__version__))
+
+    # ------------------------------------------------------------- theme
+    def apply_theme(self, name):
+        """Light or Dark: the widgets (stylesheet) and every plot."""
+        theme.set_dark(name == "Dark")
+        if self.theme_combo.currentText() != name:
+            self.theme_combo.setCurrentText(name)
+        self.setStyleSheet(theme.stylesheet(self._font))
+        self.tab2d.apply_theme()
+        if self.composer.isVisible():
+            self.composer._changed()
+
+    # ------------------------------------------------------------ geometry
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._aspect is None:
+            self.fit_to_screen()
+            QtCore.QTimer.singleShot(0, self.fit_to_screen)
+
+    def fit_to_screen(self):
+        """The window on the available area of its screen (frame
+        included); its aspect ratio is kept from then on and the plot
+        scales with it."""
+        screen = self.screen() or QtGui.QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        g = screen.availableGeometry()
+        frame, inner = self.frameGeometry(), self.geometry()
+        left, top = inner.x() - frame.x(), inner.y() - frame.y()
+        right = frame.width() - inner.width() - left
+        bottom = frame.height() - inner.height() - top
+        rect = QtCore.QRect(g.x() + left, g.y() + top,
+                            g.width() - left - right,
+                            g.height() - top - bottom)
+        self._sizing = True
+        self.setGeometry(rect)
+        self._sizing = False
+        self._aspect = rect.width() / max(rect.height(), 1)
+        self._base = (rect.width(), QtGui.QFont(self.font()))
+        self._font = ""
+        QtCore.QTimer.singleShot(0, self.tab2d.freeze_scale)
+
+    def resizeEvent(self, event):
+        """A resize keeps the aspect ratio of the start: the side moved
+        more decides the size."""
+        super().resizeEvent(event)
+        if self._aspect is None or self._sizing:
+            return
+        self._fonts.start()
+        w, h = event.size().width(), event.size().height()
+        if abs(w / max(h, 1) - self._aspect) * h < 2:
+            return
+        old = event.oldSize()
+        if abs(w - old.width()) >= abs(h - old.height()):
+            h = round(w / self._aspect)
+        else:
+            w = round(h * self._aspect)
+        QtCore.QTimer.singleShot(0, lambda: self._resize(w, h))
+
+    def _resize(self, w, h):
+        self._sizing = True
+        self.resize(w, h)
+        self._sizing = False
+        self._fonts.start()
+
+    def _scale_fonts(self):
+        """Fonts in proportion to the width of the window, so that every
+        part keeps its proportions (the plot scales by itself)."""
+        if self._base is None:
+            return
+        width, base = self._base
+        k = self.width() / width
+        font = "%.2fpt" % max(base.pointSizeF() * k, 4.0) if \
+            base.pointSizeF() > 0 else "%dpx" % max(round(
+                base.pixelSize() * k), 5)
+        if abs(k - 1.0) < 0.005:
+            font = ""
+        if font != self._font:
+            self._font = font
+            self.setStyleSheet(theme.stylesheet(font))
 
     def closeEvent(self, event):
         self._timer.stop()

@@ -28,12 +28,13 @@ HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
 
 
 class MouseTools(QtWidgets.QWidget):
-    """Mode buttons over a Plot2D canvas (pan and zoom of the tool bar go
-    off when a mode goes on, and a mode waits while they are on)."""
+    """Mode buttons over a Plot2D canvas (pan and zoom of the navigation
+    bar go off when a mode goes on, and a mode waits while they are on)."""
 
     done = Signal(str, object)      # mode, (n, 2) array of R, Z
     shown = Signal()                # statistics of the cells shown
     hint = Signal(str)
+    changed = Signal()              # a mode went on or off
 
     def __init__(self, canvas, plot, toolbar, parent=None):
         super().__init__(parent)
@@ -41,24 +42,23 @@ class MouseTools(QtWidgets.QWidget):
         self.mode, self.points, self.shape = None, [], None
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(QtWidgets.QLabel("Mouse"))
+        row.setSpacing(4)
         self.buttons = {}
         for text, key, tip in MODES:
-            b = QtWidgets.QToolButton()
+            b = QtWidgets.QPushButton()
             b.setText(text)
             b.setToolTip(tip)
             b.setCheckable(True)
             b.toggled.connect(lambda on, k=key: self._toggled(k, on))
             row.addWidget(b)
             self.buttons[key] = b
-        stats = QtWidgets.QToolButton()
-        stats.setText("Statistics of the cells shown")
-        stats.setToolTip("Volume integral, average, minimum, maximum and "
-                         "histogram of the quantity over the cells shown "
-                         "(Cells shown: index ranges, regions, Only where)")
-        stats.clicked.connect(lambda *_: self.shown.emit())
-        row.addWidget(stats)
-        row.addStretch(1)
+        self.stats = QtWidgets.QPushButton("Statistics")
+        self.stats.setToolTip(
+            "Volume integral, average, minimum, maximum and histogram of the "
+            "quantity over the cells shown (Cells shown: index ranges, "
+            "regions, Only where)")
+        self.stats.clicked.connect(lambda *_: self.shown.emit())
+        row.addWidget(self.stats)
         canvas.mpl_connect("button_press_event", self._press)
         canvas.mpl_connect("motion_notify_event", self._move)
         canvas.mpl_connect("key_press_event", self._key)
@@ -84,6 +84,7 @@ class MouseTools(QtWidgets.QWidget):
             self.mode = None
         self.points = []
         self._draw([])
+        self.changed.emit()
 
     def _press(self, event):
         if self.mode is None or event.inaxes is not self.plot.ax or \

@@ -6,6 +6,7 @@ import matplotlib.tri as mtri
 from matplotlib.collections import PolyCollection
 
 from ...b2plot.render import HATCHES
+from .. import theme
 from .styles import cmap_for, levels_for, norm_for
 
 CELL_TEXTS = 400                # most cells with their values written
@@ -77,7 +78,7 @@ class ScalarMixin:
             if st.scale == "log":
                 vals = np.ma.masked_less_equal(vals, 0.0)
             pc.set(array=vals, cmap=cmap, norm=norm, visible=True)
-            pc.set_edgecolor("k" if st.edges else "face")
+            pc.set_edgecolor(theme.rgb("k") if st.edges else "face")
             pc.set_linewidth(0.15 if st.edges else 0.3)
             self.mappable = pc
         else:
@@ -106,7 +107,7 @@ class ScalarMixin:
             if st.scale == "log":
                 vals = np.ma.masked_less_equal(vals, 0.0)
             pc.set(array=vals, cmap=cmap, norm=norm, visible=True)
-            pc.set_edgecolor("k" if st.edges else "face")
+            pc.set_edgecolor(theme.rgb("k") if st.edges else "face")
             pc.set_linewidth(0.1 if st.edges else 0.3)
             self.mappable = pc
         else:
@@ -132,7 +133,7 @@ class ScalarMixin:
             self.field_artists.append(self.ax.text(
                 centres[i, 0], centres[i, 1], "%.3g" % values[i],
                 fontsize=size, ha="center", va="center", zorder=5.8,
-                clip_on=True))
+                clip_on=True, color=theme.rgb("black")))
 
     def _contours(self, tri, z, norm, st, given=None):
         lev = levels_for(st, norm, given)
@@ -148,7 +149,7 @@ class ScalarMixin:
                                      norm=norm, extend="both", zorder=1.0)
             if st.fill_lines:
                 lines = self.ax.tricontour(tri, z, levels=lev, zorder=2.0,
-                                           colors=st.line_color,
+                                           colors=[theme.rgb(st.line_color)],
                                            linewidths=st.line_width,
                                            linestyles=st.line_style)
                 if st.line_labels:
@@ -156,8 +157,9 @@ class ScalarMixin:
                                    fmt=lambda v: f"{v:.3g}")
                 self.field_artists.append(lines)
         else:
-            kw = dict(colors="black" if st.bw else st.line_color) if (
-                st.line_mono or st.bw) else dict(cmap=cmap, norm=norm)
+            one = theme.rgb("black" if st.bw else st.line_color)
+            kw = dict(colors=[one]) if (st.line_mono or st.bw) else dict(
+                cmap=cmap, norm=norm)
             cs = self.ax.tricontour(tri, z, levels=lev, zorder=2.0,
                                     linewidths=st.line_width,
                                     linestyles=st.line_style, **kw)
