@@ -29,8 +29,9 @@ HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
 
 
 class MouseTools(QtWidgets.QWidget):
-    """Mode buttons over a Plot2D canvas (pan and zoom of the navigation
-    bar go off when a mode goes on, and a mode waits while they are on)."""
+    """Mode buttons of a Plot2D canvas, one under the other (pan and zoom
+    of the navigation bar go off when a mode goes on, and a mode waits
+    while they are on)."""
 
     done = Signal(str, object)      # mode, (n, 2) array of R, Z
     shown = Signal()                # statistics of the cells shown
@@ -41,9 +42,9 @@ class MouseTools(QtWidgets.QWidget):
         super().__init__(parent)
         self.canvas, self.plot, self.toolbar = canvas, plot, toolbar
         self.mode, self.points, self.shape = None, [], None
-        row = QtWidgets.QHBoxLayout(self)
+        row = QtWidgets.QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(4)
+        row.setSpacing(3)
         self.buttons = {}
         for text, key, tip in MODES:
             b = QtWidgets.QPushButton()

@@ -19412,8 +19412,9 @@ keeps that aspect ratio (texts and the plot scale with it); the theme is
 light or dark (in the dark one the plot colours are dimmed). Nothing is
 saved but the list of runs of the session (in the temporary folder): each
 start begins with nothing plotted, the default layers and no derived
-quantities. The 2D tab has three columns of fixed width: 30, 50 and 20 \%
-of the window.
+quantities. The 2D tab has four columns of fixed width: the quantity panel
+(25 \% of the window), the commands of the plot (5 \%), the plot
+(50 \%) and the layers (20 \%).
 
 The {\bf quantity panel} (left):
 \begin{itemize}
@@ -19470,17 +19471,20 @@ The {\bf quantity panel} (left):
 \end{itemize}
 
 The {\bf plot} (centre) shows the physical domain only, in a box that
-never moves; at its right the colour bar of the quantity and, right of
-it, the colour bar of the wall strip (empty frames when nothing is
-plotted; filled contours too get a plain rectangle). Over the plot:
-{\tt Zoom}, {\tt Unzoom}, {\tt Rezoom}, {\tt Restore} and the mouse
-tools; under them {\tt Add to page}, {\tt Page composer}, {\tt Print
-figure} (png, jpg, eps, pdf or svg; vector or raster content at a
-resolution; colour space rgb, cmyk or gray; light or dark theme),
-{\tt Export field} and a one-line readout of $R$, $Z$, $\rho_{pol}$
-(with {\tt rzpsi.dat}) and the value of the quantity shown under the
-cursor, its number and unit in bold (in smaller text when the line
-would not fit). The view starts on
+never moves, from the top of its column; at its right the colour bar of
+the quantity and, right of it, the colour bar of the wall strip (empty
+frames when nothing is plotted; filled contours too get a plain
+rectangle). The {\bf commands} of the plot stand one under the other in
+the narrow column at its left, from the height of the top of the plot
+box, in groups: {\tt Zoom}, {\tt Unzoom},
+{\tt Rezoom}, {\tt Restore}; the mouse tools; {\tt Add to page},
+{\tt Page composer}; {\tt Print figure} (png, jpg, eps, pdf or svg;
+vector or raster content at a resolution; colour space rgb, cmyk or
+gray; light or dark theme), {\tt Export field}; then the readout of the
+cursor, as plain text one item a line: $R$, $Z$, $\rho_{pol}$ (with
+{\tt rzpsi.dat}) and the value of the quantity shown, its number and
+unit in bold (in smaller text when the widest line would not fit). The
+view starts on
 the grid and the device structure, which is also the widest view
 ({\tt Restore}). Dragging the plot with the left button pans it, the
 mouse wheel zooms around the cursor (10\,\% a wheel step); neither goes
