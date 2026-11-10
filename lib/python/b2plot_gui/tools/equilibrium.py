@@ -2,57 +2,11 @@
 (the cells from the west target to the east one, or around a closed
 tube), the derived quantities (pitch, distances along the tube as DSPOL
 and DSPAR of the MDSplus snapshot, poloidal flux expansion, grazing angle
-on the wall, safety factor) and the names of the regions of the standard
-topologies, identified as B2.5 does (geometryId of b2mod_geometry)."""
+on the wall, safety factor) and the 2D maps of them."""
 
 import numpy as np
 
 from ..model import Field
-
-# volume regions of the standard topologies, by their number (manual,
-# appendix Region definitions)
-VOLUME = {
-    1: ("plasma",),
-    2: ("core", "Scrape-Off Layer"),
-    4: ("core", "Scrape-Off Layer", "Western divertor", "Eastern divertor"),
-    5: ("core", "Scrape-Off Layer", "inboard divertor", "outboard divertor",
-        "island"),
-    7: ("core", "Scrape-Off Layer", "inboard divertor",
-        "outboard divertor entrance", "outboard divertor leg 1",
-        "outboard divertor leg 2", "outboard divertor leg 3"),
-    8: ("left core", "left SOL", "left inboard divertor",
-        "left outboard divertor", "right core", "right SOL",
-        "right inboard divertor", "right outboard divertor")}
-TUBES = {1: "Core", 2: "SOL", 3: "PFR"}
-# GEOMETRY_ID declared by the grid generator that B2.5 keeps (limiter to
-# DDN; any other is the general topology) and its number of regions
-DECLARED = {3: 2, 4: 4, 5: 8, 6: 8, 7: 8}
-
-
-def region_names(run, geo):
-    """({volume region: name}, {flux tube region: name}) when the topology
-    is a standard one, else (None, None): a declared GEOMETRY_ID (written
-    only by grid generators with topological data) must be one B2.5 keeps;
-    without it the number of volume regions decides (7 regions: two
-    X-points, a snowflake)."""
-    reg = geo.get("cvReg")
-    if reg is None or not len(reg):
-        return None, None
-    n = int(reg.max())
-    gid = geo.scalar("GEOMETRY_ID")
-    if gid is not None and DECLARED.get(gid) != n:
-        return None, None
-    if n not in VOLUME or (n == 7 and len(run.geometry.xpoints) != 2):
-        return None, None
-    names = list(VOLUME[n])
-    if n == 4:                      # single null: lower or upper
-        xp, core = run.geometry.xpoints, reg == 1
-        if len(xp) and core.any() and geo.get("cvY") is not None:
-            lower = xp[0][1] < np.mean(geo.get("cvY")[core])
-            names[2] += ", inboard" if lower else ", outboard"
-            names[3] += ", outboard" if lower else ", inboard"
-    return dict(enumerate(names, 1)), TUBES
-
 
 def chain(geo, i, ncv, nfc):
     """The flux tube of cell i (0-based), or None: dict(cells: in order,

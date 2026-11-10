@@ -20,8 +20,9 @@ from .model import (MovieFile, MovieVar, PsiMap, TriMesh, make_field,
 CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 
 OP = protocol.OPCODES
-LAYER_ROLES = {1: "structure", 2: "separatrices", 3: "boundary",
-               4: "device", 5: "wall", 7: "trajectories"}
+# overlay roles of b2plot: 1 mesh.extra, 4 structure.dat
+LAYER_ROLES = {1: "vessel", 2: "separatrices", 3: "boundary",
+               4: "structure", 5: "wall", 7: "trajectories"}
 NAMED = {6: "chords: ", 8: "target: "}  # overlay roles sent per name
 
 
@@ -48,7 +49,6 @@ class Run:
         self.geometry = None
         self.layers = {}            # role name -> (n, 4) segments
         self.layer_colours = {}     # role name -> colour index per segment
-        self.marks = {}             # label text -> (R, Z), e.g. midplanes
         self.palette = {}           # colour index -> (r, g, b) of b2plot
         self.trimesh = None
         self.psimap = None

@@ -3,13 +3,15 @@ contours, restricted to the cells shown."""
 
 import numpy as np
 import matplotlib.tri as mtri
-from matplotlib.collections import PolyCollection
+from matplotlib.collections import LineCollection, PolyCollection
 
 from ...b2plot.render import HATCHES
 from .. import theme
+from ..catalog import GUARD
 from .styles import cmap_for, levels_for, norm_for
 
 CELL_TEXTS = 400                # most cells with their values written
+GUARD_ZORDER = 3.4              # boundary faces of the guard cells
 
 
 def node_values(trimesh, values):
@@ -57,9 +59,57 @@ class ScalarMixin:
     def _column(self, data, style):
         return min(max(style.column, 0), len(data.columns) - 1)
 
+    def _mask_field(self, f, st, col):
+        """A mask (st.mask: its cells not zero in one colour, no colour
+        bar) or a label with its values on the guard cells (rc, bc: in the
+        colour scale). The guard cells (without area) not zero are drawn
+        on their boundary faces, which they span."""
+        g = self.run.geometry
+        self.drawn = 0
+        if st.mask:
+            rows = np.flatnonzero(self.mask)
+            v = f.values[col][g.cells[rows] - 1]
+            on = rows[np.isfinite(v) & (v != 0)]
+            pc = PolyCollection([g.polygons[i] for i in on], zorder=1.0,
+                                facecolors=theme.rgb(st.mask),
+                                edgecolors=theme.rgb("k") if st.edges else
+                                "face", linewidths=0.15 if st.edges else 0.3)
+            self.ax.add_collection(pc, autolim=False)
+            self.field_artists.append(pc)
+            self.drawn = len(on)
+        rows = np.flatnonzero(~g.visible)
+        vals = f.values[col][g.cells[rows] - 1]
+        segs, keep = [], []
+        for k in np.flatnonzero(np.isfinite(vals) & (vals != 0)):
+            p = np.asarray(g.polygons[rows[k]], float)
+            d = ((p[:, None, :] - p[None, :, :]) ** 2).sum(-1)
+            i, j = np.unravel_index(np.argmax(d), d.shape)
+            if d[i, j] > 0:
+                segs.append(p[[i, j]])
+                keep.append(k)
+        self.mappable = None
+        if segs:
+            lc = LineCollection(segs, linewidths=3.0, capstyle="butt",
+                                zorder=GUARD_ZORDER)
+            if st.mask:
+                lc.set_color(theme.rgb(st.mask))
+            else:
+                v = vals[keep]
+                norm = norm_for(v, st)
+                lc.set(array=v, cmap=cmap_for(st, norm), norm=norm)
+                self.mappable = lc
+            self.ax.add_collection(lc, autolim=False)
+            self.field_artists.append(lc)
+        self.drawn += len(segs)
+        if self._cell_pc is not None:
+            self._cell_pc.set_visible(False)
+
     def _cell_field(self, f, st):
         g = self.run.geometry
         col = self._column(f, st)
+        if st.mask or GUARD.fullmatch(f.name or ""):
+            self._mask_field(f, st, col)
+            return
         rows = np.flatnonzero(self.mask)
         cell_values = f.values[col][g.cells[rows] - 1]
         norm = norm_for(cell_values, st)

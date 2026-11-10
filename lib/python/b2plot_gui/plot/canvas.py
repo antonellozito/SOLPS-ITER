@@ -16,6 +16,7 @@ from ...b2plot import labels
 from .. import theme
 from .overlays import LayerMixin
 from .scalar import ScalarMixin
+from .masks import MaskMixin
 from .styles import LAYERS, LabelStyle, PlotStyle
 from .surface import SurfaceMixin
 from .texts import TextMixin
@@ -24,7 +25,8 @@ from .vector import VectorMixin
 TOP = 3.0       # room over a fixed plot: title, header and extra label line
 
 
-class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
+class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
+             MaskMixin):
     """One axes (a 3D one for surfaces) with a colour-bar slot at its right
     and, right of it, the slot of the wall strip colour bar. fixed: the
     boxes do not depend on the texts and both slots are always there,
@@ -55,7 +57,9 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         self.field_artists = []
         self.data = None
         self.style = PlotStyle()
+        self.masks, self.mask_artists = [], []
         self.mappable = None
+        self.drawn = None
         self.cbar = None
         self._cell_pc = None
         self._cell_key = None
@@ -123,6 +127,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         if self.run is not None:
             for key in LAYERS:
                 self._build_layer(key)
+            self.draw_masks()
 
     # --------------------------------------------------------------- run
     def set_run(self, run, hover=True):
@@ -145,6 +150,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
             self.ecentres = np.column_stack((t.x, t.y))[t.triangles].mean(1)
         for key in LAYERS:
             self._build_layer(key)
+        self.masks, self.mask_artists = [], []  # of the run: set again
         self.set_view(self.full_box())
 
 
@@ -177,6 +183,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         and "lines" to (data, OverlayStyle) drawn over it, "mask" to a cell
         field shown where it is positive."""
         self.clear_field()
+        self.drawn = None       # mask and guard labels: cells or faces drawn
         self.data, self.style = data, replace(style)
         self.unit = data.unit if unit is None else unit
         if data is None:
@@ -202,7 +209,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
     def full_extent(self):
         g = self.run.geometry
         pts = [g.vx[np.unique(g.triangles)]]
-        for key in ("structure", "device"):
+        for key in ("structure", "vessel"):
             seg = self.run.layers.get(key)
             if seg is not None and len(seg):
                 pts.append(seg.reshape(-1, 2))

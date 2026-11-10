@@ -1,8 +1,9 @@
-"""The geometry files of a run for the cell inspector, found as B2.5 finds
-them (the run directory, .., ../baserun, ../../baserun): the B2.5 grid
-geometry of b2fgmtry (b2fgmtry_us first; the variables documented in
-b2cdcv) and the EIRENE triangles of fort.33 (nodes), fort.34 (corners)
-and fort.35 (neighbours). Arrays are read when first asked for."""
+"""Files of a run read by the GUI, found as B2.5 finds them (the run
+directory, .., ../baserun, ../../baserun): the B2.5 grid geometry of
+b2fgmtry (b2fgmtry_us first; the variables documented in b2cdcv), the
+EIRENE triangles of fort.33 (nodes), fort.34 (corners) and fort.35
+(neighbours), and the midplane segments rzimp and rzomp of
+b2.user.parameters. Arrays are read when first asked for."""
 
 import os
 import re
@@ -139,3 +140,70 @@ def _rows(path):
         first = f.readline().split()
         words = first + f.read().split()
     return np.array(words[:n * len(first)], int).reshape(n, len(first))
+
+
+_NUMBER = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eEdD][-+]?\d+)?")
+_ITEM = re.compile(r"\b(rz[io]mp)\s*\(\s*(\d)\s*,\s*(\d)\s*\)\s*=", re.I)
+
+
+def midplane_points(rundir):
+    """{"inner": ((R1, Z1), (R2, Z2)), "outer": ...}: the segments rzimp
+    and rzomp of b2.user.parameters (a Fortran namelist; rz(1, k) is the
+    R of point k, rz(2, k) its Z; values after one index fill the next
+    ones in column order), those given completely."""
+    path = find(rundir, "b2.user.parameters")
+    if path is None:
+        return {}
+    with open(path) as f:
+        text = "\n".join(line.split("!")[0] for line in f)
+    values = {"rzimp": np.full(4, np.nan), "rzomp": np.full(4, np.nan)}
+    items = list(_ITEM.finditer(text))
+    for k, m in enumerate(items):
+        end = items[k + 1].start() if k + 1 < len(items) else len(text)
+        rhs = re.split(r"[A-Za-z_]\w*\s*(?:\(|=)|/", text[m.end():end])[0]
+        start = int(m.group(2)) - 1 + 2 * (int(m.group(3)) - 1)
+        for j, word in enumerate(_NUMBER.findall(rhs)):
+            if start + j < 4:
+                values[m.group(1).lower()][start + j] = float(
+                    word.replace("d", "e").replace("D", "E"))
+    out = {}
+    for name, side in (("rzimp", "inner"), ("rzomp", "outer")):
+        v = values[name]
+        if np.isfinite(v).all() and (v[0], v[1]) != (v[2], v[3]):
+            out[side] = ((v[0], v[1]), (v[2], v[3]))
+    return out
+
+
+def inside_segments(p0, p1, inside, n=4001):
+    """The parts of the segment p0-p1 where inside(points) holds, as rows
+    (R0, Z0, R1, Z1), sampled at n points."""
+    t = np.linspace(0.0, 1.0, n)
+    pts = np.asarray(p0, float) + t[:, None] * (np.asarray(p1, float) -
+                                                np.asarray(p0, float))
+    ok = np.asarray(inside(pts), bool)
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], ok.astype(int),
+                                                   [0]))))
+    return np.array([np.concatenate((pts[a], pts[b - 1]))
+                     for a, b in zip(edges[::2], edges[1::2]) if b - a > 1]
+                    ).reshape(-1, 4)
+
+
+_NAME = re.compile(r"([A-Za-z_]\w*(?:\([^)]*\))?)\s*=")
+
+
+def namelist(path):
+    """{name: [values as text]} of the variables of a Fortran namelist
+    file (lower-case names, indexed ones such as enepar(1,1) with their
+    index); {} without the file."""
+    if path is None:
+        return {}
+    with open(path) as f:
+        text = "\n".join(line.split("!")[0] for line in f)
+    items = list(_NAME.finditer(text))
+    out = {}
+    for k, m in enumerate(items):
+        end = items[k + 1].start() if k + 1 < len(items) else len(text)
+        rhs = text[m.end():end].split("/")[0]
+        out[m.group(1).lower()] = re.findall(r"'[^']*'|\"[^\"]*\"|[^\s,]+",
+                                             rhs)
+    return out

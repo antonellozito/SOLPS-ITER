@@ -302,3 +302,42 @@ class StreamBox(_Box):
                     stream_style=self.stream_style.currentData(),
                     seeds=self.seeds, num_arrows=self.num_arrows.value(),
                     seed_markers=self.markers.isChecked())
+
+
+class MaskBox(_Box):
+    """Integer argument and colour of a mask quantity (a label with an
+    integer argument, as ixeq, or of cells set to 1, as bdcl): its cells
+    not zero in the colour, the others not drawn, no colour bar."""
+
+    argument_changed = Signal(int)
+
+    def __init__(self, parent=None):
+        super().__init__("Mask", parent)
+        form = QtWidgets.QFormLayout(self)
+        self.argument = QtWidgets.QSpinBox()
+        self.argument.setRange(-99999, 99999)
+        self.argument.setValue(1)
+        self.argument.setKeyboardTracking(False)
+        self.argument.setToolTip("Integer argument of the quantity (b2plot "
+                                 "pushes it before the label: 1 ixeq)")
+        self.argument.valueChanged.connect(self.argument_changed)
+        self.colour = ColorButton("#d62728")
+        self.colour.setToolTip("Colour of the cells where the quantity is "
+                               "not zero")
+        self.argument_label = QtWidgets.QLabel("Argument")
+        form.addRow(self.argument_label, self.argument)
+        form.addRow("Colour", self.colour)
+        self._watch(colours=(self.colour,))
+
+    def show_argument(self, on):
+        """The argument row only for the labels that take one."""
+        self.argument_label.setVisible(on)
+        self.argument.setVisible(on)
+
+    def set_argument(self, value):
+        self.argument.blockSignals(True)
+        self.argument.setValue(value)
+        self.argument.blockSignals(False)
+
+    def style_fields(self):
+        return dict(mask=self.colour.color())

@@ -1,23 +1,29 @@
 """Overlays of the 2D plot: the layers of the run (structure, grids,
-separatrices, flux surfaces, chords, trajectories) and further quantities
-over the field (vectors, contour lines, the wall strip)."""
+separatrices, flux surfaces, midplanes, targets, chords, trajectories) and
+further quantities over the field (vectors, contour lines, the wall
+strip)."""
 
 from dataclasses import replace
 
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
-from matplotlib.patches import PathPatch
-from matplotlib.path import Path
 from matplotlib.text import Text
 
 from .. import theme
 from ..catalog import CHORD_POINTS
 from . import shapes
 from .scalar import node_values
-from .styles import (FILLS, ZORDER, PlotStyle, cmap_for, even_levels,
-                     norm_for)
+from .styles import (FILL_ZORDER, HATCH, ZORDER, PlotStyle, cmap_for,
+                     even_levels, norm_for)
 
-FAR = 1.0e4                     # metres: lines and masks beyond any view
+
+def structure(run):
+    """Segments of the structure: structure.dat, else mesh.extra."""
+    for key in ("structure", "vessel"):
+        seg = run.layers.get(key)
+        if seg is not None and len(seg):
+            return seg
+    return np.zeros((0, 4))
 
 
 class LayerMixin:
@@ -30,29 +36,18 @@ class LayerMixin:
                 [] if old is None else [old]):
             a.remove()
         art = None
-        if key in ("structure", "device", "separatrices", "boundary",
-                   "targets"):
+        if key == "structure":
+            seg = structure(run)
+            if len(seg):
+                polys = shapes.solid(seg, run.geometry.centres)
+                art = [LineCollection(seg.reshape(-1, 2, 2))] + (
+                    [PolyCollection(polys)] if polys else [])
+        elif key in ("separatrices", "boundary", "targets", "midplanes"):
             seg = run.layers.get(key) if key != "targets" else np.vstack(
                 [np.zeros((0, 4))] + [v for k, v in run.layers.items()
                                       if k.startswith("target: ")])
             if seg is not None and len(seg):
                 art = LineCollection(seg.reshape(-1, 2, 2))
-        elif key == "zero":
-            art = LineCollection([[(-FAR, 0.0), (FAR, 0.0)],
-                                  [(0.0, -FAR), (0.0, FAR)]])
-        elif key == "filled":
-            polys = shapes.solid(run.layers.get("device", []),
-                                 run.geometry.centres)
-            art = PolyCollection(polys) if polys else None
-        elif key == "outside" and run.trimesh is not None:
-            loop = shapes.outline(run.trimesh)
-            box = np.array([[-FAR, -FAR], [-FAR, FAR], [FAR, FAR],
-                            [FAR, -FAR], [-FAR, -FAR]])
-            art = PathPatch(Path(np.vstack((box, loop)), np.concatenate((
-                [Path.MOVETO], [Path.LINETO] * 3, [Path.CLOSEPOLY],
-                [Path.MOVETO], [Path.LINETO] * (len(loop) - 2),
-                [Path.CLOSEPOLY]))))
-            self.ax.add_patch(art)
         elif key == "chords":
             art = self._chords(run.layers)
         elif key == "trajectories" and len(run.layers.get(key, [])):
@@ -60,12 +55,6 @@ class LayerMixin:
             art = LineCollection(seg.reshape(-1, 2, 2), colors=theme.rgb_array(
                 [run.palette.get(c, (0.5, 0.5, 0.5)) for c in
                  run.layer_colours.get(key, [1] * len(seg))]))
-        elif key == "labels":
-            art = [self.ax.text(r, z, text, ha="center", va="center",
-                                clip_on=True, bbox=dict(
-                                    boxstyle="round,pad=0.15", fc="white",
-                                    ec="none", alpha=0.6))
-                   for text, r, z in shapes.label_points(run)]
         elif key == "grid":
             art = LineCollection([np.vstack((p, p[:1]))
                                   for p in run.geometry.polygons])
@@ -83,6 +72,9 @@ class LayerMixin:
             art = self._flux_surfaces(st)
         if isinstance(art, (LineCollection, PolyCollection)):
             self.ax.add_collection(art, autolim=False)
+        elif key == "structure" and art is not None:    # lines and fill
+            for a in art:
+                self.ax.add_collection(a, autolim=False)
         if art is not None:
             self.layer_artists[key] = art
             self._restyle(key)
@@ -142,11 +134,26 @@ class LayerMixin:
         art, st = self.layer_artists.get(key), self.layer_styles[key]
         if art is None:
             return
+        if key == "structure":
+            art[0].set(edgecolor=theme.rgb(st.color), facecolor="none",
+                       linewidth=st.width, linestyle=st.style,
+                       alpha=st.alpha, visible=st.visible,
+                       zorder=ZORDER[key])
+            fill = theme.rgb(st.fill or "#e0e0e0")
+            hatched = st.fill_style == "pattern"
+            for a in art[1:]:
+                a.set(facecolor="none" if hatched else fill,
+                      edgecolor=fill if hatched else "none", linewidth=0.0,
+                      hatch=HATCH if hatched else None, alpha=st.alpha,
+                      visible=st.visible and st.fill_style != "empty",
+                      zorder=FILL_ZORDER)
+                if hasattr(a, "set_hatchcolor"):    # matplotlib 3.10
+                    a.set_hatchcolor(fill)
+            return
         if isinstance(art, list):
             for a in art:
                 if isinstance(a, Text):
-                    a.set(color=theme.rgb(st.color),
-                          fontsize=st.width if key == "labels" else 7.0,
+                    a.set(color=theme.rgb(st.color), fontsize=7.0,
                           alpha=st.alpha,
                           visible=st.visible, zorder=ZORDER[key] + 0.01)
                 else:
@@ -162,10 +169,6 @@ class LayerMixin:
             art.set(color=theme.rgb(st.color), markersize=st.width,
                     markeredgewidth=max(st.width / 5.0, 1.0),
                     alpha=st.alpha, visible=st.visible)
-        elif key in FILLS:
-            art.set(facecolor=theme.rgb(st.color), edgecolor="none",
-                    alpha=st.alpha,
-                    visible=st.visible)
         else:
             art.set(edgecolor=theme.rgb(st.color), facecolor="none",
                     linewidth=st.width,

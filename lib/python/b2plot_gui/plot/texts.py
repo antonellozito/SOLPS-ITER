@@ -89,8 +89,9 @@ class TextMixin:
 
     def _colorbar(self, data, st):
         self._drop_colorbar()
-        if self.mappable is None or not st.colorbar:
-            self._placeholder()
+        if self.mappable is None or not st.colorbar or any(
+                m[0] == "cells" for m in getattr(self, "masks", ())):
+            self._placeholder()     # nothing, or a cell mask over it
             return
         self.cax.set_visible(True)
         self.cbar = self.fig.colorbar(self.mappable, cax=self.cax,

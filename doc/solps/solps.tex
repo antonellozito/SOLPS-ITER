@@ -19438,6 +19438,17 @@ The {\bf quantity panel} (left):
   the wall and target faces of the B2.5 grid);
 \item the species, including the sum over the species (\btwoplot
   {\tt sumz}, {\tt esumz});
+\item {\tt Mask}, shown for the masks of the group {\tt Cell masks and
+  indices}: the labels with an integer argument ({\bf ixeq}, {\bf nreg},
+  {\bf freg}, {\bf tlbl}, \ldots), with the argument $i$ (sent as
+  {\tt i ixeq}), and the labels of cells set to 1 ({\bf bdcl},
+  {\bf gdcl}, {\bf rlcl}, {\bf npcl}, {\bf iimp}, {\bf iomp}); the
+  colour of the cells where the quantity is not zero, the others are left
+  empty, as patches without a colour bar. Guard cells have no area: those
+  not zero are drawn on the boundary face they span, as are the values of
+  {\bf rc} (recycling stratum) and {\bf bc} (boundary condition), which
+  B2.5 sets on the guard cells. A mask that is zero in every cell is
+  reported in the status bar;
 \item the plot type: patch, filled contour, contour lines, quiver,
   streamlines, or quiver and streamlines;
 \item the colour scale: colour map, linear, logarithmic or symmetric
@@ -19515,12 +19526,35 @@ shown. The results appear, one per line, in a small window and can be
 exported as CSV. The seed line of the streamlines is drawn with
 {\tt Draw seed line} of the streamline options.
 
-The {\bf layers panel} (right) shows and styles the device structure
-(from {\tt structure.dat}), the vessel ({\tt mesh.extra}), the
-separatrices, the X-points, the grid boundary, the B2.5 grid, the EIRENE
-grid and flux surfaces (from {\tt rzpsi.dat}, normalised $\psi_N =
-(\psi-\psi_O)/(\psi_S-\psi_O)$ or $\rho_{pol}$, with the O-point and the
-primary X-point found from the $\psi$ map).
+The {\bf layers panel} (right) shows and styles the structure (its
+closed parts empty, filled or hatched in a colour of their own; from
+{\tt structure.dat}, else from {\tt mesh.extra}), the B2.5 grid, the
+EIRENE grid, the separatrices (these four are shown at first), the
+X-points, the grid boundary, flux surfaces (from {\tt rzpsi.dat}, at
+levels of $\rho_{pol}$ or of the normalised
+$\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$, with the O-point and the
+primary X-point found from the $\psi$ map), the midplanes (the segments
+{\tt RZIMP} and {\tt RZOMP} of {\tt b2.user.parameters}, where they cross
+the B2.5 grid), the divertor targets (the faces of the target face
+regions, as B2.5 collects them), the chords and the trajectories.
+
+The {\bf masks panel}, under the layers, draws regions and labels of
+{\tt b2fgmtry} (Appendix~\ref{lis:b2cdcv}) over the plot, with a legend
+inside the plot box and no colour bar, one cell mask and one face mask at
+a time: {\tt Volume regions} ({\tt cvReg}) and {\tt Topological regions}
+(the region {\tt ftReg} of the flux tube of each cell: core, SOL, PFR)
+fill the internal cells over the quantity; {\tt Face regions}
+({\tt fcReg}), {\tt Boundary labels} ({\tt fcLbl}, the negative ones
+first, the core boundary in black) and {\tt Recycling strata labels}
+(each stratum of kind {\tt 'A'} in {\tt CRCSTRA} holds the boundary
+faces with {\tt RCSTART} $\le$ {\tt fcLbl} $\le$ {\tt RCEND}, as
+read from the file {\tt b2.neutrals.parameters}; the strata of all
+species of one label in one entry) draw the faces over the wall strip.
+The legends give {\tt cvReg}, {\tt ftReg} and {\tt fcReg} with the
+names of the standard topologies of Appendix~\ref{cha:regions}, labels
+and strata by their numbers only. The title names the masks: a cell mask
+covers the quantity, which then loses its title and colour bar; a face
+mask is named after the title of the quantity.
 
 Export:
 \begin{itemize}

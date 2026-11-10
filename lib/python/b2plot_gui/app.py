@@ -309,8 +309,8 @@ class MainWindow(QtWidgets.QMainWindow):
                                  wall=q.source == "wall")
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
-            if role not in ("prefetch", "species", "marks", "traj",
-                            "tools"):
+            if role not in ("prefetch", "species", "traj", "tools",
+                            "eqdata"):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)

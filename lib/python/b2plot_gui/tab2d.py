@@ -7,6 +7,7 @@ import socket
 from dataclasses import replace
 
 import numpy as np
+import matplotlib.tri as mtri
 from matplotlib.figure import Figure
 
 from . import catalog, presets, theme
@@ -15,17 +16,17 @@ from .plot.canvas import Plot2D
 from .plot.styles import KINDS_FLAT, LAYERS
 from .model import split_unit
 from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Qt, Signal
-from .panels.layers import LayersPanel, from_dict
+from .panels.layers import (CELL_MASKS, MASKS, LayersPanel, MasksPanel,
+                            from_dict)
 from .panels.plotarea import READOUT, Columns, PlotCommands, ScaledCanvas
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
 from .output.actions import TabOutput
 from .output.frames import FrameExport
-from .tools import cellfiles, equilibrium, inspect
+from .tools import cellfiles, equilibrium, inspect, regions
 from .tools.control import Tools
 
 MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
-MARKS = {"iimp": ("IMP", np.argmin), "iomp": ("OMP", np.argmax)}
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
             "not recognized", "error")      # in what b2plot prints
 COLUMNS = (0.3, 0.5, 0.2)       # quantity panel, plot, layers
@@ -94,8 +95,17 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         cl.setSpacing(2)
         cl.addWidget(self.commands)
         cl.addWidget(self.canvas, 1)
+        self.masks = MasksPanel()
+        self.mask_keys = []             # the masks drawn
+        self.masks.changed.connect(self._masks_changed)
+        right = QtWidgets.QWidget()
+        rl = QtWidgets.QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.addWidget(self.layers)
+        rl.addWidget(self.masks)
+        rl.addStretch(1)
         self.columns = Columns((_scrolled(self.quantity), centre,
-                                _scrolled(self.layers)), COLUMNS)
+                                _scrolled(right)), COLUMNS)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.columns)
@@ -134,6 +144,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
     # ---------------------------------------------------------------- run
     def set_run(self, run):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
+        self.mask_keys = []
+        run.layers["midplanes"] = self._midplanes(run)
         self.plot.set_run(run)
         self._show_empty()
         self.tools.panel.hide()
@@ -149,8 +161,58 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.cells_box.set_geometry(run.geometry)
         self._set_quantities()
         self._ask_species(run)
+        geometry = any(cellfiles.find(run.rundir, n)
+                       for n in cellfiles.GEOMETRY)
+        self.masks.set_available(
+            [k for k in ("volume", "face", "topological", "labels")
+             if geometry] + (["strata"] if geometry and
+                             regions.recycling_strata(run) else []))
+        self._masks_changed()
         self.setEnabled(True)
         self.toolbar.update()
+        self.canvas.draw_idle()
+
+    @staticmethod
+    def _midplanes(run):
+        """Segments of the midplanes of b2.user.parameters (rzimp, rzomp)
+        where they cross the cells of the B2.5 grid."""
+        g = run.geometry
+        tri = mtri.Triangulation(g.vx[:, 0], g.vx[:, 1], g.triangles)
+        finder = tri.get_trifinder()
+
+        def inside(p):
+            it = finder(p[:, 0], p[:, 1])
+            return (it >= 0) & g.visible[g.tri_cell[np.maximum(it, 0)]]
+        segs = [cellfiles.inside_segments(a, b, inside) for a, b in
+                cellfiles.midplane_points(run.rundir).values()]
+        return np.vstack([np.zeros((0, 4))] + segs)
+
+    def _masks_changed(self):
+        """The masks checked, computed once per run from the files of the
+        run (tools.regions), over the plot."""
+        if self.run is None:
+            return
+        out, cache = [], self.run.__dict__.setdefault("mask_cache", {})
+        want = self.masks.wanted()
+        geo = inspect.files(self.run)[0] if want else None
+        for key in want:
+            if key not in cache:
+                try:
+                    cache[key] = regions.cell_mask(self.run, geo, key) if \
+                        key in CELL_MASKS else regions.face_mask(
+                            self.run, geo, key)
+                except (TypeError, ValueError, IndexError, AttributeError,
+                        OSError):
+                    cache[key] = None
+            if cache[key] is None or not len(cache[key][1]):
+                self.status.emit("No %s in this run" % dict(MASKS)[
+                    key].lower())
+            else:
+                out.append(cache[key])
+        self.plot.set_masks(out)
+        self.mask_keys = [k for k in want if cache.get(k) is not None and
+                          len(cache[k][1])]
+        self.redraw()           # title, colour bar under a cell mask
         self.canvas.draw_idle()
 
     def _ask_species(self, run):
@@ -164,8 +226,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         for q in self.final_quantities:
             if q.name in MASSES:
                 self.request.emit(("species", q, (), None))
-            elif q.name in MARKS:
-                self.request.emit(("marks", q, (), None))
 
     def _set_quantities(self):
         """Quantities of the run (derived ones first), of the source shown
@@ -361,9 +421,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                                           data.values[:, 0] / self.mp)
             self.species_known.emit()
             return
-        if role == "marks":
-            self._mark(q.name, data)
-            return
         warn = [x for x in lines if any(w in x.lower() for w in WARNINGS)]
         if warn and role != "prefetch":
             self.status.emit("b2plot: " + warn[-1])
@@ -431,19 +488,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                 if re.match(r"[A-Za-z]*", names[i]).group(0) == element]
         return (same + ions + [0])[0]
 
-    def _mark(self, name, data):
-        """Label position of a midplane (b2plot iimp, iomp): its cell of
-        smallest R (inner) or largest R (outer)."""
-        g = self.run.geometry
-        rows = np.flatnonzero(np.asarray(data.values[0], float)[
-            g.cells - 1] > 0)
-        if rows.size:
-            text, pick = MARKS[name]
-            self.run.marks[text] = tuple(g.centres[rows[pick(
-                g.centres[rows, 0])]])
-            self.plot._build_layer("labels")
-            self.canvas.draw_idle()
-
     def _draw_trajectories(self):
         """b2plot traj with the settings of the box: weighting by the
         quantity shown (matrix ones), start cells from the Only where
@@ -497,7 +541,16 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             title += "  [%s]" % self.quantity.species.currentText()
         if q is not None and self._source(q):
             title += "  \u2014  " + self.time_box.time_text(q.movie)
-        return title
+        return self._mask_title(title)
+
+    def _mask_title(self, title):
+        """The title with the masks shown: a cell mask covers the
+        quantity, a face mask is named after it."""
+        keys = sorted(self.mask_keys, key=lambda k: k not in CELL_MASKS)
+        names = [dict(MASKS)[k] for k in keys]
+        if keys and keys[0] in CELL_MASKS or not title:
+            return ", ".join(names)
+        return ", ".join([title] + names)
 
     def label_values(self):
         """${NAME} of the label texts: RUN, HOST and TIME (of the run, or
@@ -521,6 +574,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
+        if self.plot.drawn == 0:
+            self.status.emit("%s: zero in every cell shown" % self.data.name)
         title = self._title()
         self.quantity.labels_box.set_title_hint(title)
         self.plot.set_labels(self.quantity.labels_box.style(), title,
@@ -636,8 +691,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         """Nothing plotted: the layers, the colour-bar placeholder and the
         axis labels."""
         self.plot.show_empty()
-        self.plot.set_labels(self.quantity.labels_box.style(), "",
-                             self.label_values())
+        self.plot.set_labels(self.quantity.labels_box.style(),
+                             self._mask_title(""), self.label_values())
         self.canvas.draw_idle()
 
     def _keep_view(self):
