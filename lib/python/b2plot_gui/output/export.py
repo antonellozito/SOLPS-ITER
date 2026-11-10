@@ -11,14 +11,6 @@ MOVIE_EXTS = (".gif", ".mp4")
 MOVIE_FORMATS = ";;GIF movie (*.gif);;MP4 movie (*.mp4, needs ffmpeg)"
 
 
-def component_paths(path, q):
-    """One file per component of a vector, one for a scalar."""
-    if q.source not in ("vector", "evector"):
-        return [path]
-    stem, ext = os.path.splitext(path)
-    return ["%s_%s%s" % (stem, n, ext) for n in (q.poloidal, q.radial)]
-
-
 class PathRow(QtWidgets.QWidget):
     """File name with a Browse button (save dialog)."""
 
@@ -107,56 +99,3 @@ class FigureDialog(QtWidgets.QDialog):
 
     def path(self):
         return self.where.path()
-
-
-class ValuesDialog(QtWidgets.QDialog):
-    """File and format of the values of a quantity, written by b2plot in
-    the formats of the CLI."""
-
-    def __init__(self, settings, q, species, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Export values of %s" % q.name)
-        self.settings, self.q = settings, q
-        eirene = q.source in ("eirene", "evector")
-        form = QtWidgets.QFormLayout(self)
-        self.where = PathRow(settings, "Text (*.txt *.dat);;All files (*)",
-                             q.name.replace(" ", "_") + ".txt")
-        form.addRow("File", self.where)
-        self.fmt = QtWidgets.QComboBox()
-        if eirene:
-            self.fmt.addItem("One value per line (b2plot eprt)", False)
-        else:
-            self.fmt.addItem("One value per line (b2plot mprt)", False)
-            self.fmt.addItem("Table, one cell per line (b2plot mtab)", True)
-        form.addRow("Format", self.fmt)
-        self.shown = QtWidgets.QRadioButton("as plotted (%s)" % species)
-        self.every = QtWidgets.QRadioButton("all species")
-        self.shown.setChecked(True)
-        if species in ("", "—"):
-            self.every.setEnabled(False)
-        form.addRow("Species", self.shown)
-        form.addRow("", self.every)
-        note = "b2plot writes the values with the scale factor of the plot."
-        if q.source in ("vector", "evector"):
-            note += "\nOne file per component: name_%s and name_%s." % (
-                q.poloidal, q.radial)
-        hint = QtWidgets.QLabel(note)
-        hint.setProperty("muted", True)
-        form.addRow(hint)
-        form.addRow(_buttons(self))
-
-    def accept(self):
-        if not _confirm(self, self.paths(), self.where.chosen):
-            return
-        self.settings.setValue("export_dir",
-                               os.path.dirname(self.where.path()))
-        super().accept()
-
-    def paths(self):
-        return component_paths(self.where.path(), self.q)
-
-    def table(self):
-        return bool(self.fmt.currentData())
-
-    def all_species(self):
-        return self.every.isChecked()

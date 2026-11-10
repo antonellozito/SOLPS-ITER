@@ -1,12 +1,12 @@
-"""Light and dark theme of the GUI, as the AUGVIEW shell and its
-equilibrium tab: the Qt stylesheet, the figure and axes backgrounds, and
-the dark display colour of every plot colour (lines, fills, texts, colour
-maps). The theme is one switch for the whole program (set_dark)."""
+"""Light and dark theme of the GUI: the Qt stylesheet, the figure and
+axes backgrounds, and the dark display colour of every plot colour (lines,
+fills, texts, colour maps). The theme is one switch for the whole program
+(set_dark)."""
 
 import numpy as np
 from matplotlib import colors as mcolors
 
-from ..qt import QtGui, QtWidgets, Qt
+from ..qt import QtCore, QtGui, QtWidgets, Qt
 
 COLORS = {
     "Light": dict(panel="#f0f0f0", control="#ffffff", control_alt="#eeeeee",
@@ -60,9 +60,8 @@ def placeholder():
 
 
 def _dim(rgb):
-    """Dark display colours of RGB triples ((3,) or (n, 3)), as the
-    AUGVIEW equilibrium tab: white stays, black becomes dark grey, colours
-    are desaturated and dimmed."""
+    """Dark display colours of RGB triples ((3,) or (n, 3)): white
+    stays, black becomes dark grey, colours are desaturated and dimmed."""
     a = np.clip(np.asarray(rgb, float), 0.0, 1.0)
     flat = a.reshape(-1, 3)
     lum = flat @ np.array([0.2126, 0.7152, 0.0722])
@@ -120,7 +119,7 @@ def cmap(cm):
 
 
 def stylesheet(font=""):
-    """Qt stylesheet of the current theme (AUGVIEW shell): one panel
+    """Qt stylesheet of the current theme: one panel
     colour everywhere, controls with a thin frame; font, e.g. "12.5pt",
     the size of every text (a stylesheet stops the font of the window from
     reaching the widgets)."""
@@ -192,30 +191,61 @@ QLabel#readout {{ background-color: {control}; border: 1px solid {border};
 """.format(**c)
 
 
-class _Frames(QtWidgets.QProxyStyle):
-    """Frames of the check boxes, which a stylesheet leaves without one on
-    the Fusion style (Linux, no display), as the Linux AUGVIEW."""
+ACCENT = "#2f7ae5"                # check boxes and radio buttons on
+
+
+class _Indicators(QtWidgets.QProxyStyle):
+    """Check boxes and radio buttons drawn the same way on every platform
+    and theme (a stylesheet leaves the native ones without a visible frame
+    when off): a framed box or circle, blue with a white mark when on."""
 
     def drawPrimitive(self, element, option, painter, widget=None):
-        super().drawPrimitive(element, option, painter, widget)
-        if element != QtWidgets.QStyle.PE_IndicatorCheckBox:
+        box = element == QtWidgets.QStyle.PE_IndicatorCheckBox
+        if not box and element != QtWidgets.QStyle.PE_IndicatorRadioButton:
+            super().drawPrimitive(element, option, painter, widget)
             return
-        on = bool(option.state & QtWidgets.QStyle.State_Enabled)
-        pen = QtGui.QPen(QtGui.QColor(COLORS[name()][
-            "border" if on else "soft_border"]), 1.0)
-        pen.setCosmetic(True)
+        c = COLORS[name()]
+        state = option.state
+        enabled = bool(state & QtWidgets.QStyle.State_Enabled)
+        on = bool(state & (QtWidgets.QStyle.State_On |
+                           QtWidgets.QStyle.State_NoChange))
+        side = min(option.rect.width(), option.rect.height()) - 2
+        r = QtCore.QRectF(0, 0, side, side)
+        r.moveCenter(QtCore.QRectF(option.rect).center())
+        fill = ACCENT if on and enabled else c["disabled"] if not enabled \
+            else c["control"]
+        edge = ACCENT if on and enabled else c[
+            "border" if enabled else "soft_border"]
         painter.save()
-        painter.setBrush(Qt.NoBrush)
-        painter.setPen(pen)
-        painter.drawRect(option.rect.adjusted(0, 0, -1, -1))
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtGui.QPen(QtGui.QColor(edge), 1.0))
+        painter.setBrush(QtGui.QColor(fill))
+        if box:
+            painter.drawRoundedRect(r, 3.0, 3.0)
+        else:
+            painter.drawEllipse(r)
+        if on:
+            mark = QtGui.QColor("#ffffff" if enabled else c["disabled_text"])
+            if box:
+                pen = QtGui.QPen(mark, max(side / 7.0, 1.5))
+                pen.setCapStyle(Qt.RoundCap)
+                pen.setJoinStyle(Qt.RoundJoin)
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                x, y, w = r.x(), r.y(), r.width()
+                painter.drawPolyline([QtCore.QPointF(x + u * w, y + v * w)
+                                      for u, v in ((0.24, 0.52), (0.43, 0.70),
+                                                   (0.76, 0.31))])
+            else:
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(mark)
+                painter.drawEllipse(r.center(), 0.2 * side, 0.2 * side)
         painter.restore()
 
 
-def install_frames(app):
-    """The check-box frames on every style but the native macOS one, which
-    draws its own."""
+def install_indicators(app):
+    """The check boxes and radio buttons of _Indicators on the style of the
+    platform (once)."""
     style = app.style() if app is not None else None
-    if style is None or isinstance(style, _Frames) or \
-            style.name().lower() in ("macos", "macintosh"):
-        return
-    app.setStyle(_Frames(style.name()))
+    if style is not None and not isinstance(style, _Indicators):
+        app.setStyle(_Indicators(style.name()))

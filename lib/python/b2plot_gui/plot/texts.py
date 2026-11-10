@@ -1,8 +1,9 @@
 """Texts of the 2D plot: title, axis labels, extra label, global header
-and the colour bars, as the b2plot label commands; colour bars as the
-AUGVIEW equilibrium tab (compact ticks with the power of ten above the
-bar, the label inside the bar, an empty placeholder when nothing is
-plotted)."""
+and the colour bars, as the b2plot label commands; colour bars with
+compact ticks (the power of ten above the bar), the label inside the bar
+and an empty placeholder when nothing is plotted."""
+
+from dataclasses import replace
 
 import numpy as np
 from matplotlib.colors import LogNorm, SymLogNorm
@@ -105,8 +106,8 @@ class TextMixin:
         self._style_bar(self.bbar, label)
 
     def _style_bar(self, bar, label, size=None):
-        """Ticks (compact, as AUGVIEW), frame and the label inside the bar,
-        in the colours of the theme."""
+        """Ticks (compact), frame and the label inside the bar, in the
+        colours of the theme."""
         vertical = bar.orientation == "vertical"
         axis = bar.ax.yaxis if vertical else bar.ax.xaxis
         fs = size or 10.0 * self.label_style.size
@@ -171,7 +172,7 @@ class TextMixin:
         def text(s):
             return labels.tex_to_mathtext(labels.expand(s, values))
         pw, pts = self.inches() * 72.0
-        head = ls.header.strip() and header
+        head = ls.header.strip() and header and not self.fixed
         self._top_pts = (1.8 * fs if head else 0.0) + (
             1.5 * fs if ls.extra.strip() else 0.0)
         self._place()
@@ -190,9 +191,17 @@ class TextMixin:
                 spine.set_color(color)
             ax.axis("on" if ls.axes else "off")
         x, y, w, h = self.rect
-        top = y + h       # fixed: the texts just above the title room
-        if self.fixed:
-            top -= max(3.3 * 10.0 - self._top_pts, 0.0) / pts
+        if self.fixed:      # header and extra label on one line
+            line = "     ".join(text(t) for t in (ls.header, ls.extra)
+                                if t.strip() and (header or t is ls.extra))
+            if line:        # over the title (pad 6 points)
+                above = max(19.5, 6.0 + 1.2 * self.ax.title.get_fontsize())
+                self.label_artists.append(self.fig.text(
+                    x + 0.5 * w, self.ax.get_position().y1 + above / pts,
+                    line, ha="center", va="bottom", fontsize=fit_size(
+                        line, 0.9 * fs, wide, ls.bold), **kw))
+            ls = replace(ls, header="", extra="")
+        top = y + h
         if ls.extra.strip():
             s = text(ls.extra)
             self.label_artists.append(self.fig.text(

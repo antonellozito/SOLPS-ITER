@@ -6,7 +6,6 @@ arrays. Reading the run and computing the quantities stay in Fortran;
 this module only decodes and caches what b2plot sends.
 """
 
-import os
 import queue
 import re
 import struct
@@ -30,7 +29,7 @@ NAMED = {6: "chords: ", 8: "target: "}  # overlay roles sent per name
 class Request:
     ident: int
     kind: str                   # "init", "field", "efield", "vector",
-    name: str                   # "evector", "export"
+    name: str                   # "evector", "overlay"
     ops: tuple = ()
     result: object = None
     console: list = field(default_factory=list)
@@ -168,35 +167,6 @@ class Run:
         return self._request(kind, name, " ".join(words) + "\n", ops,
                              source)
 
-    def export(self, names, paths, eirene=False, ops=(), table=False,
-               source=None):
-        """Write the values of quantities to files with b2plot (mprt, mtab
-        or eprt, the CLI formats); one path per name (both components of
-        a vector), source as in field. The result is the list of files
-        written."""
-        lines = []
-        for name, path in zip(names, paths):
-            if len(path) > 250:
-                raise ValueError("path longer than 250 characters: %s"
-                                 % path)
-            if os.path.isfile(path):    # replaced: a failure shows
-                os.remove(path)
-            quoted = "'%s'" % path.replace("'", "''")
-            if eirene:
-                cmd = "%s eprt edrop" % quoted
-            elif table:
-                cmd = "%s %s mtab drop" % (
-                    "0 0 0 0" if self.info and self.info.get(
-                        "isClassicalGrid") else "0 0", quoted)
-            else:
-                cmd = "%s mprt drop" % quoted
-            lines.append(" ".join((self._head(name, source),) + tuple(ops)
-                                  + (cmd,)))
-        req = self._request("export", " ".join(names), "\n".join(lines)
-                            + "\n", ops)
-        req.paths = list(paths)
-        return req
-
     def _trim_cache(self):
         """Drop the least recently used fields beyond CACHE_BYTES."""
         def nbytes(d):
@@ -316,11 +286,7 @@ class Run:
             req.result = self.geometry
         elif req.kind == "overlay":
             req.result = self.layers.get(req.name)
-        elif req.kind == "export":
-            ok = all(os.path.isfile(p) for p in req.paths)
-            req.result = list(req.paths) if ok else None
-        if req.result is not None and req.kind not in ("init", "export",
-                                                       "overlay"):
+        if req.result is not None and req.kind not in ("init", "overlay"):
             self.cache[(req.kind, req.name, req.ops, req.source)] = \
                 req.result
             self._trim_cache()

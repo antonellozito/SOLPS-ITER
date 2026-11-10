@@ -1,7 +1,8 @@
-"""Layout of the 2D tab, as AUGVIEW: three columns with fixed fractions of
+"""Layout of the 2D tab: three columns with fixed fractions of
 the width, the commands over the plot (Zoom, Unzoom, Rezoom, Restore,
-Pan, the mouse tools, Add to page, Print figure; the view and the cursor
-readout under them) and a canvas whose plot scales with the window."""
+Pan and the mouse tools; under them Add to page, Page composer, Print
+figure, Export field and the cursor readout) and a canvas whose plot
+scales with the window."""
 
 from ...qt import FigureCanvasQTAgg, QtCore, QtWidgets, Qt
 
@@ -37,6 +38,25 @@ class ScaledCanvas(FigureCanvasQTAgg):
         super().resizeEvent(event)
         if self.resized is not None:
             self.resized()
+
+
+class Readout(QtWidgets.QLabel):
+    """The cursor readout: always two lines (the position, then the cell
+    and the value), so that its height, and the plot under it, never
+    change."""
+
+    def __init__(self, text=READOUT, parent=None):
+        super().__init__(parent)
+        self.setObjectName("readout")
+        self.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                           QtWidgets.QSizePolicy.Fixed)
+        self.setText(text)
+
+    def setText(self, text):
+        lines = [t.strip() for t in str(text).split("\n")]
+        rest = "  ".join(t for t in lines[1:] if t)
+        super().setText("%s\n%s" % (lines[0] or " ", rest or " "))
 
 
 class Columns(QtWidgets.QWidget):
@@ -98,24 +118,26 @@ class PlotCommands(QtWidgets.QWidget):
                             QtWidgets.QSizePolicy.Fixed)
         row.addWidget(bar, len(bar.buttons) + 1)
         bar.changed.connect(self.sync)
-        row.addSpacing(10)
-        self.buttons["page"] = _button(
-            "Add to page", "Add this plot with all its settings to the page "
-            "composer", tab._add_to_page)
-        self.buttons["print"] = _button(
-            "Print figure", "The plot as an image or vector file: format, "
-            "resolution, colour space and theme", tab.print_figure)
-        row.addWidget(self.buttons["page"], 1)
-        row.addWidget(self.buttons["print"], 1)
-        self.readout = QtWidgets.QLabel(READOUT)
-        self.readout.setObjectName("readout")
-        self.readout.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.readout.setToolTip("Position, cell and value under the cursor")
-        self.readout.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                                   QtWidgets.QSizePolicy.Preferred)
         second = QtWidgets.QHBoxLayout()
-        second.addWidget(tab.viewbar)
-        second.addWidget(self.readout, 1)
+        second.setSpacing(4)
+        for key, text, tip, slot in (
+                ("page", "Add to page", "Add this plot with all its settings "
+                 "to the page composer (Ctrl+D)", tab._add_to_page),
+                ("composer", "Page composer", "The pages of the plots added "
+                 "(Ctrl+P)", tab.composer.emit),
+                ("print", "Print figure", "The plot as an image or vector "
+                 "file: format, resolution, colour space and theme "
+                 "(Ctrl+S)", tab.print_figure),
+                ("field", "Export field", "The values of the quantity shown "
+                 "with the grid: CSV, text, netCDF or HDF5",
+                 tab.export_field)):
+            self.buttons[key] = _button(text, tip, slot)
+            second.addWidget(self.buttons[key], 1)
+        second.addSpacing(10)
+        self.readout = Readout()
+        self.readout.setToolTip("Position, cell and value under the cursor "
+                                "(the mouse wheel zooms)")
+        second.addWidget(self.readout, 4)
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 4, 0, 0)
         lay.setSpacing(4)
@@ -149,7 +171,4 @@ class PlotCommands(QtWidgets.QWidget):
 
     def restore(self):
         """The full view of the run."""
-        view = self.tab.viewbar
-        if self.tab.run is not None and view.combo.count():
-            view.combo.setCurrentIndex(0)
-            view._chosen(0)
+        self.tab.restore()

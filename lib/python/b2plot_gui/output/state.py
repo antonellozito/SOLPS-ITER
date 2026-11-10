@@ -1,12 +1,9 @@
-"""Plot settings of the 2D tab as a dictionary (JSON files): the
-quantity, its species and plot type, every option of the quantity
-panel, the layers and the view. Saved settings are templates for any
-run; several of them make a set of maps on the page composer."""
-
-import json
+"""Plot settings of the 2D tab as a dictionary: the quantity, its
+species and plot type, every option of the quantity panel, the layers and
+the view; kept over Reload run and live updates."""
 
 from ..panels.layers import ColorButton
-from ...qt import QtCore, QtWidgets, Qt
+from ...qt import QtWidgets, Qt
 
 SKIP = {"search", "play", "slider", "tree", "info", "current", "partial",
         "base"}
@@ -113,62 +110,3 @@ def restore(tab, st, view=True):
     if view and st.get("view"):
         tab.plot.set_view(st["view"])
     return ok
-
-
-def save(path, st):
-    with open(path, "w") as f:
-        json.dump(st, f, indent=1)
-
-
-def load(path):
-    with open(path) as f:
-        st = json.load(f)
-    if not isinstance(st, dict) or "panel" not in st:
-        raise ValueError("%s holds no plot settings" % path)
-    return st
-
-
-class MapsJob:
-    """Settings files applied one after the other to a Tab2D, each plot
-    added to the page composer once it is drawn."""
-
-    def __init__(self, tab):
-        self.tab = tab
-        self.job = None
-
-    def start(self, paths):
-        todo = []
-        for p in paths:
-            try:
-                todo.append((p, load(p)))
-            except (OSError, ValueError) as err:
-                self.tab.status.emit("Skipped %s: %s" % (p, err))
-        self.job = dict(todo=todo, added=0, missing=[])
-        self._next()
-
-    def _next(self):
-        tab, job = self.tab, self.job
-        while job["todo"]:
-            path, st = job["todo"][0]
-            if restore(tab, st):
-                if tab._shown():
-                    QtCore.QTimer.singleShot(0, self.ready)
-                return
-            job["missing"].append(st.get("quantity"))
-            job["todo"].pop(0)
-        self.job = None
-        tab.status.emit("%d maps added to the page composer%s" % (
-            job["added"], "; not in this run: " + ", ".join(
-                map(str, job["missing"])) if job["missing"] else ""))
-
-    def ready(self):
-        """The plot of the current settings drawn: to the page."""
-        tab, job = self.tab, self.job
-        if job is None or not job["todo"] or not tab._shown():
-            return
-        job["todo"].pop(0)
-        snap = tab.snapshot()
-        if snap is not None:
-            tab.add_to_page.emit(snap)
-            job["added"] += 1
-        self._next()

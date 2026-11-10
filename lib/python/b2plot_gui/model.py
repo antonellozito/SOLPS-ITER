@@ -24,6 +24,7 @@ class Geometry:
     triangles: np.ndarray       # (ntri, 3) fan triangles of the cells
     tri_cell: np.ndarray        # (ntri,) row of the cell of each triangle
     visible: np.ndarray = None  # cells with an area (not degenerate guards)
+    corners: list = None        # ncell arrays of vertex rows (0-based)
 
     @property
     def bbox(self):
@@ -157,7 +158,7 @@ def make_geometry(m):
         region=np.asarray(m.reg), ix=np.asarray(m.ix), iy=np.asarray(m.iy),
         xpoints=np.asarray(m.xpt, float).reshape(-1, 2),
         classical=bool(m.isClassicalGrid), triangles=vlist[pos],
-        tri_cell=cell, visible=visible)
+        tri_cell=cell, visible=visible, corners=np.split(vlist, offsets))
 
 
 LOCATIONS = {1: "cells", 2: "triangles", 3: "wall"}
