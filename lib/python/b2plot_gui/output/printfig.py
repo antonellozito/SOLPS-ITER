@@ -1,4 +1,4 @@
-"""Print figure, as AUGVIEW: output format (png, jpg, eps, pdf, svg),
+"""Print figure: output format (png, jpg, eps, pdf, svg),
 content type (vector or raster), resolution, colour space (rgb, cmyk,
 gray) and export theme (light or dark). Vector output keeps the drawing;
 raster output is the figure rendered at the resolution, written as an
@@ -67,7 +67,7 @@ class PrintDialog(QtWidgets.QDialog):
         self._refresh(True)
 
     def _refresh(self, format_changed=False):
-        """Choices allowed by the format (as AUGVIEW)."""
+        """Choices allowed by the format."""
         fmt = self.format.currentText()
         contents = ["vector", "raster"] if fmt in VECTOR else ["raster"]
         colors = ["rgb", "gray"] if fmt == "svg" else ["rgb", "cmyk", "gray"]
@@ -216,7 +216,7 @@ def _gray_array(value):
 
 
 def _grayscale(figure):
-    """The colours of a figure as grey levels (as AUGVIEW)."""
+    """The colours of a figure as grey levels."""
     figure.set_facecolor(_gray(figure.get_facecolor()))
     for t in figure.texts:
         t.set_color(_gray(t.get_color()))

@@ -3,18 +3,19 @@ bar.
 
 One b2pl.exe per open run serves the data (data.Run); a QTimer
 drains its events in the GUI thread and hands finished requests to the
-tabs. There is no console and no b2plot command input. The window opens
-on the whole screen and keeps that aspect ratio; nothing is saved on the
-system: every start begins from the same state.
+tabs. There is no console and no b2plot command input. Outside a run
+directory the window opens empty (Open run). The window opens on the
+whole screen and keeps that aspect ratio; nothing is saved on the system
+but the list of runs opened in the SOLPS-ITER session (session.Recent):
+every start begins from the same state.
 """
 
 import os
-import sys
 import time
 
-from ..b2plot import __version__, backend, labels
-from . import data, theme
-from ..qt import PYSIDE6_VERSION, QtCore, QtGui, QtWidgets, Qt
+from ..b2plot import backend
+from . import data, runline, session, theme
+from ..qt import QtCore, QtGui, QtWidgets, Qt
 from .output import state
 from .output.composer import Composer
 from .tab2d import Tab2D
@@ -22,8 +23,8 @@ from .tab2d import Tab2D
 POLL_MS = 20
 POLL_BUDGET = 0.05
 PLACEHOLDERS = ["Profiles", "Chords", "Time traces"]
-LIVE = ((0, "Off"), (10, "Every 10 s"), (30, "Every 30 s"),
-        (60, "Every minute"), (300, "Every 5 minutes"))
+LIVE = ((0, "off"), (10, "every 10 s"), (30, "every 30 s"),
+        (60, "every minute"), (300, "every 5 minutes"))
 STATE_FILES = ("b2fstate", os.path.join("b2mn.exe.dir", "b2fstate"))
 
 
@@ -51,12 +52,16 @@ class SessionSettings:
 
 
 class MainWindow(QtWidgets.QMainWindow):
+    """Run line, tabs and, at the right of the tabs, the run commands,
+    live update and the theme; no menu bar."""
 
     def __init__(self, args):
         super().__init__()
         self.args = args
         self.settings = SessionSettings()
-        theme.install_frames(QtWidgets.QApplication.instance())
+        self.recent_runs = session.Recent()
+        theme.install_indicators(QtWidgets.QApplication.instance())
+        self.setStyleSheet(theme.stylesheet())  # before the widgets exist
         self.run = None
         self.record = open(args.record, "wb") if args.record else None
         self.waiting = {}           # request ident -> [(tab, want)]
@@ -72,26 +77,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self._fonts.setInterval(120)
         self._fonts.timeout.connect(self._scale_fonts)
 
-        self.runline = QtWidgets.QLabel()
-        self.runline.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.runline.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                                   QtWidgets.QSizePolicy.Preferred)
+        self.runline = runline.RunLine()
         self.tabs = QtWidgets.QTabWidget()
         self.tab2d = Tab2D(self.settings)
         self.tab2d.request.connect(self._request)
-        self.tab2d.export.connect(self._export)
         self.tab2d.status.connect(self._status)
+        self.tab2d.species_known.connect(self._species_line)
         self.composer = Composer(self.settings, self)
         self.composer.status.connect(self._status)
         self.tab2d.add_to_page.connect(self._add_to_page)
+        self.tab2d.composer.connect(self._show_composer)
         self.tabs.addTab(self.tab2d, "2D plots")
         for name in PLACEHOLDERS:
             self.tabs.addTab(_placeholder(name), name)
-        self.theme_combo = QtWidgets.QComboBox()
-        self.theme_combo.addItems(theme.NAMES)
-        self.theme_combo.setToolTip("Switch between Light and Dark mode")
-        self.theme_combo.currentTextChanged.connect(self.apply_theme)
-        self.tabs.setCornerWidget(self.theme_combo, Qt.TopRightCorner)
+        self.tabs.setCornerWidget(self._corner(), Qt.TopRightCorner)
         body = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(body)
         lay.setContentsMargins(6, 4, 6, 0)
@@ -106,86 +105,105 @@ class MainWindow(QtWidgets.QMainWindow):
         self.busy.hide()
         self.statusBar().addWidget(self.state, 1)
         self.statusBar().addPermanentWidget(self.busy)
-        self._menus()
+        self._shortcuts()
         self.resize(1500, 950)
-        self.apply_theme("Light")
+        self.tab2d.apply_theme()
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
         self._live = QtCore.QTimer(self)
         self._live.timeout.connect(self._live_check)
 
-    def _menus(self):
-        keys = QtGui.QKeySequence.StandardKey
-        m = self.menuBar().addMenu("&File")
-        a = m.addAction("Open run directory\u2026")
-        a.setShortcut(QtGui.QKeySequence(keys.Open))
-        a.triggered.connect(lambda *_: self.choose_run())
-        self.recent = m.addMenu("Recent runs")
+    def _corner(self):
+        """Open run, Recent runs, Reload run, Live update and the theme, at
+        the right of the tabs."""
+        w = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(w)
+        row.setContentsMargins(0, 0, 0, 2)
+        row.setSpacing(4)
+        self.run_buttons = {}
+        for key, text, tip, slot in (
+                ("open", "Open run\u2026", "Open another run directory "
+                 "(Ctrl+O)", self.choose_run),
+                ("recent", "Recent runs", "Runs opened in this SOLPS-ITER "
+                 "session (since source setup.csh)", None),
+                ("reload", "Reload run", "Read the run again, with the "
+                 "plot settings (Ctrl+R)", self.reload)):
+            b = QtWidgets.QPushButton(text)
+            b.setToolTip(tip)
+            if slot is not None:
+                b.clicked.connect(lambda *_, f=slot: f())
+            row.addWidget(b)
+            self.run_buttons[key] = b
+        self.recent = QtWidgets.QMenu(self)
         self.recent.aboutToShow.connect(self._fill_recent)
-        a = m.addAction("Reload run")
-        a.setShortcut(QtGui.QKeySequence("Ctrl+R"))
-        a.triggered.connect(lambda *_: self.reload())
-        m.addSeparator()
-        a = m.addAction("Print figure\u2026")
-        a.setShortcut(QtGui.QKeySequence(keys.Save))
-        a.triggered.connect(lambda *_: self.tab2d.print_figure())
-        a = m.addAction("Export values\u2026")
-        a.setShortcut(QtGui.QKeySequence("Ctrl+E"))
-        a.setToolTip("Values of the quantity shown, written by b2plot")
-        a.triggered.connect(lambda *_: self.tab2d.export_values())
-        a = m.addAction("Export field with geometry\u2026")
-        a.setShortcut(QtGui.QKeySequence("Ctrl+Shift+E"))
-        a.triggered.connect(lambda *_: self.tab2d.export_field())
-        a = m.addAction("Copy figure")
-        a.setShortcut(QtGui.QKeySequence("Ctrl+Shift+C"))
-        a.triggered.connect(lambda *_: self.tab2d.copy_figure())
-        m.addSeparator()
-        m.addAction("Save plot settings\u2026").triggered.connect(
-            lambda *_: self.tab2d.save_settings())
-        m.addAction("Load plot settings\u2026").triggered.connect(
-            lambda *_: self.tab2d.load_settings())
-        live = m.addMenu("Live update")
-        live.setToolTip("Reload the run, with the plot settings, when its "
-                        "b2fstate changes")
-        group = QtGui.QActionGroup(self)
-        self.live_actions = {}
+        self.run_buttons["recent"].setMenu(self.recent)
+        row.addSpacing(10)
+        row.addWidget(QtWidgets.QLabel("Live update"))
+        self.live_combo = QtWidgets.QComboBox()
         for secs, text in LIVE:
-            a = live.addAction(text)
-            a.setCheckable(True)
-            a.setChecked(secs == 0)
-            group.addAction(a)
-            a.triggered.connect(lambda *_, t=secs: self.set_live(t))
-            self.live_actions[secs] = a
-        m.addSeparator()
-        a = m.addAction("Quit")
-        a.setShortcut(QtGui.QKeySequence(keys.Quit))
-        a.triggered.connect(lambda *_: self.close())
-        m = self.menuBar().addMenu("&Page")
-        a = m.addAction("Add plot to page")
-        a.setShortcut(QtGui.QKeySequence("Ctrl+D"))
-        a.triggered.connect(lambda *_: self.tab2d._add_to_page())
-        a = m.addAction("Page composer\u2026")
-        a.setShortcut(QtGui.QKeySequence("Ctrl+P"))
-        a.triggered.connect(lambda *_: self._show_composer())
-        m.addAction("Maps from plot settings files\u2026").triggered.connect(
-            lambda *_: self.tab2d.maps_to_page())
-        m = self.menuBar().addMenu("&Help")
-        m.addAction("About the b2plot GUI").triggered.connect(
-            lambda *_: self.about())
+            self.live_combo.addItem(text, secs)
+        self.live_combo.setToolTip("Reload the run, with the plot settings, "
+                                   "when its b2fstate changes")
+        self.live_combo.activated.connect(
+            lambda i: self.set_live(self.live_combo.itemData(i)))
+        row.addWidget(self.live_combo)
+        self.live_info = QtWidgets.QLabel()     # time of the b2fstate read
+        self.live_info.setProperty("muted", True)
+        self.live_info.setToolTip("Time of the b2fstate file read")
+        self.live_info.hide()
+        row.addWidget(self.live_info)
+        row.addSpacing(10)
+        self.theme_combo = QtWidgets.QComboBox()
+        self.theme_combo.addItems(theme.NAMES)
+        self.theme_combo.setToolTip("Switch between Light and Dark mode")
+        self.theme_combo.currentTextChanged.connect(self.apply_theme)
+        row.addWidget(self.theme_combo)
+        return w
+
+    def _shortcuts(self):
+        """The keys of the commands (there is no menu)."""
+        tab = self.tab2d
+        for key, slot in (("Ctrl+O", self.choose_run),
+                          ("Ctrl+R", self.reload),
+                          ("Ctrl+S", tab.print_figure),
+                          ("Ctrl+D", tab._add_to_page),
+                          ("Ctrl+P", self._show_composer),
+                          ("Ctrl+Q", self.close)):
+            QtGui.QShortcut(QtGui.QKeySequence(key), self).activated.connect(
+                lambda f=slot: f())
 
     # ---------------------------------------------------------------- run
     def choose_run(self):
+        start = os.path.dirname(self.run.rundir) if self.run is not None \
+            else self.args.rundir
         path = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Open run directory", self.args.rundir)
+            self, "Open run directory", start)
         if path:
             self.open_run(path)
 
     def _fill_recent(self):
         self.recent.clear()
-        for path in self.settings.value("recent", []) or []:
+        runs = self.recent_runs.runs()
+        for path in runs:
             self.recent.addAction(path).triggered.connect(
                 lambda *_, p=path: self.open_run(p))
+        if not runs:
+            self.recent.addAction("No run opened in this session yet"
+                                  ).setEnabled(False)
+
+    def no_run(self):
+        """The empty window, outside a run directory."""
+        self.tab2d.setEnabled(False)
+        self._run_commands()
+        self.runline.set("", "No run directory: Open run (Ctrl+O) or "
+                         "Recent runs")
+        self._status("Not in a run directory: open one with Open run")
+
+    def _run_commands(self):
+        """Reload run and Live update only with a run."""
+        self.run_buttons["reload"].setEnabled(self.run is not None)
+        self.live_combo.setEnabled(self.run is not None)
 
     def reload(self):
         """The run read again, with the plot settings shown."""
@@ -198,12 +216,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def set_live(self, secs):
         """Check b2fstate every secs seconds (0: never)."""
         self._live.stop()
-        self.live_actions[secs].setChecked(True)
+        self.live_combo.setCurrentIndex(max(self.live_combo.findData(secs),
+                                            0))
         if secs:
             self._stamp = self._state_time()
             self._live.start(int(secs * 1000))
             self._status("Live update every %d s: the run is reloaded when "
                          "its b2fstate changes" % secs)
+        self._live_info()
+
+    def _live_info(self):
+        """b2fstate of HH:MM:SS next to Live update, while it is on."""
+        on = self._live.isActive() and self._stamp is not None
+        if on:
+            self.live_info.setText("b2fstate of %s" % time.strftime(
+                "%H:%M:%S", time.localtime(self._stamp)))
+        self.live_info.setVisible(on)
 
     def _state_time(self):
         if self.run is None:
@@ -222,6 +250,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def open_run(self, path):
         path = os.path.abspath(path)
+        if not session.is_run(path):
+            self._status("Not a run directory: %s" % path)
+            self._error("%s is not a run directory (no %s)." % (
+                path, ", ".join(session.RUN_FILES)), "")
+            return
         self.stop_run()
         self.args.rundir = path
         self.run = data.Run(backend.command(self.args), path, self.record)
@@ -235,10 +268,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.waiting[req.ident] = []
         self._keep = None
         self.tab2d.setEnabled(False)
-        recent = [path] + [p for p in (self.settings.value("recent", [])
-                                       or []) if p != path]
-        self.settings.setValue("recent", recent[:10])
-        self.runline.setText(path)
+        self._run_commands()
+        self.recent_runs.add(path)
+        self.runline.set(session.shown(path))
         self.setWindowTitle("b2plot \u2014 " + path)
         self._status("Reading the run with b2plot\u2026")
         self._timer.start()
@@ -252,7 +284,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _request(self, want):
         role, q, ops, source = want
         if self.run is None or not self.run.alive():
-            self._status("b2plot is not running: File > Reload run")
+            self._status("b2plot is not running: Reload run starts it")
             return
         if role == "traj":
             res = self.run.overlay("trajectories", ops[0])
@@ -271,21 +303,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)
-
-    def _export(self, job):
-        q, names, paths, ops, table, source = job
-        want = ("export", q, ops, source)
-        if self.run is None or not self.run.alive():
-            self._status("b2plot is not running: File > Reload run")
-            return
-        try:
-            req = self.run.export(names, paths, q.source in (
-                "eirene", "evector"), ops, table, source)
-        except (OSError, ValueError) as err:
-            self.tab2d.deliver(want, None, str(err))
-            return
-        self.waiting.setdefault(req.ident, []).append((self.tab2d, want))
-        self._status("b2plot writes the values of %s\u2026" % q.label)
 
     def _add_to_page(self, snap):
         self.composer.add(snap, snap.values)
@@ -326,31 +343,26 @@ class MainWindow(QtWidgets.QMainWindow):
             self._error("b2plot did not send the grid of this run.",
                         "".join(run.console[-30:]))
             return
-        info = run.info or {}
-        names = [labels.species_text(s) for s in info.get("species", [])]
-        sp = ", ".join(names if len(names) <= 8 else
-                       names[:4] + ["\u2026"] + names[-2:])
-        sp = "%d (%s)" % (len(names), sp)
-        self.runline.setText(
-            "%s   \u2014   %d cells, %s grid, species: %s%s" % (
-                run.rundir, len(run.geometry.cells),
-                "classical" if run.geometry.classical else "unstructured",
-                sp, "" if run.trimesh is None else
-                ", EIRENE triangles: %d" % len(run.trimesh.triangles)) + (
-                "   \u2014   live update, b2fstate of %s" % time.strftime(
-                    "%H:%M:%S", time.localtime(self._stamp))
-                if self._live.isActive() and self._stamp else ""))
         self.tab2d.set_run(run)
         keep, self._keep = self._keep, None
         if keep is not None:
             state.restore(self.tab2d, keep)
         self._status("Reloaded, with the plot settings" if keep is not None
                      else "Ready")
+        self._live_info()
+        self._species_line()
+
+    def _species_line(self):
+        """The run line, again when b2plot sent the EIRENE species."""
+        if self.run is not None and self.run.geometry is not None:
+            self.runline.set(session.shown(self.run.rundir),
+                             runline.details(self.run,
+                                             self.tab2d.eirene_names))
 
     def _crashed(self, run):
         self._status("b2plot stopped (exit status %s)" % run.exit_status)
         self._error("b2plot stopped unexpectedly (exit status %s). "
-                    "File > Reload run starts it again." % run.exit_status,
+                    "Reload run starts it again." % run.exit_status,
                     "".join(run.console[-30:]))
 
     # ----------------------------------------------------------- helpers
@@ -365,16 +377,6 @@ class MainWindow(QtWidgets.QMainWindow):
         box.setDetailedText(details)
         box.open()
 
-    def about(self):
-        import matplotlib
-        v = sys.version_info
-        QtWidgets.QMessageBox.about(
-            self, "About the b2plot GUI",
-            "b2plot GUI %s\nPython %d.%d.%d, PySide6 %s, "
-            "matplotlib %s\nData from b2pl.exe; drawing by matplotlib."
-            % (__version__, v[0], v[1], v[2],
-               PYSIDE6_VERSION, matplotlib.__version__))
-
     # ------------------------------------------------------------- theme
     def apply_theme(self, name):
         """Light or Dark: the widgets (stylesheet) and every plot."""
@@ -383,6 +385,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.theme_combo.setCurrentText(name)
         self.setStyleSheet(theme.stylesheet(self._font))
         self.tab2d.apply_theme()
+        self._species_line()
         if self.composer.isVisible():
             self.composer._changed()
 
@@ -469,5 +472,8 @@ def main(args):
     app.setApplicationName("b2plot_gui")
     win = MainWindow(args)
     win.show()
-    win.open_run(args.rundir)
+    if session.is_run(args.rundir):
+        win.open_run(args.rundir)
+    else:
+        win.no_run()
     return app.exec()

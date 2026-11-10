@@ -57,6 +57,9 @@ endif
 # Preserve a site/user value for central run directories; otherwise use the
 # traditional runs directory under SOLPSTOP.
 if (! $?SOLPSWORK) setenv SOLPSWORK ${SOLPSTOP}/runs
+# Each source of this script starts a session (b2plot_gui lists the runs
+# opened in it)
+setenv SOLPS_SESSION "$$.`date +%s`"
 
 # Set HOST_NAME and COMPILER, which will determine setup files to be used
 #------------------------------------------------------------------------

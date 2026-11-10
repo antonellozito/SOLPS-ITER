@@ -19392,15 +19392,28 @@ runs \btwoplot through {\tt b2plot} and also writes the pages to the
 {\tt b2plot\_gui}, started in a run directory (options {\tt -s}, {\tt -d}
 and {\tt -h} as for {\tt b2plot}), opens a window
 without any command input: everything is chosen with lists, buttons and
-toggles. The run line shows the run directory, the grid and the species;
-{\tt File} opens another run, reloads the run with all plot settings
-(after a crash of \btwoplotns, or with {\tt Live update} each time its
-{\tt b2fstate} changes) and exports. The {\tt 2D plots} tab is complete; the
+toggles; there is no menu bar. Started in any other folder of the
+\SOLPSITER environment, the window opens empty and {\tt Open run} chooses
+a run directory (one with {\tt b2mn.dat}, {\tt b2fstate} or
+{\tt b2fstati}). The run line shows the run directory (without
+{\tt \$SOLPSWORK}, by default {\tt \$SOLPSTOP/runs}), coupled or
+standalone, the numbers of cells and faces, the kind of grid and the
+number of EIRENE triangles, the plasma species by element, e.g.\
+{\tt D(0,+1), N(0,...,+7)}, and the EIRENE atom, molecule and test ion
+species (a long run directory is shortened in the middle; the whole line
+is its tool tip). At the right of the tabs, {\tt Open run},
+{\tt Recent runs} (all runs opened in the \SOLPSITER session: each
+{\tt source setup.csh} or {\tt setup.ksh} starts one, which sets
+{\tt SOLPS\_SESSION}; sessions in other terminals keep their own lists)
+and {\tt Reload run} (with all plot settings, also after a crash of
+\btwoplotns), {\tt Live update} (the run is reloaded each time its
+{\tt b2fstate} changes; the time of the file read is shown next to it)
+and the theme. The {\tt 2D plots} tab is complete; the
 {\tt Profiles}, {\tt Chords} and {\tt Time traces}
 tabs follow in later versions. The window opens on the whole screen and
-keeps that aspect ratio (texts and the plot scale with it); the selector
-at the top right switches between a light and a dark theme (in the dark
-one the plot colours are dimmed). Nothing is saved on the system: each
+keeps that aspect ratio (texts and the plot scale with it); the theme is
+light or dark (in the dark one the plot colours are dimmed). Nothing is
+saved but the list of runs of the session (in the temporary folder): each
 start begins with nothing plotted, the default layers and no derived
 quantities. The 2D tab has three columns of fixed width: 30, 50 and 20 \%
 of the window.
@@ -19446,15 +19459,17 @@ The {\bf quantity panel} (left):
 The {\bf plot} (centre) shows the physical domain only, in a box that
 keeps its place; the colour bar is at its right (an empty frame when
 nothing is plotted), the colour bar of the wall strip under it. Over the
-plot: {\tt Zoom}, {\tt Unzoom}, {\tt Rezoom}, {\tt Restore} (the full
-view) and {\tt Pan}, the mouse tools, {\tt Add to page} and
-{\tt Print figure} (png, jpg, eps, pdf or svg; vector or raster content
-at a resolution; colour space rgb, cmyk or gray; light or dark theme).
-Under them, view presets (full, outer midplane, divertors), saved views
-and the R and Z limits set the view; the readout shows the position, the
-cell (and its {\tt ix}, {\tt iy} on classical grids) or the triangle and
-the value under the cursor. Arrows are binned over the current view and
-redrawn after zoom and pan.
+plot: {\tt Zoom}, {\tt Unzoom}, {\tt Rezoom}, {\tt Restore} and
+{\tt Pan}, and the mouse tools; under them {\tt Add to page},
+{\tt Page composer}, {\tt Print figure} (png, jpg, eps, pdf or svg;
+vector or raster content at a resolution; colour space rgb, cmyk or gray;
+light or dark theme), {\tt Export field} and the readout of the position,
+the cell (and its {\tt ix}, {\tt iy} on classical grids) or the triangle
+and the value under the cursor. The view starts on the grid and the device
+structure, which is also the widest view ({\tt Restore}): zoom, pan and
+the mouse wheel (zoom around the cursor, 10\,\% a wheel step) stay
+inside it. Arrows are binned
+over the current view and redrawn after zoom and pan.
 
 The mouse tools set what a click on the plot does. {\tt Inspect}
 lists the cell (index, {\tt ix}, {\tt iy}, region, centre) and the EIRENE
@@ -19482,21 +19497,13 @@ primary X-point found from the $\psi$ map).
 
 Export:
 \begin{itemize}
-\item {\tt File > Print figure}: as {\tt Print figure} over the plot;
-\item {\tt File > Export values}: \btwoplot writes the values of the
-  quantity plotted (species shown or all, with the scale factor) with
-  {\tt mprt} or {\tt mtab}, or {\tt eprt} for EIRENE quantities; a vector
-  gives one file per component;
-\item {\tt File > Export field with geometry}: the quantity shown with its
-  cells or triangles, as CSV (centres, {\tt ix}, {\tt iy}, region), VTK
-  (polygons in the plane $x = R$, $z = Z$, for ParaView) or netCDF (corners
-  and values);
-\item {\tt File > Copy figure}: the plot as an image on the clipboard;
-\item {\tt File > Save plot settings} and {\tt Load plot settings}: the
-  quantity, species, plot type, every option, the layers and the view in a
-  JSON file, which works for any run; {\tt Page > Maps from plot settings
-  files} adds the plot of each file to the page composer;
-\item {\tt Page > Page composer}: plots added with {\tt Add to page} keep
+\item {\tt Export field}: the quantity shown (every species, with the
+  scale factor) with the grid it lives on: the vertices ($R$, $Z$,
+  $\psi_N$), each cell or EIRENE triangle with its vertex numbers, centre,
+  {\tt ix}, {\tt iy} and region (numbers from 1, as in \btwoplotns), as a
+  CSV table (one row per cell, with its corners), ASCII text (a vertex and
+  a cell table), netCDF or HDF5 file;
+\item {\tt Page composer}: plots added with {\tt Add to page} keep
   all their settings and are laid out $n_x \times n_y$ on pages (as
   {\tt page}) with a global header, square, A4 portrait or A4 landscape
   (as {\tt sq}, {\tt a4p}, {\tt a4l}); a PDF holds all pages, other

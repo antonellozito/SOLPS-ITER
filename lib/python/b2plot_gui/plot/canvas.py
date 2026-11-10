@@ -21,6 +21,8 @@ from .surface import SurfaceMixin
 from .texts import TextMixin
 from .vector import VectorMixin
 
+TOP = 3.0       # room over a fixed plot: title, header and extra label line
+
 
 class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
     """One axes (a 3D one for surfaces) with a colour-bar slot at its right
@@ -58,18 +60,20 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         self._cell_key = None
         self._tri_pc = None
         self._reset_axes()
+        self.ax.set_xticks([])          # an empty frame until a run is set
+        self.ax.set_yticks([])
 
     def _positions(self):
         """Boxes of the axes, of the colour bar at its right and of the
         bar under it, in the rectangle of the figure. Margins in points:
         scaled with the label size, or (fixed) those of the default size
-        with room for the header and the extra label, so that the plot
+        with one line for the header and the extra label, so that the plot
         box never moves; the bar under the plot takes its room only when
         shown."""
         x, y, w, h = self.rect
         pw, ph = np.maximum(self.inches() * 72.0, 1.0)
         fs = 10.0 if self.fixed else 10.0 * self.label_style.size
-        top = (6.3 * fs if self.fixed else 3.0 * fs + self._top_pts) / ph
+        top = (TOP * fs if self.fixed else 3.0 * fs + self._top_pts) / ph
         left, bottom = 6.0 * fs / pw, 4.2 * fs / ph
         under = 3.6 * fs / ph if self.bottom_bar else 0.0
         gap, bar, right = 1.2 * fs / pw, 1.8 * fs / pw, 4.6 * fs / pw
@@ -141,7 +145,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
             self.ecentres = np.column_stack((t.x, t.y))[t.triangles].mean(1)
         for key in LAYERS:
             self._build_layer(key)
-        self.set_view(self.views()["Full"])
+        self.set_view(self.full_box())
 
 
     # ------------------------------------------------------------- field
@@ -206,33 +210,16 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         return (float(p[:, 0].min()), float(p[:, 0].max()),
                 float(p[:, 1].min()), float(p[:, 1].max()))
 
-    def views(self):
-        """View presets from the grid, X-points and separatrices."""
+    def full_box(self):
+        """The view limits of the run: grid and device structure with a
+        small margin (the start view, Restore, and the most a view may
+        show)."""
         x0, x1, y0, y1 = self.full_extent()
-        w, h = x1 - x0, y1 - y0
-        pad = 0.02 * max(w, h)
-        out = {"Full": (x0 - pad, x1 + pad, y0 - pad, y1 + pad)}
-        zmid = 0.5 * (y0 + y1)
-        sep = self.run.layers.get("separatrices")
-        if sep is not None and len(sep):
-            p = sep.reshape(-1, 2)
-            omp = p[np.argmax(p[:, 0])]
-            zmid = float(omp[1])
-            out["Outer midplane"] = (omp[0] - 0.12 * w, x1 + pad,
-                                     omp[1] - 0.12 * h, omp[1] + 0.12 * h)
-        for xr, xz in self.run.geometry.xpoints:
-            if xz < zmid and "Lower divertor" not in out:
-                out["Lower divertor"] = (xr - 0.3 * w, xr + 0.3 * w,
-                                         y0 - pad, xz + 0.2 * h)
-            elif xz >= zmid and "Upper divertor" not in out:
-                out["Upper divertor"] = (xr - 0.3 * w, xr + 0.3 * w,
-                                         xz - 0.2 * h, y1 + pad)
-        return out
+        pad = 0.02 * max(x1 - x0, y1 - y0)
+        return (x0 - pad, x1 + pad, y0 - pad, y1 + pad)
 
-    def set_view(self, box):
-        """Show at least this box, widened to the equal aspect of the axes
-        (and again so after a resize)."""
-        self.requested = tuple(box)
+    def _fit(self, box):
+        """The box widened to the equal aspect of the axes."""
         x0, x1, y0, y1 = box
         bb = self.ax.get_window_extent()
         if bb.width > 0 and bb.height > 0 and x1 > x0 and y1 > y0:
@@ -243,8 +230,43 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
             else:
                 c, h = 0.5 * (x0 + x1), 0.5 * (y1 - y0) / want
                 x0, x1 = c - h, c + h
+        return x0, x1, y0, y1
+
+    def set_view(self, box):
+        """Show at least this box, widened to the equal aspect of the axes
+        (and again so after a resize), within the limits of the run."""
+        self.requested = tuple(box)
+        x0, x1, y0, y1 = self._fit(box)
         self.ax.set_xlim(x0, x1)
         self.ax.set_ylim(y0, y1)
+        self.clamp()
+
+    def clamp(self):
+        """The view inside the limits of the run: no larger than they are,
+        moved back inside; True if it changed."""
+        if self.run is None:
+            return False
+        lx0, lx1, ly0, ly1 = self._fit(self.full_box())
+        x0, x1 = self.ax.get_xlim()
+        y0, y1 = self.ax.get_ylim()
+        if x1 - x0 >= lx1 - lx0 - 1e-12 or y1 - y0 >= ly1 - ly0 - 1e-12:
+            box = (lx0, lx1, ly0, ly1)
+        else:
+            dx = max(lx0 - x0, 0.0) - max(x1 - lx1, 0.0)
+            dy = max(ly0 - y0, 0.0) - max(y1 - ly1, 0.0)
+            box = (x0 + dx, x1 + dx, y0 + dy, y1 + dy)
+        if np.allclose(box, (x0, x1, y0, y1), rtol=0.0, atol=1e-12):
+            return False
+        self.ax.set_xlim(box[0], box[1])
+        self.ax.set_ylim(box[2], box[3])
+        return True
+
+    def zoom_at(self, x, y, factor):
+        """Zoom around (x, y) by factor (below 1: in), within the limits."""
+        x0, x1 = self.ax.get_xlim()
+        y0, y1 = self.ax.get_ylim()
+        self.set_view((x - (x - x0) * factor, x + (x1 - x) * factor,
+                       y - (y - y0) * factor, y + (y1 - y) * factor))
 
     def _keep_aspect(self):
         """Z range for the equal aspect after the axes changed height."""

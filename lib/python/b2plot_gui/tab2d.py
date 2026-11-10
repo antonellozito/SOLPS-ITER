@@ -19,13 +19,11 @@ from .panels.layers import LayersPanel, from_dict
 from .panels.plotarea import READOUT, Columns, PlotCommands, ScaledCanvas
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
-from .panels.views import ViewBar
-from .output import state
 from .output.actions import TabOutput
 from .output.frames import FrameExport
 from .tools.control import Tools
 
-MASSES = {"massa": "a", "massm": "m"}   # b2plot label: Eirene stack
+MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
 MARKS = {"iimp": ("IMP", np.argmin), "iomp": ("OMP", np.argmax)}
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
             "not recognized", "error")      # in what b2plot prints
@@ -44,10 +42,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
     """The 2D plots tab; data requests go through the main window."""
 
     request = Signal(object)        # (role, Quantity, operations, source)
-    export = Signal(object)         # (Quantity, names, paths, ops, table,
-                                    #  source)
     add_to_page = Signal(object)    # Snapshot
+    composer = Signal()             # show the page composer
     status = Signal(str)
+    species_known = Signal()        # EIRENE species names arrived
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -56,6 +54,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.data = None
         self.wanted = None
         self.odata = {}                 # overlay role -> Field or Vector
+        self.eirene_names = {}          # a, m, i -> EIRENE species names
         self.figure = Figure()
         self.canvas = ScaledCanvas(self.figure, self._keep_view)
         self.plot = Plot2D(self.figure, fixed=True)
@@ -75,7 +74,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.time_box.source_changed.connect(self._source_changed)
         self.time_box.frames_changed.connect(self._fetch)
         self.frames = FrameExport(self)
-        self.maps = state.MapsJob(self)
         self.time_box.export_frames.connect(lambda: self.frames.start())
         self.time_box.ready = self._shown
         self.final_quantities, self.movie_quantities = [], []
@@ -84,14 +82,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         for key, st in self.layers.styles().items():
             self.plot.layer_styles[key] = st
 
-        self.viewbar = ViewBar(self.plot, self.toolbar, settings)
-        self.viewbar.moved.connect(self._view_moved)
         self.tools = Tools(self)
         self.commands = PlotCommands(self)
         self.hover = self.commands.readout
         centre = QtWidgets.QWidget()
         cl = QtWidgets.QVBoxLayout(centre)
         cl.setContentsMargins(6, 0, 6, 0)
+        cl.setSpacing(2)
         cl.addWidget(self.commands)
         cl.addWidget(self.canvas, 1)
         self.columns = Columns((_scrolled(self.quantity), centre,
@@ -102,6 +99,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
         self.canvas.mpl_connect("motion_notify_event", self._motion)
         self.canvas.mpl_connect("button_release_event", self._nav_done)
+        self.canvas.mpl_connect("scroll_event", self._scroll)
+        self._lims = QtCore.QTimer(self)
+        self._lims.setSingleShot(True)
+        self._lims.timeout.connect(self._view_changed)
         self._vector_timer = QtCore.QTimer(self)
         self._vector_timer.setSingleShot(True)
         self._vector_timer.setInterval(150)
@@ -135,7 +136,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.unselect()
         self.quantity.traj_box.set_species(column_names(
             self._species() or []))
-        self.viewbar.set_run()
+        for signal in ("xlim_changed", "ylim_changed"):   # after set_run
+            self.plot.ax.callbacks.connect(signal, self._lims_changed)
         self._set_available()
         self.translate = catalog.translator(run.catalog)
         self.time_box.set_movies(run.movies)
@@ -151,6 +153,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         information, EIRENE atoms and molecules with their masses from
         b2plot (massa, massm)."""
         self.species = presets.Species((run.info or {}).get("species", []))
+        self.eirene_names = {}
         self.mp = next((float(v) for n, v, _ in dict(run.catalog).get(
             "Constants", []) if n.strip() == "mp"), 1.6726219e-27)
         for q in self.final_quantities:
@@ -291,11 +294,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         role, q, ops, source = want
         lines = [x.strip() for x in console.splitlines() if x.strip()]
         tail = " ".join(lines[-3:])
-        if role == "export":
-            self.status.emit("Values of %s written to %s" % (
-                q.name, ", ".join(data)) if data is not None else
-                "b2plot did not write the values of %s. %s" % (q.name, tail))
-            return
         if role == "traj":
             self._show_trajectories(data)
             return
@@ -307,8 +305,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                              % (q.name, tail))
             return
         if role == "species":
-            self.species.set_neutrals(MASSES[q.name], data.columns,
-                                      data.values[:, 0] / self.mp)
+            kind = MASSES[q.name]
+            self.eirene_names[kind] = [c.strip() for c in data.columns
+                                       if c.strip()]
+            if kind != "i":         # test ions: not in the calculator
+                self.species.set_neutrals(kind, data.columns,
+                                          data.values[:, 0] / self.mp)
+            self.species_known.emit()
             return
         if role == "marks":
             self._mark(q.name, data)
@@ -476,15 +479,45 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                              self.label_values())
         if self._shown():
             self._prefetch()
-            for job in (self.frames, self.maps):
-                if job.job is not None:
-                    QtCore.QTimer.singleShot(0, job.ready)
+            if self.frames.job is not None:
+                QtCore.QTimer.singleShot(0, self.frames.ready)
         if self.plot.mappable is not None:
             norm = self.plot.mappable.norm
             self.quantity.set_range(norm.vmin, norm.vmax)
         self.canvas.draw_idle()
 
     # -------------------------------------------------------------- views
+    def _lims_changed(self, *_):
+        self._lims.start(0)         # once both limits are set
+
+    def _view_changed(self):
+        """A new view (zoom, pan, unzoom, scroll): inside the limits of the
+        run, then arrows and cell values for it."""
+        if self.plot.clamp():
+            self.canvas.draw_idle()
+        self._view_moved()
+
+    def _scroll(self, event):
+        """The mouse wheel zooms around the cursor, 10 % a wheel step (a
+        touch pad in smaller steps)."""
+        if event.inaxes is self.plot.ax and event.xdata is not None and \
+                self.run is not None:
+            gui = event.guiEvent
+            steps = gui.angleDelta().y() / 120.0 if hasattr(
+                gui, "angleDelta") else event.step   # not pixels (macOS)
+            if steps:
+                self.toolbar.push_current()
+                self.plot.zoom_at(event.xdata, event.ydata,
+                                  0.9 ** float(np.clip(steps, -3.0, 3.0)))
+                self.canvas.draw_idle()
+
+    def restore(self):
+        """The full view of the run (its limits)."""
+        if self.run is not None:
+            self.toolbar.push_current()
+            self.plot.set_view(self.plot.full_box())
+            self.canvas.draw_idle()
+
     def _view_moved(self):
         """Arrows, streamlines and cell values follow zoom and pan."""
         if (self.data is not None and hasattr(self.data, "vr")) or any(

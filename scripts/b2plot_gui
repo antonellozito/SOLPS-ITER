@@ -1,6 +1,7 @@
 #! /bin/tcsh -f
 
-# Opens the b2plot GUI on the run directory: needs a B2.5 build with the
+# Opens the b2plot GUI on the run directory (anywhere else the window
+# opens empty, a run is chosen with Open run): needs a B2.5 build with the
 # Python graphics (the default, not USE_NCAR) and the SOLPS-ITER Python
 
 setenv SOLPSTOP "`determine_SOLPSTOP`"
@@ -13,7 +14,8 @@ set opts=()
 argloop:
   if ("X${1}X" == "X-hX") then
     echo 'Usage: b2plot_gui [OPTIONS]'
-    echo 'Opens the b2plot GUI on the run directory'
+    echo 'Opens the b2plot GUI on the run directory; started anywhere else,'
+    echo 'the window opens empty and Open run chooses a run.'
     echo ' '
     echo 'Optional arguments:'
     echo ' -d <debugger>: run b2pl.exe with debugger <debugger> (or with $DBX if <debugger> not specified).'

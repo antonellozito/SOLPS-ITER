@@ -73,8 +73,7 @@ class ResultsPanel(QtWidgets.QWidget):
         self.apply_theme()
 
     def apply_theme(self):
-        """The small figure in the colours of the theme (as the profile
-        plots of the AUGVIEW equilibrium tab)."""
+        """The small figure in the colours of the theme."""
         ax, color = self.ax, theme.text()
         self.figure.set_facecolor(theme.figure_bg())
         ax.set_facecolor("#424242" if theme.is_dark() else "#ffffff")
