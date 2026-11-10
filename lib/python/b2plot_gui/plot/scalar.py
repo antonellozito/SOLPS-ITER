@@ -84,6 +84,14 @@ class ScalarMixin:
         else:
             z = np.asarray(f.vertex[col], float)
             tri = self._cell_tri()
+            bad = ~np.isfinite(z)
+            if bad.any():           # no contours where there is no value
+                hide = bad[tri.triangles].any(axis=1)
+                if tri.mask is not None:
+                    hide |= tri.mask
+                tri = mtri.Triangulation(tri.x, tri.y, tri.triangles,
+                                         mask=hide)
+                z = np.where(bad, 0.0, z)
             used = np.unique(tri.get_masked_triangles())
             self._contours(tri, z, norm_for(z[used], st), st, f.levels)
         if st.cell_values:

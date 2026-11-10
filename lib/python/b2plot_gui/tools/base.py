@@ -1,7 +1,8 @@
 """Mouse modes of the 2D plot: inspect a cell, draw a line, a box or a
-polygon, or the seed line of the streamlines. The shape drawn goes out
-with the signal done and stays drawn until the next one; Escape drops
-the points clicked so far."""
+polygon, or the seed line of the streamlines (started from the
+streamline options, no button here). The shape drawn goes out with the
+signal done and stays drawn until the next one; Escape drops the points
+clicked so far; a polygon closes with a click near its first corner."""
 
 import numpy as np
 from matplotlib.lines import Line2D
@@ -9,21 +10,21 @@ from matplotlib.lines import Line2D
 from ...qt import QtWidgets, Signal
 
 MODES = (
-    ("Inspect", "inspect", "Click a cell or triangle: index, position, "
-     "volume and the values of the quantities loaded"),
+    ("Inspect", "inspect", "Click a B2.5 cell or an EIRENE triangle: the "
+     "value shown there and the geometry of the cell and the triangle"),
     ("Line", "line", "Click the two ends of a line: profile of the "
      "quantity shown, integral, average; flux through the line for flux "
      "densities"),
     ("Box", "box", "Click two corners: statistics of the cells shown "
      "inside"),
-    ("Polygon", "polygon", "Click the corners, double-click the last one: "
-     "statistics of the cells shown inside"),
-    ("Seeds", "seeds", "Click the two ends of the seed line of the "
-     "streamlines"))
+    ("Polygon", "polygon", "Click the corners, then the first one again "
+     "(or double-click the last one): statistics of the cells shown "
+     "inside"))
+HIDDEN = ("seeds",)                 # modes without a button here
 POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2}
 HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
          "box": "Click two corners of the box", "polygon": "Click the "
-         "corners of the polygon, double-click the last one",
+         "corners of the polygon, then the first one again",
          "seeds": "Click the start and the end of the seed line"}
 
 
@@ -67,6 +68,10 @@ class MouseTools(QtWidgets.QWidget):
         """Mode on, or all off with None."""
         for key, b in self.buttons.items():
             b.setChecked(key == mode)
+        if mode in HIDDEN:
+            self._toggled(mode, True)
+        elif self.mode in HIDDEN:
+            self._toggled(self.mode, False)
 
     def _toggled(self, key, on):
         if on:
@@ -90,7 +95,8 @@ class MouseTools(QtWidgets.QWidget):
         if self.mode is None or event.inaxes is not self.plot.ax or \
                 event.button != 1 or str(self.toolbar.mode):
             return
-        if self.mode == "polygon" and event.dblclick:
+        if self.mode == "polygon" and (event.dblclick or self._near_first(
+                event)):
             if len(self.points) >= 3:
                 self._finish(np.array(self.points))
             return
@@ -102,7 +108,19 @@ class MouseTools(QtWidgets.QWidget):
 
     def _move(self, event):
         if self.points and event.inaxes is self.plot.ax:
-            self._draw(self.points + [(event.xdata, event.ydata)])
+            if self.mode == "polygon" and self._near_first(event):
+                self._draw(self.points, closed=True)
+            else:
+                self._draw(self.points + [(event.xdata, event.ydata)])
+
+    def _near_first(self, event):
+        """The mouse within 10 screen pixels of the first corner of a
+        polygon of at least three corners."""
+        if self.mode != "polygon" or len(self.points) < 3:
+            return False
+        x, y = self.plot.ax.transData.transform(self.points[0])
+        return np.hypot(event.x - x, event.y - y) <= \
+            10.0 * self.canvas.device_pixel_ratio
 
     def _key(self, event):
         if event.key == "escape" and self.points:

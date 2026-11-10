@@ -36,7 +36,7 @@ class QuantityPanel(QtWidgets.QWidget):
 
     quantity_chosen = Signal(object)
     style_changed = Signal()
-    seed_line = Signal()
+    seed_line = Signal(bool)
     calculator = Signal(str)        # open the calculator with this text
 
     def __init__(self, parent=None):
@@ -310,7 +310,8 @@ class QuantityPanel(QtWidgets.QWidget):
         self.streams.setVisible(kind in ("stream", "quiverstream"))
         self.levels_box.setVisible(kind in ("contourf", "contour"))
         self.overlay_box.setVisible(kind in KINDS_FLAT)
-        self.cells_box.setVisible(source in ("matrix", "vector"))
+        self.cells_box.setVisible(source in ("matrix", "vector",
+                                             "equilibrium"))
         if emit:
             self._changed()
 

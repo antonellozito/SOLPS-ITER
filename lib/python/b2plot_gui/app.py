@@ -38,6 +38,15 @@ def _placeholder(name):
     return w
 
 
+def _roomy(combo):
+    """A combo box and its list wide enough for the longest item."""
+    fm = combo.fontMetrics()
+    text = max(fm.horizontalAdvance(combo.itemText(i))
+               for i in range(combo.count()))
+    combo.setMinimumWidth(text + 4 * fm.averageCharWidth() + 24)
+    combo.view().setMinimumWidth(text + 6 * fm.averageCharWidth())
+
+
 class SessionSettings:
     """Settings of one session (QSettings interface), in memory only."""
 
@@ -119,7 +128,7 @@ class MainWindow(QtWidgets.QMainWindow):
         the right of the tabs."""
         w = QtWidgets.QWidget()
         row = QtWidgets.QHBoxLayout(w)
-        row.setContentsMargins(0, 0, 0, 2)
+        row.setContentsMargins(0, 0, 0, 7)     # clear of the tab pane
         row.setSpacing(4)
         self.run_buttons = {}
         for key, text, tip, slot in (
@@ -159,6 +168,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.theme_combo.setToolTip("Switch between Light and Dark mode")
         self.theme_combo.currentTextChanged.connect(self.apply_theme)
         row.addWidget(self.theme_combo)
+        for combo in (self.live_combo, self.theme_combo):
+            _roomy(combo)
         return w
 
     def _shortcuts(self):

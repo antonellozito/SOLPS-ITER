@@ -90,7 +90,8 @@ class LayerMixin:
     def _wall_strip(self, data, o):
         """A wall field (one value per wall element, WallStyle o) along the
         wall elements, with its own colour scale and colour bar."""
-        seg = self.run.layers.get("wall", np.zeros((0, 4)))
+        seg = data.segments if getattr(data, "segments", None) is not None \
+            else self.run.layers.get("wall", np.zeros((0, 4)))
         v = np.asarray(data.values[min(o.column, len(data.columns) - 1)],
                        float)[:len(seg)]
         if o.log:
@@ -108,7 +109,7 @@ class LayerMixin:
         self.ax.add_collection(strip, autolim=False)
         self.field_artists.append(strip)
         if o.colorbar:
-            self.bottom_colorbar(strip, data.label)
+            self.wall_colorbar(strip, data.label)
 
     def _chords(self, layers):
         """Chords of every set, each numbered set.chord at its end."""

@@ -30,9 +30,9 @@ def defaults(fmt="png"):
 class PrintDialog(QtWidgets.QDialog):
     """The options of Print figure; options() after Export."""
 
-    def __init__(self, dark=False, parent=None):
+    def __init__(self, dark=False, parent=None, title="Print figure"):
         super().__init__(parent)
-        self.setWindowTitle("Print figure")
+        self.setWindowTitle(title)
         d = defaults()
         lay = QtWidgets.QGridLayout(self)
         lay.setContentsMargins(18, 14, 18, 14)
@@ -121,31 +121,12 @@ def save(figure, path, options):
     honoured, or ""."""
     fmt, content = options["format"], options["content"]
     color, dpi = options["color"], int(options["dpi"])
-    notes = []
     if content == "vector" and fmt in VECTOR:
-        if color == "gray":
-            _grayscale(figure)
-        if color == "cmyk":
-            notes.append("CMYK vector export is not supported; RGB "
-                         "colours written.")
+        note = _vector_colors(figure, color)
         figure.savefig(path, format=fmt, dpi=dpi,
                        facecolor=figure.get_facecolor())
-        return " ".join(notes)
-    buf = io.BytesIO()
-    figure.savefig(buf, format="png", dpi=dpi,
-                   facecolor=figure.get_facecolor())
-    image = QtGui.QImage.fromData(buf.getvalue())
-    if color == "gray":
-        image = image.convertToFormat(QtGui.QImage.Format_Grayscale8)
-    elif color == "cmyk":
-        cmyk = getattr(QtGui.QImage.Format, "Format_CMYK8888", None)
-        converted = image.convertToFormat(cmyk) if cmyk is not None and \
-            fmt == "eps" else None
-        if converted is None or converted.isNull():
-            notes.append("CMYK is not supported for this format; RGB "
-                         "colours written.")
-        else:
-            image = converted
+        return note
+    image, note = _raster(figure, fmt, color, dpi)
     if fmt in ("png", "jpg"):
         if not image.save(path, "JPG" if fmt == "jpg" else "PNG"):
             raise OSError("cannot write %s" % path)
@@ -153,7 +134,63 @@ def save(figure, path, options):
         _svg_with_image(image, path)
     else:
         _wrapped(image, path, fmt, dpi)
-    return " ".join(notes)
+    return note
+
+
+def save_pages(figures, path, options):
+    """Pages with the options of the dialog: a PDF holds all pages, other
+    formats get one file per page (name_p2.png, ...). Returns the files
+    and a note."""
+    fmt, notes = options["format"], set()
+    if fmt == "pdf" and len(figures) > 1:
+        from matplotlib.backends.backend_pdf import PdfPages
+        dpi = int(options["dpi"])
+        with PdfPages(path) as pdf:
+            for fig in figures:
+                if options["content"] == "vector":
+                    notes.add(_vector_colors(fig, options["color"]))
+                    pdf.savefig(fig, dpi=dpi, facecolor=fig.get_facecolor())
+                else:
+                    image, note = _raster(fig, fmt, options["color"], dpi)
+                    notes.add(note)
+                    pdf.savefig(_image_figure(image, dpi), dpi=dpi,
+                                pad_inches=0.0)
+        return [path], " ".join(sorted(n for n in notes if n))
+    files = []
+    stem, ext = os.path.splitext(path)
+    for i, fig in enumerate(figures):
+        name = path if i == 0 else "%s_p%d%s" % (stem, i + 1, ext)
+        notes.add(save(fig, name, options))
+        files.append(name)
+    return files, " ".join(sorted(n for n in notes if n))
+
+
+def _vector_colors(figure, color):
+    if color == "gray":
+        _grayscale(figure)
+    return "CMYK vector export is not supported; RGB colours written." \
+        if color == "cmyk" else ""
+
+
+def _raster(figure, fmt, color, dpi):
+    """The figure rendered at dpi in the colour space: (QImage, note)."""
+    buf = io.BytesIO()
+    figure.savefig(buf, format="png", dpi=dpi,
+                   facecolor=figure.get_facecolor())
+    image = QtGui.QImage.fromData(buf.getvalue())
+    note = ""
+    if color == "gray":
+        image = image.convertToFormat(QtGui.QImage.Format_Grayscale8)
+    elif color == "cmyk":
+        cmyk = getattr(QtGui.QImage.Format, "Format_CMYK8888", None)
+        converted = image.convertToFormat(cmyk) if cmyk is not None and \
+            fmt == "eps" else None
+        if converted is None or converted.isNull():
+            note = "CMYK is not supported for this format; RGB colours " \
+                "written."
+        else:
+            image = converted
+    return image, note
 
 
 def _rgba(image):
@@ -183,8 +220,8 @@ def _svg_with_image(image, path):
                     base64.b64encode(bytes(data)).decode("ascii")))
 
 
-def _wrapped(image, path, fmt, dpi):
-    """The image as the only content of a PDF or EPS page."""
+def _image_figure(image, dpi):
+    """A figure of the size of the image with the image as its content."""
     rgba = _rgba(image)
     h, w = rgba.shape[:2]
     fig = Figure(figsize=(w / dpi, h / dpi), dpi=dpi)
@@ -192,6 +229,12 @@ def _wrapped(image, path, fmt, dpi):
     ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
     ax.imshow(rgba)
     ax.set_axis_off()
+    return fig
+
+
+def _wrapped(image, path, fmt, dpi):
+    """The image as the only content of a PDF or EPS page."""
+    fig = _image_figure(image, dpi)
     fig.savefig(path, format=fmt, dpi=dpi, facecolor=fig.get_facecolor(),
                 pad_inches=0.0)
 

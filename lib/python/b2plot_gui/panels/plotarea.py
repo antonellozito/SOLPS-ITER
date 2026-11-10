@@ -1,17 +1,20 @@
 """Layout of the 2D tab: three columns with fixed fractions of
-the width, the commands over the plot (Zoom, Unzoom, Rezoom, Restore,
-Pan and the mouse tools; under them Add to page, Page composer, Print
+the width, the commands over the plot (Zoom, Unzoom, Rezoom, Restore and
+the mouse tools; under them Add to page, Page composer, Print
 figure, Export field and the cursor readout) and a canvas whose plot
 scales with the window."""
 
-from ...qt import FigureCanvasQTAgg, QtCore, QtWidgets, Qt
+import re
+
+from ...qt import FigureCanvasQTAgg, QtCore, QtGui, QtWidgets, Qt
 
 NAV = (("Zoom", "zoom", "Drag a box to zoom in"),
        ("Unzoom", "back", "Back to the previous view"),
        ("Rezoom", "forward", "Forward to the next view"),
-       ("Restore", "restore", "The full view of the run"),
-       ("Pan", "pan", "Drag to move the view"))
-READOUT = "R = --\nZ = --"
+       ("Restore", "restore", "The full view of the run (the plot moves "
+        "when dragged with the left button, the mouse wheel zooms)"))
+READOUT = "R = --   Z = --"
+VALUE = re.compile(r"value = (.+)$")      # number and unit, in bold
 
 
 class ScaledCanvas(FigureCanvasQTAgg):
@@ -41,22 +44,73 @@ class ScaledCanvas(FigureCanvasQTAgg):
 
 
 class Readout(QtWidgets.QLabel):
-    """The cursor readout: always two lines (the position, then the cell
-    and the value), so that its height, and the plot under it, never
-    change."""
+    """The cursor readout: one line (R, Z, rho poloidal, value, its number
+    and unit in bold) of fixed height; its text gets smaller when the line
+    is wider than the box, so that every number shows."""
 
     def __init__(self, text=READOUT, parent=None):
         super().__init__(parent)
         self.setObjectName("readout")
         self.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.setTextFormat(Qt.RichText)
         self.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
                            QtWidgets.QSizePolicy.Fixed)
+        self._line, self._size, self._base, self._busy = "", None, None, False
         self.setText(text)
 
     def setText(self, text):
-        lines = [t.strip() for t in str(text).split("\n")]
-        rest = "  ".join(t for t in lines[1:] if t)
-        super().setText("%s\n%s" % (lines[0] or " ", rest or " "))
+        self._line = " ".join(str(text).splitlines()) or " "
+        self._fit()
+
+    def text(self):
+        """The line as plain text."""
+        return self._line
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if not self._busy and event.type() in (QtCore.QEvent.FontChange,
+                                               QtCore.QEvent.StyleChange):
+            self._base = None           # the window font changed
+            self._fit()
+
+    def _fit(self):
+        if self._busy:
+            return
+        self._busy = True
+        try:
+            if self._base is None:      # font of the window, line height
+                self.setStyleSheet("")
+                self._size = None
+                self._base = self.font().pointSizeF()
+                super().setText("R")
+                self.setFixedHeight(self.sizeHint().height())
+            avail = self.contentsRect().width() - 4
+            f = QtGui.QFont(self.font())
+            f.setPointSizeF(self._base)
+            width = QtGui.QFontMetricsF(f).horizontalAdvance(self._line)
+            number = VALUE.search(self._line)
+            if number:                      # number and unit in bold
+                f.setBold(True)
+                width += QtGui.QFontMetricsF(f).horizontalAdvance(
+                    number.group(1))
+                f.setBold(False)
+                width -= QtGui.QFontMetricsF(f).horizontalAdvance(
+                    number.group(1))
+            size = self._base if width <= avail or avail <= 0 else max(
+                0.6 * self._base, int(4 * self._base * avail / width) / 4.0)
+            if size != (self._size or self._base):
+                self.setStyleSheet("" if size == self._base else
+                                   "font-size: %.2fpt;" % size)
+                self._size = size
+            html = self._line.replace("&", "&amp;").replace(
+                "<", "&lt;").replace("   ", "&nbsp;&nbsp; ")
+            super().setText(VALUE.sub(r"value = <b>\1</b>", html))
+        finally:
+            self._busy = False
 
 
 class Columns(QtWidgets.QWidget):
@@ -95,7 +149,8 @@ def _button(text, tip, slot=None, checkable=False):
 
 class PlotCommands(QtWidgets.QWidget):
     """The commands over the plot of a Tab2D (its hidden matplotlib
-    navigation bar does the zooming and panning)."""
+    navigation bar does the box zoom; the tab pans and zooms with the
+    mouse)."""
 
     def __init__(self, tab, parent=None):
         super().__init__(parent)
@@ -104,7 +159,7 @@ class PlotCommands(QtWidgets.QWidget):
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(4)
         for text, key, tip in NAV:
-            checkable = key in ("zoom", "pan")
+            checkable = key == "zoom"
             slot = (lambda on, k=key: self._mode(k, on)) if checkable else \
                 {"back": lambda: self._step(self.nav.back),
                  "forward": lambda: self._step(self.nav.forward),
@@ -145,14 +200,13 @@ class PlotCommands(QtWidgets.QWidget):
         lay.addLayout(second)
 
     def _mode(self, key, on):
-        """Zoom or Pan on or off (the mouse tools go off)."""
+        """Zoom on or off (the mouse tools go off)."""
         nav = self.nav
         if on:
             self.tab.tools.bar.set_mode(None)
         current = str(nav.mode)
-        want = {"zoom": "zoom rect", "pan": "pan/zoom"}[key]
-        if on != (current == want):
-            nav.zoom() if key == "zoom" else nav.pan()
+        if on != (current == "zoom rect"):
+            nav.zoom()
         self.sync()
 
     def _step(self, move):
@@ -161,13 +215,11 @@ class PlotCommands(QtWidgets.QWidget):
         self.tab.plot.requested = self.tab.plot.get_view()
 
     def sync(self):
-        """Zoom and Pan show the mode of the navigation bar."""
-        current = str(self.nav.mode)
-        for key, mode in (("zoom", "zoom rect"), ("pan", "pan/zoom")):
-            b = self.buttons[key]
-            b.blockSignals(True)
-            b.setChecked(current == mode)
-            b.blockSignals(False)
+        """Zoom shows the mode of the navigation bar."""
+        b = self.buttons["zoom"]
+        b.blockSignals(True)
+        b.setChecked(str(self.nav.mode) == "zoom rect")
+        b.blockSignals(False)
 
     def restore(self):
         """The full view of the run."""

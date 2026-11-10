@@ -1,17 +1,18 @@
 """What the mouse tools of a 2D tab do with the shapes drawn: the cell
-inspector, the line cut and the statistics in the results panel, the
-seed line of the streamlines."""
+inspector, the line cut and the statistics in the results panel (those of
+the cells shown follow the view), the seed line of the streamlines."""
 
 import numpy as np
 
 from ...b2plot import labels
+from ...qt import QtCore, QtWidgets, Qt
 from ..model import split_unit
 from . import inspect, measure
 from .base import MouseTools
 from .results import ResultsPanel
 
 VOLUMES = {"cells": ("field", "vol"), "triangles": ("efield", "triavol")}
-WHERE = {"shown": "the cells shown", "box": "the box",
+WHERE = {"shown": "the cells shown in the view", "box": "the box",
          "polygon": "the polygon"}
 
 
@@ -29,16 +30,37 @@ class Tools:
             self.bar.buttons[key].toggled.connect(
                 lambda on: on and self._load())
         self.last, self.waiting = None, False
+        self._again = QtCore.QTimer(tab)
+        self._again.setSingleShot(True)
+        self._again.setInterval(150)
+        self._again.timeout.connect(lambda: self.last is not None and
+                                    self._done(*self.last))
 
     def _load(self):
-        """Ask b2plot for the default quantities of the inspector and the
-        volumes (kept in the cache once loaded)."""
+        """Ask b2plot for the triangle areas and volumes and the cell
+        volumes (kept in the cache once loaded); the inspector reads the
+        geometry files of the run once."""
         tab = self.tab
-        for name in inspect.DEFAULTS:
+        if tab.run is None:
+            return
+        for name in inspect.REQUESTS + ("vol",):
             q = next((q for q in tab.final_quantities if q.name == name),
                      None)
             if q is not None:
                 tab.request.emit(("tools", q, (), None))
+        if self.bar.mode == "inspect":
+            QtWidgets.QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                inspect.files(tab.run)
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+
+    def view_changed(self):
+        """The statistics of the cells shown again for a new view (once
+        the view stops moving)."""
+        if self.last is not None and self.last[0] == "shown" and \
+                self.panel.isVisible():
+            self._again.start()
 
     def deliver(self, data):
         """A quantity the tools asked for arrived (None: b2plot failed):
@@ -63,13 +85,17 @@ class Tools:
             return
         self.last = (mode, pts)
         if mode == "inspect":
-            names = {q.name: q.label for q in tab.final_quantities
-                     + tab.movie_quantities}
             x, y = pts[0]
-            self.panel.show_table(
-                "Cell at R %.4f m, Z %.4f m" % (x, y), inspect.HEADER,
-                inspect.rows(tab.run, tab.plot, x, y, names,
-                             tab._species()))
+            found = inspect.groups(tab, x, y)
+            if not found:               # outside every cell and triangle
+                self.last = None
+                return
+            title = []
+            for t, _ in found:
+                t = t.split(":")[0]
+                if t != "Quantity shown" and t not in title:
+                    title.append(t)
+            self.panel.show_groups(", ".join(title), inspect.HEADER, found)
         elif mode == "line":
             self._line(pts)
         else:
@@ -90,23 +116,28 @@ class Tools:
         unit = plain(split_unit(data.label)[1])
         s, r, z, v, vn = measure.profile(tab.plot, data, pts[0], pts[1])
         inside, total, mean, flux = measure.line_sums(s, r, v, vn)
-        text = ("Inside the cells shown: %.4g m of %.4g m.  Integral %.5g %s,"
-                "  average %.5g %s" % (inside, s[-1], total, plain(
-                    measure.times_m(unit, 1)), mean, plain(unit)))
+        lines = ["Length inside the cells shown: %.4g m of %.4g m" % (
+                     inside, s[-1]),
+                 "Integral along the line: %.5g %s" % (
+                     total, plain(measure.times_m(unit, 1))),
+                 "Average along the line: %.5g %s" % (mean, plain(unit))]
         if vn is not None and measure.PER_M.search(unit) and \
                 measure.PER_M.search(unit).group(1) == "2":
-            text += (".  Flux through the surface the line sweeps around "
-                     "the axis (2πR v·n, n to the right of the "
-                     "line): %.5g %s" % (flux, plain(measure.times_m(
-                         unit, 2))))
+            lines.append("Flux through the surface the line sweeps around "
+                         "the axis (2πR v·n, n to the right of the line): "
+                         "%.5g %s" % (flux, plain(measure.times_m(unit, 2))))
         elif vn is not None:
-            text += ".  No flux: the unit is not a flux density (m^-2)"
+            lines.append("No flux: the unit is not a flux density (m^-2)")
+        text = "\n".join(lines)
+        ok = np.isfinite(v)
 
         def draw(ax):
             ax.plot(s, v, label="|v|" if vn is not None else None)
             if vn is not None:
                 ax.plot(s, vn, label="v·n")
                 ax.legend(fontsize="small")
+            if ok.any():                # the profile from end to end
+                ax.set_xlim(s[ok].min(), s[ok].max())
             ax.set_xlabel("distance along the line (m)")
             ax.set_ylabel(plain(unit))
             ax.grid(alpha=0.3)
@@ -137,6 +168,9 @@ class Tools:
                 tab.request.emit(("tools", q, (), None))
             return
         self.waiting = False
+        if mode == "shown":             # the cells shown in the view
+            x0, x1, y0, y1 = plot.get_view()
+            pts = np.array([(x0, y0), (x1, y1)])
         idx = measure.chosen(plot, data, pts)
         cells = data.location == "cells"
         i = g.cells[idx] - 1 if cells else idx
@@ -145,11 +179,14 @@ class Tools:
         st = measure.statistics(values, volumes)
         plain = labels.any_to_plain
         unit = plain(split_unit(data.label)[1])
-        text = ("%d %s, volume %.5g m^3.  Volume integral %.5g %s,  volume "
-                "average %.5g %s,  minimum %.5g,  maximum %.5g" % (
-                    st["n"], "cells" if cells else "triangles", st["volume"],
-                    st["integral"], plain(measure.times_m(unit, 3)),
-                    st["average"], plain(unit), st["min"], st["max"]))
+        text = "\n".join((
+            "%s: %d" % ("Cells" if cells else "Triangles", st["n"]),
+            "Volume: %.5g m^3" % st["volume"],
+            "Volume integral: %.5g %s" % (st["integral"], plain(
+                measure.times_m(unit, 3))),
+            "Volume average: %.5g %s" % (st["average"], plain(unit)),
+            "Minimum: %.5g %s" % (st["min"], plain(unit)),
+            "Maximum: %.5g %s" % (st["max"], plain(unit))))
         ok = np.isfinite(values)
 
         def draw(ax):

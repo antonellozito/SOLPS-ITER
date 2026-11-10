@@ -58,6 +58,7 @@ NEUTRALS = "Neutrals (EIRENE)"
 NEUTRAL_VECTORS = "Neutral fluxes and velocities (EIRENE vectors)"
 DERIVED = "Derived quantities"
 CHORDS = "Chord contributions (*.chords files)"
+EQUILIBRIUM = "Magnetic equilibrium (derived)"
 CHORD_POINTS = 33               # points of each chord sent by guigeom
 ORDER = [DERIVED, "Plasma state", VECTORS, "Fluxes", "Velocities",
          "Sources and sinks", "Sources by origin", "Atomic physics and "
@@ -65,7 +66,7 @@ ORDER = [DERIVED, "Plasma state", VECTORS, "Fluxes", "Velocities",
          "coefficients", "Neoclassical, collisionality, plasma frequencies",
          "Flux limiters", "Balances", "Convergence (residuals, corrections)",
          "Previous time step", NEUTRALS, NEUTRAL_VECTORS, "Geometry and "
-         "magnetic field", FAMILIES[-1][0], OTHER, CHORDS]
+         "magnetic field", EQUILIBRIUM, FAMILIES[-1][0], OTHER, CHORDS]
 
 
 @dataclass
@@ -73,7 +74,8 @@ class Quantity:
     name: str                   # b2plot label, "pol rad" for vectors
     description: str
     group: str
-    source: str                 # "matrix", "eirene", "vector", "evector"
+    source: str                 # "matrix", "eirene", "vector", "evector",
+    #                             "equilibrium" (computed by the GUI)
     poloidal: str = ""
     radial: str = ""
     movie: int = 0              # 1 b2movies.nc, 2 eirenemovies.nc
@@ -148,8 +150,10 @@ def _epairs(entries):
     return out
 
 
-def quantities(categories):
-    """List of Quantity from the categories of the CATALOG message."""
+def quantities(categories, maps=()):
+    """List of Quantity from the categories of the CATALOG message, and
+    the 2D maps of the derived equilibrium quantities (name, label: the
+    GUI computes them from the geometry files, source "equilibrium")."""
     cats = dict(categories)
     matrix = [e for e in cats.get("Matrix quantities", []) if e[0].strip()]
     eirene = [e for e in cats.get("Eirene quantities", []) if e[0].strip()]
@@ -162,6 +166,8 @@ def quantities(categories):
     out += [Quantity(x + " " + y, d, NEUTRAL_VECTORS, "evector", x, y)
             for x, y, d in _epairs(eirene)]
     out.sort(key=lambda q: (ORDER.index(q.group), q.name.lower()))
+    out += [Quantity(n, d, EQUILIBRIUM, "equilibrium") for n, d in maps]
+    out.sort(key=lambda q: ORDER.index(q.group))       # maps in their order
     return out
 
 

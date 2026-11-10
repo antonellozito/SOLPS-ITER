@@ -1,14 +1,14 @@
 """Page composer: snapshots of the 2D plot (quantity with all its
-settings) laid out nx by ny on pages, as b2plot page, for export. The
-interactive plot of the tab stays one."""
+settings) laid out nx by ny on pages, as b2plot page, printed with the
+options of Print figure. The interactive plot of the tab stays one."""
 
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from ...b2plot import labels
-from . import page
+from .. import theme
+from . import page, printfig
 from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
-from .export import FigureDialog
 
 PREVIEW_DPI = 60
 
@@ -29,13 +29,22 @@ class Composer(QtWidgets.QWidget):
         self.list.setToolTip("Plots in page order: left to right, then "
                              "top to bottom")
         self.list.currentRowChanged.connect(self._show_page_of)
+        self.list.itemSelectionChanged.connect(self._buttons)
         buttons = QtWidgets.QHBoxLayout()
-        for text, slot in (("Up", lambda: self._move(-1)),
-                           ("Down", lambda: self._move(1)),
-                           ("Remove", self._remove), ("Clear", self.clear)):
+        self.buttons = {}
+        for key, text, tip, slot in (
+                ("up", "Move up", "The selected plot one place earlier",
+                 lambda: self._move(-1)),
+                ("down", "Move down", "The selected plot one place later",
+                 lambda: self._move(1)),
+                ("remove", "Remove", "The selected plot off the pages",
+                 self._remove),
+                ("clear", "Clear", "All plots off the pages", self.clear)):
             b = QtWidgets.QPushButton(text)
+            b.setToolTip(tip)
             b.clicked.connect(lambda *_, f=slot: f())
             buttons.addWidget(b)
+            self.buttons[key] = b
 
         self.nx = QtWidgets.QSpinBox()
         self.ny = QtWidgets.QSpinBox()
@@ -60,8 +69,10 @@ class Composer(QtWidgets.QWidget):
         self.page.setRange(1, 1)
         self.page.setPrefix("page ")
         self.page.valueChanged.connect(lambda *_: self._timer.start())
-        export = QtWidgets.QPushButton("Export pages…")
-        export.clicked.connect(lambda *_: self.export())
+        export = QtWidgets.QPushButton("Print pages…")
+        export.setToolTip("All pages as image or vector files, with the "
+                          "options of Print figure (a PDF holds all pages)")
+        export.clicked.connect(lambda *_: self.print_pages())
 
         form = QtWidgets.QFormLayout()
         row = QtWidgets.QHBoxLayout()
@@ -100,6 +111,17 @@ class Composer(QtWidgets.QWidget):
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._render)
         self.resize(1100, 640)
+        self._buttons()
+
+    def _buttons(self):
+        """Move up, Move down and Remove act on the selected plot: only
+        with a selection (and where the plot can move)."""
+        rows = [self.list.row(i) for i in self.list.selectedItems()]
+        i, n = (rows[0] if rows else -1), len(self.snaps)
+        self.buttons["up"].setEnabled(i > 0)
+        self.buttons["down"].setEnabled(0 <= i < n - 1)
+        self.buttons["remove"].setEnabled(i >= 0)
+        self.buttons["clear"].setEnabled(n > 0)
 
     # ------------------------------------------------------------ plots
     def add(self, snap, values=None):
@@ -116,6 +138,7 @@ class Composer(QtWidgets.QWidget):
         self.snaps = []
         self.list.clear()
         self._changed()
+        self._buttons()
 
     def _remove(self):
         i = self.list.currentRow()
@@ -123,6 +146,7 @@ class Composer(QtWidgets.QWidget):
             del self.snaps[i]
             self.list.takeItem(i)
             self._changed()
+            self._buttons()
 
     def _move(self, step):
         i = self.list.currentRow()
@@ -133,6 +157,7 @@ class Composer(QtWidgets.QWidget):
             self.list.insertItem(j, item)
             self.list.setCurrentRow(j)
             self._changed()
+            self._buttons()
 
     # ----------------------------------------------------------- pages
     def grid(self):
@@ -185,23 +210,48 @@ class Composer(QtWidgets.QWidget):
         super().resizeEvent(event)
         self._fit()
 
-    def export(self, path=None, dpi=None):
-        """Write all pages (dialog unless path is given); returns files."""
+    def print_pages(self, path=None, options=None):
+        """Print all pages with the options of Print figure (dialogs unless
+        path is given; options default to those of its extension); returns
+        the files."""
         if not self.snaps:
             self.status.emit("The page composer has no plots")
             return []
-        if path is None:
-            dlg = FigureDialog(self.settings, "b2plot_pages.pdf", shape=False,
-                               parent=self)
+        if options is None and path is None:
+            dlg = printfig.PrintDialog(theme.is_dark(), self, "Print pages")
             if dlg.exec() != QtWidgets.QDialog.Accepted:
                 return []
-            path, dpi = dlg.path(), dlg.dpi.value()
+            options = dlg.options()
+        if options is None:
+            options = printfig.defaults(path.rsplit(".", 1)[-1].lower())
+        if path is None:
+            folder = self.settings.value("export_dir", "")
+            fmt = options["format"]
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Print pages", (folder + "/" if folder else "") +
+                "b2plot_pages." + fmt, printfig.FILTERS[fmt])
+            if not path:
+                return []
+        path = printfig.with_suffix(path, options["format"])
         nx, ny = self.grid()
+        dark = theme.is_dark()
         try:
-            files = page.save(path, self.snaps, self.size(), dpi or 150, nx,
-                              ny, self.header.text(), self.values)
-        except Exception as err:
-            self.status.emit("Cannot export the pages: %s" % err)
+            theme.set_dark(options.get("theme", theme.name().lower())
+                           == "dark")
+            figures = []
+            for group in page.pages(self.snaps, nx, ny):
+                fig = page.figure(self.size())
+                FigureCanvasAgg(fig)
+                page.draw_page(fig, group, nx, ny, self.header.text(),
+                               self.values)
+                figures.append(fig)
+            files, note = printfig.save_pages(figures, path, options)
+        except Exception as err:    # a bad snapshot must not end the GUI
+            self.status.emit("Cannot print the pages: %s" % err)
             return []
-        self.status.emit("Pages written to %s" % ", ".join(files))
+        finally:
+            theme.set_dark(dark)
+        self.settings.setValue("export_dir", path.rsplit("/", 1)[0])
+        self.status.emit(("Pages printed to %s. %s" % (
+            ", ".join(files), note)).strip())
         return files

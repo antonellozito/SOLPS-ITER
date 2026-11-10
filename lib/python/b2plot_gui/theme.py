@@ -138,7 +138,7 @@ QTabWidget::tab-bar {{ alignment: left; }}
 QTabBar::tab {{ background-color: {tab}; color: {text};
     border: 1px solid {border}; border-top-left-radius: 4px;
     border-top-right-radius: 4px; padding: 3px 10px; margin-right: 1px;
-    min-height: 16px; }}
+    margin-top: 6px; min-height: 16px; }}
 QTabBar::tab:hover {{ background-color: {hover}; }}
 QTabBar::tab:selected {{ background-color: {tab_selected};
     border-bottom-color: {tab_selected}; font-weight: 600; }}

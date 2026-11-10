@@ -19433,7 +19433,12 @@ The {\bf quantity panel} (left):
 \item the quantity tree (description and \btwoplot name), with a search
   field; a click plots a quantity, a second click clears the plot; vector
   quantities pair the poloidal and radial components (B2.5) or the
-  Cartesian components (EIRENE);
+  Cartesian components (EIRENE); the group {\tt Magnetic equilibrium
+  (derived)} holds maps the GUI computes from {\tt b2fgmtry}, the derived
+  quantities of {\tt Inspect} on every cell (vertex values with
+  inverse-volume weights), empty where a quantity has no meaning; the
+  grazing angle is a wall quantity of the wall strip ({\tt graze}, along
+  the wall and target faces of the B2.5 grid);
 \item the species, including the sum over the species (\btwoplot
   {\tt sumz}, {\tt esumz});
 \item the plot type: patch, filled contour, contour lines, quiver,
@@ -19457,36 +19462,61 @@ The {\bf quantity panel} (left):
 \end{itemize}
 
 The {\bf plot} (centre) shows the physical domain only, in a box that
-keeps its place; the colour bar is at its right (an empty frame when
-nothing is plotted), the colour bar of the wall strip under it. Over the
-plot: {\tt Zoom}, {\tt Unzoom}, {\tt Rezoom}, {\tt Restore} and
-{\tt Pan}, and the mouse tools; under them {\tt Add to page},
-{\tt Page composer}, {\tt Print figure} (png, jpg, eps, pdf or svg;
-vector or raster content at a resolution; colour space rgb, cmyk or gray;
-light or dark theme), {\tt Export field} and the readout of the position,
-the cell (and its {\tt ix}, {\tt iy} on classical grids) or the triangle
-and the value under the cursor. The view starts on the grid and the device
-structure, which is also the widest view ({\tt Restore}): zoom, pan and
-the mouse wheel (zoom around the cursor, 10\,\% a wheel step) stay
-inside it. Arrows are binned
-over the current view and redrawn after zoom and pan.
+never moves; at its right the colour bar of the quantity and, right of
+it, the colour bar of the wall strip (empty frames when nothing is
+plotted; filled contours too get a plain rectangle). Over the plot:
+{\tt Zoom}, {\tt Unzoom}, {\tt Rezoom}, {\tt Restore} and the mouse
+tools; under them {\tt Add to page}, {\tt Page composer}, {\tt Print
+figure} (png, jpg, eps, pdf or svg; vector or raster content at a
+resolution; colour space rgb, cmyk or gray; light or dark theme),
+{\tt Export field} and a one-line readout of $R$, $Z$, $\rho_{pol}$
+(with {\tt rzpsi.dat}) and the value of the quantity shown under the
+cursor, its number and unit in bold (in smaller text when the line
+would not fit). The view starts on
+the grid and the device structure, which is also the widest view
+({\tt Restore}). Dragging the plot with the left button pans it, the
+mouse wheel zooms around the cursor (10\,\% a wheel step); neither goes
+outside the widest view. Arrows are binned over the current view and
+redrawn after zoom and pan.
 
-The mouse tools set what a click on the plot does. {\tt Inspect}
-lists the cell (index, {\tt ix}, {\tt iy}, region, centre) and the EIRENE
-triangle under the cursor, with the values there of every quantity loaded
-({\tt ne}, {\tt te}, {\tt ti}, {\tt na}, {\tt po}, {\tt ua}, {\tt vol}
-and {\tt triavol} always). {\tt Line} (two clicks) gives the profile of
-the quantity shown along the line (linear in the vertex values, as the
-contours), its integral and average over the part inside the cells shown
-and, for a flux density (unit m$^{-2}$), the flux
-$\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the surface the
-line sweeps around the axis ($\mathbf{n}$ to the right of the line).
-{\tt Box}, {\tt Polygon} (double-click the last corner) and
-{\tt Statistics} (the cells shown) give the number of cells or
+The mouse tools set what a click on the plot does. {\tt Inspect}, in a
+B2.5 cell or an EIRENE triangle (elsewhere nothing happens), lists in up
+to five groups, with the quantity, its B2.5 or EIRENE name, the value
+and the unit: the value of the quantity shown; the grid of the B2.5 cell
+from {\tt b2fgmtry} (the variables of \texttt{b2cdcv}: number, centre,
+{\tt ix}, {\tt iy}, region and region of its flux tube, named for the
+standard topologies of Appendix~\ref{cha:regions} as B2.5 identifies
+them, kind, flux tube, volume, lengths, its faces with their areas,
+lengths, distances and angles, its vertices); its magnetic equilibrium,
+basic quantities ($\rho_{pol}$ and $\psi_N$ with {\tt rzpsi.dat}, the
+field components and $|B|$, the field direction, the connection length
+of B2.5, the contact areas, angles and field components at the faces,
+the flux at the vertices) and derived quantities, without a name
+(magnetic pitch, pitch angle, the grazing angle of the field on the wall
+and target faces of the cell, parallel length of the cell, the poloidal
+and parallel distances along the flux tube from the west target and to
+the east target and the tube length wall to wall, as {\tt DSPOL} and
+{\tt DSPAR} of the MDSplus snapshot, or the lengths of a closed tube;
+the poloidal flux expansion $(R B_{pol})_{mid}/(R B_{pol})$ relative to
+the B2.5 midplane cell nearest along the tube; the safety factor
+$q = \frac{1}{2\pi}\oint B_{tor}/(R B_{pol})\,dl_{pol}$ of a closed
+tube); the EIRENE triangle from {\tt fort.33}, {\tt fort.34} and
+{\tt fort.35} (nodes and their coordinates, neighbours and their sides,
+additional surfaces, its B2.5 cell and faces, centroid, area and volume
+of \btwoplotns). {\tt Line} (two clicks) gives the profile of the quantity
+shown along the line (linear in the vertex values, as the contours, the
+plot from its first to its last value), its integral and average over
+the part inside the cells shown and, for a flux density (unit m$^{-2}$),
+the flux $\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the
+surface the line sweeps around the axis ($\mathbf{n}$ to the right of
+the line). {\tt Box}, {\tt Polygon} (closed by a click near its first
+corner, or a double click) and {\tt Statistics} (the cells shown in the
+view, again after each zoom or pan) give the number of cells or
 triangles, their volume ({\tt vol}, {\tt triavol}), the volume integral
 and average, the minimum, the maximum and a histogram of the quantity
-shown. {\tt Seeds} draws the seed line of the streamlines. The results
-appear in a small window and can be exported as CSV.
+shown. The results appear, one per line, in a small window and can be
+exported as CSV. The seed line of the streamlines is drawn with
+{\tt Draw seed line} of the streamline options.
 
 The {\bf layers panel} (right) shows and styles the device structure
 (from {\tt structure.dat}), the vessel ({\tt mesh.extra}), the
@@ -19506,8 +19536,10 @@ Export:
 \item {\tt Page composer}: plots added with {\tt Add to page} keep
   all their settings and are laid out $n_x \times n_y$ on pages (as
   {\tt page}) with a global header, square, A4 portrait or A4 landscape
-  (as {\tt sq}, {\tt a4p}, {\tt a4l}); a PDF holds all pages, other
-  formats give one file per page.
+  (as {\tt sq}, {\tt a4p}, {\tt a4l}); {\tt Move up}, {\tt Move down} and
+  {\tt Remove} act on the selected plot; {\tt Print pages} has the options
+  of {\tt Print figure}; a PDF holds all pages, other formats give one
+  file per page.
 \end{itemize}
 
 The GUI talks to {\tt b2pl.exe} with the commands of
