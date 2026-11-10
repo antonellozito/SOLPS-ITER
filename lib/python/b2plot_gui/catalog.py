@@ -28,9 +28,15 @@ GROUPS = [
      ("density", "temperature", "pressure", "potential", "energy",
       "charge", "z_{eff}", "zeff")),
 ]
-# Labels with an integer argument (masks): written ixeq(10) as derived
+# Labels with an integer argument (masks): argument of the Mask box, or
+# written ixeq(10) in derived quantities
 INTEGER = re.compile(r"i[xysc](lt|le|eq|ne|ge|gt)|nreg|freg|clbl|flbl|tlbl|"
                      r"ifeq|iveq|fteq")
+# Labels of cells set to 1, the others 0 (masks without argument)
+FLAGS = re.compile(r"bdcl|gdcl|rlcl|npcl|iimp|iomp")
+# Labels with their values on the guard cells (no area), drawn on the
+# boundary faces of those cells (as the masks are)
+GUARD = re.compile(r"rc|bc")
 # Families of labels, checked before the description keywords of GROUPS
 FAMILIES = [
     ("Convergence (residuals, corrections)",
@@ -50,7 +56,7 @@ FAMILIES = [
      r"dnneo|chineo|vnneo|vwneo|lnn|ltt|nuab|nua|nustar|vth|rhol|deltal|wb|"
      r"deltaw[nt]?|omega|deltab|deltapar|chhichii|colle|colli|lnlam|wpe|wce|"
      r"wci|vthe|vthi|valfven"),
-    ("Cell masks and indices (integer argument: ixeq(10))", INTEGER.pattern
+    ("Cell masks and indices", INTEGER.pattern
      + r"|rlcl|gdcl|bdcl|npcl|iimp|iomp|ix|iy|iix|iiy|ic|ift|xymap|bc|rc"),
 ]
 OTHER = "Other matrix quantities"

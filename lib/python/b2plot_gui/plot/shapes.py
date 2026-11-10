@@ -1,6 +1,6 @@
 """Shapes from the run geometry for the layers and the streamline seeds:
-polylines chained from the layer segments, the outline of the EIRENE
-mesh, points spaced along polylines, positions of the text labels."""
+polylines chained from the layer segments, the closed parts of the
+structure, points spaced along polylines."""
 
 import numpy as np
 from matplotlib.path import Path
@@ -45,33 +45,6 @@ def area(p):
                   - np.dot(p[:, 1], np.roll(p[:, 0], -1)))
 
 
-def outline(trimesh):
-    """Outer boundary of a triangle mesh (closed, counter-clockwise)."""
-    t = trimesh.triangles
-    e = np.sort(np.vstack((t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]])), 1)
-    edges, count = np.unique(e, axis=0, return_counts=True)
-    near = {}
-    for a, b in edges[count == 1]:
-        near.setdefault(a, []).append(b)
-        near.setdefault(b, []).append(a)
-    xy = np.column_stack((trimesh.x, trimesh.y))
-    loops, seen = [], set()
-    for start in near:
-        if start in seen:
-            continue
-        loop, prev, cur = [start], -1, start
-        seen.add(start)
-        nxt = [n for n in near[cur] if n != prev and n not in seen]
-        while nxt:
-            prev, cur = cur, nxt[0]
-            loop.append(cur)
-            seen.add(cur)
-            nxt = [n for n in near[cur] if n != prev and n not in seen]
-        loops.append(xy[loop + loop[:1]])
-    best = max(loops, key=lambda p: abs(area(p)), default=None)
-    return best if best is None or area(best) > 0 else best[::-1]
-
-
 def along(polys, n):
     """n points evenly spaced along the polylines (by length)."""
     pieces = [(p[:-1], p[1:]) for p in polys if len(p) > 1]
@@ -108,26 +81,3 @@ def seed_points(run, key, n, inside):
         return dense[np.linspace(0, len(dense) - 1, min(n, len(dense)))
                      .astype(int)] if len(dense) else dense
     return along(polylines(run.layers.get(key, [])), n)
-
-
-def label_points(run):
-    """(text, R, Z) of the labels: regions at a central cell, X-points,
-    the O-point of the psi map, midplanes (run.marks), targets at their
-    middle."""
-    g, out = run.geometry, []
-    for r in np.unique(g.region[g.visible]):
-        rows = np.flatnonzero(g.visible & (g.region == r))
-        c = g.centres[rows]
-        i = np.argmin(np.hypot(*(c - c.mean(axis=0)).T))
-        out.append((str(r), c[i, 0], c[i, 1]))
-    for k, (r, z) in enumerate(g.xpoints):
-        out.append(("X%s" % (k + 1 if len(g.xpoints) > 1 else ""), r, z))
-    if run.psimap is not None:
-        out.append(("O",) + tuple(run.psimap.opoint))
-    for name, (r, z) in getattr(run, "marks", {}).items():
-        out.append((name, r, z))
-    for name, polys in targets(run.layers).items():
-        mid = along(polys, 1)
-        if len(mid):
-            out.append(("T" + name, mid[0, 0], mid[0, 1]))
-    return out

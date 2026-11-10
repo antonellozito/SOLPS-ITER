@@ -24,39 +24,35 @@ class LayerStyle:
     alpha: float = 1.0
     levels: str = ""            # flux surfaces: psiN or rho levels
     rho: bool = False
+    fill_style: str = "empty"   # structure: closed parts "full", hatched
+    fill: str = ""              # ("pattern") or not filled, this colour
 
 
 LAYERS = {
-    "device": ("Device structure (structure.dat)",
-               LayerStyle(True, "#000000", 1.0)),
-    "structure": ("Vessel (mesh.extra)", LayerStyle(True, "#000000", 1.0)),
+    "structure": ("Structure", LayerStyle(True, "#000000", 1.0,
+                                          fill_style="full",
+                                          fill="#e0e0e0")),
+    "grid": ("B2.5 grid", LayerStyle(True, "#4d4d4d", 0.15)),
+    "eirene": ("EIRENE grid", LayerStyle(True, "#8c8c8c", 0.1)),
     "separatrices": ("Separatrices", LayerStyle(True, "#d62728", 1.2)),
     "xpoints": ("X-points", LayerStyle(False, "#d62728", 8.0)),
     "boundary": ("Grid boundary", LayerStyle(False, "#1f3b8c", 0.8)),
-    "grid": ("B2.5 grid", LayerStyle(False, "#4d4d4d", 0.15)),
-    "eirene": ("EIRENE grid", LayerStyle(False, "#8c8c8c", 0.1)),
     "flux": ("Flux surfaces",
              LayerStyle(False, "#2ca02c", 0.6, ":", 1.0,
-                        "0.90 0.95 1.00 1.02 1.04 1.06")),
+                        "0.90 0.95 1.00 1.02 1.04 1.06", rho=True)),
+    "midplanes": ("Midplanes", LayerStyle(False, "#1f77b4", 1.5, "--")),
     "targets": ("Divertor targets", LayerStyle(False, "#ff7f0e", 2.0)),
-    "zero": ("Zero lines (R = 0, Z = 0)",
-             LayerStyle(False, "#000000", 0.6, ":")),
-    "filled": ("Device structure filled", LayerStyle(False, "#e0e0e0")),
-    "outside": ("Mask outside the EIRENE mesh",
-                LayerStyle(False, "#ffffff")),
-    "labels": ("Labels: regions, X, O, midplanes, targets",
-               LayerStyle(False, "#000000", 8.0)),
     "chords": ("Chords (*.chords files), numbered",
                LayerStyle(False, "#9467bd", 0.8)),
     "trajectories": ("Trajectories (colours of b2plot)",
                      LayerStyle(False, "#000000", 0.6)),
 }
 ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2, "boundary": 3.3,
-          "outside": 3.35, "filled": 3.38, "structure": 3.4,
-          "device": 3.45, "separatrices": 3.5, "targets": 3.55,
-          "xpoints": 3.6, "zero": 3.65, "chords": 3.7, "trajectories": 3.75,
-          "labels": 6.0}
-FILLS = ("filled", "outside")   # layers drawn as areas (no line style)
+          "structure": 3.45, "separatrices": 3.5, "midplanes": 3.52,
+          "targets": 3.55, "xpoints": 3.6, "chords": 3.7,
+          "trajectories": 3.75}
+FILL_ZORDER = 3.38              # the filled parts of the structure
+HATCH = "////"                  # their pattern
 PWN = ((0.15, 0.45, 0.68), (1.0, 1.0, 1.0), (0.72, 0.15, 0.15))
 
 
@@ -64,6 +60,7 @@ PWN = ((0.15, 0.45, 0.68), (1.0, 1.0, 1.0), (0.72, 0.15, 0.15))
 class PlotStyle:
     kind: str = "patch"
     column: int = 0
+    mask: str = ""              # cells not zero in this colour, no bar
     cmap: str = "turbo"
     reverse: bool = False
     scale: str = "linear"       # linear, log, symlog

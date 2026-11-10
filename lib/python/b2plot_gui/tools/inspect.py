@@ -9,7 +9,7 @@ fort.34, fort.35, area and volume of b2plot)."""
 import numpy as np
 
 from ...b2plot import labels
-from . import cellfiles, equilibrium
+from . import cellfiles, equilibrium, regions
 
 HEADER = ["Quantity", "Name", "Value", "Unit"]
 REQUESTS = ("triarea", "triavol", "conn", "iimp", "iomp")  # from b2plot
@@ -138,7 +138,7 @@ def cell_rows(run, row, geo, rho=None):
         if len(hit):
             add(grid, "Structured grid indices ix, iy", "imapCv",
                 "%d, %d" % (hit[0][1] - 1, hit[0][0] - 1))
-    volume, tubes = equilibrium.region_names(run, geo)
+    volume, tubes = regions.region_names(run, geo)
     reg = val("cvReg")
     if reg is not None:
         add(grid, "Region", "cvReg", "%d (%s)" % (reg, volume[int(reg)])

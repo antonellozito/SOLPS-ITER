@@ -2,9 +2,10 @@
 
 import re
 import time
+from dataclasses import replace
 
 from ...b2plot import labels
-from ..catalog import INTEGER
+from ..catalog import FLAGS, GUARD, INTEGER
 from ..expression import real_token
 from ..plot.styles import (KINDS_FLAT, KINDS_SCALAR, KINDS_VECTOR,
                            PlotStyle)
@@ -12,7 +13,7 @@ from ...qt import QtWidgets, Qt, Signal
 from .options import CellsBox, LabelsBox, LevelsBox
 from .overlays import OverlayBox
 from .trajectories import TrajBox
-from .plotopts import ArrowsBox, ColourBox, LinesBox, StreamBox
+from .plotopts import ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox
 from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
@@ -20,6 +21,7 @@ KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
 SUM = "Sum over species"
+ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
 
 
 def column_names(columns, species=None):
@@ -82,6 +84,10 @@ class QuantityPanel(QtWidgets.QWidget):
         self.species.currentIndexChanged.connect(self._changed)
         form.addRow("Species", self.species)
         lay.addLayout(form)
+        self.mask_box = MaskBox()
+        self.mask_box.argument_changed.connect(self._argument)
+        self.mask_box.changed.connect(self._changed)
+        lay.addWidget(self.mask_box)
 
         kinds = QtWidgets.QGroupBox("Plot type")
         kgrid = QtWidgets.QGridLayout(kinds)
@@ -180,23 +186,48 @@ class QuantityPanel(QtWidgets.QWidget):
         q = item.data(0, Qt.UserRole)
         if q is None or q is self.current:
             return
-        if INTEGER.fullmatch(q.name):           # needs an integer argument
-            self.calculator.emit("%s(1)" % q.name)
-            return
         self.current = q
         vector = q.source in ("vector", "evector")
+        patch = self.is_mask(q) or bool(GUARD.fullmatch(q.name))
         for b in self.kind_buttons.buttons():
-            b.setEnabled((b.property("kind") in KINDS_VECTOR) == vector)
+            b.setEnabled((b.property("kind") in KINDS_VECTOR) == vector
+                         and (not patch or b.property("kind") == "patch"))
         kind = self.kind()
-        if (kind in KINDS_VECTOR) != vector:
+        if (kind in KINDS_VECTOR) != vector or (patch and kind != "patch"):
             self.kind_buttons.button(len(KINDS_SCALAR) if vector else 0
                                      ).setChecked(True)
         self.colour.edges.setEnabled(not vector)
         self._kind_changed(emit=False)
-        self.quantity_chosen.emit(q)
+        self.quantity_chosen.emit(self.wanted())
+
+    def is_mask(self, q=None):
+        """The quantity (default the current one) is a mask: a label
+        with an integer argument or a label of cells set to 1."""
+        q = self.current if q is None else q
+        return q is not None and bool(INTEGER.fullmatch(q.name) or
+                                      FLAGS.fullmatch(q.name))
+
+    def wanted(self):
+        """The current quantity as plotted: a mask with the argument of
+        the Mask box (name "1 ixeq")."""
+        q = self.current
+        if q is None or not INTEGER.fullmatch(q.name):
+            return q
+        n = self.mask_box.argument.value()
+        return replace(q, name="%d %s" % (n, q.name),
+                       description="%s, argument %d" % (q.description, n))
+
+    def _argument(self, *_):
+        if self.current is not None and INTEGER.fullmatch(self.current.name):
+            self.quantity_chosen.emit(self.wanted())
 
     def select(self, name):
-        """Select the quantity with this name, if listed."""
+        """Select the quantity with this name, if listed (a mask with its
+        argument: "1 ixeq")."""
+        m = ARGUMENT.fullmatch(name)
+        if m and INTEGER.fullmatch(m.group(2)):
+            self.mask_box.set_argument(int(m.group(1)))
+            name = m.group(2)
         for i in range(self.tree.topLevelItemCount()):
             top = self.tree.topLevelItem(i)
             for j in range(top.childCount()):
@@ -308,10 +339,16 @@ class QuantityPanel(QtWidgets.QWidget):
         self.lines.fill_lines.setVisible(kind == "contourf")
         self.arrows.setVisible(kind in ("quiver", "quiverstream"))
         self.streams.setVisible(kind in ("stream", "quiverstream"))
-        self.levels_box.setVisible(kind in ("contourf", "contour"))
         self.overlay_box.setVisible(kind in KINDS_FLAT)
         self.cells_box.setVisible(source in ("matrix", "vector",
                                              "equilibrium"))
+        mask = self.is_mask()
+        self.mask_box.setVisible(mask)
+        self.mask_box.show_argument(mask and bool(INTEGER.fullmatch(
+            self.current.name)))
+        self.colour.setVisible(not mask)
+        self.levels_box.setVisible(kind in ("contourf", "contour")
+                                   and not mask)
         if emit:
             self._changed()
 
@@ -326,6 +363,8 @@ class QuantityPanel(QtWidgets.QWidget):
         for box in (self.colour, self.levels_box, self.lines, self.arrows,
                     self.streams, self.cells_box):
             fields.update(box.style_fields())
+        if self.is_mask():
+            fields.update(self.mask_box.style_fields())
         return PlotStyle(kind=self.kind(), column=0 if self.reduced()
                          else max(self.species.currentIndex(), 0), **fields)
 
