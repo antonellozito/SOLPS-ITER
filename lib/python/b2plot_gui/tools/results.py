@@ -1,7 +1,7 @@
 """Results of the mouse tools in a small window over the main one (the
-plot keeps its place): a title and a summary, a table (cell inspector) or
-a small figure (profile along a line, histogram) in the colours of the
-theme, and the rows behind them for Export (CSV)."""
+plot keeps its place): a title and a summary, a table in groups (cell
+inspector) or a small figure (profile along a line, histogram) in the
+colours of the theme, and the rows behind them for Export (CSV)."""
 
 import csv
 import os
@@ -11,7 +11,7 @@ from matplotlib.figure import Figure
 
 from ...b2plot import labels
 from .. import theme
-from ...qt import FigureCanvasQTAgg, QtWidgets, Qt
+from ...qt import FigureCanvasQTAgg, QtGui, QtWidgets, Qt
 
 
 class ResultsPanel(QtWidgets.QWidget):
@@ -23,6 +23,7 @@ class ResultsPanel(QtWidgets.QWidget):
         self.setWindowTitle("b2plot — results")
         self.settings = settings
         self.placed = False
+        self.sized = False          # made larger for the inspector once
         self.header, self.rows = [], []
         self.title = QtWidgets.QLabel()
         self.title.setStyleSheet("font-weight: bold;")
@@ -56,6 +57,9 @@ class ResultsPanel(QtWidgets.QWidget):
 
     def show_table(self, title, header, rows):
         self._set(title, "", header, rows, figure=False)
+        self.table.clearSpans()
+        self.table.horizontalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.Interactive)
         self.table.setColumnCount(len(header))
         self.table.setHorizontalHeaderLabels(header)
         self.table.setRowCount(len(rows))
@@ -64,6 +68,41 @@ class ResultsPanel(QtWidgets.QWidget):
                 self.table.setItem(i, j, QtWidgets.QTableWidgetItem(
                     labels.any_to_plain(str(v))))
         self.table.resizeColumnsToContents()
+
+    def show_groups(self, title, header, groups):
+        """Groups of rows under a bold title row each; Export writes the
+        group as the first column."""
+        rows = [[g] + list(r) for g, rs in groups for r in rs]
+        self._set(title, "", ["Group"] + list(header), rows, figure=False)
+        t = self.table
+        t.clearSpans()
+        t.setColumnCount(len(header))
+        t.setHorizontalHeaderLabels(header)
+        t.setRowCount(sum(len(rs) + 1 for _, rs in groups))
+        t.setWordWrap(True)
+        bold = QtGui.QFont(t.font())
+        bold.setBold(True)
+        i = 0
+        for title_, rs in groups:
+            item = QtWidgets.QTableWidgetItem(title_)
+            item.setFont(bold)
+            t.setItem(i, 0, item)
+            t.setSpan(i, 0, 1, len(header))
+            i += 1
+            for r in rs:
+                for j, v in enumerate(r):
+                    t.setItem(i, j, QtWidgets.QTableWidgetItem(str(v)))
+                i += 1
+        value = header.index("Value") if "Value" in header else -1
+        h = t.horizontalHeader()
+        for j in range(len(header)):        # all columns in the window
+            h.setSectionResizeMode(j, QtWidgets.QHeaderView.Stretch
+                                   if j == value else
+                                   QtWidgets.QHeaderView.ResizeToContents)
+        if not self.sized:
+            self.resize(max(self.width(), 900), max(self.height(), 640))
+            self.sized = True
+        t.resizeRowsToContents()
 
     def show_figure(self, title, text, draw, header, rows):
         """draw(ax) makes the small figure; rows are what Export writes."""

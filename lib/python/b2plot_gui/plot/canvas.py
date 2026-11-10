@@ -26,26 +26,27 @@ TOP = 3.0       # room over a fixed plot: title, header and extra label line
 
 class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
     """One axes (a 3D one for surfaces) with a colour-bar slot at its right
-    and a bar under it for the wall strip. fixed: the boxes do not depend
-    on the texts (the plot of the GUI), and an empty colour-bar slot shows
-    a placeholder."""
+    and, right of it, the slot of the wall strip colour bar. fixed: the
+    boxes do not depend on the texts and both slots are always there,
+    empty ones with a placeholder (the plot of the GUI); otherwise the wall
+    slot takes its room only while a wall bar is shown."""
 
     def __init__(self, fig, rect=(0.0, 0.0, 1.0, 1.0), fixed=False):
         self.fig, self.rect, self.fixed = fig, tuple(rect), fixed
         self.label_artists = []
         self.label_style = LabelStyle()
         self._top_pts = 0.0         # header and extra label
-        self.bottom_bar = False     # wall strip colour bar under the plot
-        self.bbar = None
+        self.wall_bar = False       # wall strip colour bar shown
+        self.wbar = None
         self.reference = None       # size (inches) the fixed boxes keep
         self.requested = None       # the view last asked for (R, Z box)
-        ax_box, cax_box, bax_box = self._positions()
+        ax_box, cax_box, wax_box = self._positions()
         self.ax = fig.add_axes(ax_box)
         self.ax3d = None
         self.cax = fig.add_axes(cax_box)
         self.cax.set_visible(False)
-        self.bax = fig.add_axes(bax_box)
-        self.bax.set_visible(False)
+        self.wax = fig.add_axes(wax_box)
+        self.wax.set_visible(False)
         fig.set_facecolor(theme.figure_bg())
         fig.canvas.mpl_connect("resize_event", self._place)
         self.run = None
@@ -65,23 +66,22 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
 
     def _positions(self):
         """Boxes of the axes, of the colour bar at its right and of the
-        bar under it, in the rectangle of the figure. Margins in points:
-        scaled with the label size, or (fixed) those of the default size
-        with one line for the header and the extra label, so that the plot
-        box never moves; the bar under the plot takes its room only when
-        shown."""
+        wall bar right of that, in the rectangle of the figure. Margins in
+        points: scaled with the label size, or (fixed) those of the default
+        size with one line for the header and the extra label and both bar
+        slots, so that the plot box never moves."""
         x, y, w, h = self.rect
         pw, ph = np.maximum(self.inches() * 72.0, 1.0)
         fs = 10.0 if self.fixed else 10.0 * self.label_style.size
         top = (TOP * fs if self.fixed else 3.0 * fs + self._top_pts) / ph
         left, bottom = 6.0 * fs / pw, 4.2 * fs / ph
-        under = 3.6 * fs / ph if self.bottom_bar else 0.0
         gap, bar, right = 1.2 * fs / pw, 1.8 * fs / pw, 4.6 * fs / pw
-        aw = max(w - left - gap - bar - right, 0.1 * w)
-        ah = max(h - bottom - under - top, 0.1 * h)
-        ax = [x + left, y + bottom + under, aw, ah]
-        return ax, [x + left + aw + gap, y + bottom + under, bar, ah], [
-            x + left, y + 1.8 * fs / ph, aw, 1.2 * fs / ph]
+        wall = bar + right if self.fixed or self.wall_bar else 0.0
+        aw = max(w - left - gap - bar - right - wall, 0.1 * w)
+        ah = max(h - bottom - top, 0.1 * h)
+        x0 = x + left + aw + gap
+        return [x + left, y + bottom, aw, ah], [x0, y + bottom, bar, ah], [
+            x0 + bar + right, y + bottom, bar, ah]
 
     def inches(self):
         """Size of the figure for the boxes: the reference size of a fixed
@@ -96,11 +96,11 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         self._place()
 
     def _place(self, *_):
-        """Axes and bars to their boxes (labels, bottom bar or figure size
+        """Axes and bars to their boxes (labels, wall bar or figure size
         changed), keeping the equal aspect."""
-        ax_box, cax_box, bax_box = self._positions()
+        ax_box, cax_box, wax_box = self._positions()
         self.cax.set_position(cax_box)
-        self.bax.set_position(bax_box)
+        self.wax.set_position(wax_box)
         if not np.allclose(self.ax.get_position().bounds, ax_box):
             self.ax.set_position(ax_box)
             self._keep_aspect()
@@ -151,7 +151,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
     # ------------------------------------------------------------- field
     def clear_field(self):
         self._drop_colorbar()
-        self._drop_bottom_bar()
+        self._drop_wall_bar()
         for a in self.field_artists:
             a.remove()
         self.field_artists = []
@@ -261,6 +261,13 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
         self.ax.set_ylim(box[2], box[3])
         return True
 
+    def pan_to(self, box):
+        """The view moved to box (same size), stopped at the limits of the
+        run before it is drawn."""
+        self.ax.set_xlim(box[0], box[1])
+        self.ax.set_ylim(box[2], box[3])
+        self.clamp()
+
     def zoom_at(self, x, y, factor):
         """Zoom around (x, y) by factor (below 1: in), within the limits."""
         x0, x1 = self.ax.get_xlim()
@@ -284,38 +291,38 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin):
 
     # -------------------------------------------------------------- hover
     def lookup(self, x, y):
-        """Two lines on the cell or triangle at (x, y): the position, then
-        the cell and the value; '' without a run."""
+        """One line on the point (x, y): R, Z, rhop (rho poloidal, with a
+        psi map) and the value of the quantity shown there (|v| for
+        vectors); '' without a run."""
         if self.run is None:
             return ""
-        out = "R %.4f m  Z %.4f m\n" % (x, y)
-        g, d = self.run.geometry, self.data
-        it = int(self.finder(x, y))
-        if it >= 0:
-            row = g.tri_cell[it]
-            out += "  cell %d" % g.cells[row]
-            if g.classical and g.ix[row] >= 0:
-                out += " (ix %d, iy %d)" % (g.ix[row], g.iy[row])
-        if d is None:
-            return out.strip()
+        parts = ["R = %.4f m" % x, "Z = %.4f m" % y]
+        if self.run.psimap is not None:
+            rho = self.run.psimap.rhop(x, y)
+            if np.isfinite(rho):
+                parts.append("rhop = %.4f" % rho)
+        value = self.value_at(x, y)
+        if value is not None:
+            parts.append(("value = %.4g %s" % (value, labels.any_to_plain(
+                self.data.unit))).strip())
+        return "   ".join(parts)
+
+    def value_at(self, x, y):
+        """The value of the quantity shown (|v| for vectors) at the cell or
+        triangle under (x, y), or None."""
+        d = self.data
+        if d is None or self.run is None:
+            return None
         col = self._column(d, self.style)
-        unit = labels.any_to_plain(d.unit)
-        if hasattr(d, "vr") and d.location == "cells":
-            if it >= 0:
-                i = g.cells[g.tri_cell[it]] - 1
-                out += "  |v| %.4g %s" % (np.hypot(d.vr[col][i],
-                                                   d.vz[col][i]), unit)
-        elif hasattr(d, "vr") and self.efinder is not None:
-            jt = int(self.efinder(x, y))
-            if jt >= 0:
-                out += "  triangle %d  |v| %.4g %s" % (
-                    jt + 1, np.hypot(d.vr[col][jt], d.vz[col][jt]), unit)
-        elif d.location == "cells" and it >= 0:
-            out += "  %s %.4g %s" % (d.name, d.values[col][g.cells[
-                g.tri_cell[it]] - 1], unit)
-        elif d.location == "triangles" and self.efinder is not None:
-            jt = int(self.efinder(x, y))
-            if jt >= 0:
-                out += "  triangle %d  %s %.4g %s" % (
-                    jt + 1, d.name, d.values[col][jt], unit)
-        return "\n".join(line.strip() for line in out.split("\n"))
+        if d.location == "cells":
+            it = int(self.finder(x, y))
+            if it < 0:
+                return None
+            i = self.run.geometry.cells[self.run.geometry.tri_cell[it]] - 1
+        else:
+            i = int(self.efinder(x, y)) if self.efinder is not None else -1
+            if i < 0:
+                return None
+        if hasattr(d, "vr"):
+            return float(np.hypot(d.vr[col][i], d.vz[col][i]))
+        return float(d.values[col][i])

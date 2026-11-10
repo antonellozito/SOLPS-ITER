@@ -218,7 +218,7 @@ class StreamBox(_Box):
     """Streamline density, line, arrows and seed points (a line drawn on
     the plot or a preset of the run geometry)."""
 
-    seed_line = Signal()
+    seed_line = Signal(bool)        # wait for the clicks of the line, or not
     seed_preset = Signal(str)
 
     def __init__(self, parent=None):
@@ -256,8 +256,11 @@ class StreamBox(_Box):
         sf.addRow("Seeds", row)
         row = QtWidgets.QHBoxLayout()
         self.seed_button = QtWidgets.QPushButton("Draw seed line")
-        self.seed_button.setToolTip("Click two points on the plot")
-        self.seed_button.clicked.connect(lambda *_: self.seed_line.emit())
+        self.seed_button.setToolTip("Then click the two ends of the line on "
+                                    "the plot (click again to cancel)")
+        self.seed_button.setCheckable(True)
+        self.seed_button.clicked.connect(
+            lambda on: self.seed_line.emit(bool(on)))
         self.clear_seeds = QtWidgets.QPushButton("Clear")
         self.clear_seeds.clicked.connect(lambda *_: self.set_seeds([]))
         self.markers = QtWidgets.QCheckBox("markers")
@@ -280,7 +283,13 @@ class StreamBox(_Box):
         if key != "line":
             self.seed_preset.emit(key)
         elif line:
-            self.seed_line.emit()
+            self.seed_line.emit(True)
+
+    def waiting(self, on):
+        """Draw seed line shows whether the plot waits for its clicks."""
+        self.seed_button.blockSignals(True)
+        self.seed_button.setChecked(on)
+        self.seed_button.blockSignals(False)
 
     def set_seeds(self, seeds):
         self.seeds = list(seeds)

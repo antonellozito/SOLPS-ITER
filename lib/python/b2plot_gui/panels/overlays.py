@@ -172,6 +172,8 @@ class OverlayBox(QtWidgets.QGroupBox):
         q = self.wall_q.currentData()
         if q is None:
             return None
+        if q.source == "eqwall":        # computed by the GUI, no operation
+            return q
         ops = (["stow"] if self.wall_from.currentIndex() else []) + [
             op for op in [self.wall_per.currentData()] if op]
         return replace(q, name=" ".join([q.name] + ops), source="wall",

@@ -45,6 +45,26 @@ class PsiMap:
     opoint: tuple
     spoint: tuple               # point that defines psiN = 1
 
+    def rhop(self, r, z):
+        """rho poloidal, sqrt(psiN), at (r, z) by bilinear interpolation
+        of the map; NaN outside the box or where psiN < 0."""
+        r, z = np.asarray(r, float), np.asarray(z, float)
+        out = np.full(np.broadcast(r, z).shape, np.nan)
+        i = np.searchsorted(self.r, r) - 1
+        j = np.searchsorted(self.z, z) - 1
+        ok = (i >= 0) & (i < len(self.r) - 1) & (j >= 0) & \
+            (j < len(self.z) - 1)
+        if not np.any(ok):
+            return out if out.shape else float(out)
+        i, j = np.where(ok, i, 0), np.where(ok, j, 0)
+        u = (r - self.r[i]) / (self.r[i + 1] - self.r[i])
+        v = (z - self.z[j]) / (self.z[j + 1] - self.z[j])
+        p = self.psin
+        f = ((1 - u) * (1 - v) * p[j, i] + u * (1 - v) * p[j, i + 1] +
+             (1 - u) * v * p[j + 1, i] + u * v * p[j + 1, i + 1])
+        out = np.where(ok & (f >= 0), np.sqrt(np.abs(f)), np.nan)
+        return out if out.shape else float(out)
+
 
 @dataclass
 class TriMesh:
@@ -93,6 +113,8 @@ class Field:
     ops: tuple = ()             # b2plot operations after the label
     levels: np.ndarray = None   # contour levels b2plot set (clvp, eclvp)
     source: tuple = None        # movie (file, first, last frame)
+    segments: np.ndarray = None  # (n, 4) of a wall field not on the wall
+    #                              elements of b2plot (R, Z of both ends)
 
     @property
     def title(self):

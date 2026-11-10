@@ -14,13 +14,14 @@ from .plot import shapes
 from .plot.canvas import Plot2D
 from .plot.styles import KINDS_FLAT, LAYERS
 from .model import split_unit
-from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Signal
+from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Qt, Signal
 from .panels.layers import LayersPanel, from_dict
 from .panels.plotarea import READOUT, Columns, PlotCommands, ScaledCanvas
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
 from .output.actions import TabOutput
 from .output.frames import FrameExport
+from .tools import cellfiles, equilibrium, inspect
 from .tools.control import Tools
 
 MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
@@ -65,7 +66,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.quantity_chosen.connect(self._chosen)
         self.quantity.style_changed.connect(self._options_changed)
         self.quantity.seed_line.connect(
-            lambda: self.tools.bar.set_mode("seeds"))
+            lambda on: self.tools.bar.set_mode("seeds" if on else None))
         self.quantity.streams.seed_preset.connect(self._seed_preset)
         self.quantity.traj_box.draw.connect(self._draw_trajectories)
         self.quantity.traj_box.clear.connect(self._clear_trajectories)
@@ -83,6 +84,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.plot.layer_styles[key] = st
 
         self.tools = Tools(self)
+        self.tools.bar.changed.connect(lambda: self.quantity.streams.waiting(
+            self.tools.bar.mode == "seeds"))
         self.commands = PlotCommands(self)
         self.hover = self.commands.readout
         centre = QtWidgets.QWidget()
@@ -97,6 +100,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.columns)
 
+        self._pan = None            # (pixel, view, data per pixel)
+        self.canvas.mpl_connect("button_press_event", self._pan_start)
         self.canvas.mpl_connect("motion_notify_event", self._motion)
         self.canvas.mpl_connect("button_release_event", self._nav_done)
         self.canvas.mpl_connect("scroll_event", self._scroll)
@@ -169,8 +174,14 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                                           self.translate)
         for text in errors:
             self.status.emit("Derived quantity not available: " + text)
+        geometry = any(cellfiles.find(self.run.rundir, n)
+                       for n in cellfiles.GEOMETRY)
+        maps = equilibrium.MAPS if geometry else ()
+        walls = catalog.wall_quantities(self.run.catalog) + ([
+            catalog.Quantity(*equilibrium.WALL, "Wall", "eqwall")]
+            if geometry else [])
         self.final_quantities = derived + catalog.quantities(
-            self.run.catalog) + catalog.chord_quantities(
+            self.run.catalog, maps) + catalog.chord_quantities(
             self.run.layers, self.run.trimesh is not None)
         self.movie_quantities = catalog.movie_quantities(self.run.movies,
                                                          derived)
@@ -180,7 +191,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.overlay_box.set_choices(
             [q for q in quantities if q.source in ("vector", "evector")],
             [q for q in quantities if q.source in ("matrix", "eirene")],
-            walls=catalog.wall_quantities(self.run.catalog))
+            walls=walls)
         self.quantity.cells_box.set_conditions(
             [q for q in quantities if q.expr and q.source == "matrix"])
 
@@ -253,7 +264,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
     def _overlays_needed(self):
         """[(role, Quantity)] of the active overlays (scalar plots only)."""
         cells = self.quantity.cells_box.wanted() if self.wanted is not None \
-            and self.wanted.source in ("matrix", "vector") else []
+            and self.wanted.source in ("matrix", "vector",
+                                       "equilibrium") else []
         if self.quantity.kind() not in KINDS_FLAT:
             return cells
         return self.quantity.overlay_box.wanted() + cells
@@ -265,13 +277,44 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             return
         for role, q in self._overlays_needed():
             if not self._loaded(role, q):
-                self.request.emit((role, q, (), self._source(q)))
+                if q.source == "eqwall":    # computed here, as the maps
+                    geo = inspect.files(self.run)[0]
+                    if geo is not None:
+                        self.deliver((role, q, (), None),
+                                     equilibrium.wall_field(geo))
+                else:
+                    self.request.emit((role, q, (), self._source(q)))
         if self._current():
             self.redraw()
+        elif self.wanted.source == "equilibrium":
+            self._equilibrium()
         else:
             self.request.emit(("main", self.wanted,
                                self.quantity.ops(self.wanted),
                                self._source(self.wanted)))
+
+    def _equilibrium(self):
+        """A map of the derived equilibrium, computed here from the
+        geometry files (the midplane cells of the flux expansion asked of
+        b2plot first)."""
+        q, ops = self.wanted, self.quantity.ops(self.wanted)
+        geo = inspect.files(self.run)[0]
+        if geo is None:
+            self.status.emit("%s needs the unstructured geometry of "
+                             "b2fgmtry" % q.description)
+            return
+        missing = [m for m in equilibrium.MIDPLANES if ("field", m, (), None)
+                   not in self.run.cache]
+        if q.name == "fexp" and missing:
+            for m in missing:
+                mq = next((x for x in self.final_quantities if x.name == m),
+                          None)
+                if mq is not None:
+                    self.request.emit(("eqdata", mq, (), None))
+            self.status.emit("Asking b2plot for the midplane cells\u2026")
+            return
+        self.deliver(("main", q, ops, None), equilibrium.field(
+            self.run, geo, q.name, ops))
 
     def _prefetch(self):
         """While playing, ask for the frames of the next position."""
@@ -299,6 +342,11 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             return
         if role == "tools":
             self.tools.deliver(data)
+            return
+        if role == "eqdata":           # midplane cells: the map again
+            if data is not None and self.wanted is not None and \
+                    self.wanted.source == "equilibrium":
+                self._fetch()
             return
         if data is None:
             self.status.emit("b2plot returned no data for %s. %s"
@@ -496,6 +544,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if self.plot.clamp():
             self.canvas.draw_idle()
         self._view_moved()
+        self.tools.view_changed()
 
     def _scroll(self, event):
         """The mouse wheel zooms around the cursor, 10 % a wheel step (a
@@ -506,17 +555,25 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             steps = gui.angleDelta().y() / 120.0 if hasattr(
                 gui, "angleDelta") else event.step   # not pixels (macOS)
             if steps:
-                self.toolbar.push_current()
+                self._history()
                 self.plot.zoom_at(event.xdata, event.ydata,
                                   0.9 ** float(np.clip(steps, -3.0, 3.0)))
+                self.toolbar.push_current()
                 self.canvas.draw_idle()
 
     def restore(self):
         """The full view of the run (its limits)."""
         if self.run is not None:
-            self.toolbar.push_current()
+            self._history()
             self.plot.set_view(self.plot.full_box())
+            self.toolbar.push_current()
             self.canvas.draw_idle()
+
+    def _history(self):
+        """Before a view change of the wheel, Restore or a pan: the view
+        on the stack of Unzoom (the new one is pushed after it)."""
+        if self.toolbar._nav_stack() is None:
+            self.toolbar.push_current()
 
     def _view_moved(self):
         """Arrows, streamlines and cell values follow zoom and pan."""
@@ -530,10 +587,35 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     # -------------------------------------------------------------- mouse
     def _motion(self, event):
+        if self._pan is not None:
+            self._pan_move(event)
         if event.inaxes is self.plot.ax and event.xdata is not None:
             self.hover.setText(self.plot.lookup(event.xdata, event.ydata))
         else:
             self.hover.setText(READOUT)
+
+    def _pan_start(self, event):
+        """A left press on the plot, with no tool and no Zoom on, starts a
+        pan: the view follows the mouse and never leaves the limits."""
+        if event.button != 1 or event.inaxes is not self.plot.ax or \
+                self.run is None or str(self.toolbar.mode) or \
+                self.tools.bar.mode is not None or event.dblclick or \
+                self.plot.ax3d is not None:
+            return
+        box = self.plot.ax.get_window_extent()
+        x0, x1, y0, y1 = self.plot.get_view()
+        self._pan = ((event.x, event.y), (x0, x1, y0, y1),
+                     ((x1 - x0) / box.width, (y1 - y0) / box.height), False)
+        self.canvas.setCursor(Qt.ClosedHandCursor)
+
+    def _pan_move(self, event):
+        (px, py), (x0, x1, y0, y1), (sx, sy), moved = self._pan
+        dx, dy = (event.x - px) * sx, (event.y - py) * sy
+        if not moved:
+            self._history()
+            self._pan = self._pan[:3] + (True,)
+        self.plot.pan_to((x0 - dx, x1 - dx, y0 - dy, y1 - dy))
+        self.canvas.draw_idle()
 
     # -------------------------------------------------------------- theme
     def apply_theme(self):
@@ -566,7 +648,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _nav_done(self, event):
         """A zoom or pan with the mouse: that view is the one kept."""
-        if str(self.toolbar.mode):
+        if self._pan is not None:
+            moved, self._pan = self._pan[3], None
+            self.canvas.unsetCursor()
+            if moved:
+                self.plot.requested = self.plot.get_view()
+                self.toolbar.push_current()
+        elif str(self.toolbar.mode):
             self.plot.requested = self.plot.get_view()
 
     def freeze_scale(self):

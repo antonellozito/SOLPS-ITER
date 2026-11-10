@@ -14,6 +14,7 @@ from ...b2plot import labels
 from .. import theme
 
 PLACEHOLDER = "Quantity"
+WALL_PLACEHOLDER = "Wall quantity"
 
 
 def fit_size(s, size, width, bold=False):
@@ -57,23 +58,25 @@ class TextMixin:
         self.cbar = None
         _empty(self.cax)
 
-    def _drop_bottom_bar(self):
-        """The bar under the plot (wall strip) away, the plot box back."""
-        _detach(self.bbar)
-        self.bbar = None
-        _empty(self.bax)
-        self.bax.set_visible(False)
-        if self.bottom_bar:
-            self.bottom_bar = False
+    def _drop_wall_bar(self):
+        """The wall strip colour bar away: its placeholder in a fixed plot,
+        else the slot and its room."""
+        _detach(self.wbar)
+        self.wbar = None
+        _empty(self.wax)
+        self.wax.set_visible(False)
+        if self.wall_bar:
+            self.wall_bar = False
             self._place()
+        self._placeholder(self.wax, WALL_PLACEHOLDER)
 
-    def _placeholder(self):
+    def _placeholder(self, cax=None, text=PLACEHOLDER):
         """Empty colour-bar slot of a fixed plot (hidden otherwise)."""
+        cax = self.cax if cax is None else cax
         if not self.fixed:
-            self.cax.set_visible(False)
+            cax.set_visible(False)
             return
-        face, frame, text = theme.placeholder()
-        cax = self.cax
+        face, frame, color = theme.placeholder()
         _empty(cax)
         cax.set_visible(True)
         cax.set_facecolor(face)
@@ -81,9 +84,8 @@ class TextMixin:
         cax.set_yticks([])
         for spine in cax.spines.values():
             spine.set_color(frame)
-        cax.text(0.5, 0.5, PLACEHOLDER, rotation=90, ha="center",
-                 va="center", fontsize=9.0, color=text,
-                 transform=cax.transAxes)
+        cax.text(0.5, 0.5, text, rotation=90, ha="center", va="center",
+                 fontsize=9.0, color=color, transform=cax.transAxes)
 
     def _colorbar(self, data, st):
         self._drop_colorbar()
@@ -91,19 +93,20 @@ class TextMixin:
             self._placeholder()
             return
         self.cax.set_visible(True)
-        self.cbar = self.fig.colorbar(self.mappable, cax=self.cax)
+        self.cbar = self.fig.colorbar(self.mappable, cax=self.cax,
+                                      extendfrac=0.0)   # always a rectangle
         self._style_bar(self.cbar, self.unit)
 
-    def bottom_colorbar(self, mappable, label):
-        """A horizontal colour bar under the plot (the wall strip); the
-        plot box gets shorter while it is shown."""
-        if not self.bottom_bar:
-            self.bottom_bar = True
+    def wall_colorbar(self, mappable, label):
+        """The colour bar of the wall strip, right of the colour bar of the
+        quantity."""
+        if not self.wall_bar:
+            self.wall_bar = True
             self._place()
-        self.bax.set_visible(True)
-        self.bbar = self.fig.colorbar(mappable, cax=self.bax,
-                                      orientation="horizontal")
-        self._style_bar(self.bbar, label)
+        _empty(self.wax)
+        self.wax.set_visible(True)
+        self.wbar = self.fig.colorbar(mappable, cax=self.wax)
+        self._style_bar(self.wbar, label)
 
     def _style_bar(self, bar, label, size=None):
         """Ticks (compact), frame and the label inside the bar, in the
@@ -214,7 +217,7 @@ class TextMixin:
                 x + 0.5 * w, top - 0.4 * fs / pts, s, ha="center",
                 va="top", fontsize=fit_size(s, 1.2 * fs, wide, ls.bold),
                 **kw))
-        for bar in (self.cbar, self.bbar):
+        for bar in (self.cbar, self.wbar):
             if bar is not None:
                 for t in bar.ax.texts:
                     t.set(color=color, fontsize=fs if t.get_gid() ==
