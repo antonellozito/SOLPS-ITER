@@ -29,7 +29,7 @@ from .tools.control import Tools
 MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
             "not recognized", "error")      # in what b2plot prints
-COLUMNS = (0.3, 0.5, 0.2)       # quantity panel, plot, layers
+COLUMNS = (0.25, 0.05, 0.5, 0.2)     # quantities, commands, plot, layers
 
 
 def _scrolled(widget):
@@ -91,9 +91,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.hover = self.commands.readout
         centre = QtWidgets.QWidget()
         cl = QtWidgets.QVBoxLayout(centre)
-        cl.setContentsMargins(6, 0, 6, 0)
-        cl.setSpacing(2)
-        cl.addWidget(self.commands)
+        cl.setContentsMargins(4, 0, 6, 0)
         cl.addWidget(self.canvas, 1)
         self.masks = MasksPanel()
         self.mask_keys = []             # the masks drawn
@@ -104,8 +102,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         rl.addWidget(self.layers)
         rl.addWidget(self.masks)
         rl.addStretch(1)
-        self.columns = Columns((_scrolled(self.quantity), centre,
-                                _scrolled(right)), COLUMNS)
+        self.columns = Columns((_scrolled(self.quantity), self.commands,
+                                centre, _scrolled(right)), COLUMNS)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.columns)
@@ -115,6 +113,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.canvas.mpl_connect("motion_notify_event", self._motion)
         self.canvas.mpl_connect("button_release_event", self._nav_done)
         self.canvas.mpl_connect("scroll_event", self._scroll)
+        self.canvas.mpl_connect("draw_event", self._align_commands)
         self._lims = QtCore.QTimer(self)
         self._lims.setSingleShot(True)
         self._lims.timeout.connect(self._view_changed)
@@ -694,6 +693,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.plot.set_labels(self.quantity.labels_box.style(),
                              self._mask_title(""), self.label_values())
         self.canvas.draw_idle()
+
+    def _align_commands(self, *_):
+        """The first command at the height of the top of the plot box."""
+        y = self.canvas.mapTo(self, QtCore.QPoint(0, 0)).y() - \
+            self.commands.mapTo(self, QtCore.QPoint(0, 0)).y()
+        self.commands.set_top(y + round(
+            (1.0 - self.plot.ax.get_position().y1) * self.canvas.height()))
 
     def _keep_view(self):
         """After a resize the view asked for, not the one matplotlib
