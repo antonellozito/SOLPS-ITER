@@ -74,7 +74,6 @@ switch BAL_QUANT
     case 'momentum'
         balmom(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,SPECIES_INDEX,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,AREAEND,area_divide,AREATYPE,POLBALDIST);
     case 'totpress'
-        warning('Use total pressure balance with caution. Balance not currently perfect.');
         baltotpress(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,POLBALDIST);
     case 'elheat'
         baleht(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,AREAEND,area_divide,AREATYPE,POLBALDIST);
@@ -83,7 +82,6 @@ switch BAL_QUANT
     case 'totheat'
         baltotht(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,AREAEND,area_divide,AREATYPE,POLBALDIST);
     case 'toten'
-        warning('Use total energy balance with caution. Balance not currently perfect.');
         baltoten(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,AREAEND,area_divide,AREATYPE,POLBALDIST);
     otherwise
         error('Balance quantity ''%s'' not supported.',BAL_QUANT);

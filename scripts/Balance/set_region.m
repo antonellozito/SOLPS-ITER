@@ -16,7 +16,6 @@ indpol = false(comuse.nCv,1);
 % Determine the geometry type based on the nuumber of X-points
 if comuse.nXpt==1
     display('Assuming single null case');
-    display('Assuming that face labels of targets are 1, 2, -13 or -34');
     switch region_name(1:2)
         case {'li','ui'}
             for iCv = 1:comuse.nCi
@@ -63,7 +62,6 @@ if comuse.nXpt==1
     end
 elseif comuse.nXpt==2
     display('Assuming connected double null case');
-    display('Assuming that face labels of targets are 1, 2, 3, 4, -13, -34, -17, or -38');
     switch region_name(1:2)
         case 'li'
             for iCv = 1:comuse.nCi
@@ -159,27 +157,31 @@ elseif comuse.nXpt == 0
     end
 end
 
-% Determine the faces of the upstream and downstream boundary of indrad
+% Determine the faces of the upstream and downstream boundary of indrad.
+% Downstream faces are the ends of the flux tubes: faces between a cell of
+% the region and a guard cell of the same flux tube that the flux tube passes
+% through (cosine of alpha non-zero, as B2.5 itself tells them from radial
+% faces): the targets, or the walls that the flux tubes end on in extended
+% grids. This does not depend on the face labels, which differ between grids.
 facesup = []; % list of faces at the upstream boundary
 facesdown = []; % list of faces at the downstream boundary
 for iFc = 1:comuse.nFc
     iCv1 = comuse.fcCv(iFc,1);
     iCv2 = comuse.fcCv(iFc,2);
     if (indrad(iCv1) && ~indrad(iCv2)) || (~indrad(iCv1) && indrad(iCv2))
-        if comuse.cvReg(iCv1) ~= comuse.cvReg(iCv2)
+        if indrad(iCv1)
+            iCvin = iCv1;
+            iCvout = iCv2;
+        else
+            iCvin = iCv2;
+            iCvout = iCv1;
+        end
+        if (iCvout > comuse.nCi) && ...
+                (comuse.cvFt(iCvout) == comuse.cvFt(iCvin)) && ...
+                (comuse.fcQalf(iFc,1) ~= 0)
+            facesdown = [facesdown,iFc];
+        elseif comuse.cvReg(iCv1) ~= comuse.cvReg(iCv2)
             facesup = [facesup,iFc];
-        elseif comuse.nXpt < 2
-            if (comuse.fcLbl(iFc) == 1) || (comuse.fcLbl(iFc) == 2) || ...
-                    (comuse.fcLbl(iFc) == -13) || (comuse.fcLbl(iFc) == -34)
-                facesdown = [facesdown,iFc];
-            end
-        elseif comuse.nXpt == 2
-            if (comuse.fcLbl(iFc) == 1) || (comuse.fcLbl(iFc) == 2) || ...
-                    (comuse.fcLbl(iFc) == 3) || (comuse.fcLbl(iFc) == 4) || ...
-                    (comuse.fcLbl(iFc) == -13) || (comuse.fcLbl(iFc) == -34) || ...
-                    (comuse.fcLbl(iFc) == -17) || (comuse.fcLbl(iFc) == -38)
-                facesdown = [facesdown,iFc];
-            end  
         end
     end
 end
