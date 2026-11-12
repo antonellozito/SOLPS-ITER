@@ -5,8 +5,9 @@
 % the equations it does solve: electron energy + ion energy + sum over the     %
 % ion species of (u times the parallel momentum equation - m*u^2/2 times the   %
 % continuity equation). Every term of these equations in balance.nc is         %
-% multiplied in the same way, so the balance closes exactly against            %
-%   reshe + reshi + sum_is (u*resmo - m*u^2/2*resco).                          %
+% multiplied in the same way, so the balance closes against                    %
+%   reshe + reshi + sum_is (u*resmo - m*u^2/2*resco)                           %
+% as well as the balances of these equations do.                               %
 % For the flux terms, u_cell times the net inflow of a flux F is shown as the  %
 % kinetic energy flux u_face*F on the faces plus the cell term                 %
 % sum over the faces of (u_cell - u_face)*F, with u_face from intface.         %
@@ -74,9 +75,7 @@ sname = {'b2stbc_she_bal','b2stbc_shi_bal','b2stbm_she_bal',...
     'b2sihs_fraa_bal','b2stbr_phys_she_bal',...
     'b2stbr_first_flight_she_bal','b2stbr_phys_shi_bal',...
     'b2stbr_first_flight_shi_bal'};
-snew = {'b2shdt_she_bal','b2shdt_shi_bal','art_she_bal','art_shi_bal',...
-    'b2sikt_she_bal','b2sikt_shi_bal','eirene_aver_she_bal',...
-    'eirene_aver_shi_bal','b2mndt_she_bal','b2mndt_shi_bal'};
+snew = {'b2shdt_she_bal','b2shdt_shi_bal'};
 hsrc = zeros(nCv,numel(sname)+numel(snew)+2);
 for k = 1:numel(sname)
     hsrc(:,k) = ncread(balfile,sname{k});
@@ -116,10 +115,9 @@ mname = {'b2stel_smq_ion_bal','b2stel_smq_rec_bal','b2stcx_smq_bal',...
     'b2sigp_smogpe_bal','b2sigp_smogpgr_bal','b2stbr_phys_smo_bal',...
     'b2stbm_smo_bal','ext_smo_bal','b2srsm_smo_bal','b2srdt_smo_bal',...
     'b2srst_smo_bal','b2stbc_smo_bal'};
-mnew = {'b2smdt_smo_bal','art_smo_bal','eirene_aver_smo_bal',...
-    'b2sral_smo_bal','b2mndt_smo_bal'};
+mnew = {'b2smdt_smo_bal'};
 % groups of momentum sources shown together
-mgroup = [1 1 1 2 2 2 2 2 2 2 2 3 3 3 4 4 4 5 5 5 4 4 4 4 4 4 4 4 4 4 4 4];
+mgroup = [1 1 1 2 2 2 2 2 2 2 2 3 3 3 4 4 4 5 5 5 4 4 4 4 4 4 4 4];
 smom = cell(1,numel(mname)+numel(mnew));
 for k = 1:numel(mname)
     smom{k} = ncread(balfile,mname{k});
@@ -146,8 +144,7 @@ pname = {'b2stbr_phys_sna_bal','b2stbr_first_flight_sna_bal',...
     'b2stbc_sna_bal','b2stbm_sna_bal','ext_sna_bal',...
     'b2stel_sna_ion_bal','b2stel_sna_rec_bal','b2stcx_sna_bal',...
     'b2srsm_sna_bal','b2srdt_sna_bal','b2srst_sna_bal'};
-pnew = {'b2scdt_sna_bal','art_sna_bal','eirene_aver_sna_bal',...
-    'b2sral_sna_bal','b2mndt_sna_bal'};
+pnew = {'b2scdt_sna_bal'};
 spart = zeros(nCv,ns);
 for k = 1:numel(pname)
     spart = spart + ncread(balfile,pname{k});
