@@ -6,7 +6,8 @@
 % BALFILE:        Full path to the balance.nc file created by SOLPS-ITER with  %
 %                 balance_netcdf set non-zero in b2mn.dat.                     %
 % BAL_QUANT:      Either 'particles','momentum','totpress','elheat','ionheat', %
-%                 'totheat'.                                                   %
+%                 'totheat','toten' (total energy) or 'potential' (potential   %
+%                 equation, continuity of the electric current).               %
 % SPECIES_INDEX:  An array specifying the species indices to be summed over.   %
 %                 Has length 1 for a single species. Only applicable to        %
 %                 'particles' and 'momentum' balances.                         %
@@ -83,6 +84,10 @@ switch BAL_QUANT
         baltotht(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,AREAEND,area_divide,AREATYPE,POLBALDIST);
     case 'toten'
         baltoten(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,facesdown_pol,comuse,axbal,reverse,STRATA_PLOT,axstrat,true,AREAEND,area_divide,AREATYPE,POLBALDIST);
+    case 'potential'
+        balpot(BALFILE,indrad,indpol,facesup,facesdown,facesup_pol,...
+            facesdown_pol,comuse,axbal,reverse,true,AREAEND,area_divide,...
+            AREATYPE,POLBALDIST);
     otherwise
         error('Balance quantity ''%s'' not supported.',BAL_QUANT);
 end
