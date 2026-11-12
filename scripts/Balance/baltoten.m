@@ -226,7 +226,7 @@ for k = 1:nf
     divpol(:,k) = raddiv(fx(:,k),fy(:,k),comuse,[],[],areatype);
 end
 fluxname = [strrep(hname,'_','\_'),kfname];
-srcname = [strcat('rad. diverg. ',fluxname),hsname,ksname];
+srcname = [strcat({'rad. diverg. '},fluxname),hsname,ksname];
 res = reshe + reshi + kres;
 
 %% Make plots...
