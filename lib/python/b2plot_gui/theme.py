@@ -13,12 +13,12 @@ COLORS = {
                   disabled="#e5e5e5", text="#000000", muted="#606060",
                   disabled_text="#8c8c8c", border="#8a8a8a",
                   soft_border="#b8b8b8", selection="#d9e8f8", tab="#e8e8e8",
-                  tab_selected="#ffffff", hover="#f7f7f7", checked="#cfe8ff"),
+                  hover="#f7f7f7", checked="#cfe8ff"),
     "Dark": dict(panel="#262626", control="#1f1f1f", control_alt="#3a3a3a",
                  disabled="#303030", text="#ebebeb", muted="#b8b8b8",
                  disabled_text="#777777", border="#666666",
                  soft_border="#555555", selection="#526d86", tab="#303030",
-                 tab_selected="#444444", hover="#4a4a4a", checked="#526d86")}
+                 hover="#4a4a4a", checked="#526d86")}
 NAMES = tuple(COLORS)
 
 _dark = False
@@ -132,16 +132,6 @@ QGroupBox {{ background-color: {panel}; border: 1px solid {border};
     margin-top: 7px; padding-top: 5px; }}
 QGroupBox::title {{ subcontrol-origin: margin; left: 7px; padding: 0px 2px;
     background-color: {panel}; color: {text}; font-weight: 600; }}
-QTabWidget::pane {{ background-color: {panel}; border: 1px solid {border};
-    top: -1px; }}
-QTabWidget::tab-bar {{ alignment: left; }}
-QTabBar::tab {{ background-color: {tab}; color: {text};
-    border: 1px solid {border}; border-top-left-radius: 4px;
-    border-top-right-radius: 4px; padding: 3px 10px; margin-right: 1px;
-    margin-top: 6px; min-height: 16px; }}
-QTabBar::tab:hover {{ background-color: {hover}; }}
-QTabBar::tab:selected {{ background-color: {tab_selected};
-    border-bottom-color: {tab_selected}; font-weight: 600; }}
 QLineEdit, QPlainTextEdit, QTableView, QTableWidget, QTreeView,
 QListView, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {control}; color: {text}; border: 1px solid {border};

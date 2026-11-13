@@ -1,8 +1,8 @@
 """Layout of the 2D tab: columns with fixed fractions of the width, the
 commands of the plot in a narrow column at its left (Zoom, Unzoom,
 Rezoom, Restore; the mouse tools; Add to page, Page composer; Print
-figure, Export field; the cursor readout) and a canvas whose plot scales
-with the window."""
+figure, Export field; the cursor readout; at the bottom the parallel
+balance) and a canvas whose plot scales with the window."""
 
 import re
 
@@ -201,8 +201,9 @@ class PlotCommands(QtWidgets.QWidget):
     """The commands of the plot in a narrow column at its left, one under
     the other in groups: the view (Zoom to Restore), the mouse tools
     (Inspect to Statistics), the pages (Add to page, Page composer), the
-    files (Print figure, Export field), then the cursor readout; the
-    first button at the height of the top of the plot box. The
+    files (Print figure, Export field), then the cursor readout, and the
+    parallel balance at the bottom; the first button at the height of the
+    top of the plot box, the last one at the height of its bottom. The
     buttons get a smaller font only when a label would not fit the
     column. A Tab2D's hidden matplotlib navigation bar does the box
     zoom; the tab pans and zooms with the mouse."""
@@ -258,6 +259,8 @@ class PlotCommands(QtWidgets.QWidget):
                                 "(the mouse wheel zooms)")
         lay.addWidget(self.readout)
         lay.addStretch(1)
+        self.buttons["balance"] = tab.balance.button
+        lay.addWidget(tab.balance.button)
         self._base, self._busy = None, False
 
     def set_top(self, top):
@@ -268,6 +271,15 @@ class PlotCommands(QtWidgets.QWidget):
         if m.top() != top:
             self.layout().setContentsMargins(m.left(), top, m.right(),
                                              m.bottom())
+
+    def set_bottom(self, bottom):
+        """The last button with its bottom at this distance (pixels) from
+        the bottom of the column: the bottom of the plot box."""
+        m = self.layout().contentsMargins()
+        bottom = max(int(bottom), 0)
+        if m.bottom() != bottom:
+            self.layout().setContentsMargins(m.left(), m.top(), m.right(),
+                                             bottom)
 
     def all_buttons(self):
         bar = self.tab.tools.bar
@@ -327,6 +339,7 @@ class PlotCommands(QtWidgets.QWidget):
         nav = self.nav
         if on:
             self.tab.tools.bar.set_mode(None)
+            self.tab.balance.cancel()
         current = str(nav.mode)
         if on != (current == "zoom rect"):
             nav.zoom()
