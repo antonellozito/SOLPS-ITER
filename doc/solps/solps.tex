@@ -19474,21 +19474,20 @@ standalone, the numbers of cells and faces, the kind of grid and the
 number of EIRENE triangles, the plasma species by element, e.g.\
 {\tt D(0,+1), N(0,...,+7)}, and the EIRENE atom, molecule and test ion
 species (a long run directory is shortened in the middle; the whole line
-is its tool tip). At the right of the tabs, {\tt Open run},
+is its tool tip). At its right, {\tt Open run},
 {\tt Recent runs} (all runs opened in the \SOLPSITER session: each
 {\tt source setup.csh} or {\tt setup.ksh} starts one, which sets
 {\tt SOLPS\_SESSION}; sessions in other terminals keep their own lists)
 and {\tt Reload run} (with all plot settings, also after a crash of
 \btwoplotns), {\tt Live update} (the run is reloaded each time its
 {\tt b2fstate} changes; the time of the file read is shown next to it)
-and the theme. The {\tt 2D plots} tab is complete; the
-{\tt Profiles}, {\tt Chords} and {\tt Time traces}
-tabs follow in later versions. The window opens on the whole screen and
+and the theme. Under it is the one view of the window, the 2D plots.
+The window opens on the whole screen and
 keeps that aspect ratio (texts and the plot scale with it); the theme is
 light or dark (in the dark one the plot colours are dimmed). Nothing is
 saved but the list of runs of the session (in the temporary folder): each
 start begins with nothing plotted, the default layers and no derived
-quantities. The 2D tab has four columns of fixed width: the quantity panel
+quantities. The view has four columns of fixed width: the quantity panel
 (25 \% of the window), the commands of the plot (5 \%), the plot
 (50 \%) and the layers (20 \%).
 
@@ -19559,8 +19558,9 @@ vector or raster content at a resolution; colour space rgb, cmyk or
 gray; light or dark theme), {\tt Export field}; then the readout of the
 cursor, as plain text one item a line: $R$, $Z$, $\rho_{pol}$ (with
 {\tt rzpsi.dat}) and the value of the quantity shown, its number and
-unit in bold (in smaller text when the widest line would not fit). The
-view starts on
+unit in bold (in smaller text when the widest line would not fit);
+at the bottom, level with the bottom of the plot box, {\tt Calculate
+parallel balance}. The view starts on
 the grid and the device structure, which is also the widest view
 ({\tt Restore}). Dragging the plot with the left button pans it, the
 mouse wheel zooms around the cursor (10\,\% a wheel step); neither goes
@@ -19605,6 +19605,49 @@ and average, the minimum, the maximum and a histogram of the quantity
 shown. The results appear, one per line, in a small window and can be
 exported as CSV. The seed line of the streamlines is drawn with
 {\tt Draw seed line} of the streamline options.
+
+The {\bf parallel balance}, only with a {\tt balance.nc} written with
+the {\tt b2fstate} and {\tt b2fplasma} of the run, computes the
+balances of the scripts of {\tt scripts/Balance} in a volume picked on
+the plot: a click on the upstream surface, then one on the downstream
+surface (the end faces of the flux tubes when the mouse is near them),
+both across the whole of one topological region (core, SOL or PFR,
+found from the grid of {\tt balance.nc}: the primary separatrix
+separates the SOL from the core and the PFRs, a secondary one does not
+split the SOL, the PFR of each X-point is a region of its own). The
+volume holds the flux tubes of the upstream surface from it to the
+downstream surface, and those that end on a wall in between (in a closed
+region the shorter way); it is filled over the plot (see-through over a
+quantity), with its upstream surface and its downstream surface and walls
+drawn, and its two sides (yellow; a yellow dot where the two surfaces
+meet); either surface can be dragged along
+the flux tubes, and either side across them to narrow the volume within
+its region. A window
+over the main one, scaling with its size, has the quantity (particles,
+momentum and force (the momentum balance per ion, with the viscous
+fluxes as forces) of the species checked, total pressure, electron, ion and total
+heat, total energy, potential; in a coupled run the species B2.5 does not
+solve are greyed out), the area type and end, the radial coordinate
+($\rho_{pol}$ with {\tt rzpsi.dat}, or the distance from the separatrix
+along the upstream surface), the poloidal distance, the smoothing and the
+residuals, and shows the total radial balance (per flux tube: upstream
+and downstream flux, sources) and the total poloidal balance (per slice
+of the volume, radially integrated, along the flux tube next to the
+separatrix), each with its equation, and the comparison of the B2.5 and
+post-processed residuals. A click on a line opens its parts; a group of
+sources opens its terms, an EIRENE one its strata, and a recycling
+stratum shows its segments on the plot. The mouse wheel zooms a plot
+(never out of the whole plot) and dragging with the left button moves it;
+the other plots of the same balance follow in $x$. In the windows of the
+parts and of the terms, {\tt Show total} draws the sum of the lines and
+{\tt Show equation term} shows the equation of the term
+under the mouse (line or legend entry) next to it, simplified from the
+model equations of B2.5 (a group: the equations of its terms); there is
+none for boundary conditions and recycling, numerics and time
+derivatives, discretisation corrections, residuals and EIRENE. Every
+window saves its plots as
+{\tt Print figure} does and exports their values (CSV, text, netCDF,
+HDF5).
 
 The {\bf layers panel} (right) shows and styles the structure (its
 closed parts empty, filled or hatched in a colour of their own; from

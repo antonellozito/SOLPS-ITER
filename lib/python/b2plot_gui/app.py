@@ -1,9 +1,9 @@
-"""Main window of the b2plot GUI: run line, tabs, theme switch, status
-bar.
+"""Main window of the b2plot GUI: run line with the run commands and
+the theme switch, the 2D view, status bar.
 
 One b2pl.exe per open run serves the data (data.Run); a QTimer
 drains its events in the GUI thread and hands finished requests to the
-tabs. There is no console and no b2plot command input. Outside a run
+view. There is no console and no b2plot command input. Outside a run
 directory the window opens empty (Open run). The window opens on the
 whole screen and keeps that aspect ratio; nothing is saved on the system
 but the list of runs opened in the SOLPS-ITER session (session.Recent):
@@ -15,27 +15,16 @@ import time
 
 from ..b2plot import backend
 from . import data, runline, session, theme
-from ..qt import QtCore, QtGui, QtWidgets, Qt
+from ..qt import QtCore, QtGui, QtWidgets
 from .output import state
 from .output.composer import Composer
 from .tab2d import Tab2D
 
 POLL_MS = 20
 POLL_BUDGET = 0.05
-PLACEHOLDERS = ["Profiles", "Chords", "Time traces"]
 LIVE = ((0, "off"), (10, "every 10 s"), (30, "every 30 s"),
         (60, "every minute"), (300, "every 5 minutes"))
 STATE_FILES = ("b2fstate", os.path.join("b2mn.exe.dir", "b2fstate"))
-
-
-def _placeholder(name):
-    w = QtWidgets.QWidget()
-    lay = QtWidgets.QVBoxLayout(w)
-    label = QtWidgets.QLabel("%s: coming in a later version." % name)
-    label.setAlignment(Qt.AlignCenter)
-    label.setEnabled(False)
-    lay.addWidget(label)
-    return w
 
 
 def _roomy(combo):
@@ -61,8 +50,8 @@ class SessionSettings:
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    """Run line, tabs and, at the right of the tabs, the run commands,
-    live update and the theme; no menu bar."""
+    """Run line with, at its right, the run commands, live update and the
+    theme; the 2D view under it; no menu bar."""
 
     def __init__(self, args):
         super().__init__()
@@ -87,7 +76,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._fonts.timeout.connect(self._scale_fonts)
 
         self.runline = runline.RunLine()
-        self.tabs = QtWidgets.QTabWidget()
         self.tab2d = Tab2D(self.settings)
         self.tab2d.request.connect(self._request)
         self.tab2d.status.connect(self._status)
@@ -96,15 +84,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.composer.status.connect(self._status)
         self.tab2d.add_to_page.connect(self._add_to_page)
         self.tab2d.composer.connect(self._show_composer)
-        self.tabs.addTab(self.tab2d, "2D plots")
-        for name in PLACEHOLDERS:
-            self.tabs.addTab(_placeholder(name), name)
-        self.tabs.setCornerWidget(self._corner(), Qt.TopRightCorner)
         body = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(body)
         lay.setContentsMargins(6, 4, 6, 0)
-        lay.addWidget(self.runline)
-        lay.addWidget(self.tabs, 1)
+        top = QtWidgets.QHBoxLayout()
+        top.addWidget(self.runline, 1)
+        top.addWidget(self._corner())
+        lay.addLayout(top)
+        lay.addWidget(self.tab2d, 1)
         self.setCentralWidget(body)
 
         self.state = QtWidgets.QLabel()
@@ -125,10 +112,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _corner(self):
         """Open run, Recent runs, Reload run, Live update and the theme, at
-        the right of the tabs."""
+        the right of the run line."""
         w = QtWidgets.QWidget()
         row = QtWidgets.QHBoxLayout(w)
-        row.setContentsMargins(0, 0, 0, 7)     # clear of the tab pane
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(4)
         self.run_buttons = {}
         for key, text, tip, slot in (
@@ -310,7 +297,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
             if role not in ("prefetch", "species", "traj", "tools",
-                            "eqdata"):
+                            "eqdata", "balance"):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)

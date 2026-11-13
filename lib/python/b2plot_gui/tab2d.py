@@ -1,4 +1,4 @@
-"""2D tab: quantity panel, one plot with its commands, layers panel, in
+"""2D view: quantity panel, one plot with its commands, layers panel, in
 columns of fixed width (30, 50 and 20 % of the window)."""
 
 import json
@@ -25,6 +25,7 @@ from .output.actions import TabOutput
 from .output.frames import FrameExport
 from .tools import cellfiles, equilibrium, inspect, regions
 from .tools.control import Tools
+from .balances.picker import BalanceTool
 
 MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
@@ -41,7 +42,7 @@ def _scrolled(widget):
 
 
 class Tab2D(TabOutput, QtWidgets.QWidget):
-    """The 2D plots tab; data requests go through the main window."""
+    """The 2D view; data requests go through the main window."""
 
     request = Signal(object)        # (role, Quantity, operations, source)
     add_to_page = Signal(object)    # Snapshot
@@ -87,6 +88,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.tools = Tools(self)
         self.tools.bar.changed.connect(lambda: self.quantity.streams.waiting(
             self.tools.bar.mode == "seeds"))
+        self.balance = BalanceTool(self)
+        self.tools.bar.changed.connect(
+            lambda: self.tools.bar.mode is not None and self.balance.cancel())
         self.commands = PlotCommands(self)
         self.hover = self.commands.readout
         centre = QtWidgets.QWidget()
@@ -149,6 +153,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self._show_empty()
         self.tools.panel.hide()
         self.tools.last = None
+        self.balance.set_run(run)
         self.quantity.unselect()
         self.quantity.traj_box.set_species(column_names(
             self._species() or []))
@@ -402,6 +407,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if role == "tools":
             self.tools.deliver(data)
             return
+        if role == "balance":
+            self.balance.deliver_rc(data)
+            return
         if role == "eqdata":           # midplane cells: the map again
             if data is not None and self.wanted is not None and \
                     self.wanted.source == "equilibrium":
@@ -573,6 +581,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
+        self.balance.restyle()
         if self.plot.drawn == 0:
             self.status.emit("%s: zero in every cell shown" % self.data.name)
         title = self._title()
@@ -654,7 +663,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if event.button != 1 or event.inaxes is not self.plot.ax or \
                 self.run is None or str(self.toolbar.mode) or \
                 self.tools.bar.mode is not None or event.dblclick or \
-                self.plot.ax3d is not None:
+                self.plot.ax3d is not None or self.balance.grabs(event):
             return
         box = self.plot.ax.get_window_extent()
         x0, x1, y0, y1 = self.plot.get_view()
@@ -684,22 +693,34 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         panel = self.tools.panel
         if panel.isVisible() and panel.canvas.isVisible():
             panel.apply_theme()
+        self.balance.apply_theme()
         self.canvas.draw_idle()
 
     def _show_empty(self):
         """Nothing plotted: the layers, the colour-bar placeholder and the
         axis labels."""
         self.plot.show_empty()
+        self.balance.restyle()
         self.plot.set_labels(self.quantity.labels_box.style(),
                              self._mask_title(""), self.label_values())
         self.canvas.draw_idle()
 
     def _align_commands(self, *_):
-        """The first command at the height of the top of the plot box."""
+        """The first command at the height of the top of the plot box, the
+        last one at the height of its bottom."""
         y = self.canvas.mapTo(self, QtCore.QPoint(0, 0)).y() - \
             self.commands.mapTo(self, QtCore.QPoint(0, 0)).y()
-        self.commands.set_top(y + round(
-            (1.0 - self.plot.ax.get_position().y1) * self.canvas.height()))
+        box = self.plot.ax.get_position()
+        h = self.canvas.height()
+        self.commands.set_top(y + round((1.0 - box.y1) * h))
+        self.commands.set_bottom(self.commands.height() - y -
+                                 round((1.0 - box.y0) * h))
+
+    def ask_label(self, name):
+        """Ask b2plot for a label quantity for the parallel balance."""
+        q = next((q for q in self.final_quantities if q.name == name), None)
+        if q is not None:
+            self.request.emit(("balance", q, (), None))
 
     def _keep_view(self):
         """After a resize the view asked for, not the one matplotlib
