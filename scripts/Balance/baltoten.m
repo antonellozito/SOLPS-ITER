@@ -76,15 +76,18 @@ sname = {'b2stbc_she_bal','b2stbc_shi_bal','b2stbm_she_bal',...
     'b2stbr_first_flight_she_bal','b2stbr_phys_shi_bal',...
     'b2stbr_first_flight_shi_bal'};
 snew = {'b2shdt_she_bal','b2shdt_shi_bal'};
-hsrc = zeros(nCv,numel(sname)+numel(snew)+2);
+hsrc = zeros(nCv,numel(sname)+numel(snew)+5);
 for k = 1:numel(sname)
     hsrc(:,k) = ncread(balfile,sname{k});
 end
 for k = 1:numel(snew)
     hsrc(:,numel(sname)+k) = ncread_opt(balfile,snew{k},[nCv 1]);
 end
-% electron energy of the atomic processes, all species together
-hsrc(:,end-1) = sum(ncread(balfile,'b2stel_she_bal'),2);
+% electron energy of the atomic processes by part, all species together
+hsrc(:,end-4) = sum(ncread_opt(balfile,'b2stel_rqrad_bal',[nCv ns]),2);
+hsrc(:,end-3) = sum(ncread_opt(balfile,'b2stel_rqbrm_bal',[nCv ns]),2);
+hsrc(:,end-2) = sum(ncread_opt(balfile,'b2stel_iz_bal',[nCv ns]),2);
+hsrc(:,end-1) = sum(ncread_opt(balfile,'b2stel_rc_bal',[nCv ns]),2);
 % EIRENE, all strata together
 if eirene
     hsrc(:,end) = sum(ncread(balfile,'eirene_mc_eael_she_bal'),2) + ...
@@ -97,7 +100,8 @@ if eirene
         sum(ncread(balfile,'eirene_mc_eppl_shi_bal'),2);
 end
 hsname = [strrep(strrep([sname,snew],'_bal',''),'_','\_'),...
-    {'b2stel\_she','eirene\_mc el. and ion'}];
+    {'b2stel\_rqrad','b2stel\_rqbrm','b2stel\_iz','b2stel\_rc',...
+    'eirene\_mc el. and ion'}];
 % (equipartition, b2npht_shei_bal, cancels between electrons and ions)
 reshe = ncread(balfile,'reshe');
 reshi = ncread(balfile,'reshi');
@@ -134,11 +138,11 @@ if eirene
 end
 resmo = ncread(balfile,'resmo');
 % Continuity: flux (sum of its parts, per species) and sources
-fname = {'fna_pinch','fna_pll','fna_drift','fna_ch','fna_nanom',...
-    'fna_panom','fna_pschused'};
+fname = {'fna_pinch','fna_pll','fna_ecrb','fna_dia','fna_ch',...
+    'fna_nanom','fna_panom','fna_pschused'};
 fna = zeros(nFc,2,ns);
 for k = 1:numel(fname)
-    fna = fna + ncread(balfile,fname{k});
+    fna = fna + ncread_opt(balfile,fname{k},[nFc 2 ns]);
 end
 pname = {'b2stbr_phys_sna_bal','b2stbr_first_flight_sna_bal',...
     'b2stbc_sna_bal','b2stbm_sna_bal','ext_sna_bal',...
