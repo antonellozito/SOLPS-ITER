@@ -19633,15 +19633,33 @@ sources opens its terms, an EIRENE one its strata, and a recycling
 stratum shows its segments on the plot. The mouse wheel zooms a plot
 (never out of the whole plot) and dragging with the left button moves it;
 the other plots of the same balance follow in $x$. In the windows of the
-parts and of the terms, {\tt Show total} draws the sum of the lines and
-{\tt Show equation term} shows the equation of the term
-under the mouse (line or legend entry) next to it, simplified from the
-model equations of B2.5 (a group: the equations of its terms); there is
-none for boundary conditions and recycling, numerics and time
-derivatives, discretisation corrections, residuals and EIRENE. Every
+parts and of the terms, the radial coordinate (or the poloidal distance,
+as their $x$ axis) and the smoothing are their own, at first those of
+the window the line was clicked in, and {\tt Show total} draws the sum of
+the lines; the equation of the term under the mouse (line or legend
+entry) is shown next to it, simplified from the model equations of B2.5
+(a group: the equations of its terms); there is none for boundary
+conditions and recycling, numerics and time derivatives, discretisation
+corrections, residuals and EIRENE. Every
 window saves its plots as
 {\tt Print figure} does and exports their values (CSV, text, netCDF,
 HDF5).
+
+The {\bf radial balance}, under it, is the same across the flux surfaces:
+a click on the inner flux surface, then one on the outer flux surface,
+outside it in the same region (inner: towards the magnetic axis in the
+core and the SOL, the separatrix side in a PFR). The volume holds the
+flux tubes from one to the other over their whole poloidal extent (in
+the core a whole turn from a cut at the primary X-point, the lower one
+with two); its inner surface is drawn blue, its outer surface red, its
+start and end yellow, and they can be dragged as in the parallel
+balance. The window is the same, but for the total pressure and the
+force, defined along the field lines only, and the area (none, or the
+contact area of the inner or outer surface): the total radial balance
+(per flux tube) shows the flux across the flux surfaces and the sources
+of the tubes, the total poloidal balance (per slice) the flux in through
+the inner surface, out through the outer surface and the sources, with
+the poloidal transport among them.
 
 The {\bf layers panel} (right) shows and styles the structure (its
 closed parts empty, filled or hatched in a colour of their own; from

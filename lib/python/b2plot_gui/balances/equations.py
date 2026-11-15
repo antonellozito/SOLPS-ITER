@@ -4,7 +4,7 @@ none for boundary conditions and recycling, numerics and time
 derivatives, discretisation corrections, residuals and EIRENE."""
 
 from .termeqs import EQ
-from .terms import BOUNDARY, EIRENE, NUMERICS, RADIAL
+from .terms import BOUNDARY, EIRENE, NUMERICS, POLOIDAL, RADIAL
 
 HEAT = ("elheat", "ionheat", "totheat", "toten")
 NONE_GROUPS = {BOUNDARY, NUMERICS} | set(EIRENE.values())
@@ -36,15 +36,17 @@ def _none(t):
 
 def of_term(quantity, role, t):
     """Equation of the Term t of the balance of quantity (role "flux": a
-    part of the flux along the tube, its poloidal component; "source": a
-    source, the radial transport being the radial component of a flux
-    through the sides of the tube), or None."""
+    part of the flux along the tube, its poloidal component; "radial": a
+    part of the flux across the flux surfaces, its radial component;
+    "source": a source, the radial (poloidal) transport being the radial
+    (poloidal) component of a flux), or None."""
     if _none(t):
         return None
-    if role == "source" and t.group == RADIAL and t.key != "raddiv":
+    if role == "source" and t.group in (RADIAL, POLOIDAL) and \
+            t.key != "raddiv":
         flux = t.name.split(": ", 1)[-1]         # the name of the flux
-        return _lookup(quantity, "radial", t.key,
-                       flux[:1].upper() + flux[1:])
+        return _lookup(quantity, "radial" if t.group == RADIAL else "flux",
+                       t.key, flux[:1].upper() + flux[1:])
     return _lookup(quantity, role, t.key, t.name)
 
 

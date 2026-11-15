@@ -20,6 +20,7 @@ SPECIES = ("particles", "momentum", "force")
 MW = 1.0e6
 
 RADIAL = "Radial transport"
+POLOIDAL = "Poloidal transport"
 ATOMIC = "Atomic processes (B2.5)"
 FORCES = "Friction and thermal forces"
 VISCOSITY = "Viscosity and other forces"
