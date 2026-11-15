@@ -1,7 +1,8 @@
 """What the balance windows draw: panels of lines built from a Result (the
-total radial and poloidal balance, the decomposition of one of their
-lines, the terms of a group or the strata of an EIRENE term), the
-equations shown over them, and the drawing on a matplotlib axes."""
+total balance of each of its two parts: along the radial coordinate and
+along the flux tubes; the decomposition of one of their lines, the terms
+of a group or the strata of an EIRENE term), the equations shown over
+them, and the drawing on a matplotlib axes."""
 
 import textwrap
 from dataclasses import dataclass, field
@@ -13,21 +14,20 @@ from matplotlib.legend_handler import HandlerLineCollection
 from ...b2plot import labels
 from .. import theme
 from . import style
+from .kinds import KINDS
 
 COORDINATES = (("rhop", "ρ poloidal"),
                ("dssep", "Distance from separatrix"))
-XLABELS = {"rhop": r"$\rho_\mathrm{pol}$",
-           "dssep": "Distance from the separatrix at the upstream surface "
-                    "(cm)"}
+XLABELS = {"rhop": r"$\rho_\mathrm{pol}$"}
 
 
 @dataclass
 class Series:
     """One line: values y at x (the panel x unless given), its colour and
     style, and what a click on it opens (key, None: nothing); gradient:
-    coloured from the upstream blue (first point) to the downstream red
-    (last point); term: what it is, for its equation ("flux" or "source",
-    Term; "group", [Term])."""
+    coloured from blue (first point: upstream, inner) to red (last point:
+    downstream, outer); term: what it is, for its equation ("flux",
+    "radial" or "source", Term; "group", [Term])."""
     label: str
     y: np.ndarray
     color: str
@@ -49,8 +49,7 @@ class Panel:
     x: np.ndarray
     series: list = field(default_factory=list)
     equation: str = ""
-    reverse_x: bool = False
-    side: str = ""                  # "radial" or "poloidal"
+    side: str = ""                  # the part of the result: "ends", "cut"
 
 
 def _unit(result):
@@ -61,56 +60,105 @@ def _nonzero(y):
     return np.any(np.asarray(y) != 0)
 
 
-def _sym(terms):
-    return terms.symbol
-
-
 # ------------------------------------------------------------- level 2
-def radial(result, terms, coord, residuals, level, area_text):
-    """Total radial balance: per flux tube, upstream and downstream flux,
-    sources, residuals."""
-    s = _sym(terms)
-    x = result.x
+WORDS = {   # of the plots of each kind: where the coordinates start,
+    #         the subscripts of the flux in and out, the variable of the
+    #         flux across, the names of the lines of the level 2 plots
+    "parallel": dict(
+        coord_at="upstream", distance_from="downstream", sub=("up", "down"),
+        var="s", inflow="Upstream flux (into the volume)",
+        outflow="Downstream flux (out of the volume)",
+        ends="Sources, poloidally integrated",
+        across="Flux through the volume", cut="Sources of the slices"),
+    "radial": dict(
+        coord_at="start", distance_from="start", sub=("in", "out"),
+        var="r", inflow="Inner flux (into the volume)",
+        outflow="Outer flux (out of the volume)",
+        ends="Sources, radially integrated",
+        across="Flux across the volume", cut="Sources of the flux tubes")}
+
+
+def _xlabel(kind, coord):
+    if coord == "dssep":
+        return "Distance from the separatrix at the %s surface (cm)" % \
+            WORDS[kind]["coord_at"]
+    return XLABELS[coord]
+
+
+def _dlabel(kind, distance):
+    return "%s distance from the %s surface (m)" % (
+        distance.capitalize(), WORDS[kind]["distance_from"])
+
+
+def axis(result, part, coord, distance):
+    """x and x label of part ("ends" or "cut") of result: the radial
+    coordinate coord or the distance along the flux tubes."""
+    p = result.part(part)
+    return p.x, (_xlabel(result.kind, coord) if p.axis == "radial" else
+                 _dlabel(result.kind, distance))
+
+
+def total(result, terms, axis_, coord, residuals, level, area_text,
+          distance):
+    """Total radial (axis_ "radial") or poloidal balance: the part of the
+    result along axis_, per unit with ends the flux in and out and the
+    sources, or the flux across the boundaries of the units cut (coloured
+    from the first to the last) and their sources; residuals."""
+    kind = KINDS[result.kind]
+    w = WORDS[kind.key]
+    part = kind.part(axis_)
+    p = result.part(part)
+    _, xlabel = axis(result, part, coord, distance)
     sm = lambda y: style.smooth(y, level)                  # noqa: E731
-    lines = [Series("Upstream flux (into the volume)", sm(result.up.sum(1)),
-                    style.UP, marker=".", key=("radial", "up")),
-             Series("Downstream flux (out of the volume)",
-                    sm(result.down.sum(1)), style.DOWN, marker=".",
-                    key=("radial", "down")),
-             Series("Sources, poloidally integrated", sm(result.src.sum(1)),
-                    style.SOURCE, marker=".", key=("radial", "src"))]
+    if part == "ends":
+        lines = [Series(w["inflow"], sm(p.inflow.sum(1)), style.UP,
+                        marker=".", key=("ends", "in")),
+                 Series(w["outflow"], sm(p.outflow.sum(1)), style.DOWN,
+                        marker=".", key=("ends", "out"))]
+    else:
+        lines = [Series(w["across"], sm(p.across.sum(1)), style.UP,
+                        gradient=True, key=("cut", "across"), x=p.edges,
+                        marker=".")]
+    lines.append(Series(w[part], sm(p.src.sum(1)), style.SOURCE, marker=".",
+                        key=(part, "src")))
     if residuals:
-        lines += [Series("Residual (B2.5)", sm(result.code), style.CODE),
-                  Series("Residual (post-processing)", sm(result.post),
+        lines += [Series("Residual (B2.5)", sm(p.code), style.CODE),
+                  Series("Residual (post-processing)", sm(p.post),
                          style.POST, style="--")]
-    return Panel("Total radial balance", XLABELS[coord], _unit(result), x,
-                 lines, radial_text(s, area_text), side="radial")
+    text = TEXTS[(kind.key, part)](terms.symbol, distance, area_text)
+    return Panel("Total %s balance" % axis_, xlabel, _unit(result), p.x,
+                 lines, text, side=part)
 
 
-def area_text(quantity, areatype, areaend, reverse):
+FIXED_AREAS = {     # quantities with their own areas
+    "totpress": lambda reverse: ", per face at the %s end" % (
+        "upstream" if reverse else "downstream"),
+    "force": lambda reverse: "; every term per ion, over the ions "
+    "n<sub>a</sub>V of a cell (radial balance: of the first cell of each "
+    "flux tube; poloidal balance: of each cell)"}
+
+
+def area_text(quantity, areatype, areaend, reverse, kind="parallel"):
     """What the terms of the level 2 plots are divided by, in words."""
-    if quantity == "totpress":
-        return ", per face at the %s end" % ("upstream" if reverse else
-                                             "downstream")
-    if quantity == "force":
-        return "; every term per ion, over the ions n<sub>a</sub>V of a " \
-            "cell (radial balance: of the first cell of each flux tube; " \
-            "poloidal balance: of each cell)"
+    k = KINDS[kind]
+    if quantity in FIXED_AREAS and quantity not in k.left_out:
+        return FIXED_AREAS[quantity](reverse)
     if areatype == "none":
         return ""
     return "; all divided by the %s area of the %s surface" % (
-        areatype, "upstream" if areaend == "up" else "downstream")
+        areatype, dict(k.area_ends)[areaend].lower())
 
 
 def area_texts(quantity):
-    """Every text area_text gives for the quantity."""
-    return {area_text(quantity, t, e, r) for t in ("none", "parallel",
-                                                   "contact")
-            for e in ("up", "down") for r in (False, True)}
+    """Every text area_text gives for the quantity, in either kind."""
+    return {area_text(quantity, t, e, r, k.key) for k in KINDS.values()
+            for t, _ in k.area_types for e, _ in k.area_ends
+            for r in (False, True)}
 
 
-def radial_text(s, area):
-    """Explanation of the total radial balance (s: symbol of the flux)."""
+def tubes_text(s, distance, area):
+    """Explanation of the flux tubes between their ends (parallel
+    balance; s: symbol of the flux)."""
     return ("%s<sub>up</sub>(x) &minus; %s<sub>down</sub>(x) + S(x) = "
             "R(x), for each flux tube of the volume: %s<sub>up</sub> flows "
             "in through the upstream surface, %s<sub>down</sub> out "
@@ -121,8 +169,8 @@ def radial_text(s, area):
                 s, s, s, s, s, s, area))
 
 
-def poloidal_text(s, distance, area):
-    """Explanation of the total poloidal balance."""
+def slices_text(s, distance, area):
+    """Explanation of the slices cut (parallel balance)."""
     return ("%s(s<sub>k</sub>) &minus; %s(s<sub>k+1</sub>) + S<sub>k</sub> "
             "= R<sub>k</sub>, for each slice k of the volume between the "
             "surfaces at s<sub>k</sub> and s<sub>k+1</sub> (s: %s distance "
@@ -133,47 +181,56 @@ def poloidal_text(s, distance, area):
             "or post-processed%s." % (s, s, distance, s, area))
 
 
+def columns_text(s, distance, area):
+    """Explanation of the slices between their ends (radial balance)."""
+    return ("%s<sub>in</sub>(s) &minus; %s<sub>out</sub>(s) + S(s) = R(s), "
+            "for each slice of the volume (s: %s distance from the start "
+            "surface along the flux tube next to the separatrix): "
+            "%s<sub>in</sub> flows in through the inner surface, "
+            "%s<sub>out</sub> out through the outer surface, S = &int; "
+            "sources dV over the slice (poloidal transport into the slice "
+            "included); R: residual of B2.5, or post-processed as "
+            "%s<sub>in</sub> &minus; %s<sub>out</sub> + S%s." % (
+                s, s, distance, s, s, s, s, area))
+
+
+def rings_text(s, distance, area):
+    """Explanation of the flux tubes cut (radial balance)."""
+    return ("%s(r<sub>k</sub>) &minus; %s(r<sub>k+1</sub>) + S<sub>k</sub> "
+            "= R<sub>k</sub>, for each flux tube k of the volume between the "
+            "flux surfaces at r<sub>k</sub> and r<sub>k+1</sub>: %s(r) flows "
+            "across the flux surfaces through the whole volume, S<sub>k</sub>"
+            " = &int; sources dV over the tube (transport through its ends "
+            "included); R: residual of B2.5, or post-processed%s." % (
+                s, s, s, area))
+
+
+TEXTS = {("parallel", "ends"): tubes_text, ("parallel", "cut"): slices_text,
+         ("radial", "ends"): columns_text, ("radial", "cut"): rings_text}
+
+
 def all_texts(side):
-    """Every explanation a plot of the side ("radial", "poloidal",
-    "parts": levels 3 and 4) can show: its label keeps the room of the
-    longest, so that the plots keep their size."""
+    """Every explanation a plot of the side ("radial", "poloidal": the
+    total balance along that axis, in either kind; "parts": levels 3 and
+    4) can show: its label keeps the room of the longest, so that the
+    plots keep their size."""
     from .terms import QUANTITIES, SYMBOLS
     from .calc import DISTANCES
     out = set()
+    subs = [x for w in WORDS.values() for x in w["sub"]] + [""]
+    variables = {w["var"] for w in WORDS.values()}
     for q, _ in QUANTITIES:
         s = SYMBOLS[q]
-        for a in area_texts(q):
-            if side == "radial":
-                out.add(radial_text(s, a))
-            elif side == "poloidal":
-                out |= {poloidal_text(s, d, a) for d, _ in DISTANCES}
         if side == "parts":
-            out |= {parts_text(s, sub) for sub in ("up", "down", "")}
+            out |= {parts_text(s, sub, v) for sub in subs for v in variables}
+            continue
+        for a in area_texts(q):
+            for k in KINDS.values():
+                text = TEXTS[(k.key, k.part(side))]
+                out |= {text(s, d, a) for d, _ in DISTANCES}
     if side == "parts":
         out |= {SOURCES_TEXT, members_text(True), members_text(False)}
     return tuple(sorted(out))
-
-
-def poloidal(result, terms, distance, residuals, level, area_text):
-    """Total poloidal balance: flux through the surfaces between the
-    slices (coloured from upstream to downstream), sources of the slices,
-    residuals."""
-    s = _sym(terms)
-    sm = lambda y: style.smooth(y, level)                  # noqa: E731
-    lines = [Series("Flux through the volume", sm(result.edges.sum(1)),
-                    style.UP, gradient=True, key=("poloidal", "flux"),
-                    x=result.px_edges, marker="."),
-             Series("Sources of the slices", sm(result.psrc.sum(1)),
-                    style.SOURCE, marker=".", key=("poloidal", "src"))]
-    if residuals:
-        lines += [Series("Residual (B2.5)", sm(result.pcode), style.CODE),
-                  Series("Residual (post-processing)", sm(result.ppost),
-                         style.POST, style="--")]
-    return Panel("Total poloidal balance", "%s distance from the "
-                 "downstream surface (m)" % distance.capitalize(),
-                 _unit(result), result.px, lines,
-                 poloidal_text(s, distance, area_text), reverse_x=True,
-                 side="poloidal")
 
 
 # ------------------------------------------------------------- level 3
@@ -181,14 +238,14 @@ SOURCES_TEXT = "S = &Sigma;<sub>g</sub> S<sub>g</sub>: the sources by " \
     "group; a group marked ▸ opens its terms (EIRENE: its strata)."
 
 
-def parts_text(s, sub):
-    """Explanation of the parts of a flux (sub: up, down, or "" for the
-    poloidal flux)."""
+def parts_text(s, sub, var="s"):
+    """Explanation of the parts of a flux (sub: of the flux in or out, or
+    "" for the flux across, function of var)."""
     if sub:
         return "%s<sub>%s</sub> = &Sigma;<sub>k</sub> %s<sub>%s</sub>" \
             "<sub>,k</sub>: the parts of the flux of B2.5." % (s, sub, s, sub)
-    return "%s(s) = &Sigma;<sub>k</sub> %s<sub>k</sub>(s): the parts of " \
-        "the flux of B2.5." % (s, s)
+    return "%s(%s) = &Sigma;<sub>k</sub> %s<sub>k</sub>(%s): the parts of " \
+        "the flux of B2.5." % (s, var, s, var)
 
 
 def members_text(strata):
@@ -219,78 +276,65 @@ def _expandable(sources, values, cols):
 
 
 def decomposition(result, terms, which, coord, distance, level):
-    """Level 3: the decomposition of the line which (("radial", "up"),
-    ...): flux parts, or the sources by group (a group with several terms
-    or with strata opens its own window)."""
-    s = _sym(terms)
+    """Level 3: the decomposition of the line which ((part, "in"), (part,
+    "out"), (part, "across"), (part, "src")): flux parts, or the sources
+    by group (a group with several terms or with strata opens its own
+    window)."""
+    kind = KINDS[result.kind]
+    w = WORDS[kind.key]
+    s = terms.symbol
     sm = lambda y: style.smooth(y, level)                  # noqa: E731
-    side, part = which
-    if side == "radial":
-        x, xlabel = result.x, XLABELS[coord]
-    else:
-        x, xlabel = result.px, "%s distance from the downstream surface " \
-            "(m)" % distance.capitalize()
-    edge = side == "poloidal" and part == "flux"
-    if edge:
-        x = result.px_edges
+    part, what = which
+    p = result.part(part)
+    x, xlabel = axis(result, part, coord, distance)
     lines = []
-    if part in ("up", "down", "flux"):
-        values = {"up": result.up, "down": result.down,
-                  "flux": result.edges}[part]
+    if what in ("in", "out", "across"):
+        values = {"in": p.inflow, "out": p.outflow, "across": p.across}[what]
+        if what == "across":
+            x = p.edges
         for k, t in enumerate(result.fluxes):
             if _nonzero(values[:, k]):
                 c, st = style.cycle(len(lines))
                 lines.append(Series(t.name, sm(values[:, k]), c, st,
-                                    term=("flux", t)))
-        title = {"up": "Upstream flux by part", "down": "Downstream flux "
-                 "by part", "flux": "Flux through the volume by part"}[part]
-        sub = {"up": "up", "down": "down", "flux": ""}[part]
-        eq = parts_text(s, sub)
-        total = values.sum(1)
+                                    term=(kind.flux_role, t)))
+        name = {"in": "inflow", "out": "outflow", "across": "across"}[what]
+        title = w[name].split(" (")[0] + " by part"
+        sub = {"in": w["sub"][0], "out": w["sub"][1], "across": ""}[what]
+        eq = parts_text(s, sub, w["var"])
     else:
-        sources = result.sources if side == "radial" else result.psources
-        values = result.src if side == "radial" else result.psrc
-        for name, cols in groups(sources, values):
+        values = p.src
+        for name, cols in groups(p.sources, values):
             y = values[:, cols].sum(1)
             if not _nonzero(values[:, cols]):
                 continue
             live = [k for k in cols if _nonzero(values[:, k])]
-            label = name if len(live) > 1 or sources[live[0]].parts else \
-                sources[live[0]].name
-            key = (side, "group", name) if _expandable(
-                sources, values, cols) else None
-            one = len(live) == 1 and not sources[live[0]].parts
-            term = ("source", sources[live[0]]) if one else \
-                ("group", [sources[k] for k in live])
+            one = len(live) == 1 and not p.sources[live[0]].parts
+            label = p.sources[live[0]].name if one else name
+            key = (part, "group", name) if _expandable(
+                p.sources, values, cols) else None
+            term = ("source", p.sources[live[0]]) if one else \
+                ("group", [p.sources[k] for k in live])
             c, st = style.cycle(len(lines))
             lines.append(Series(label, sm(y), c, st,
                                 width=1.8 if key else 1.5, key=key,
                                 term=term))
-        title = "Sources by group" + (", poloidally integrated" if
-                                      side == "radial" else
-                                      " of the slices")
+        title = "Sources by group" + w[part][len("Sources"):]
         eq = SOURCES_TEXT
-        total = values.sum(1)
-    lines.append(Series("Sum", sm(total), "#000000", width=2.4,
+    lines.append(Series("Sum", sm(values.sum(1)), "#000000", width=2.4,
                         style="-", total=True))
-    return Panel(title, xlabel, _unit(result), x, lines, eq,
-                 reverse_x=side == "poloidal", side=side)
+    return Panel(title, xlabel, _unit(result), x, lines, eq, side=part)
 
 
 # ------------------------------------------------------------- level 4
 def members(result, terms, key, coord, distance, level, strata):
     """Level 4: the terms of a group of sources, the strata of its EIRENE
     terms (recycling strata clickable: their segments on the 2D plot)."""
-    side, _, name = key
+    part, _, name = key
     sm = lambda y: style.smooth(y, level)                  # noqa: E731
-    sources = result.sources if side == "radial" else result.psources
-    values = result.src if side == "radial" else result.psrc
+    p = result.part(part)
+    sources, values = p.sources, p.src
     cols = dict(groups(sources, values))[name]
-    if side == "radial":
-        x, xlabel, summed = result.x, XLABELS[coord], result.radial_sum
-    else:
-        x, xlabel, summed = result.px, "%s distance from the downstream " \
-            "surface (m)" % distance.capitalize(), result.poloidal_sum
+    x, xlabel = axis(result, part, coord, distance)
     lines, strata_lines = [], False
     for k in cols:
         t = sources[k]
@@ -302,16 +346,16 @@ def members(result, terms, key, coord, distance, level, strata):
                                 term=("source", t)))
             continue
         strata_lines = True
-        for part, arr in t.parts:
-            per = summed(arr)
+        for sub, arr in t.parts:
+            per = p.sum(arr)
             for j in range(per.shape[1]):
                 if not _nonzero(per[:, j]):
                     continue
-                label = strata.label(j) + (", " + part if part else "")
+                label = strata.label(j) + (", " + sub if sub else "")
                 c, st = style.cycle(len(lines))
                 lines.append(Series(label, sm(per[:, j]), c, st, key=(
                     "stratum", j) if strata.recycling(j) else None))
-        rest = values[:, k] - sum(summed(arr).sum(1) for _, arr in t.parts)
+        rest = values[:, k] - sum(p.sum(arr).sum(1) for _, arr in t.parts)
         if _nonzero(np.round(rest, 12)) and \
                 np.max(np.abs(rest)) > 1e-9 * np.max(np.abs(values[:, k])):
             c, st = style.cycle(len(lines))
@@ -319,8 +363,7 @@ def members(result, terms, key, coord, distance, level, strata):
     lines.append(Series("Sum", sm(values[:, cols].sum(1)), "#000000",
                         width=2.4, total=True))
     return Panel(name, xlabel, _unit(result), x, lines,
-                 members_text(strata_lines),
-                 reverse_x=side == "poloidal", side=side)
+                 members_text(strata_lines), side=part)
 
 
 # -------------------------------------------------------------- drawing

@@ -1,9 +1,8 @@
-"""Parallel balance on the 2D plot: the button, picking the upstream and
-the downstream surface (the surface across the region nearest to the
-mouse, the end faces of the flux tubes when the mouse is near them), the
-balance volume drawn filled, with its upstream surface and its downstream
-surface and walls, dragging either surface along the flux tubes, the
-glowing segments of a recycling stratum; and the balance window."""
+"""Parallel and radial balance on the 2D plot: the buttons, picking a
+volume (picking.py: its two surfaces, the surfaces nearest to the mouse
+or the end faces of the flux tubes when the mouse is near them; dragging
+its surfaces and its limits), the volume drawn filled with its surfaces,
+the glowing segments of a recycling stratum; and the balance window."""
 
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
@@ -11,39 +10,45 @@ from matplotlib.collections import LineCollection, PolyCollection
 from .. import theme
 from ...qt import QtWidgets, Qt
 from . import calc, ncfile, strata, style, terms, topology
+from .kinds import KINDS
+from .picking import NEAR, PICKINGS, REACH, WIDTH
 from .windows import BalanceWindow, screen_room
 
 ZORDER = 7.0
 FILL = {False: (1.0, 1.0), True: (2.6, 0.45)}   # z-order and opacity of the
 #                                               fill without, with a quantity
-NEAR = 14.0                         # pixels: an end face wins over others
-REACH = 40.0                        # pixels: farthest face picked
 GRAB = 8.0                          # pixels: a surface taken for dragging
 DOT = 10.0                          # pixels: a corner dot taken
-WIDTH = 3.0                         # points: contour of the volume
-TEXT = "Calculate\nparallel\nbalance"
 
 
 class BalanceTool:
-    """The parallel balance of a Tab2D (its canvas, plot, status)."""
+    """The parallel and the radial balance of a Tab2D (its canvas, plot,
+    status); one volume at a time."""
 
     def __init__(self, tab):
         self.tab = tab
         self.settings = tab.settings
-        self.button = QtWidgets.QPushButton(TEXT)
-        self.button.setCheckable(True)
-        self.button.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                                  QtWidgets.QSizePolicy.Fixed)
-        self.button.clicked.connect(self._clicked)
+        self.buttons = {}
+        for kind in KINDS.values():
+            b = QtWidgets.QPushButton(kind.button)
+            b.setCheckable(True)
+            b.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                            QtWidgets.QSizePolicy.Fixed)
+            b.clicked.connect(lambda on, k=kind.key: self._clicked(k))
+            self.buttons[kind.key] = b
+        self.kind = "parallel"
+        self.pickings = {k: P(self) for k, P in PICKINGS.items()}
         self.run = None
         self.path = None
         self.bf = self.grid = self.strata = None
         self.rc = None                  # b2plot label rc (old strata)
-        self.mode = None                # "up", "down", "drag-" + "up",
-        #                                 "down", "first", "last" (sides)
-        self.up = self.down = self.vol = None
+        self.mode = None                # the two clicks of picking (picks
+        #                                 of the kind), "drag-" + "start",
+        #                                 "end" (surfaces), "first", "last"
+        #                                 (limits)
+        self.vol = None
         self.span = None                # end tubes of the volume (None: all)
-        self.sides = ([], [], [])       # side faces (topology.sides)
+        self.sides = ([], [], [])       # faces to the cells out of it
         self.corners = {}               # side without faces -> its point
         self.candidate = None
         self.window = None
@@ -52,7 +57,7 @@ class BalanceTool:
         self.stratum = None
         self.artists = {}
         self._rows = None
-        self.xzoom = {}                 # "radial", "poloidal" -> x range
+        self.xzoom = {}                 # (side, x label) -> x range
         c = tab.canvas
         c.mpl_connect("motion_notify_event", self._motion)
         c.mpl_connect("button_press_event", self._press)
@@ -60,17 +65,24 @@ class BalanceTool:
         c.mpl_connect("key_press_event", self._key)
         self.set_run(None)
 
+    @property
+    def picking(self):
+        """How a volume of the kind is picked (picking.py)."""
+        return self.pickings[self.kind]
+
     # ---------------------------------------------------------------- run
     def set_run(self, run):
-        """A new run (or reload): nothing picked; the button only with a
+        """A new run (or reload): nothing picked; the buttons only with a
         balance.nc of this state of the run."""
         if self.window is not None:
             self.window.close()
         self.window = None
         self._clear()
         self.run, self.mode = run, None
-        self.up = self.down = self.vol = None
+        self.vol = None
         self.span, self.sides, self.corners = None, ([], [], []), {}
+        for p in self.pickings.values():
+            p.reset(True)
         if self.bf is not None:
             self.bf.close()
         self.bf = self.grid = self.strata = self.rc = None
@@ -79,13 +91,14 @@ class BalanceTool:
             self.path, why = None, "No run"
         else:
             self.path, why = ncfile.status(run.rundir)
-        self.button.setChecked(False)
-        self.button.setEnabled(self.path is not None)
-        self.button.setToolTip(
-            "Pick the upstream and the downstream surface of a volume on "
-            "the plot (both in one region: core, SOL or PFR); the balances "
-            "of balance.nc in it open in their own window" if self.path
-            else why)
+        for key, b in self.buttons.items():
+            b.setChecked(False)
+            b.setEnabled(self.path is not None)
+            b.setToolTip(KINDS[key].tip if self.path else why)
+
+    @property
+    def name(self):
+        return KINDS[self.kind].name
 
     def _load(self):
         """balance.nc and the topology of its grid, once per run."""
@@ -117,31 +130,50 @@ class BalanceTool:
         self.tab.status.emit(text)
 
     # -------------------------------------------------------------- modes
-    def _clicked(self, on):
-        if self.mode in ("up", "down"):
+    def _picking(self):
+        """True while the two surfaces are being clicked."""
+        return self.mode in self.picking.picks
+
+    def _clicked(self, kind):
+        """A balance button: picking a volume of that kind (the volume of
+        the other kind and its window go)."""
+        if self._picking() and self.kind == kind:
             self.cancel()
             return
         if not self._load():
-            self.button.setChecked(False)
+            self._buttons()
             return
+        if kind != self.kind:
+            if self.window is not None:
+                self.window.close()
+            self.cancel()
+            self.closed()
+            self.kind = kind
         self.tab.tools.bar.set_mode(None)
         self.tab.commands._mode("zoom", False)
-        self.mode = "up"
-        self.button.setChecked(True)
-        for key in ("up", "down", "fill"):     # back if cancelled
-            self._remove(key)
+        self.mode = self.picking.picks[0]
+        self.picking.begin()
+        self._buttons()
+        for key in ("in", "out", "fill", "sides", "corners"):
+            self._remove(key)           # back if cancelled
         self.tab.canvas.draw_idle()
-        self.status("Parallel balance: click the upstream surface "
-                    "(Escape cancels)")
+        self.status("%s: click the %s surface (Escape cancels)" % (
+            self.name, self.picking.first_name))
+
+    def _buttons(self):
+        """The button of the kind being picked pressed, the other not."""
+        picking = self._picking()
+        for key, b in self.buttons.items():
+            b.setChecked(picking and self.kind == key)
 
     def cancel(self):
         """Picking stopped; the volume picked before stays."""
-        if self.mode in ("up", "down"):
+        if self._picking():
             self.mode = None
-            self._draw_candidate(None)
+            self._draw_candidate([])
             self._draw_volume()
-            self.status("Parallel balance: picking cancelled")
-        self.button.setChecked(False)
+            self.status("%s: picking cancelled" % self.name)
+        self._buttons()
 
     def busy(self):
         return self.mode is not None
@@ -193,16 +225,18 @@ class BalanceTool:
                 event.xdata is None:
             return
         if self.mode in ("drag-first", "drag-last"):
-            self._move_side(event)
-        elif self.mode in ("up", "down", "drag-up", "drag-down"):
-            region = None if self.mode == "up" else self.up.region
+            t = self.picking.tube_at(event.xdata, event.ydata)
+            if t is not None:
+                self.picking.move_limit(t)
+        elif self._picking():
+            self.picking.hover(event)
+        elif self.mode in ("drag-start", "drag-end"):
+            region = self.vol.region
             s = self._surface(self._face(event.xdata, event.ydata, region),
                               region)
             if s is not self.candidate:
                 self.candidate = s
-                self._draw_candidate(s, "up" if self.mode in (
-                    "up", "drag-up") else "down",
-                    self.span if self.mode.startswith("drag-") else None)
+                self.picking.draw_end(s, self.mode[5:])
         elif self.vol is not None:
             self.tab.canvas.setCursor(Qt.SizeAllCursor if self._grab(
                 event) else Qt.ArrowCursor)
@@ -211,79 +245,67 @@ class BalanceTool:
         if self.grid is None or event.button != 1 or \
                 event.inaxes is not self.tab.plot.ax or event.dblclick:
             return
-        if self.mode in ("up", "down"):
+        p = self.picking
+        if self._picking():
             self._motion(event)         # the surface where it was clicked
-        if self.mode == "up":
-            if self.candidate is None:
-                return
-            self.up, self.mode = self.candidate, "down"
-            self.candidate = None
-            self._draw_candidate(None)
-            self._draw_surface("picked", self.up, style.UP)
-            self.status("Parallel balance: upstream surface in the %s (%d "
-                        "flux tubes); click the downstream surface in the "
-                        "same region" % (self.grid.names[self.up.region],
-                                         len(self.up.tubes)))
-        elif self.mode == "down":
-            if self.candidate is None:
-                self.status("Parallel balance: the downstream surface must "
-                            "be in the %s" % self.grid.names[self.up.region])
-                return
-            if self._set(self.up, self.candidate):
+            if self.mode == p.picks[0]:
+                if self.candidate is None:
+                    return
+                p.choose(self.candidate)
+                self.mode, self.candidate = p.picks[1], None
+                self._remove("candidate")
+                self._lines("picked", p.pending(), style.UP, WIDTH)
+                self.tab.canvas.draw_idle()
+                self.status(p.chosen_text())
+            elif p.complete(self.candidate):
                 self.mode = None
-                self.button.setChecked(False)
+                self._buttons()
                 self._open()
         elif self.mode is None and self.vol is not None:
             which = self._grab(event)
             if which in ("first", "last"):
-                self.mode = "drag-" + which
-                self.candidate = None
-                self.status("Parallel balance: move the side of the volume "
-                            "across the flux tubes and release")
+                self.mode, self.candidate = "drag-" + which, None
+                self.status("%s: move the %s across the flux tubes and "
+                            "release" % (self.name, p.limit_name(which)))
             elif which is not None:
-                self.mode = "drag-" + which
-                self.candidate = None
-                self.status("Parallel balance: move the %s surface along the "
-                            "flux tubes and release" % ("upstream" if which ==
-                                                        "up" else
-                                                        "downstream"))
+                self.mode, self.candidate = "drag-" + which, None
+                self.status("%s: move the %s surface along the flux tubes "
+                            "and release" % (self.name, p.ends[which]))
 
     def _release(self, event):
         if self.mode in ("drag-first", "drag-last"):
             self.mode = None
             span, self.candidate = self.candidate, None
             self._remove("candidate")
-            if span is None or span == self._span():
+            if span is None or span == self.picking.span():
                 self._draw_volume()
-                return
-            if self._set(self.up, self.down, span) and \
-                    self.window is not None:
-                self.window.refresh()
+            elif self.picking.set_span(span):
+                self._refresh()
             return
-        if self.mode not in ("drag-up", "drag-down"):
+        if self.mode not in ("drag-start", "drag-end"):
             return
         which, self.mode = self.mode[5:], None
         s, self.candidate = self.candidate, None
-        self._draw_candidate(None)
-        if s is None or s is (self.up if which == "up" else self.down):
+        self._draw_candidate([])
+        ok = self.picking.move_end(which, s)
+        if ok is None:
             self._draw_volume()
-            return
-        up, down = (s, self.down) if which == "up" else (self.up, s)
-        if self._set(up, down, self.span) and self.window is not None:
-            self.window.refresh()
+        elif ok:
+            self._refresh()
 
     def _key(self, event):
         if event.key == "escape":
             if self.mode is not None and self.mode.startswith("drag-"):
                 self.mode, self.candidate = None, None
-                self._draw_candidate(None)
+                self._draw_candidate([])
                 self._draw_volume()
             else:
                 self.cancel()
 
     def _grab(self, event):
-        """"up" or "down" if the mouse is on that surface of the volume,
-        "first" or "last" on that side."""
+        """"start" or "end" if the mouse is on the surface at the start or
+        at the end of the flux tubes of the volume, "first" or "last" on
+        that limit."""
         if self.vol is None or event.xdata is None or \
                 event.inaxes is not self.tab.plot.ax:
             return None
@@ -293,12 +315,12 @@ class BalanceTool:
             if np.hypot(*(p - point)) <= DOT * px:  # where the surfaces end
                 return key
         best, which = np.inf, None
-        for key, faces in (("up", [f for fs in self.vol.up for f in fs]),
-                           ("down", [f for i, fs in enumerate(self.vol.down)
-                                     for f in fs[:len(g.faces_at(
-                                         self.vol.tubes[i],
-                                         self.vol.down_pos[i]))]
-                                     if self.vol.reached[i]]),
+        for key, faces in (("start", [f for fs in self.vol.up for f in fs]),
+                           ("end", [f for i, fs in enumerate(self.vol.down)
+                                    for f in fs[:len(g.faces_at(
+                                        self.vol.tubes[i],
+                                        self.vol.down_pos[i]))]
+                                    if self.vol.reached[i]]),
                            ("first", self.sides[0]), ("last", self.sides[1])):
             if faces:
                 d = g.distance(p, np.array(faces, int)).min()
@@ -306,81 +328,20 @@ class BalanceTool:
                     best, which = d, key
         return which if best <= GRAB * px else None
 
-    def _span(self):
-        """The end tubes of the volume, the first one first in the order of
-        the upstream surface."""
-        order = {t: i for i, t in enumerate(self.up.tubes)}
-        a, b = self.vol.tubes[0], self.vol.tubes[-1]
-        return (a, b) if order[a] <= order[b] else (b, a)
-
-    def _tube_at(self, x, y):
-        """Tube of the upstream surface nearest to (x, y)."""
-        g = self.grid
-        faces = np.array([f for f in g.sep_faces
-                          if g.face_pos[f][0] in self.up.pos], int)
-        if not len(faces):
-            return None
-        f = int(faces[np.argmin(g.distance(np.array((x, y)), faces))])
-        return g.face_pos[f][0]
-
-    def _move_side(self, event):
-        """The side dragged at the tube under the mouse (never past the
-        other side): its new place drawn."""
-        t = self._tube_at(event.xdata, event.ydata)
-        if t is None:
-            return
-        order = {u: i for i, u in enumerate(self.up.tubes)}
-        a, b = self._span()
-        if self.mode == "drag-first":
-            span = (t if order[t] <= order[b] else b, b)
-        else:
-            span = (a, t if order[t] >= order[a] else a)
-        if span == self.candidate:
-            return
-        vol = topology.volume(self.grid, self.up, self.down, span)
-        if isinstance(vol, str):
-            return
-        self.candidate = span
-        first, last, _ = topology.sides(self.grid, vol, self.up)
-        which = self.mode[5:]
-        faces = first if which == "first" else last
-        self._lines("candidate", self._segments(faces), style.SOURCE, WIDTH)
-        if not faces:
-            self._dot("candidate", topology.corner(self.grid, vol, self.up,
-                                                   which))
-        self.tab.canvas.draw_idle()
-
-    def _set(self, up, down, span=None):
-        """The volume between up and down across span (end tubes; None:
-        the whole region); False (and a message) if there is none."""
-        vol = topology.volume(self.grid, up, down, span)
-        if isinstance(vol, str):
-            self.status("Parallel balance: " + vol)
-            return False
-        self.up, self.down, self.vol = up, down, vol
-        self.span = span if span is not None and \
-            topology.span_tubes(up, span) != list(up.tubes) else None
-        self.sides = topology.sides(self.grid, vol, up)
-        self.corners = {}
-        for which, faces in zip(("first", "last"), self.sides):
-            point = None if faces else topology.corner(self.grid, vol, up,
-                                                        which)
-            if point is not None:
-                self.corners[which] = np.array(point)
+    def set_volume(self, vol, span, sides, corners):
+        """The volume picked (span: its end tubes, None: all; sides: the
+        faces to the cells out of it; corners: the points of the limits
+        without faces), drawn."""
+        self.vol, self.span, self.sides, self.corners = vol, span, sides, \
+            corners
         self.xzoom = {}
-        self._draw_candidate(None)
+        self._remove("candidate")
+        self._remove("picked")
         self._draw_volume()
-        self.status("Parallel balance: " + self.describe())
-        return True
+        self.status("%s: %s" % (self.name, self.describe()))
 
     def describe(self):
-        v, g = self.vol, self.grid
-        walls = sum(not r for r in v.reached)
-        return "%s, %d flux tubes from the upstream to the downstream " \
-            "surface%s, %d cells, %d slices of the poloidal balance" % (
-                g.names[v.region], len(v.tubes),
-                " (%d of them end on a wall before it)" % walls if walls
-                else "", len(v.cell), v.slices.shape[0] - 1)
+        return self.picking.describe()
 
     # ------------------------------------------------------------ results
     def terms(self, quantity, species):
@@ -394,18 +355,19 @@ class BalanceTool:
 
     def compute(self, t, opts, coord):
         g, v = self.grid, self.vol
-        if coord == "rhop" and self.run.psimap is not None:
-            psimap = self.run.psimap
-            x = topology.rhop(g, self.up, v,
-                              lambda r, z: psimap.rhop(r, z) ** 2)
-        else:
-            x = 100.0 * topology.dssep(g, self.up, v)
+        psimap = self.run.psimap
+        psin = None if psimap is None else (
+            lambda r, z: psimap.rhop(r, z) ** 2)
+        geometry = self.picking.geometry
+        x = geometry.rhop(g, v, psin) if coord == "rhop" and psin else \
+            100.0 * geometry.dssep(g, v)
         return calc.compute(g, v, t, opts, x)
 
     def zoom(self, side, xlim, source):
-        """The x range of the radial or poloidal balance in every window
-        but source (None: the whole plot)."""
-        self.xzoom[side] = xlim
+        """The x range of the plots of one part of the balance in every
+        window but source (None: the whole plot)."""
+        label = source.panel.xlabel if source.panel is not None else ""
+        self.xzoom[(side, label)] = xlim
         w = self.window
         views = [w.radial, w.poloidal] if w is not None else []
         d = w.detail if w is not None else None
@@ -413,7 +375,8 @@ class BalanceTool:
             views.append(d.view)
             d = d.child
         for v in views:
-            if v is not source and v.side == side:
+            if v is not source and v.side == side and v.panel is not None \
+                    and v.panel.xlabel == label:     # the same x axis
                 v.set_x(xlim)
 
     def _open(self):
@@ -434,13 +397,20 @@ class BalanceTool:
         self.window.show()
         self.window.raise_()
 
+    def _refresh(self):
+        """The balance window again after the volume changed."""
+        if self.window is not None:
+            self.window.refresh()
+
     def closed(self):
         """The balance window was closed: the volume goes."""
         self.window = None
-        self.up = self.down = self.vol = None
+        self.vol = None
         self.span, self.sides, self.corners = None, ([], [], []), {}
+        for p in self.pickings.values():
+            p.reset()
         self.mode = None
-        self.button.setChecked(False)
+        self._buttons()
         self._clear()
 
     # ---------------------------------------------------------- drawing
@@ -487,17 +457,9 @@ class BalanceTool:
         faces = np.asarray(list(faces), int)
         return self.grid.vx[self.grid.fv[faces]] if len(faces) else []
 
-    def _draw_surface(self, key, s, color, width=WIDTH):
-        self._lines(key, s.polyline() if s is not None else [], color, width)
-        self.tab.canvas.draw_idle()
-
-    def _draw_candidate(self, s, which="up", span=None):
-        """Surface s under the mouse, across the tubes of span (the
-        volume narrowed: dragging one of its surfaces) or all of them."""
-        segs = [] if s is None else [s.segments[t] for t in
-                                     topology.span_tubes(s, span)]
-        self._lines("candidate", segs, style.UP if which == "up" else
-                    style.DOWN, 2.4)
+    def _draw_candidate(self, segments, color=style.UP):
+        """The surface under the mouse (its segments; none: nothing)."""
+        self._lines("candidate", segments, color, 2.4)
         self.tab.canvas.draw_idle()
 
     def _fill(self):
@@ -525,25 +487,25 @@ class BalanceTool:
             self._fill()
 
     def _draw_volume(self):
-        """The volume: filled, its upstream surface, its downstream surface
-        and walls."""
-        for key in ("picked", "up", "down", "fill", "sides", "corners"):
+        """The volume: filled, its limits (yellow), the faces where flux
+        comes in (blue: parallel upstream, radial inner) and goes out
+        (red: downstream and walls, outer), the corner dots; while the
+        second surface is clicked, the first one alone."""
+        for key in ("picked", "in", "out", "fill", "sides", "corners"):
             self._remove(key)
-        v = self.vol
-        if v is not None:
+        v, p = self.vol, self.picking
+        pending = p.pending() if self.mode == p.picks[1] else None
+        if pending is not None:
+            self._lines("picked", pending, style.UP, WIDTH)
+        elif v is not None:
             self._fill()
-            self._lines("sides", self._segments(
-                f for fs in self.sides for f in fs), style.SOURCE,
-                0.5 * WIDTH)
-            self._lines("down", self._segments(f for fs in v.down
-                                               for f in fs), style.DOWN,
+            self._lines("sides", self._segments(p.limits()), style.SOURCE,
+                        0.5 * WIDTH)
+            self._lines("out", self._segments(v.ends.outflow), style.DOWN,
                         WIDTH)
-            self._lines("up", self._segments(f for fs in v.up for f in fs),
-                        style.UP, WIDTH)
+            self._lines("in", self._segments(v.ends.inflow), style.UP, WIDTH)
             for point in self.corners.values():
                 self._dot("corners", point)
-        elif self.up is not None and self.mode == "down":
-            self._draw_surface("picked", self.up, style.UP)
         self.tab.canvas.draw_idle()
 
     def highlight_stratum(self, k):

@@ -1,8 +1,9 @@
 """Topology of the B2.5 grid of balance.nc for the balance volumes, from
 balance.nc alone: flux tubes (their cells in the positive poloidal
 direction of B2.5, closed or with two ends), X-points, topological regions
-(core, SOL, PFR), surfaces across a region and the volume between two of
-them, with the slices of its poloidal balance.
+(core, SOL, PFR), surfaces across a region, the cells of a balance volume
+(built by parallel.py and radial.py) and the slices of its poloidal
+extent.
 
 A position on a tube of n cells is the place between two of its cells:
 0 to n on an open tube (0 and n its two ends), 0 to n-1 on a closed one.
@@ -363,18 +364,19 @@ def surface(grid, f0, region=None):
 
 @dataclass
 class Volume:
-    """The cells between an upstream and a downstream surface: per tube
-    of the upstream surface, its cells in the downstream direction (sign
-    of the positive poloidal direction: direction), its upstream faces and
-    its downstream faces (the downstream surface, or the end of the tube,
-    and the walls the cells touch)."""
+    """The cells of a balance volume, per flux tube in the order of the
+    tubes (parallel: of the upstream surface; radial: from the inner to the
+    outer flux surface): its cells from its start to its end position in
+    the direction (sign of the positive poloidal direction) of the volume,
+    the faces at its start and at its end (with the walls its cells touch);
+    ends and cuts: the two parts of its balance (see Ends, Cuts)."""
     region: int
     direction: int
     tubes: list
-    cells: list                     # per tube, in the downstream order
-    up: list                        # per tube, faces
-    down: list                      # per tube, faces
-    reached: list                   # per tube, True at the downstream surface
+    cells: list                     # per tube, from its start
+    up: list                        # per tube, faces at its start
+    down: list                      # per tube, faces at its end and walls
+    reached: list                   # per tube, True at the end surface
     up_pos: list
     down_pos: list
     walls: np.ndarray = None        # wall faces of the cells
@@ -382,180 +384,58 @@ class Volume:
     cell_tube: np.ndarray = None    # index in tubes of each cell
     ref: int = 0                    # index of the tube along the separatrix
     slices: list = field(default_factory=list)
+    kind: str = "parallel"          # "parallel" or "radial"
+    sides: tuple = None             # faces to the cells out of it
+    surface: object = None          # parallel: the upstream surface
+    ends: object = None             # Ends of its balance
+    cuts: object = None             # Cuts of its balance
 
     @property
     def reverse(self):
         return self.direction < 0
 
 
-def _arc(grid, t, a, b, step):
-    """Cells of closed tube t from position a to position b going step."""
-    n = len(grid.tube_cells[t])
-    count = ((b - a) * step) % n
-    first = a if step > 0 else a - 1
-    return [(first + step * i) % n for i in range(count)]
+@dataclass
+class Ends:
+    """The balance of each unit (flux tube or slice) between its two ends:
+    the faces where flux comes in, those where it goes out (the units of
+    their cells), the unit of each cell of the volume."""
+    n: int
+    cell: np.ndarray
+    inflow: np.ndarray
+    in_unit: np.ndarray
+    outflow: np.ndarray
+    out_unit: np.ndarray
 
 
-def span_tubes(up, span):
-    """The tubes of surface up from one tube of span (two tubes) to the
-    other, in the order of the surface; all of them without span."""
-    if span is None or span[0] not in up.pos or span[1] not in up.pos:
-        return list(up.tubes)
-    i, j = sorted(up.tubes.index(t) for t in span)
-    return list(up.tubes[i:j + 1])
+@dataclass
+class Cuts:
+    """The balance across the boundaries 0 to n between the n units (slices
+    or flux tubes): parts (face, sign, first, last), the flux of the face
+    times sign counted across the boundaries first to last - 1; the unit of
+    each cell of the volume."""
+    n: int
+    cell: np.ndarray
+    parts: list
 
 
-def volume(grid, up, down, span=None):
-    """The volume between surfaces up and down (same region), across the
-    tubes of span (two tubes of up: from one to the other; None: all), or
-    a text saying why there is none."""
-    if up.region != down.region:
-        return "The two surfaces are in different regions"
-    common = [t for t in up.tubes if t in down.pos]
-    if not common:
-        return "The downstream surface crosses none of the flux tubes of " \
-            "the upstream one"
-    closed = grid.closed[up.tubes[0]]
-    if closed:
-        t = min(common, key=lambda t: abs(grid.tpsi[t] - grid.psi_sep)
-                if grid.psi_sep is not None else 0)
-        length = {s: grid.cvHx[grid.tube_cells[t][_arc(
-            grid, t, up.pos[t], down.pos[t], s)]].sum() for s in (1, -1)}
-        step = 1 if length[1] <= length[-1] else -1
-    else:
-        votes = sum(np.sign(down.pos[t] - up.pos[t]) for t in common)
-        step = 1 if votes >= 0 else -1
-    tubes, cells, ups, downs, walls, reached, upos, dpos = \
-        [], [], [], [], [], [], [], []
-    reach = []                      # tubes at the downstream surface
-    for t in span_tubes(up, span):
-        n = len(grid.tube_cells[t])
-        pu = up.pos[t]
-        if closed:
-            if t not in down.pos:
-                continue
-            pd, hit = down.pos[t], True
-            idx = _arc(grid, t, pu, pd, step)
-        else:
-            hit = t in down.pos and (down.pos[t] - pu) * step > 0
-            pd = down.pos[t] if hit else (n if step > 0 else 0)
-            idx = list(range(pu, pd)) if step > 0 else \
-                list(range(pu - 1, pd - 1, -1))
-        if not idx:
-            continue
-        if closed or hit:
-            reach.append(len(tubes))
-        cs = grid.tube_cells[t][idx]
-        uf, df = grid.faces_at(t, pu), grid.faces_at(t, pd)
-        wall = sorted({f for c in cs for f in grid.cell_faces[c]
-                       if grid.guard[f] and grid.qalf[f] != 0} -
-                      set(uf) - set(df))
-        tubes.append(t)
-        cells.append(cs)
-        ups.append(uf)
-        downs.append(df + wall)
-        walls.append(wall)
-        reached.append(hit)
-        upos.append(pu)
-        dpos.append(pd)
-    keep = _ending_on_walls(grid, cells, reach)
-    tubes, cells, ups, downs, walls, reached, upos, dpos = (
-        [a[i] for i in keep] for a in (tubes, cells, ups, downs, walls,
-                                       reached, upos, dpos))
-    if not tubes:
-        return "The volume between the two surfaces has no cells"
-    vol = Volume(up.region, step, tubes, cells, ups, downs, reached, upos,
-                 dpos)
-    vol.walls = np.array([f for w in walls for f in w], int)
-    _finish(grid, vol)
-    return vol
+def signs(grid, member, faces, inflow):
+    """Signs giving the inflow (or the outflow) of the fluxes of faces
+    into the cells member (True for each cell of the volume)."""
+    faces = np.asarray(faces, int)
+    into = member[grid.fc[faces, 1]]
+    return np.where(into if inflow else ~into, 1.0, -1.0)
 
 
-def sides(grid, vol, up):
-    """Faces of the sides of the volume: the faces between its cells and
-    the cells out of it, but the upstream, downstream and wall faces;
-    (first, last, other): the side towards the beginning of the order of
-    surface up, towards its end (where the region or the grid ends: the
-    side of the nearer end tube), faces of neither (towards tubes of the
-    volume, at its upstream and downstream ends)."""
-    member = np.zeros(grid.nCv, bool)
-    member[vol.cell] = True
-    ends = {f for fs in vol.up + vol.down for f in fs}
-    order = {t: i for i, t in enumerate(up.tubes)}
-    lo, hi = order[vol.tubes[0]], order[vol.tubes[-1]]
-    if lo > hi:
-        lo, hi = hi, lo
-    first, last, other = [], [], []
-    for i, cs in enumerate(vol.cells):
-        k = order[vol.tubes[i]]
-        for c in cs:
-            for f in grid.cell_faces[c]:
-                a, b = grid.fc[f]
-                o = b if a == c else a
-                if f in ends or member[o]:
-                    continue
-                t = -1 if grid.guard[f] else grid.cvFt[o]
-                if t in order:
-                    side = first if order[t] < lo else last if \
-                        order[t] > hi else other
-                else:                   # the region or the grid ends:
-                    side = first if k - lo <= hi - k else last  # nearer end
-                side.append(f)
-    return first, last, other
+def cell_slices(vol):
+    """Slice of each cell of the volume (in the order of vol.cell)."""
+    counts = vol.slices
+    return np.concatenate([np.searchsorted(counts[:, i], np.arange(
+        len(cs)), side="right") - 1 for i, cs in enumerate(vol.cells)])
 
 
-def corner(grid, vol, up, which):
-    """Point where the upstream and downstream faces of the end tube of
-    side which ("first" or "last", as sides) meet: the vertex they share
-    (the one farthest from the other end tube), else the middle of their
-    nearest vertices; for a side without faces."""
-    order = {t: i for i, t in enumerate(up.tubes)}
-    ends = sorted(range(len(vol.tubes)), key=lambda i: order[vol.tubes[i]])
-    i, j = (ends[0], ends[-1]) if which == "first" else (ends[-1], ends[0])
-    uv = {int(v) for f in vol.up[i] for v in grid.fv[f]}
-    dv = {int(v) for f in vol.down[i] for v in grid.fv[f]}
-    if not uv or not dv:
-        return None
-    common = uv & dv
-    if common:
-        far = grid.vx[grid.fv[np.array(vol.up[j], int)]].reshape(-1, 2) \
-            .mean(axis=0)
-        v = max(common, key=lambda v: np.hypot(*(grid.vx[v] - far)))
-        return tuple(grid.vx[v])
-    a = grid.vx[sorted(uv)]
-    b = grid.vx[sorted(dv)]
-    d = np.hypot(a[:, None, 0] - b[None, :, 0], a[:, None, 1] - b[None, :, 1])
-    k, m = np.unravel_index(np.argmin(d), d.shape)
-    return tuple(0.5 * (a[k] + b[m]))
-
-
-def _ending_on_walls(grid, cells, reach):
-    """Indices of the tubes in the volume: those at the downstream surface
-    and, joined one by one, those that end on a wall in between (the last
-    cell next to a cell of the volume); a tube that goes on past the
-    downstream surface elsewhere is left out."""
-    keep = set(reach)
-    inside = np.zeros(grid.nCv, bool)
-    for i in keep:
-        inside[cells[i]] = True
-    added = True
-    while added:
-        added = False
-        for i in range(len(cells)):
-            if i in keep:
-                continue
-            last = cells[i][-1]
-            near = [c for f in grid.cell_faces[last] for c in grid.fc[f]
-                    if c != last and c < grid.nCi]
-            if any(inside[c] for c in near):
-                keep.add(i)
-                inside[cells[i]] = True
-                added = True
-    return sorted(keep)
-
-
-def _finish(grid, vol):
-    """Cell lists, the reference tube and the slices."""
+def finish(grid, vol):
+    """Cell lists, the reference tube and the slices of a new volume."""
     vol.cell = np.concatenate(vol.cells)
     vol.cell_tube = np.concatenate([np.full(len(c), i)
                                     for i, c in enumerate(vol.cells)])
@@ -597,14 +477,14 @@ def slices(grid, vol):
 
 
 # --------------------------------------------------------- coordinates
-def dssep(grid, up, vol):
-    """Distance (m) along the upstream surface from the separatrix to the
-    middle of the face of each tube of the volume: positive in the SOL,
-    negative in the core and the PFR."""
-    order = up.tubes
+def dssep(grid, s, tubes):
+    """Distance (m) along surface s from the separatrix to the middle of
+    its face on each of tubes (nan where it does not cross it): positive
+    in the SOL, negative in the core and the PFR."""
+    order = s.tubes
     length, total, last = {}, 0.0, None
     for t in order:
-        a, b = up.segments[t]
+        a, b = s.segments[t]
         if last is not None:
             total += float(np.hypot(*(a - last)))
         length[t] = total + 0.5 * float(np.hypot(*(b - a)))
@@ -614,16 +494,17 @@ def dssep(grid, up, vol):
             abs(grid.tpsi[order[-1]] - grid.psi_sep) < \
             abs(grid.tpsi[order[0]] - grid.psi_sep):
         length = {t: total - v for t, v in length.items()}
-    sign = 1.0 if grid.kind[up.region] == "SOL" else -1.0
-    return np.array([sign * length[t] for t in vol.tubes])
+    sign = 1.0 if grid.kind[s.region] == "SOL" else -1.0
+    return np.array([sign * length[t] if t in length else np.nan
+                     for t in tubes])
 
 
-def rhop(grid, up, vol, psin):
-    """rho poloidal of each tube of the volume: square root of the
-    normalised psi (psin(r, z)) at the ends of its upstream face."""
+def rhop(grid, faces, psin):
+    """rho poloidal at each list of faces: square root of the normalised
+    psi (psin(r, z)) at their ends."""
     out = []
-    for t in vol.tubes:
-        p = psin(*grid.vx[grid.fv[up.face[t]]].T)
+    for fs in faces:
+        p = psin(*grid.vx[grid.fv[np.asarray(fs, int)]].reshape(-1, 2).T)
         v = np.nanmean(p) if np.isfinite(p).any() else np.nan
         out.append(np.sqrt(v) if v >= 0 else np.nan)
     return np.array(out)

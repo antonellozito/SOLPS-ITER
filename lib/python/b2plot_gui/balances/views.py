@@ -116,11 +116,13 @@ class PlotView(QtCore.QObject):
     when a line glows. The mouse wheel zooms in and out (never out of the
     view of the whole plot), dragging with the left button moves the view
     (inside the whole plot; a press without moving is a click); group.zoom
-    passes the x range to the other plots of the same balance (radial or
-    poloidal)."""
+    passes the x range to the other plots of the same part of the balance
+    with the same x axis."""
 
     clicked = Signal(object)
     hovered = Signal(object, object)
+    ylabel_left = Signal(float)     # left edge of the y label of the whole
+    #                                 plot (fraction of the canvas width)
 
     def __init__(self, group, column=False, parent=None):
         super().__init__(parent)
@@ -149,6 +151,8 @@ class PlotView(QtCore.QObject):
         self.canvas.mpl_connect("button_release_event", self._release)
         self.canvas.mpl_connect("figure_leave_event", self._leave)
         self.canvas.mpl_connect("scroll_event", self._scroll)
+        self.canvas.mpl_connect("draw_event", self._drawn)
+        self._measure = False
         self.scale(1.0)
 
     def scale(self, k):
@@ -170,11 +174,23 @@ class PlotView(QtCore.QObject):
         self.hovered.emit(None, None)
         self.items, self.legend = plots.draw(self.ax, panel, self.legend_box)
         self.home = (self.ax.get_xlim(), self.ax.get_ylim())
+        self._measure = True            # at the next draw: the whole plot
         win = self.canvas.window()
         if isinstance(win, Scaled):     # the text may need more lines
             win.refit()
-        self.set_x(self.group.xzoom.get(self.side))
+        self.set_x(self.group.xzoom.get((self.side, panel.xlabel)))
         self.canvas.draw_idle()
+
+    def _drawn(self, event):
+        """After the first draw of a panel (the whole plot, not zoomed):
+        the left edge of its y label, as a fraction of the canvas width;
+        not after a zoom, so that what is aligned to it stays."""
+        if not self._measure:
+            return
+        self._measure = False
+        box = self.ax.yaxis.label.get_window_extent(event.renderer)
+        width = float(self.figure.bbox.width) or 1.0
+        self.ylabel_left.emit(max(float(box.x0), 0.0) / width)
 
     # --------------------------------------------------------------- zoom
     def _scroll(self, event):

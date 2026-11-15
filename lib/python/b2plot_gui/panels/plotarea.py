@@ -2,7 +2,8 @@
 commands of the plot in a narrow column at its left (Zoom, Unzoom,
 Rezoom, Restore; the mouse tools; Add to page, Page composer; Print
 figure, Export field; the cursor readout; at the bottom the parallel
-balance) and a canvas whose plot scales with the window."""
+and the radial balance) and a canvas whose plot scales with the
+window."""
 
 import re
 
@@ -202,10 +203,10 @@ class PlotCommands(QtWidgets.QWidget):
     the other in groups: the view (Zoom to Restore), the mouse tools
     (Inspect to Statistics), the pages (Add to page, Page composer), the
     files (Print figure, Export field), then the cursor readout, and the
-    parallel balance at the bottom; the first button at the height of the
-    top of the plot box, the last one at the height of its bottom. The
-    buttons get a smaller font only when a label would not fit the
-    column. A Tab2D's hidden matplotlib navigation bar does the box
+    parallel and the radial balance at the bottom; the first button at
+    the height of the top of the plot box, the last one at the height of
+    its bottom. The buttons get a smaller font only when a label would not
+    fit the column. A Tab2D's hidden matplotlib navigation bar does the box
     zoom; the tab pans and zooms with the mouse."""
 
     SPACING, GAP = 0.5, 2.0         # in lines: between buttons, groups
@@ -259,8 +260,9 @@ class PlotCommands(QtWidgets.QWidget):
                                 "(the mouse wheel zooms)")
         lay.addWidget(self.readout)
         lay.addStretch(1)
-        self.buttons["balance"] = tab.balance.button
-        lay.addWidget(tab.balance.button)
+        for key, b in tab.balance.buttons.items():
+            self.buttons[key] = b
+            lay.addWidget(b)
         self._base, self._busy = None, False
 
     def set_top(self, top):
