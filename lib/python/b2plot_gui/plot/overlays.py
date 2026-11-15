@@ -68,6 +68,9 @@ class LayerMixin:
         elif key == "xpoints" and len(run.geometry.xpoints):
             xp = run.geometry.xpoints
             art, = self.ax.plot(xp[:, 0], xp[:, 1], ls="none", marker="x")
+        elif key == "opoints" and run.psimap is not None:
+            r, z = run.psimap.opoint        # of rzpsi.dat
+            art, = self.ax.plot([r], [z], ls="none", marker="o")
         elif key == "flux" and st.visible and run.psimap is not None:
             art = self._flux_surfaces(st)
         if isinstance(art, (LineCollection, PolyCollection)):
@@ -165,10 +168,10 @@ class LayerMixin:
             art.set(linewidth=st.width, linestyle=st.style, alpha=st.alpha,
                     visible=st.visible, zorder=ZORDER[key])
             return
-        if key == "xpoints":
+        if key in ("xpoints", "opoints"):
             art.set(color=theme.rgb(st.color), markersize=st.width,
-                    markeredgewidth=max(st.width / 5.0, 1.0),
-                    alpha=st.alpha, visible=st.visible)
+                    markeredgewidth=max(st.width / 5.0, 1.0) if key ==
+                    "xpoints" else 0.0, alpha=st.alpha, visible=st.visible)
         else:
             art.set(edgecolor=theme.rgb(st.color), facecolor="none",
                     linewidth=st.width,

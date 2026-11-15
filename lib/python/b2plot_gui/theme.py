@@ -122,35 +122,54 @@ def stylesheet(font=""):
     """Qt stylesheet of the current theme: one panel
     colour everywhere, controls with a thin frame; font, e.g. "12.5pt",
     the size of every text (a stylesheet stops the font of the window from
-    reaching the widgets)."""
-    c = dict(COLORS[name()], font="font-size: %s;" % font if font else "")
+    reaching the widgets). Titles (of the groups, the column heads, the
+    tabs, widgets with the property bold) in bold, in the size of the
+    texts."""
+    base = QtWidgets.QApplication.font().pointSizeF()
+    size = float(font[:-2]) if font.endswith("pt") else base if base > 0 \
+        else 13.0
+    k = size / (base if base > 0 else 13.0)     # sizes follow the font
+    c = dict(COLORS[name()], font="font-size: %s;" % font if font else "",
+             title="font-size: %s;" % (font or "%.2fpt" % (
+                 base if base > 0 else 13.0)),
+             gap=round(0.9 * size),     # under a group title
+             **{"px%d" % n: max(round(n * k), 1) for n in (2, 3, 4, 6, 7, 12,
+                                                           14, 16, 24)})
     return """
 QMainWindow, QWidget {{ background-color: {panel}; color: {text}; {font} }}
 QLabel, QCheckBox {{ background-color: transparent; color: {text}; }}
 QLabel[muted="true"] {{ color: {muted}; }}
+*[bold="true"] {{ font-weight: bold; }}
 QGroupBox {{ background-color: {panel}; border: 1px solid {border};
-    margin-top: 7px; padding-top: 5px; }}
-QGroupBox::title {{ subcontrol-origin: margin; left: 7px; padding: 0px 2px;
-    background-color: {panel}; color: {text}; font-weight: 600; }}
+    margin-top: {px7}px; padding-top: {gap}px; font-weight: bold; {title} }}
+QGroupBox::title {{ subcontrol-origin: margin; left: {px7}px;
+    padding: 0px {px2}px;
+    background-color: {panel}; color: {text}; }}
+QTabBar::tab {{ background-color: {tab}; color: {text};
+    border: 1px solid {border}; border-bottom: 0px; padding: {px3}px {px14}px;
+    margin-right: {px2}px; border-top-left-radius: 4px;
+    border-top-right-radius: 4px; font-weight: bold; {title} }}
+QTabBar::tab:selected {{ background-color: {control}; }}
+QTabBar::tab:disabled {{ color: {disabled_text}; }}
 QLineEdit, QPlainTextEdit, QTableView, QTableWidget, QTreeView,
 QListView, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {control}; color: {text}; border: 1px solid {border};
-    border-radius: 3px; padding: 1px 4px;
+    border-radius: 3px; padding: 1px {px4}px;
     selection-background-color: {selection}; selection-color: {text}; }}
 QTableView, QTableWidget, QTreeView, QListView {{
     gridline-color: {soft_border}; alternate-background-color: {hover};
     border-radius: 0px; padding: 0px; }}
-QComboBox {{ padding-right: 16px; }}
-QComboBox::drop-down {{ width: 16px; border-left: 1px solid {soft_border};
+QComboBox {{ padding-right: {px16}px; }}
+QComboBox::drop-down {{ width: {px16}px; border-left: 1px solid {soft_border};
     border-top-right-radius: 3px; border-bottom-right-radius: 3px;
     background-color: {control_alt}; }}
 QComboBox QAbstractItemView {{ background-color: {control}; color: {text};
-    border: 1px solid {border}; padding: 3px;
+    border: 1px solid {border}; padding: {px3}px;
     selection-background-color: {selection}; selection-color: {text};
     outline: 0; }}
 QPushButton, QToolButton {{ background-color: {control_alt}; color: {text};
-    border: 1px solid {border}; border-radius: 4px; padding: 1px 6px;
-    min-height: 16px; }}
+    border: 1px solid {border}; border-radius: 4px; padding: 1px {px6}px;
+    min-height: {px16}px; }}
 QPushButton:hover, QToolButton:hover {{ background-color: {hover}; }}
 QPushButton:checked, QToolButton:checked {{ background-color: {checked};
     font-weight: 600; }}
@@ -160,24 +179,23 @@ QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
     border-color: {soft_border}; }}
 QCheckBox:disabled, QRadioButton:disabled, QLabel:disabled {{
     color: {disabled_text}; }}
-QScrollBar:vertical {{ background-color: {panel}; width: 12px; margin: 0px;
-    border: 0px; }}
-QScrollBar:horizontal {{ background-color: {panel}; height: 12px;
+QScrollBar:vertical {{ background-color: {panel}; width: {px12}px;
+    margin: 0px; border: 0px; }}
+QScrollBar:horizontal {{ background-color: {panel}; height: {px12}px;
     margin: 0px; border: 0px; }}
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
     background-color: {control_alt}; border: 1px solid {soft_border};
-    border-radius: 4px; min-height: 24px; min-width: 24px; }}
+    border-radius: 4px; min-height: {px24}px; min-width: {px24}px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0px; height: 0px; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
 QHeaderView::section {{ background-color: {tab}; color: {text};
-    border: 1px solid {border}; padding: 2px 3px; font-weight: 600; }}
+    border: 1px solid {border}; padding: {px2}px {px3}px; font-weight: bold;
+    {title} }}
 QScrollArea {{ background-color: {panel}; border: 0px; }}
 QMenuBar, QMenu, QStatusBar {{ background-color: {panel}; color: {text}; }}
 QMenu::item:selected {{ background-color: {selection}; }}
 QToolTip {{ background-color: {control}; color: {text};
-    border: 1px solid {border}; padding: 4px; }}
-QLabel#readout {{ background-color: {control}; border: 1px solid {border};
-    padding: 1px 6px; }}
+    border: 1px solid {border}; padding: {px4}px; }}
 """.format(**c)
 
 
@@ -187,9 +205,37 @@ ACCENT = "#2f7ae5"                # check boxes and radio buttons on
 class _Indicators(QtWidgets.QProxyStyle):
     """Check boxes and radio buttons drawn the same way on every platform
     and theme (a stylesheet leaves the native ones without a visible frame
-    when off): a framed box or circle, blue with a white mark when on."""
+    when off): a framed box or circle, blue with a white mark when on; the
+    arrows of the open and closed branches of a tree in the text colour."""
+
+    SCALED = (QtWidgets.QStyle.PM_IndicatorWidth,
+              QtWidgets.QStyle.PM_IndicatorHeight,
+              QtWidgets.QStyle.PM_ExclusiveIndicatorWidth,
+              QtWidgets.QStyle.PM_ExclusiveIndicatorHeight,
+              QtWidgets.QStyle.PM_CheckBoxLabelSpacing,
+              QtWidgets.QStyle.PM_RadioButtonLabelSpacing,
+              QtWidgets.QStyle.PM_LayoutLeftMargin,
+              QtWidgets.QStyle.PM_LayoutTopMargin,
+              QtWidgets.QStyle.PM_LayoutRightMargin,
+              QtWidgets.QStyle.PM_LayoutBottomMargin,
+              QtWidgets.QStyle.PM_LayoutHorizontalSpacing,
+              QtWidgets.QStyle.PM_LayoutVerticalSpacing)
+
+    def pixelMetric(self, metric, option=None, widget=None):
+        """The sizes of indicators and the spacing of layouts follow the
+        font of the widget (a window scaled with its size)."""
+        v = super().pixelMetric(metric, option, widget)
+        if metric in self.SCALED and widget is not None and v > 0:
+            base = QtWidgets.QApplication.font().pointSizeF()
+            size = widget.font().pointSizeF()
+            if base > 0 and size > 0:
+                return max(round(v * size / base), 1)
+        return v
 
     def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QtWidgets.QStyle.PE_IndicatorBranch:
+            self._branch(option, painter)
+            return
         box = element == QtWidgets.QStyle.PE_IndicatorCheckBox
         if not box and element != QtWidgets.QStyle.PE_IndicatorRadioButton:
             super().drawPrimitive(element, option, painter, widget)
@@ -230,6 +276,28 @@ class _Indicators(QtWidgets.QProxyStyle):
                 painter.setPen(Qt.NoPen)
                 painter.setBrush(mark)
                 painter.drawEllipse(r.center(), 0.2 * side, 0.2 * side)
+        painter.restore()
+
+
+    @staticmethod
+    def _branch(option, painter):
+        """A filled triangle, down when open, right when closed (nothing
+        for an item without children)."""
+        if not option.state & QtWidgets.QStyle.State_Children:
+            return
+        r = QtCore.QRectF(option.rect)
+        c = r.center()
+        h = max(min(r.width(), r.height()) * 0.18, 3.0)
+        pts = ((-h, -0.6 * h), (h, -0.6 * h), (0.0, 0.8 * h)) if \
+            option.state & QtWidgets.QStyle.State_Open else \
+            ((-0.6 * h, -h), (0.8 * h, 0.0), (-0.6 * h, h))
+        painter.save()
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QtGui.QColor(COLORS[name()]["text"]))
+        painter.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(c.x() + x,
+                                                            c.y() + y)
+                                             for x, y in pts]))
         painter.restore()
 
 

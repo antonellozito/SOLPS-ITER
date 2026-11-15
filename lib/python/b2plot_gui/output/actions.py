@@ -1,4 +1,4 @@
-"""Output of the 2D tab: snapshots for the page composer, Print figure,
+"""Output of the 2D tab: snapshots for the page composer, Save plot,
 figure files, frames and the field with its grid (mixed into Tab2D)."""
 
 import os
@@ -6,7 +6,7 @@ import re
 from dataclasses import replace
 
 from . import fieldfile, page, printfig
-from .. import theme
+from .. import scaling, theme
 from .export import FigureDialog
 from ..plot.snapshot import Snapshot
 from ...qt import QtWidgets
@@ -22,7 +22,8 @@ class TabOutput:
         return Snapshot(
             run=self.run, data=self.data, style=self.quantity.style(),
             unit=self._unit(), overlays=self._overlay_data(),
-            layers={k: replace(s) for k, s in self.layers.styles().items()},
+            layers={k: replace(s) for k, s in
+                    self.plot.layer_styles.items()},
             view=self.plot.get_view(),
             labels=self.quantity.labels_box.style(), title=self._title(),
             values=self.label_values())
@@ -61,11 +62,11 @@ class TabOutput:
         return files
 
     def print_figure(self, path=None, options=None):
-        """Print figure (output.printfig): the options dialog and the
+        """Save plot (output.printfig): the options dialog and the
         file dialog unless options and path are given. Returns the path
         written or None."""
         if self.run is None or not self._current():
-            self.status.emit("No plot to print")
+            self.status.emit("No plot to save")
             return None
         if options is None:
             dlg = printfig.PrintDialog(theme.is_dark(), self)
@@ -74,7 +75,7 @@ class TabOutput:
             options = dlg.options()
         fmt = options["format"]
         if path is None:
-            path = self._file("Print figure", re.sub(
+            path = self._file("Save plot", re.sub(
                 r"[^A-Za-z0-9_.+-]+", "_", self.wanted.label) + "." + fmt,
                 printfig.FILTERS[fmt])
             if path is None:
@@ -88,12 +89,12 @@ class TabOutput:
                 self.apply_theme()
             note = printfig.save(self.figure, path, options)
         except (OSError, ValueError, RuntimeError) as err:
-            self.status.emit("Cannot print the figure: %s" % err)
+            self.status.emit("Cannot save the plot: %s" % err)
             return None
         finally:            # the plot of the GUI theme again
             theme.set_dark(dark)
             self.apply_theme()
-        self.status.emit(("Figure printed to %s. %s" % (path, note)).strip())
+        self.status.emit(("Plot saved to %s. %s" % (path, note)).strip())
         return path
 
     def export_frames(self, path=None, shape="shown", dpi=150):
@@ -118,9 +119,9 @@ class TabOutput:
             self.status.emit("No plot to export")
             return None
         if path is None:
-            choice, ok = QtWidgets.QInputDialog.getItem(
-                self, "Export field", "Output format",
-                list(fieldfile.FORMATS), 0, False)
+            choice, ok = scaling.choose(self, "Export field",
+                                        "Output format",
+                                        list(fieldfile.FORMATS))
             if not ok:
                 return None
             ext = fieldfile.FORMATS[choice]

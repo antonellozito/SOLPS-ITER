@@ -1,9 +1,9 @@
 """Layout of the 2D tab: columns with fixed fractions of the width, the
-commands of the plot in a narrow column at its left (Zoom, Unzoom,
+commands of the plot in a narrow column at its right (Zoom, Unzoom,
 Rezoom, Restore; the mouse tools; Add to page, Page composer; Print
-figure, Export field; the cursor readout; at the bottom the parallel
-and the radial balance) and a canvas whose plot scales with the
-window."""
+figure, Export field; at the bottom the parallel and the radial
+balance), the cursor readout under the plot box and a canvas whose plot
+scales with the window."""
 
 import re
 
@@ -28,9 +28,17 @@ class ScaledCanvas(FigureCanvasQTAgg):
         self.resized = resized      # called after each resize
 
     def freeze(self):
-        """The present size becomes the reference."""
-        if self.width() > 0:
-            self.inches = self.width() / self.figure._original_dpi
+        """The present size becomes the reference (again: with the
+        resolution of the first one)."""
+        if self.width() <= 0:
+            return
+        if self.inches is None:
+            self._dpi0 = self.figure._original_dpi
+        else:
+            self.figure._original_dpi = self._dpi0
+            self.figure._set_dpi(self._dpi0 * self.device_pixel_ratio,
+                                 forward=False)
+        self.inches = self.width() / self.figure._original_dpi
 
     def resizeEvent(self, event):
         if self.inches and event.size().width() > 0:
@@ -43,39 +51,33 @@ class ScaledCanvas(FigureCanvasQTAgg):
             self.resized()
 
 
-class Readout(QtWidgets.QWidget):
-    """The cursor readout, plain text on the background, one item under
-    the other: R, Z, rho poloidal (with a psi map), "value =" and under it
-    the number and unit of the quantity shown, in bold. The lines keep
-    their height wherever the cursor is; one font for all of them, smaller
-    when the widest line possible would not fit."""
+class Readout(QtWidgets.QLabel):
+    """The cursor readout in one line under the plot box, from its left
+    edge (a label over the canvas that lets the mouse through): R, Z, rho
+    poloidal (with a psi map) and the value of the quantity shown with its
+    unit in bold, in a font a little larger than the one of the window,
+    the same whatever is shown."""
 
-    LINES = 5                       # R, Z, rhop, "value =", number
+    SCALE = 1.15                    # of the font of the window
 
     def __init__(self, text=READOUT, parent=None):
         super().__init__(parent)
-        self.setObjectName("readout")
-        lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-        self.lines = []
-        for _ in range(self.LINES):
-            label = QtWidgets.QLabel()
-            label.setTextFormat(Qt.RichText)
-            label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            label.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                                QtWidgets.QSizePolicy.Fixed)
-            lay.addWidget(label)
-            self.lines.append(label)
-        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                           QtWidgets.QSizePolicy.Fixed)
-        self._line, self._unit, self._size = "", None, None
-        self._base, self._busy = None, False
+        self.setTextFormat(Qt.RichText)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._line, self._busy = "", False
+        self._font()
         self.setText(text)
 
     def setText(self, text):
         self._line = " ".join(str(text).splitlines()) or " "
-        self._show()
+        parts = []
+        for part in self._line.split("   "):
+            name, _, value = part.strip().partition(" = ")
+            if value:
+                parts.append("%s = %s" % (name, "<b>%s</b>" % _html(
+                    value, True) if name == "value" else _html(value)))
+        super().setText("&nbsp;&nbsp;&nbsp;&nbsp;".join(parts) or " ")
+        self.adjustSize()
 
     def text(self):
         """The readout as one plain line, the items separated by three
@@ -83,75 +85,24 @@ class Readout(QtWidgets.QWidget):
         return self._line
 
     def rows(self):
-        """The lines shown, as plain text."""
-        return [label.text() and QtGui.QTextDocumentFragment.fromHtml(
-            label.text()).toPlainText() for label in self.lines]
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._fit()
+        """The items shown, as plain text."""
+        return [p.strip() for p in self._line.split("   ") if p.strip()]
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if not self._busy and event.type() in (QtCore.QEvent.FontChange,
                                                QtCore.QEvent.StyleChange):
-            self._base = None           # the window font changed
-            self._fit()
+            self._font()                # the window font changed
 
-    def _items(self):
-        """{R, Z, rhop, value: text after " = "} of the line."""
-        out = {}
-        for part in self._line.split("   "):
-            name, _, value = part.strip().partition(" = ")
-            if value:
-                out[name] = value
-        return out
-
-    def _show(self):
-        items = self._items()
-        number = items.get("value", "")
-        unit = number.partition(" ")[2]
-        texts = ["%s = %s" % (k, _html(items[k])) if k in items else ""
-                 for k in ("R", "Z", "rhop")]
-        texts += ["value =" if number else "",
-                  "<b>%s</b>" % _html(number, True) if number else ""]
-        for label, text in zip(self.lines, texts):
-            label.setText(text)
-        if unit != self._unit:
-            self._unit = unit
-            self._fit()
-
-    def _fit(self):
-        """One font size for the lines: the window font, or smaller so
-        that the widest line possible (a coordinate, the number of the
-        value with its unit) fits the width."""
-        if self._busy:
-            return
+    def _font(self):
+        """SCALE times the font of the window."""
         self._busy = True
         try:
-            if self._base is None:
-                for label in self.lines:
-                    label.setStyleSheet("")
-                self._size = None
-                self._base = self.lines[0].font().pointSizeF()
-                height = QtGui.QFontMetrics(self.lines[0].font()).height()
-                for label in self.lines:
-                    label.setFixedHeight(height + 1)
-            avail = self.contentsRect().width() - 2
-            f = QtGui.QFont(self.lines[0].font())
-            f.setPointSizeF(self._base)
-            width = max(QtGui.QFontMetricsF(f).horizontalAdvance(t) for t in
-                        ("Z = -1.2345 m", "rhop = 0.9876"))
-            f.setBold(True)
-            width = max(width, QtGui.QFontMetricsF(f).horizontalAdvance(
-                "-1.234e+20 " + (self._unit or "").replace("^", "")))
-            size = self._base if width <= avail or avail <= 0 else max(
-                0.6 * self._base, int(4 * self._base * avail / width) / 4.0)
-            if size != (self._size or self._base):
-                for label in self.lines:
-                    label.setStyleSheet("" if size == self._base else
-                                        "font-size: %.2fpt;" % size)
-                self._size = size
+            self.setStyleSheet("")
+            size = self.font().pointSizeF()
+            self.setStyleSheet("background: transparent; font-size: %.2fpt;"
+                               % (self.SCALE * (size if size > 0 else 13.0)))
+            self.adjustSize()
         finally:
             self._busy = False
 
@@ -166,18 +117,22 @@ def _html(text, sup=False):
 
 class Columns(QtWidgets.QWidget):
     """Widgets side by side at fixed fractions of the width (no splitter:
-    the columns cannot be resized)."""
+    the columns cannot be resized); before: empty fraction before each
+    widget."""
 
-    def __init__(self, widgets, fractions, parent=None):
+    def __init__(self, widgets, fractions, before=None, parent=None):
         super().__init__(parent)
         self.widgets, self.fractions = list(widgets), list(fractions)
+        self.before = list(before or [0.0] * len(self.widgets))
         for w in self.widgets:
             w.setParent(self)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         x, width, height = 0, self.width(), self.height()
-        for i, (w, f) in enumerate(zip(self.widgets, self.fractions)):
+        for i, (w, f, b) in enumerate(zip(self.widgets, self.fractions,
+                                          self.before)):
+            x += round(b * width)
             dx = width - x if i == len(self.widgets) - 1 else round(f * width)
             w.setGeometry(x, 0, dx, height)
             x += dx
@@ -199,24 +154,26 @@ def _button(text, tip, slot=None, checkable=False):
 
 
 class PlotCommands(QtWidgets.QWidget):
-    """The commands of the plot in a narrow column at its left, one under
+    """The commands of the plot in a narrow column at its right, one under
     the other in groups: the view (Zoom to Restore), the mouse tools
     (Inspect to Statistics), the pages (Add to page, Page composer), the
-    files (Print figure, Export field), then the cursor readout, and the
-    parallel and the radial balance at the bottom; the first button at
+    files (Save plot, Export field), and the parallel and the radial
+    balance at the bottom, from the left edge of the column, narrower
+    than it (room to the layers); the first button at
     the height of the top of the plot box, the last one at the height of
     its bottom. The buttons get a smaller font only when a label would not
     fit the column. A Tab2D's hidden matplotlib navigation bar does the box
     zoom; the tab pans and zooms with the mouse."""
 
     SPACING, GAP = 0.5, 2.0         # in lines: between buttons, groups
+    ROOM = 0.18                     # of the width, right of the buttons
 
     def __init__(self, tab, parent=None):
         super().__init__(parent)
         self.tab, self.nav = tab, tab.toolbar
         self.buttons = {}
         lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(6, 6, 2, 6)     # as far from the scroll bar
+        lay.setContentsMargins(0, 6, 6, 6)     # right: ROOM (resizeEvent)
         self.gaps = []                          # as from the plot
 
         def gap():
@@ -244,7 +201,7 @@ class PlotCommands(QtWidgets.QWidget):
                         tab._add_to_page),
                        ("composer", "Page\ncomposer", "The pages of the plots "
                         "added (Ctrl+P)", tab.composer.emit)),
-                      (("print", "Print\nfigure", "The plot as an image or "
+                      (("print", "Save\nplot", "The plot as an image or "
                         "vector file: format, resolution, colour space and "
                         "theme (Ctrl+S)", tab.print_figure),
                        ("field", "Export\nfield", "The values of the quantity "
@@ -254,15 +211,12 @@ class PlotCommands(QtWidgets.QWidget):
             for key, text, tip, slot in group:
                 self.buttons[key] = _button(text, tip, slot)
                 lay.addWidget(self.buttons[key])
-        gap()
-        self.readout = Readout()
-        self.readout.setToolTip("Position, cell and value under the cursor "
-                                "(the mouse wheel zooms)")
-        lay.addWidget(self.readout)
         lay.addStretch(1)
         for key, b in tab.balance.buttons.items():
             self.buttons[key] = b
             lay.addWidget(b)
+        for b in self.all_buttons():
+            b.setProperty("bold", True)
         self._base, self._busy = None, False
 
     def set_top(self, top):
@@ -290,6 +244,11 @@ class PlotCommands(QtWidgets.QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        m = self.layout().contentsMargins()
+        right = round(self.ROOM * self.width())
+        if m.right() != right:
+            self.layout().setContentsMargins(m.left(), m.top(), right,
+                                             m.bottom())
         self._fit()
 
     def changeEvent(self, event):
@@ -301,7 +260,7 @@ class PlotCommands(QtWidgets.QWidget):
 
     def _fit(self):
         """The font of the window on the buttons, or smaller when the
-        widest label (bold, as a checked button) would not fit; the
+        widest label (bold) would not fit; the
         spaces between the buttons and the groups in lines of that
         font."""
         if self._busy:
@@ -321,13 +280,16 @@ class PlotCommands(QtWidgets.QWidget):
                                     QtWidgets.QSizePolicy.Minimum,
                                     QtWidgets.QSizePolicy.Fixed)
                 self.layout().invalidate()
-            avail = self.contentsRect().width()
+            m = self.layout().contentsMargins()      # the buttons
+            avail = self.contentsRect().width() - m.left() - m.right()
             f = QtGui.QFont(buttons[0].font())
             f.setPointSizeF(self._base)
             f.setBold(True)
             fm = QtGui.QFontMetricsF(f)
-            width = 16 + max(fm.horizontalAdvance(line) for b in buttons
-                             for line in b.text().splitlines())
+            app = QtWidgets.QApplication.font().pointSizeF()
+            pad = 16 * self._base / app if app > 0 else 16  # as the theme
+            width = pad + max(fm.horizontalAdvance(line) for b in buttons
+                              for line in b.text().splitlines())
             size = self._base if width <= avail or avail <= 0 else max(
                 0.6 * self._base, int(4 * self._base * avail / width) / 4.0)
             for b in buttons:

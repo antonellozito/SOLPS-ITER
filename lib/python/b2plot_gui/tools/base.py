@@ -7,21 +7,25 @@ clicked so far; a polygon closes with a click near its first corner."""
 import numpy as np
 from matplotlib.lines import Line2D
 
+from .. import theme
+from ..balances.style import glow
 from ...qt import QtWidgets, Signal
 
 MODES = (
-    ("Inspect", "inspect", "Click a B2.5 cell or an EIRENE triangle: the "
-     "value shown there and the geometry of the cell and the triangle"),
-    ("Line", "line", "Click the two ends of a line: profile of the "
+    ("Inspect\ncell", "inspect", "Click a B2.5 cell or an EIRENE triangle: "
+     "the value shown there and the geometry of the cell and the "
+     "triangle"),
+    ("Line\nprofile", "line", "Click the two ends of a line: profile of the "
      "quantity shown, integral, average; flux through the line for flux "
      "densities"),
-    ("Box", "box", "Click two corners: statistics of the cells shown "
+    ("Draw\nbox", "box", "Click two corners: statistics of the cells shown "
      "inside"),
-    ("Polygon", "polygon", "Click the corners, then the first one again "
+    ("Draw\npolygon", "polygon", "Click the corners, then the first one again "
      "(or double-click the last one): statistics of the cells shown "
      "inside"))
 HIDDEN = ("seeds",)                 # modes without a button here
 POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2}
+GOLD = "#e8b500"                    # the cell under the mouse (Inspect)
 HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
          "box": "Click two corners of the box", "polygon": "Click the "
          "corners of the polygon, then the first one again",
@@ -42,6 +46,7 @@ class MouseTools(QtWidgets.QWidget):
         super().__init__(parent)
         self.canvas, self.plot, self.toolbar = canvas, plot, toolbar
         self.mode, self.points, self.shape = None, [], None
+        self.hot, self.hot_key = None, None     # cell outline (Inspect)
         row = QtWidgets.QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(3)
@@ -90,6 +95,8 @@ class MouseTools(QtWidgets.QWidget):
             self.mode = None
         self.points = []
         self._draw([])
+        if self.mode != "inspect":
+            self._outline(None)
         self.changed.emit()
 
     def _press(self, event):
@@ -108,11 +115,53 @@ class MouseTools(QtWidgets.QWidget):
             self._draw(self.points)
 
     def _move(self, event):
+        if self.mode == "inspect" and not str(self.toolbar.mode):
+            self._outline(self._cell_at(event))
         if self.points and event.inaxes is self.plot.ax:
             if self.mode == "polygon" and self._near_first(event):
                 self._draw(self.points, closed=True)
             else:
                 self._draw(self.points + [(event.xdata, event.ydata)])
+
+    def _cell_at(self, event):
+        """(key, polygon) of the B2.5 cell under the mouse, else of the
+        EIRENE triangle, else None."""
+        run, plot = self.plot.run, self.plot
+        if run is None or event.inaxes is not plot.ax or event.xdata is None:
+            return None
+        g = run.geometry
+        it = int(plot.finder(event.xdata, event.ydata)) if \
+            plot.finder is not None else -1
+        if it >= 0 and g.visible[g.tri_cell[it]]:
+            row = g.tri_cell[it]
+            return ("cell", row), g.polygons[row]
+        it = int(plot.efinder(event.xdata, event.ydata)) if \
+            plot.efinder is not None else -1
+        if it >= 0:
+            t = run.trimesh
+            k = t.triangles[it]
+            return ("triangle", it), np.column_stack((t.x[k], t.y[k]))
+        return None
+
+    def _outline(self, found):
+        """The cell (key, polygon) with a golden glowing outline; None:
+        none. Drawn again only when the cell changes."""
+        key = found[0] if found is not None else None
+        if key == self.hot_key and (self.hot is None or
+                                    self.hot in self.plot.ax.lines):
+            return
+        self.hot_key = key
+        if self.hot is None or self.hot not in self.plot.ax.lines:
+            self.hot = Line2D([], [], linewidth=1.6, zorder=6.4)
+            self.plot.ax.add_line(self.hot)
+            self.apply_theme()
+        if found is None:
+            self.hot.set_visible(False)
+        else:
+            p = np.vstack((found[1], found[1][:1]))
+            self.hot.set_data(p[:, 0], p[:, 1])
+            self.hot.set_visible(True)
+        self.canvas.draw_idle()
 
     def _near_first(self, event):
         """The mouse within 10 screen pixels of the first corner of a
@@ -140,9 +189,11 @@ class MouseTools(QtWidgets.QWidget):
         dashed line over the plot."""
         ax = self.plot.ax
         if self.shape is None or self.shape not in ax.lines:
-            self.shape = Line2D([], [], color="red", linestyle="--",
-                                linewidth=1.2, marker="+", zorder=6.5)
+            self.shape = Line2D([], [], color=theme.rgb("red"),
+                                linestyle="--", linewidth=1.2, marker="+",
+                                zorder=6.5)
             ax.add_line(self.shape)
+        self.shape.set_markevery(None)
         p = np.asarray(pts, float).reshape(-1, 2)
         if self.mode == "box" and len(p) == 2:
             (x0, y0), (x1, y1) = p
@@ -151,3 +202,20 @@ class MouseTools(QtWidgets.QWidget):
             p = np.vstack((p, p[:1]))
         self.shape.set_data(p[:, 0], p[:, 1])
         self.canvas.draw_idle()
+
+    def curve(self, r, z):
+        """The line drawn as its projection (r, z) on the poloidal plane,
+        its ends marked."""
+        self._draw(np.column_stack((r, z)))
+        self.shape.set_markevery([0, len(r) - 1])
+        self.canvas.draw_idle()
+
+    def apply_theme(self):
+        """The shape drawn in the red of the theme, the cell outline in
+        its gold."""
+        if self.shape is not None:
+            self.shape.set_color(theme.rgb("red"))
+        if self.hot is not None:
+            self.hot.set_color(theme.rgb(GOLD))
+            self.hot.set_path_effects(glow(1.6, GOLD, strong=True,
+                                           on_map=True))

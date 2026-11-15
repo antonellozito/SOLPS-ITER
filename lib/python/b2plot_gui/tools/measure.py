@@ -41,38 +41,47 @@ def _grid(plot, data):
     return tri, [np.asarray(z, float) for z in comps]
 
 
-def profile(plot, data, p0, p1, n=401):
-    """Samples along the line p0-p1: s, R, Z and the values (|v| and the
-    normal component v.n for vectors, n to the right of the line), NaN
-    outside the cells shown."""
+def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0)):
+    """Samples along the straight line from (R, Z) p0 at the toroidal angle
+    phi[0] to p1 at phi[1] (degrees; the same angle: a line in the poloidal
+    plane, else a chord whose projection on it is curved): s along the
+    line, R, Z, phi, the values (|v| and the normal component v.n for
+    vectors, n to the right of the projection), and the length l along the
+    projection; NaN outside the cells shown."""
     t = np.linspace(0.0, 1.0, n)
-    p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
-    r = p0[0] + t * (p1[0] - p0[0])
-    z = p0[1] + t * (p1[1] - p0[1])
-    length = float(np.hypot(*(p1 - p0)))
+    a0, a1 = np.radians(np.asarray(phi, float))
+    q0 = np.array([p0[0] * np.cos(a0), p0[0] * np.sin(a0), p0[1]], float)
+    q1 = np.array([p1[0] * np.cos(a1), p1[0] * np.sin(a1), p1[1]], float)
+    q = q0 + t[:, None] * (q1 - q0)
+    r, z = np.hypot(q[:, 0], q[:, 1]), q[:, 2]
+    ph = np.degrees(np.unwrap(np.arctan2(q[:, 1], q[:, 0])))
+    s = t * float(np.linalg.norm(q1 - q0))
+    l = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(r), np.diff(z)))))
     tri, comps = _grid(plot, data)
     vals = [np.ma.filled(mtri.LinearTriInterpolator(tri, c)(r, z), np.nan)
             for c in comps]
     if len(vals) == 1:
-        return t * length, r, z, vals[0], None
-    nr, nz = (p1[1] - p0[1]) / length, -(p1[0] - p0[0]) / length
-    return t * length, r, z, np.hypot(*vals), vals[0] * nr + vals[1] * nz
+        return s, r, z, ph, vals[0], None, l
+    dr, dz = np.gradient(r), np.gradient(z)     # along the projection
+    norm = np.maximum(np.hypot(dr, dz), 1e-300)
+    return (s, r, z, ph, np.hypot(*vals),
+            vals[0] * dz / norm - vals[1] * dr / norm, l)
 
 
-def line_sums(s, r, values, normal):
+def line_sums(s, r, values, normal, l=None):
     """Integral and average of the values over the part of the line inside
-    the cells, and the flux through the surface the line sweeps around
-    the axis (2 pi R v.n, for vectors)."""
+    the cells, and the flux through the surface its projection on the
+    poloidal plane (lengths l, default s) sweeps around the axis (2 pi R
+    v.n, for vectors)."""
     ok = np.isfinite(values)
-    seg = np.diff(s)
     both = ok[1:] & ok[:-1]
 
-    def trapz(f):
-        return float(np.sum(0.5 * (f[1:] + f[:-1]) * seg * both))
-    inside = float(np.sum(seg * both))
-    total = trapz(np.where(ok, values, 0.0))
+    def trapz(f, x):
+        return float(np.sum(0.5 * (f[1:] + f[:-1]) * np.diff(x) * both))
+    inside = float(np.sum(np.diff(s) * both))
+    total = trapz(np.where(ok, values, 0.0), s)
     flux = None if normal is None else trapz(np.where(
-        ok, 2 * np.pi * r * normal, 0.0))
+        ok, 2 * np.pi * r * normal, 0.0), s if l is None else l)
     return inside, total, total / inside if inside > 0 else np.nan, flux
 
 

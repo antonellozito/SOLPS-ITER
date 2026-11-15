@@ -5,11 +5,11 @@ import time
 from dataclasses import replace
 
 from ...b2plot import labels
+from .. import theme
 from ..catalog import FLAGS, GUARD, INTEGER
 from ..expression import real_token
-from ..plot.styles import (KINDS_FLAT, KINDS_SCALAR, KINDS_VECTOR,
-                           PlotStyle)
-from ...qt import QtWidgets, Qt, Signal
+from ..plot.styles import KINDS_FLAT, KINDS_VECTOR, PlotStyle
+from ...qt import QtGui, QtWidgets, Qt, Signal
 from .options import CellsBox, LabelsBox, LevelsBox
 from .overlays import OverlayBox
 from .trajectories import TrajBox
@@ -17,11 +17,24 @@ from .plotopts import ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox
 from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
-             "contour": "Contour lines", "surface": "3D surface",
-             "quiver": "Quiver",
+             "contour": "Contour lines", "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
 SUM = "Sum over species"
 ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
+CHARGE = re.compile(r"([A-Za-z]*)\s*\+?(\d*)")     # D0, D+, N+7, N7+
+
+
+def default_species(names):
+    """Index of the highest charge state of the first species in names
+    (D+ of D0, D+, N0, ...)."""
+    def parse(n):
+        m = CHARGE.match(n)
+        charge = int(m.group(2)) if m.group(2) else 1 if "+" in n else 0
+        return m.group(1), charge
+    first = parse(names[0])[0] if names else ""
+    same = [(parse(n)[1], -i) for i, n in enumerate(names)
+            if parse(n)[0] == first]
+    return -max(same)[1] if same else 0
 
 
 def column_names(columns, species=None):
@@ -45,9 +58,10 @@ class QuantityPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.current = None
         self.wanted_species = None      # species name to choose next
+        self.chosen_species = None      # the species last chosen by hand
         self._last_click = (None, 0.0)  # item, time (double clicks)
         lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setContentsMargins(0, 0, 6, 6)   # the tabs: 6 px over it
         self.time_box = TimeBox()
         lay.addWidget(self.time_box)
 
@@ -57,6 +71,7 @@ class QuantityPanel(QtWidgets.QWidget):
         self.search.textChanged.connect(self._filter)
         calc = QtWidgets.QToolButton()
         calc.setText("Calculator\u2026")
+        calc.setProperty("bold", True)
         calc.setToolTip("Derived quantities: expressions of b2plot "
                         "quantities, presets")
         calc.clicked.connect(lambda *_: self.calculator.emit(""))
@@ -72,17 +87,22 @@ class QuantityPanel(QtWidgets.QWidget):
         head.setStretchLastSection(False)
         head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         head.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-        self.tree.setToolTip("Click a quantity to plot it, click it again "
-                             "to clear the plot")
+        self.tree.setExpandsOnDoubleClick(False)
+        self.tree.setToolTip("Click a group to open or close it, a quantity "
+                             "to plot it, click it again to clear the plot")
         self.tree.itemActivated.connect(self._clicked)
         self.tree.itemClicked.connect(self._clicked)
+        self.tree.itemExpanded.connect(self._group_marked)
+        self.tree.itemCollapsed.connect(self._group_marked)
         lay.addLayout(row)
         lay.addWidget(self.tree, 1)
 
         form = QtWidgets.QFormLayout()
         self.species = QtWidgets.QComboBox()
-        self.species.currentIndexChanged.connect(self._changed)
-        form.addRow("Species", self.species)
+        self.species.currentIndexChanged.connect(self._species_chosen)
+        label = QtWidgets.QLabel("Species")
+        label.setProperty("bold", True)
+        form.addRow(label, self.species)
         lay.addLayout(form)
         self.mask_box = MaskBox()
         self.mask_box.argument_changed.connect(self._argument)
@@ -90,14 +110,18 @@ class QuantityPanel(QtWidgets.QWidget):
         lay.addWidget(self.mask_box)
 
         kinds = QtWidgets.QGroupBox("Plot type")
-        kgrid = QtWidgets.QGridLayout(kinds)
+        form = QtWidgets.QFormLayout(kinds)     # as the other groups
+        kgrid = QtWidgets.QGridLayout()
+        kgrid.setContentsMargins(0, 0, 0, 0)
+        kgrid.setVerticalSpacing(form.verticalSpacing())
+        form.addRow(kgrid)
         self.kind_buttons = QtWidgets.QButtonGroup(self)
-        for i, kind in enumerate(KINDS_SCALAR + KINDS_VECTOR):
+        for i, kind in enumerate(KINDS_FLAT + KINDS_VECTOR):
             b = QtWidgets.QRadioButton(KIND_TEXT[kind])
             b.setProperty("kind", kind)
             self.kind_buttons.addButton(b, i)
             vector = kind in KINDS_VECTOR
-            kgrid.addWidget(b, i - len(KINDS_SCALAR) * vector, int(vector))
+            kgrid.addWidget(b, i - len(KINDS_FLAT) * vector, int(vector))
         self.kind_buttons.button(0).setChecked(True)
         self.kind_buttons.idToggled.connect(
             lambda i, on: on and self._kind_changed())
@@ -135,6 +159,9 @@ class QuantityPanel(QtWidgets.QWidget):
             if top is None:
                 top = QtWidgets.QTreeWidgetItem([q.group])
                 top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
+                font = top.font(0)
+                font.setBold(True)
+                top.setFont(0, font)
                 groups[q.group] = top
                 self.tree.addTopLevelItem(top)
             item = QtWidgets.QTreeWidgetItem([q.text, q.label])
@@ -158,16 +185,32 @@ class QuantityPanel(QtWidgets.QWidget):
                 shown += hit
             top.setHidden(shown == 0)
             top.setExpanded(bool(text) and shown > 0)
+        self.mark_groups()
+
+    def _group_marked(self, top):
+        """An open group with the background of a selected quantity."""
+        brush = QtGui.QBrush(QtGui.QColor(theme.COLORS[theme.name()][
+            "selection"])) if top.isExpanded() else QtGui.QBrush()
+        for col in range(self.tree.columnCount()):
+            top.setBackground(col, brush)
+
+    def mark_groups(self):
+        """The backgrounds of the groups (open or not, the theme)."""
+        for i in range(self.tree.topLevelItemCount()):
+            self._group_marked(self.tree.topLevelItem(i))
 
     def _clicked(self, item, *_):
-        """A click (or Return) on a quantity: plot it, or clear the plot
-        if it is the one plotted; the second click of a double click is
-        no new click."""
+        """A click (or Return) on a group: open or close it; on a
+        quantity: plot it, or clear the plot if it is the one plotted; the
+        second click of a double click is no new click."""
         last, when = self._last_click
         now = time.monotonic()
         self._last_click = (item, now)
         if item is last and now - when < \
                 QtWidgets.QApplication.doubleClickInterval() / 1000.0:
+            return
+        if item.parent() is None:
+            item.setExpanded(not item.isExpanded())
             return
         q = item.data(0, Qt.UserRole)
         if q is not None and q is self.current:
@@ -194,7 +237,7 @@ class QuantityPanel(QtWidgets.QWidget):
                          and (not patch or b.property("kind") == "patch"))
         kind = self.kind()
         if (kind in KINDS_VECTOR) != vector or (patch and kind != "patch"):
-            self.kind_buttons.button(len(KINDS_SCALAR) if vector else 0
+            self.kind_buttons.button(len(KINDS_FLAT) if vector else 0
                                      ).setChecked(True)
         self.colour.edges.setEnabled(not vector)
         self._kind_changed(emit=False)
@@ -252,13 +295,13 @@ class QuantityPanel(QtWidgets.QWidget):
                 if e and 1 < len(cols) < len(names) - 1:
                     names.append("Sum %s" % e)
                     self.partial[names[-1]] = (cols[0], cols[-1])
-        old = self.wanted_species or self.species.currentText()
+        old = self.wanted_species or self.chosen_species
         self.wanted_species = None
         self.species.blockSignals(True)
         self.species.clear()
         self.species.addItems(names)
-        if old in names:
-            self.species.setCurrentIndex(names.index(old))
+        self.species.setCurrentIndex(names.index(old) if old in names else
+                                     default_species(names[:len(columns)]))
         self.species.setEnabled(len(names) > 1)
         self.species.blockSignals(False)
 
@@ -367,6 +410,12 @@ class QuantityPanel(QtWidgets.QWidget):
             fields.update(self.mask_box.style_fields())
         return PlotStyle(kind=self.kind(), column=0 if self.reduced()
                          else max(self.species.currentIndex(), 0), **fields)
+
+    def _species_chosen(self, *_):
+        """A species chosen (set_columns changes it silently): the one
+        offered first from now on, where a quantity has it."""
+        self.chosen_species = self.species.currentText()
+        self._changed()
 
     def _changed(self, *_):
         self.style_changed.emit()

@@ -30,6 +30,8 @@ class Tools:
             self.bar.buttons[key].toggled.connect(
                 lambda on: on and self._load())
         self.last, self.waiting = None, False
+        self.shown = None               # the data and column measured
+        self.coords = None              # line: R, Z, phi of its two ends
         self._again = QtCore.QTimer(tab)
         self._again.setSingleShot(True)
         self._again.setInterval(150)
@@ -54,6 +56,17 @@ class Tools:
                 inspect.files(tab.run)
             finally:
                 QtWidgets.QApplication.restoreOverrideCursor()
+
+    def data_changed(self):
+        """A new quantity, species or frame plotted: the result shown again
+        for it (the same line, box, polygon, cell or view)."""
+        tab = self.tab
+        key = (id(tab.data), tab.plot.style.column)
+        if key == self.shown:
+            return
+        self.shown = key
+        if self.last is not None and self.panel.isVisible():
+            self._done(*self.last)
 
     def view_changed(self):
         """The statistics of the cells shown again for a new view (once
@@ -110,12 +123,22 @@ class Tools:
         return text
 
     def _line(self, pts):
+        """The profile along the line of the two points clicked, at the
+        toroidal angles set in the results window (0 at first)."""
+        (x0, y0), (x1, y1) = pts
+        c = self.coords
+        if c is None or not np.allclose((c[0], c[1], c[3], c[4]),
+                                        (x0, y0, x1, y1)):
+            self.coords = (x0, y0, 0.0, x1, y1, 0.0)
         tab = self.tab
         data = tab.data
         plain = labels.any_to_plain
         unit = plain(split_unit(data.label)[1])
-        s, r, z, v, vn = measure.profile(tab.plot, data, pts[0], pts[1])
-        inside, total, mean, flux = measure.line_sums(s, r, v, vn)
+        r0, z0, f0, r1, z1, f1 = self.coords
+        s, r, z, ph, v, vn, l = measure.profile(tab.plot, data, (r0, z0),
+                                                (r1, z1), phi=(f0, f1))
+        inside, total, mean, flux = measure.line_sums(s, r, v, vn, l)
+        self.bar.curve(r, z)            # its projection on the plot
         lines = ["Length inside the cells shown: %.4g m of %.4g m" % (
                      inside, s[-1]),
                  "Integral along the line: %.5g %s" % (
@@ -123,15 +146,20 @@ class Tools:
                  "Average along the line: %.5g %s" % (mean, plain(unit))]
         if vn is not None and measure.PER_M.search(unit) and \
                 measure.PER_M.search(unit).group(1) == "2":
-            lines.append("Flux through the surface the line sweeps around "
-                         "the axis (2πR v·n, n to the right of the line): "
-                         "%.5g %s" % (flux, plain(measure.times_m(unit, 2))))
+            lines.append("Flux through the surface the line (its projection "
+                         "on the poloidal plane) sweeps around the axis "
+                         "(2πR v·n, n to the right of the line): %.5g %s" % (
+                             flux, plain(measure.times_m(unit, 2))))
         elif vn is not None:
             lines.append("No flux: the unit is not a flux density (m^-2)")
         text = "\n".join(lines)
         ok = np.isfinite(v)
+        name = split_unit(tab.wanted.description)[0]  # as the 2D plot
+        if tab.quantity.species.count() > 1:
+            name += "  [%s]" % tab.quantity.species.currentText()
 
-        def draw(ax):
+        def draw(ax, options):
+            ax.set_title(labels.any_to_mathtext(name), fontsize="medium")
             ax.plot(s, v, label="|v|" if vn is not None else None)
             if vn is not None:
                 ax.plot(s, vn, label="v·n")
@@ -140,15 +168,21 @@ class Tools:
                 ax.set_xlim(s[ok].min(), s[ok].max())
             ax.set_xlabel("distance along the line (m)")
             ax.set_ylabel(plain(unit))
-            ax.grid(alpha=0.3)
-        (x0, y0), (x1, y1) = pts
         header = ["s (m)", "R (m)", "Z (m)", "value (%s)" % plain(unit)] + (
-            ["normal component (%s)" % plain(unit)] if vn is not None else [])
-        rows = [list(row) for row in zip(s, r, z, v)] if vn is None else \
-            [list(row) for row in zip(s, r, z, v, vn)]
-        self.panel.show_figure(
-            "Line from (%.4f, %.4f) to (%.4f, %.4f) m: %s" % (
-                x0, y0, x1, y1, self._what()), text, draw, header, rows)
+            ["normal component (%s)" % plain(unit)] if vn is not None
+            else []) + ["phi (deg)"]
+        cols = (s, r, z, v) + ((vn,) if vn is not None else ()) + (ph,)
+        rows = [list(row) for row in zip(*cols)]
+        self.panel.show_figure("Line profile: %s" % self._what(), text,
+                               draw, header, rows, line=self.coords,
+                               moved=self._moved)
+
+    def _moved(self, coords):
+        """New ends (R, Z, phi) typed in the results window."""
+        self.coords = tuple(coords)
+        r0, z0, _, r1, z1, _ = coords
+        self.last = ("line", np.array([(r0, z0), (r1, z1)]))
+        self._line(self.last[1])
 
     def _statistics(self, mode, pts):
         tab = self.tab
@@ -189,16 +223,14 @@ class Tools:
             "Maximum: %.5g %s" % (st["max"], plain(unit))))
         ok = np.isfinite(values)
 
-        def draw(ax):
+        def draw(ax, options):
             v = values[ok]
             if not v.size:
                 return
-            log = plot.style.scale == "log" and v.min() > 0
-            bins = np.geomspace(v.min(), v.max(), 31) if log and \
-                v.max() > v.min() else 30
-            ax.hist(v, bins=bins, color="#4c72b0")
-            if log:
-                ax.set_xscale("log")
+            n = options.bins.value()
+            log = options.logx.isChecked() and v.min() > 0
+            ax.hist(v, bins=np.geomspace(v.min(), v.max(), n + 1) if log and
+                    v.max() > v.min() else n)
             ax.set_xlabel(plain(unit))
             ax.set_ylabel("cells" if cells else "triangles")
         centres = g.centres[idx] if cells else plot.ecentres[idx]
@@ -207,4 +239,5 @@ class Tools:
         self.panel.show_figure(
             "Statistics over %s: %s" % (WHERE[mode], self._what()), text,
             draw, ["cell" if cells else "triangle", "R (m)", "Z (m)",
-                   "volume (m^3)", "value (%s)" % plain(unit)], rows)
+                   "volume (m^3)", "value (%s)" % plain(unit)], rows,
+            kind="hist", logx=plot.style.scale == "log")

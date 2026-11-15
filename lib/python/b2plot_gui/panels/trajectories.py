@@ -1,16 +1,20 @@
 """Trajectories of test particles (b2plot traj) drawn on demand as a layer:
-number of particles, weighting, species, time steps, time colouring and
-the cells where they start."""
+number of particles, weighting, species, time steps, time colouring, the
+cells where they start, and their lines (in the colours of b2plot)."""
 
 from ...qt import QtWidgets, Qt, Signal
+from .glyphs import LineStyleChooser, WidthChooser
+from .layers import spin
 from .options import _row
 
 
 class TrajBox(QtWidgets.QGroupBox):
-    """Draw asks the tab for the trajectories, Clear removes them."""
+    """Draw asks the tab for the trajectories, Clear removes them;
+    style_changed() for a new width, line style or opacity."""
 
     draw = Signal()
     clear = Signal()
+    style_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Trajectories", parent)
@@ -38,6 +42,15 @@ class TrajBox(QtWidgets.QGroupBox):
         self.start.addItem("all cells", "all")
         self.start.addItem("where the Only where mask holds", "mask")
         form.addRow("Start in", self.start)
+        self.line_width = WidthChooser(0.6)
+        self.line_style = LineStyleChooser("-")
+        self.line_alpha = spin(0.05, 1.0, 0.1, 1.0, tip="Opacity")
+        form.addRow("Lines", _row(self.line_width, self.line_style,
+                                  self.line_alpha))
+        for signal in (self.line_width.valueChanged,
+                       self.line_style.currentIndexChanged,
+                       self.line_alpha.valueChanged):
+            signal.connect(lambda *_: self.style_changed.emit())
         draw, clear = (QtWidgets.QPushButton(t) for t in ("Draw", "Clear"))
         draw.clicked.connect(lambda *_: self.draw.emit())
         clear.clicked.connect(lambda *_: self.clear.emit())

@@ -1,5 +1,6 @@
-"""2D view: quantity panel, one plot with its commands, layers panel, in
-columns of fixed width (30, 50 and 20 % of the window)."""
+"""2D view: quantity panel, one plot with its commands at its right,
+layers panel, in columns of fixed width (28, 50, 5 and, after 1 % of
+space, 16 % of the window)."""
 
 import json
 import re
@@ -10,15 +11,16 @@ import numpy as np
 import matplotlib.tri as mtri
 from matplotlib.figure import Figure
 
-from . import catalog, presets, theme
+from . import catalog, presets, scaling, theme
 from .plot import shapes
 from .plot.canvas import Plot2D
-from .plot.styles import KINDS_FLAT, LAYERS
+from .plot.styles import KINDS_FLAT, LAYERS, TRAJECTORIES
 from .model import split_unit
 from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Qt, Signal
 from .panels.layers import (CELL_MASKS, MASKS, LayersPanel, MasksPanel,
                             from_dict)
-from .panels.plotarea import READOUT, Columns, PlotCommands, ScaledCanvas
+from .panels.plotarea import (READOUT, Columns, PlotCommands, Readout,
+                              ScaledCanvas)
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
 from .output.actions import TabOutput
@@ -30,7 +32,8 @@ from .balances.picker import BalanceTool
 MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
             "not recognized", "error")      # in what b2plot prints
-COLUMNS = (0.25, 0.05, 0.5, 0.2)     # quantities, commands, plot, layers
+COLUMNS = (0.28, 0.5, 0.05, 0.16)    # quantities, plot, commands, layers
+SPACE = (0.0, 0.0, 0.0, 0.01)        # before each column
 
 
 def _scrolled(widget):
@@ -72,6 +75,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.streams.seed_preset.connect(self._seed_preset)
         self.quantity.traj_box.draw.connect(self._draw_trajectories)
         self.quantity.traj_box.clear.connect(self._clear_trajectories)
+        self.quantity.traj_box.style_changed.connect(self._traj_style)
         self.quantity.calculator.connect(self.open_calculator)
         self.time_box = self.quantity.time_box
         self.time_box.source_changed.connect(self._source_changed)
@@ -92,7 +96,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.tools.bar.changed.connect(
             lambda: self.tools.bar.mode is not None and self.balance.cancel())
         self.commands = PlotCommands(self)
-        self.hover = self.commands.readout
+        self.hover = Readout(parent=self.canvas)    # under the plot box
         centre = QtWidgets.QWidget()
         cl = QtWidgets.QVBoxLayout(centre)
         cl.setContentsMargins(4, 0, 6, 0)
@@ -106,8 +110,16 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         rl.addWidget(self.layers)
         rl.addWidget(self.masks)
         rl.addStretch(1)
-        self.columns = Columns((_scrolled(self.quantity), self.commands,
-                                centre, _scrolled(right)), COLUMNS)
+        left = QtWidgets.QWidget()      # the tabs stay over the scrolling
+        ll = QtWidgets.QVBoxLayout(left)
+        ll.setContentsMargins(6, 6, 6, 0)
+        ll.setSpacing(6)                # the panel scrolls apart from them
+        ll.addWidget(self.time_box.source)
+        ll.addWidget(_scrolled(self.quantity), 1)
+        self.columns = Columns((left, centre, self.commands,
+                                _scrolled(right)), COLUMNS, SPACE)
+        for column in (self.quantity, right):  # never scrolled sideways
+            scaling.squeezable(column)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.columns)
@@ -516,18 +528,26 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.status.emit("b2plot drew no trajectories")
             return
         self.plot._build_layer("trajectories")
-        self._set_available()
-        self.layers.rows["trajectories"]["check"].setChecked(True)
+        self._traj_style()
         self.status.emit("%d trajectory segments" % len(seg))
-        self.canvas.draw_idle()
 
     def _clear_trajectories(self):
         if self.run is not None:
             self.run.layers.pop("trajectories", None)
             self.plot._build_layer("trajectories")
-            self.layers.rows["trajectories"]["check"].setChecked(False)
-            self._set_available()
-            self.canvas.draw_idle()
+            self._traj_style()
+
+    def _traj_style(self):
+        """The trajectories (shown while drawn) with the lines of their
+        box."""
+        box = self.quantity.traj_box
+        drawn = self.run is not None and len(self.run.layers.get(
+            "trajectories", []))
+        self.plot.set_layer("trajectories", replace(
+            TRAJECTORIES, visible=bool(drawn),
+            width=box.line_width.value(), style=box.line_style.currentData(),
+            alpha=box.line_alpha.value()))
+        self.canvas.draw_idle()
 
     def _seed_preset(self, key):
         """Streamline seeds along a curve of the run (plot.shapes.SEEDS)."""
@@ -542,8 +562,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.set_seeds([tuple(p) for p in pts])
 
     def _title(self):
-        q = self.wanted
-        title = q.description if q is not None else self.data.label
+        q = self.wanted       # the unit is the one of the colour bar
+        title = split_unit(q.description if q is not None else
+                           self.data.label)[0]
         if self.quantity.species.count() > 1:
             title += "  [%s]" % self.quantity.species.currentText()
         if q is not None and self._source(q):
@@ -582,6 +603,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
         self.balance.restyle()
+        self.tools.data_changed()       # the results window follows
         if self.plot.drawn == 0:
             self.status.emit("%s: zero in every cell shown" % self.data.name)
         title = self._title()
@@ -595,7 +617,20 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if self.plot.mappable is not None:
             norm = self.plot.mappable.norm
             self.quantity.set_range(norm.vmin, norm.vmax)
+        self._measures()
         self.canvas.draw_idle()
+
+    def _measures(self):
+        """Line, Box, Polygon and Statistics only with a quantity plotted
+        (Inspect also on the grid alone)."""
+        on = self.run is not None and self.data is not None and \
+            self.wanted is not None
+        bar = self.tools.bar
+        for b in [bar.buttons[k] for k in ("line", "box", "polygon")] + [
+                bar.stats]:
+            b.setEnabled(on)
+        if not on and bar.mode in ("line", "box", "polygon"):
+            bar.set_mode(None)
 
     # -------------------------------------------------------------- views
     def _lims_changed(self, *_):
@@ -663,7 +698,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if event.button != 1 or event.inaxes is not self.plot.ax or \
                 self.run is None or str(self.toolbar.mode) or \
                 self.tools.bar.mode is not None or event.dblclick or \
-                self.plot.ax3d is not None or self.balance.grabs(event):
+                self.balance.grabs(event):
             return
         box = self.plot.ax.get_window_extent()
         x0, x1, y0, y1 = self.plot.get_view()
@@ -690,9 +725,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self._show_empty()
         else:
             self.redraw()
-        panel = self.tools.panel
-        if panel.isVisible() and panel.canvas.isVisible():
-            panel.apply_theme()
+        self.tools.bar.apply_theme()
+        self.quantity.mark_groups()
         self.balance.apply_theme()
         self.canvas.draw_idle()
 
@@ -703,11 +737,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.balance.restyle()
         self.plot.set_labels(self.quantity.labels_box.style(),
                              self._mask_title(""), self.label_values())
+        self._measures()
         self.canvas.draw_idle()
 
     def _align_commands(self, *_):
         """The first command at the height of the top of the plot box, the
-        last one at the height of its bottom."""
+        last one at the height of its bottom; the readout under the box,
+        from its left edge, at the bottom of the canvas."""
         y = self.canvas.mapTo(self, QtCore.QPoint(0, 0)).y() - \
             self.commands.mapTo(self, QtCore.QPoint(0, 0)).y()
         box = self.plot.ax.get_position()
@@ -715,6 +751,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.commands.set_top(y + round((1.0 - box.y1) * h))
         self.commands.set_bottom(self.commands.height() - y -
                                  round((1.0 - box.y0) * h))
+        self.hover.move(round(box.x0 * self.canvas.width()),
+                        h - self.hover.height())
 
     def ask_label(self, name):
         """Ask b2plot for a label quantity for the parallel balance."""

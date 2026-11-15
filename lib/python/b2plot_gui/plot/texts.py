@@ -7,13 +7,14 @@ from dataclasses import replace
 
 import numpy as np
 from matplotlib.colors import LogNorm, SymLogNorm
-from matplotlib.ticker import (FuncFormatter, LogFormatterSciNotation,
-                               LogLocator, ScalarFormatter)
+from matplotlib.ticker import LogFormatterSciNotation, LogLocator, MaxNLocator
 
 from ...b2plot import labels
 from .. import theme
 
 PLACEHOLDER = "Quantity"
+TICK_CHARS = 5                  # longest tick label of a colour bar
+BAR_ROOM = 3.4                  # room for them beside a bar (font sizes)
 WALL_PLACEHOLDER = "Wall quantity"
 
 
@@ -30,6 +31,20 @@ def fit_size(s, size, width, bold=False):
     except (ValueError, RuntimeError):     # text mathtext cannot parse
         return size
     return size if w <= width else max(size * width / w, 4.0)
+
+
+def short_labels(values):
+    """Labels of the values with the fewest decimals that keep them
+    apart and within 1 % of their range."""
+    v = np.asarray(values, float)
+    tol = 0.01 * (v.max() - v.min()) if len(v) > 1 else 0.0
+    for d in range(7):
+        texts = ["0" if float("%.*f" % (d, x)) == 0 else "%.*f" % (d, x)
+                 for x in v]
+        if len(set(texts)) == len(texts) and all(
+                abs(float(t) - x) <= tol for t, x in zip(texts, v)):
+            break
+    return texts
 
 
 def _detach(bar):
@@ -123,7 +138,8 @@ class TextMixin:
             bar.update_ticks()
         elif not isinstance(norm, SymLogNorm):
             self._compact_ticks(bar, axis, vertical, fs, color)
-        bar.ax.tick_params(labelsize=0.9 * fs, colors=color)
+        bar.ax.tick_params(labelsize=0.9 * fs * getattr(bar, "tick_factor",
+                                                         1.0), colors=color)
         bar.outline.set_edgecolor(color)
         bar.set_label("")
         text = labels.any_to_mathtext(label or "")
@@ -137,30 +153,38 @@ class TextMixin:
 
     @staticmethod
     def _compact_ticks(bar, axis, vertical, fs, color):
-        """Plain ticks, or the values divided by a power of ten written
-        above (or right of) the bar when they are large or small."""
-        lo, hi = bar.mappable.get_clim()
+        """Short tick labels: the values divided by a power of ten written
+        above (or right of) the bar when they are large or small, with the
+        fewest decimals that keep them apart (nice values when they would
+        still be long), in a smaller font if they would not fit beside
+        the bar."""
+        lo, hi = sorted(bar.mappable.get_clim())
         top = np.nanmax(np.abs([lo, hi])) if np.isfinite([lo, hi]).any() \
             else np.nan
-        if not (top > 0 and (top >= 1e3 or top < 1e-2)):
-            f = ScalarFormatter(useMathText=True)
-            f.set_powerlimits((-3, 4))
-            bar.formatter = f
+        p = int(np.floor(np.log10(top))) if top > 0 and (
+            top >= 1e3 or top < 1e-2) else 0
+        tol = 1e-9 * max(hi - lo, abs(hi), 1e-300)
+        for nice in (False, True):
+            if nice:
+                bar.locator = MaxNLocator(nbins=6)
             bar.update_ticks()
-            axis.get_offset_text().set_visible(False)
-            return
-        p = int(np.floor(np.log10(top)))
-        bar.formatter = FuncFormatter(
-            lambda v, _=None: "0" if abs(v / 10.0 ** p) < 5e-13 else
-            "%g" % (v / 10.0 ** p))
-        bar.update_ticks()
+            ticks = np.asarray(bar.get_ticks(), float)
+            ticks = ticks[(ticks >= lo - tol) & (ticks <= hi + tol)]
+            texts = short_labels(ticks / 10.0 ** p)
+            if max([len(t) for t in texts] + [0]) <= TICK_CHARS:
+                break
+        bar.set_ticks(ticks, labels=texts)
         axis.get_offset_text().set_visible(False)
-        bar.ax.text(*((0.5, 1.01) if vertical else (1.01, 0.5)),
-                    r"$\times 10^{%d}$" % p, transform=bar.ax.transAxes,
-                    ha="center" if vertical else "left",
-                    va="bottom" if vertical else "center",
-                    fontsize=0.9 * fs, color=color, clip_on=False,
-                    gid="bar-exponent")
+        room = BAR_ROOM * fs if vertical else np.inf
+        bar.tick_factor = min([fit_size(t, 0.9 * fs, room) / (0.9 * fs)
+                               for t in texts] + [1.0])
+        if p:
+            bar.ax.text(*((0.5, 1.01) if vertical else (1.01, 0.5)),
+                        r"$\times 10^{%d}$" % p, transform=bar.ax.transAxes,
+                        ha="center" if vertical else "left",
+                        va="bottom" if vertical else "center",
+                        fontsize=0.9 * fs, color=color, clip_on=False,
+                        gid="bar-exponent")
 
     def set_labels(self, ls, title, values=None, header=True):
         """Texts, sizes and colours of a LabelStyle; title is the automatic
@@ -185,7 +209,7 @@ class TextMixin:
         mid = 0.5 * (box.x0 + box.x1)   # the title is centred on the axes
         half = min(mid - self.rect[0], self.rect[0] + self.rect[2] - mid)
         s = text(ls.title or title)
-        for ax in [a for a in (self.ax, self.ax3d) if a is not None]:
+        for ax in (self.ax,):
             ax.set_title(s, fontsize=fit_size(s, 1.1 * fs, 1.96 * half * pw,
                                               ls.bold), **kw)
             ax.set_xlabel(text(ls.xlabel or "R (m)"), fontsize=fs, **kw)
@@ -223,5 +247,6 @@ class TextMixin:
                 for t in bar.ax.texts:
                     t.set(color=color, fontsize=fs if t.get_gid() ==
                           "bar-label" else 0.9 * fs)
-                bar.ax.tick_params(labelsize=0.9 * fs, colors=color)
+                bar.ax.tick_params(labelsize=0.9 * fs * getattr(
+                    bar, "tick_factor", 1.0), colors=color)
                 bar.outline.set_edgecolor(color)

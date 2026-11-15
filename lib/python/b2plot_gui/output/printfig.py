@@ -1,4 +1,4 @@
-"""Print figure: output format (png, jpg, eps, pdf, svg),
+"""Save plot: output format (png, jpg, eps, pdf, svg),
 content type (vector or raster), resolution, colour space (rgb, cmyk,
 gray) and export theme (light or dark). Vector output keeps the drawing;
 raster output is the figure rendered at the resolution, written as an
@@ -12,6 +12,7 @@ import numpy as np
 from matplotlib import colors as mcolors
 from matplotlib.figure import Figure
 
+from ..scaling import Scaled
 from ...qt import QtCore, QtGui, QtWidgets
 
 FORMATS = ("png", "jpg", "eps", "pdf", "svg")
@@ -27,10 +28,10 @@ def defaults(fmt="png"):
                 dpi=600, color="rgb")
 
 
-class PrintDialog(QtWidgets.QDialog):
-    """The options of Print figure; options() after Export."""
+class PrintDialog(Scaled, QtWidgets.QDialog):
+    """The options of Save plot; options() after Export."""
 
-    def __init__(self, dark=False, parent=None, title="Print figure"):
+    def __init__(self, dark=False, parent=None, title="Save plot"):
         super().__init__(parent)
         self.setWindowTitle(title)
         d = defaults()
@@ -65,6 +66,7 @@ class PrintDialog(QtWidgets.QDialog):
         self.format.currentTextChanged.connect(lambda *_: self._refresh(True))
         self.content.currentTextChanged.connect(lambda *_: self._refresh())
         self._refresh(True)
+        self.scaled()
 
     def _refresh(self, format_changed=False):
         """Choices allowed by the format."""
@@ -94,7 +96,7 @@ class PrintDialog(QtWidgets.QDialog):
                 float(self.dpi.text())
             except ValueError:
                 QtWidgets.QMessageBox.warning(
-                    self, "Print figure", "Resolution must be a number of "
+                    self, self.windowTitle(), "Resolution must be a number of "
                     "dpi.")
                 return
         self.accept()

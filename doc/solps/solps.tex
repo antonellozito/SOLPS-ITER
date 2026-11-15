@@ -19477,18 +19477,21 @@ and {\tt Reload run} (with all plot settings, also after a crash of
 {\tt b2fstate} changes; the time of the file read is shown next to it)
 and the theme. Under it is the one view of the window, the 2D plots.
 The window opens on the whole screen and
-keeps that aspect ratio (texts and the plot scale with it); the theme is
+keeps that aspect ratio (texts and the plot scale with it), as do its
+other windows; the theme is
 light or dark (in the dark one the plot colours are dimmed). Nothing is
 saved but the list of runs of the session (in the temporary folder): each
 start begins with nothing plotted, the default layers and no derived
 quantities. The view has four columns of fixed width: the quantity panel
-(25 \% of the window), the commands of the plot (5 \%), the plot
-(50 \%) and the layers (20 \%).
+(28 \% of the window, its tabs always at the top), the plot (50 \%),
+the commands of the plot (5 \%) and, after 1 \% of space, the layers
+(16 \%).
 
 The {\bf quantity panel} (left):
 \begin{itemize}
-\item {\tt Time}: the final state ({\tt b2fstate}) or the movie frames,
-  read by \btwoplot with {\bf mvframe} and {\bf mvframev}
+\item the tabs {\tt Final state} ({\tt b2fstate}) and {\tt Run movies}
+  (the movie frames), read by \btwoplot with {\bf mvframe} and
+  {\bf mvframev}
   (\ref{sec:mvframe}): one frame, the mean over a range of frames, a
   rolling mean (a window of $W$ frames ending at the frame or centred on
   it, moved frame by frame) or a batch mean (consecutive blocks of $W$
@@ -19498,16 +19501,18 @@ The {\bf quantity panel} (left):
   numbered image files or as the pages of one PDF; all options of the tab
   apply to movie data;
 \item the quantity tree (description and \btwoplot name), with a search
-  field; a click plots a quantity, a second click clears the plot; vector
+  field; a click opens or closes a group, plots a quantity, a second
+  click clears the plot; vector
   quantities pair the poloidal and radial components (B2.5) or the
   Cartesian components (EIRENE); the group {\tt Magnetic equilibrium
   (derived)} holds maps the GUI computes from {\tt b2fgmtry}, the derived
-  quantities of {\tt Inspect} on every cell (vertex values with
+  quantities of {\tt Inspect cell} on every cell (vertex values with
   inverse-volume weights), empty where a quantity has no meaning; the
   grazing angle is a wall quantity of the wall strip ({\tt graze}, along
   the wall and target faces of the B2.5 grid);
 \item the species, including the sum over the species (\btwoplot
-  {\tt sumz}, {\tt esumz});
+  {\tt sumz}, {\tt esumz}); at first the highest charge state of the
+  first species, then the species last chosen, where a quantity has it;
 \item {\tt Mask}, shown for the masks of the group {\tt Cell masks and
   indices}: the labels with an integer argument ({\bf ixeq}, {\bf nreg},
   {\bf freg}, {\bf tlbl}, \ldots), with the argument $i$ (sent as
@@ -19521,10 +19526,13 @@ The {\bf quantity panel} (left):
   reported in the status bar;
 \item the plot type: patch, filled contour, contour lines, quiver,
   streamlines, or quiver and streamlines;
-\item the colour scale: colour map, linear, logarithmic or symmetric
-  logarithmic scale, fixed or automatic range, the number of decades of a
-  logarithmic scale, and a scale factor applied by \btwoplot ({\tt rm*},
-  {\tt rem*});
+\item the colour scale: colour map (the diverging ones, from
+  {\tt twilight} to {\tt vanimo}, keep their centre colour at zero and
+  show of each side as much as the range covers, or go from the centre to
+  one end when all values have one sign), linear, logarithmic or
+  symmetric logarithmic scale, fixed or automatic range, the number of
+  decades of a logarithmic scale, and a scale factor applied by
+  \btwoplot ({\tt rm*}, {\tt rem*});
 \item the contour levels: number, step, list, or proportion as computed by
   \btwoplot {\tt clvp} or {\tt eclvp}; lines over filled contours, as
   {\tt cont};
@@ -19544,24 +19552,26 @@ never moves, from the top of its column; at its right the colour bar of
 the quantity and, right of it, the colour bar of the wall strip (empty
 frames when nothing is plotted; filled contours too get a plain
 rectangle). The {\bf commands} of the plot stand one under the other in
-the narrow column at its left, from the height of the top of the plot
+the narrow column at its right, from the height of the top of the plot
 box, in groups: {\tt Zoom}, {\tt Unzoom},
 {\tt Rezoom}, {\tt Restore}; the mouse tools; {\tt Add to page},
-{\tt Page composer}; {\tt Print figure} (png, jpg, eps, pdf or svg;
+{\tt Page composer}; {\tt Save plot} (png, jpg, eps, pdf or svg;
 vector or raster content at a resolution; colour space rgb, cmyk or
-gray; light or dark theme), {\tt Export field}; then the readout of the
-cursor, as plain text one item a line: $R$, $Z$, $\rho_{pol}$ (with
-{\tt rzpsi.dat}) and the value of the quantity shown, its number and
-unit in bold (in smaller text when the widest line would not fit);
+gray; light or dark theme), {\tt Export field};
 at the bottom, level with the bottom of the plot box, {\tt Calculate
-parallel balance}. The view starts on
+parallel balance}. Under the plot box, from its left edge, the readout of
+the cursor in one line: $R$, $Z$, $\rho_{pol}$ (with {\tt rzpsi.dat})
+and the value of the quantity shown with its unit in bold. The view
+starts on
 the grid and the device structure, which is also the widest view
 ({\tt Restore}). Dragging the plot with the left button pans it, the
 mouse wheel zooms around the cursor (10\,\% a wheel step); neither goes
 outside the widest view. Arrows are binned over the current view and
 redrawn after zoom and pan.
 
-The mouse tools set what a click on the plot does. {\tt Inspect}, in a
+The mouse tools set what a click on the plot does ({\tt Line profile},
+{\tt Draw box}, {\tt Draw polygon} and {\tt Statistics} only with a quantity
+plotted). {\tt Inspect cell} outlines the cell under the mouse in gold; in a
 B2.5 cell or an EIRENE triangle (elsewhere nothing happens), lists in up
 to five groups, with the quantity, its B2.5 or EIRENE name, the value
 and the unit: the value of the quantity shown; the grid of the B2.5 cell
@@ -19585,19 +19595,27 @@ $q = \frac{1}{2\pi}\oint B_{tor}/(R B_{pol})\,dl_{pol}$ of a closed
 tube); the EIRENE triangle from {\tt fort.33}, {\tt fort.34} and
 {\tt fort.35} (nodes and their coordinates, neighbours and their sides,
 additional surfaces, its B2.5 cell and faces, centroid, area and volume
-of \btwoplotns). {\tt Line} (two clicks) gives the profile of the quantity
+of \btwoplotns). {\tt Line profile} (two clicks) gives the profile of the quantity
 shown along the line (linear in the vertex values, as the contours, the
 plot from its first to its last value), its integral and average over
 the part inside the cells shown and, for a flux density (unit m$^{-2}$),
 the flux $\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the
 surface the line sweeps around the axis ($\mathbf{n}$ to the right of
-the line). {\tt Box}, {\tt Polygon} (closed by a click near its first
+the line); in its window the two ends can be moved, also in the toroidal
+angle $\phi$ (degrees, 0 and 0 at first): the profile is then taken
+along the straight line between the two points in space, whose
+projection on the poloidal plane (drawn on the plot) is curved.
+{\tt Draw box}, {\tt Draw polygon} (closed by a click near its first
 corner, or a double click) and {\tt Statistics} (the cells shown in the
 view, again after each zoom or pan) give the number of cells or
 triangles, their volume ({\tt vol}, {\tt triavol}), the volume integral
 and average, the minimum, the maximum and a histogram of the quantity
 shown. The results appear, one per line, in a small window and can be
-exported as CSV. The seed line of the streamlines is drawn with
+exported as CSV ({\tt Save plot} saves the profile or the histogram as the one of the
+main window does); they have their options
+(colour, line style, width and markers of each curve, the bins, the axis
+limits, logarithmic axes, grid), the mouse wheel zooms them and dragging
+moves them. The seed line of the streamlines is drawn with
 {\tt Draw seed line} of the streamline options.
 
 The {\bf parallel balance}, only with a {\tt balance.nc} written with
@@ -19642,7 +19660,7 @@ entry) is shown next to it, simplified from the model equations of B2.5
 conditions and recycling, numerics and time derivatives, discretisation
 corrections, residuals and EIRENE. Every
 window saves its plots as
-{\tt Print figure} does and exports their values (CSV, text, netCDF,
+{\tt Save plot} does and exports their values (CSV, text, netCDF,
 HDF5).
 
 The {\bf radial balance}, under it, is the same across the flux surfaces:
@@ -19664,14 +19682,16 @@ the poloidal transport among them.
 The {\bf layers panel} (right) shows and styles the structure (its
 closed parts empty, filled or hatched in a colour of their own; from
 {\tt structure.dat}, else from {\tt mesh.extra}), the B2.5 grid, the
-EIRENE grid, the separatrices (these four are shown at first), the
+EIRENE grid, the separatrices (the structure, the B2.5 grid and the
+separatrices are shown at first), the O-point (of {\tt rzpsi.dat}), the
 X-points, the grid boundary, flux surfaces (from {\tt rzpsi.dat}, at
 levels of $\rho_{pol}$ or of the normalised
 $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$, with the O-point and the
 primary X-point found from the $\psi$ map), the midplanes (the segments
 {\tt RZIMP} and {\tt RZOMP} of {\tt b2.user.parameters}, where they cross
 the B2.5 grid), the divertor targets (the faces of the target face
-regions, as B2.5 collects them), the chords and the trajectories.
+regions, as B2.5 collects them) and the chords. The lines of the
+trajectories are set in their group of the quantity panel.
 
 The {\bf masks panel}, under the layers, draws regions and labels of
 {\tt b2fgmtry} (Appendix~\ref{lis:b2cdcv}) over the plot, with a legend
@@ -19704,7 +19724,7 @@ Export:
   {\tt page}) with a global header, square, A4 portrait or A4 landscape
   (as {\tt sq}, {\tt a4p}, {\tt a4l}); {\tt Move up}, {\tt Move down} and
   {\tt Remove} act on the selected plot; {\tt Print pages} has the options
-  of {\tt Print figure}; a PDF holds all pages, other formats give one
+  of {\tt Save plot}; a PDF holds all pages, other formats give one
   file per page.
 \end{itemize}
 
