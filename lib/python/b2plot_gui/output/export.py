@@ -4,6 +4,7 @@ and the values of a quantity (written by b2plot mprt, mtab or eprt)."""
 import os
 
 from . import page
+from ..scaling import Scaled
 from ...qt import QtWidgets
 
 FIGURE_EXTS = (".pdf", ".png", ".svg", ".eps")
@@ -57,7 +58,7 @@ def _buttons(dialog):
     return box
 
 
-class FigureDialog(QtWidgets.QDialog):
+class FigureDialog(Scaled, QtWidgets.QDialog):
     """File, shape and resolution of an exported figure or page."""
 
     def __init__(self, settings, default="b2plot.pdf", shape=True,
@@ -84,6 +85,7 @@ class FigureDialog(QtWidgets.QDialog):
         self.dpi.setToolTip("Resolution of PNG files (dots per inch)")
         form.addRow("Resolution", self.dpi)
         form.addRow(_buttons(self))
+        self.scaled()
 
     def accept(self):
         path = self.path()

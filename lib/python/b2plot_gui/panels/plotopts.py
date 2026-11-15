@@ -3,12 +3,9 @@ streamlines; each gives its part of the PlotStyle (style_fields)."""
 
 from ..plot.shapes import SEEDS
 from ..plot.vector import NUM_ARROWS
-from ...qt import QtGui, QtWidgets, Qt, Signal
+from ...qt import QtGui, QtWidgets, Signal
+from .glyphs import CmapChooser, WidthChooser
 from .layers import ColorButton, spin, style_combo
-
-CMAPS = ["turbo", "viridis", "plasma", "inferno", "magma", "cividis",
-         "jet", "hot", "coolwarm", "RdBu_r", "seismic", "bwr", "Spectral_r",
-         "gray", "pwn"]
 
 
 def _number(text, default):
@@ -44,11 +41,7 @@ class ColourBox(_Box):
         super().__init__("Colour scale", parent)
         cf = QtWidgets.QFormLayout(self)
         row = QtWidgets.QHBoxLayout()
-        self.cmap = QtWidgets.QComboBox()
-        self.cmap.addItems(CMAPS)
-        self.cmap.setItemData(len(CMAPS) - 1, "Red positive, white zero, "
-                              "blue negative (MATLAB colorbarpwn)",
-                              Qt.ToolTipRole)
+        self.cmap = CmapChooser("turbo")
         self.reverse = QtWidgets.QCheckBox("reversed")
         row.addWidget(self.cmap, 1)
         row.addWidget(self.reverse)
@@ -124,7 +117,7 @@ class ColourBox(_Box):
             self.vmax.setText("%.4g" % hi)
 
     def style_fields(self):
-        return dict(cmap=self.cmap.currentText(),
+        return dict(cmap=self.cmap.name(),
                     reverse=self.reverse.isChecked(),
                     scale=self.scale.currentText(), auto=self.auto.isChecked(),
                     vmin=_number(self.vmin.text(), 0.0),
@@ -153,7 +146,7 @@ class LinesBox(_Box):
         row.addStretch(1)
         lf.addRow(row)
         row = QtWidgets.QHBoxLayout()
-        self.line_width = spin(0.1, 10.0, 0.1, 0.8, tip="Line width (pt)")
+        self.line_width = WidthChooser(0.8)
         self.line_style = style_combo("-")
         self.line_labels = QtWidgets.QCheckBox("labels")
         row.addWidget(self.line_width)
@@ -227,7 +220,7 @@ class StreamBox(_Box):
         self.density = spin(0.2, 10.0, 0.1, 1.5, tip="Density")
         sf.addRow("Density", self.density)
         row = QtWidgets.QHBoxLayout()
-        self.stream_width = spin(0.1, 10.0, 0.1, 0.8, tip="Line width")
+        self.stream_width = WidthChooser(0.8)
         self.stream_style = style_combo("-")
         self.stream_color = ColorButton("#1f77b4")
         row.addWidget(self.stream_width)

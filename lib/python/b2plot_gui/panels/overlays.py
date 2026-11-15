@@ -6,11 +6,12 @@ from dataclasses import replace
 
 from ..plot.styles import OverlayStyle, VectorStyle, WallStyle
 from ...qt import QtWidgets, Qt, Signal
+from .glyphs import CmapChooser, WidthChooser
 from .layers import ColorButton, spin, style_combo
 from .options import _row
-from .plotopts import CMAPS
 
 AS_PLOT = "as the plot"
+STRIP_WIDTHS = (2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30)     # points
 
 
 class VectorRow:
@@ -88,7 +89,7 @@ class OverlayBox(QtWidgets.QGroupBox):
         self.line_levels.setValue(10)
         self.line_log = QtWidgets.QCheckBox("log")
         self.line_color = ColorButton("#ffffff")
-        self.line_width = spin(0.1, 10.0, 0.1, 0.6, tip="Line width")
+        self.line_width = WidthChooser(0.6)
         self.line_style = style_combo("-")
         self.line_labels = QtWidgets.QCheckBox("labels")
         form.addRow(self.lines, self.scalar)
@@ -121,11 +122,9 @@ class OverlayBox(QtWidgets.QGroupBox):
         for text, op in (("", ""), ("per ne", "pwne"),
                          ("per area", "pswa")):
             self.wall_per.addItem(text, op)
-        self.wall_cmap = QtWidgets.QComboBox()
-        self.wall_cmap.addItems([c for c in CMAPS if c != "pwn"])
-        self.wall_cmap.setCurrentText("viridis")
+        self.wall_cmap = CmapChooser("viridis")
         self.wall_log = QtWidgets.QCheckBox("log")
-        self.wall_width = spin(1.0, 30.0, 1.0, 6.0, 1, "Strip width (pt)")
+        self.wall_width = WidthChooser(6.0, STRIP_WIDTHS, "Strip width (pt)")
         self.wall_bar = QtWidgets.QCheckBox("colour bar")
         self.wall_bar.setChecked(True)
         form.addRow(self.wall, self.wall_from)
@@ -227,7 +226,7 @@ class OverlayBox(QtWidgets.QGroupBox):
             return self.vectors[self.ROLES.index(role)].style()
         if role == "wall":
             return WallStyle(column=max(self.wall_species.currentIndex(), 0),
-                             cmap=self.wall_cmap.currentText(),
+                             cmap=self.wall_cmap.name(),
                              log=self.wall_log.isChecked(),
                              width=self.wall_width.value(),
                              colorbar=self.wall_bar.isChecked())

@@ -2,8 +2,12 @@
 
 from dataclasses import replace
 
+from matplotlib import colors as mcolors
+
+from .. import theme
 from ..plot.styles import LAYERS, LayerStyle
-from ...qt import QtGui, QtWidgets, Signal
+from ...qt import QtCore, QtGui, QtWidgets, Signal
+from .glyphs import LineStyleChooser, SizeChooser, WidthChooser
 
 # Why a layer can be missing in a run
 MISSING = {"structure": "No structure.dat or mesh.extra found for this "
@@ -11,17 +15,19 @@ MISSING = {"structure": "No structure.dat or mesh.extra found for this "
            "flux": "No rzpsi.dat found for this run",
            "eirene": "No EIRENE triangles in this run",
            "xpoints": "No X-point in this grid",
+           "opoints": "No rzpsi.dat found for this run (it gives the "
+                      "O-point)",
            "midplanes": "No rzimp or rzomp in b2.user.parameters, or not "
                         "on the B2.5 grid",
            "targets": "No divertor targets sent by b2plot"}
-NO_STYLE = ("xpoints",)         # rows without a line style
+NO_STYLE = ("opoints", "xpoints")      # rows without a line style
 FILL_STYLES = ("empty", "full", "pattern")      # of the structure
-LINESTYLES = [("solid", "-"), ("dashed", "--"), ("dotted", ":"),
-              ("dash-dot", "-.")]
+MARKER_SIZES = (4, 5, 6, 8, 10, 12, 14, 16, 20)
 
 
 class ColorButton(QtWidgets.QToolButton):
-    """Colour swatch that opens a colour dialog."""
+    """Colour swatch (as drawn in the theme) that opens a colour
+    dialog."""
 
     changed = Signal(str)
 
@@ -34,9 +40,20 @@ class ColorButton(QtWidgets.QToolButton):
 
     def set_color(self, color):
         self._color = QtGui.QColor(color).name()
-        pix = QtGui.QPixmap(18, 14)
-        pix.fill(QtGui.QColor(self._color))
+        self._swatch()
+
+    def _swatch(self):
+        base = QtWidgets.QApplication.font().pointSizeF()
+        k = self.font().pointSizeF() / base if base > 0 else 1.0
+        self.setIconSize(QtCore.QSize(round(18 * k), round(14 * k)))
+        pix = QtGui.QPixmap(self.iconSize())     # follows the font
+        pix.fill(QtGui.QColor(mcolors.to_hex(theme.rgb(self._color))))
         self.setIcon(QtGui.QIcon(pix))
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QtCore.QEvent.StyleChange:   # theme switched
+            self._swatch()
 
     def color(self):
         return self._color
@@ -49,11 +66,7 @@ class ColorButton(QtWidgets.QToolButton):
 
 
 def style_combo(value="-"):
-    combo = QtWidgets.QComboBox()
-    for text, ls in LINESTYLES:
-        combo.addItem(text, ls)
-    combo.setCurrentIndex(max(combo.findData(value), 0))
-    return combo
+    return LineStyleChooser(value)
 
 
 def spin(lo, hi, step, value, decimals=2, tip=""):
@@ -65,6 +78,13 @@ def spin(lo, hi, step, value, decimals=2, tip=""):
     box.setToolTip(tip)
     box.setKeyboardTracking(False)
     return box
+
+
+def _narrow(w):
+    """A box that shares the room of its column (squeezed with it)."""
+    w.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                    QtWidgets.QSizePolicy.Fixed)
+    w.setMinimumWidth(24)
 
 
 class LayersPanel(QtWidgets.QGroupBox):
@@ -79,7 +99,7 @@ class LayersPanel(QtWidgets.QGroupBox):
         grid = QtWidgets.QGridLayout(self)
         grid.setContentsMargins(6, 6, 6, 6)
         grid.setHorizontalSpacing(6)
-        grid.setColumnMinimumWidth(0, 14)
+        grid.setColumnStretch(2, 1)         # width and style share the room
         grid.setColumnStretch(3, 1)
         for col, text in enumerate(("", "Colour", "Width", "Style",
                                     "Opacity")):
@@ -92,15 +112,13 @@ class LayersPanel(QtWidgets.QGroupBox):
             check = QtWidgets.QCheckBox(name)
             check.setChecked(st.visible)
             color = ColorButton(st.color)
-            width = spin(0.05, 20.0, 0.1, st.width, tip={
-                "xpoints": "Marker size (pt)"}.get(key, "Line width (pt)"))
+            width = SizeChooser(st.width, MARKER_SIZES, "Marker size (pt)",
+                                {"xpoints": "x"}.get(key, "o")) \
+                if key in NO_STYLE else WidthChooser(st.width)
             style = style_combo(st.style)
-            style.setSizeAdjustPolicy(
-                QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
-            style.setMinimumContentsLength(5)
+            for w in (width, style):        # narrow: the glyph is enough
+                _narrow(w)
             alpha = spin(0.05, 1.0, 0.1, st.alpha, tip="Opacity")
-            for w in (width, alpha):
-                w.setMinimumWidth(44)
             if key in NO_STYLE:
                 style.setEnabled(False)
             row = dict(check=check, color=color, width=width, style=style,
@@ -120,6 +138,7 @@ class LayersPanel(QtWidgets.QGroupBox):
                     max(fill_style.findData(st.fill_style), 0))
                 fill_style.setToolTip("Fill of the closed parts of the "
                                       "structure: none, full or hatched")
+                _narrow(fill_style)
                 label = QtWidgets.QLabel("fill")
                 label.setProperty("muted", True)
                 grid.addWidget(label, r, 0)
@@ -137,6 +156,7 @@ class LayersPanel(QtWidgets.QGroupBox):
                 rho.addItem("psiN", False)
                 rho.addItem("rhop", True)
                 rho.setCurrentIndex(1 if st.rho else 0)
+                _narrow(rho)
                 grid.addWidget(QtWidgets.QLabel("levels"), r, 1)
                 grid.addWidget(levels, r, 2, 1, 2)
                 grid.addWidget(rho, r, 4)

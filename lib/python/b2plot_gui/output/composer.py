@@ -1,6 +1,6 @@
 """Page composer: snapshots of the 2D plot (quantity with all its
 settings) laid out nx by ny on pages, as b2plot page, printed with the
-options of Print figure. The interactive plot of the tab stays one."""
+options of Save plot. The interactive plot of the tab stays one."""
 
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -8,12 +8,13 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from ...b2plot import labels
 from .. import theme
 from . import page, printfig
+from ..scaling import Scaled
 from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
 
 PREVIEW_DPI = 60
 
 
-class Composer(QtWidgets.QWidget):
+class Composer(Scaled, QtWidgets.QWidget):
     """Window with the list of plots, the page options and a preview."""
 
     status = Signal(str)
@@ -71,7 +72,7 @@ class Composer(QtWidgets.QWidget):
         self.page.valueChanged.connect(lambda *_: self._timer.start())
         export = QtWidgets.QPushButton("Print pages…")
         export.setToolTip("All pages as image or vector files, with the "
-                          "options of Print figure (a PDF holds all pages)")
+                          "options of Save plot (a PDF holds all pages)")
         export.clicked.connect(lambda *_: self.print_pages())
 
         form = QtWidgets.QFormLayout()
@@ -112,6 +113,12 @@ class Composer(QtWidgets.QWidget):
         self._timer.timeout.connect(self._render)
         self.resize(1100, 640)
         self._buttons()
+        self.scaled()
+
+    def prepare(self):
+        """The size set above, not the smaller one of the content."""
+        if self._aspect is None:
+            self.rebase(self.width(), self.height())
 
     def _buttons(self):
         """Move up, Move down and Remove act on the selected plot: only
@@ -211,7 +218,7 @@ class Composer(QtWidgets.QWidget):
         self._fit()
 
     def print_pages(self, path=None, options=None):
-        """Print all pages with the options of Print figure (dialogs unless
+        """Print all pages with the options of Save plot (dialogs unless
         path is given; options default to those of its extension); returns
         the files."""
         if not self.snaps:

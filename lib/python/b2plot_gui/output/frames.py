@@ -24,8 +24,8 @@ class FrameExport:
         tab = self.tab
         if tab.run is None or tab.wanted is None or \
                 not tab._source(tab.wanted):
-            tab.status.emit("Export frames needs movie frames: Time > "
-                            "Movie frames")
+            tab.status.emit("Export frames needs movie frames: the Run "
+                            "movies tab")
             return
         if path is None:
             dlg = FigureDialog(tab.settings, tab.wanted.name.replace(

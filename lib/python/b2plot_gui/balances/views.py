@@ -9,7 +9,7 @@ import re
 import numpy as np
 from matplotlib.figure import Figure
 
-from .. import theme
+from .. import scaling, theme
 from ..output import printfig
 from ..panels.plotarea import ScaledCanvas
 from ...qt import QtCore, QtWidgets, Qt, Signal
@@ -20,8 +20,6 @@ LEFT, RIGHT, TOP, BOTTOM = 80, 18, 34, 54   # around it (pixels)
 LEGEND = 300                        # legend column of a decomposition
 HOT = 2.2                           # points added to a line under the mouse
 PICK = 6.0                          # pixels from a line that take it
-DRAG = 4.0                          # pixels the mouse moves to pan
-SMALLEST = 0.6                      # of its first size, a window at least
 TIE = 1.5                           # pixels preferring a line that opens more
 
 
@@ -202,8 +200,10 @@ class PlotView(QtCore.QObject):
         steps = gui.angleDelta().y() / 120.0 if hasattr(
             gui, "angleDelta") else event.step
         f = 0.85 ** float(np.clip(steps, -3.0, 3.0))
-        x = _zoomed(self.ax.get_xlim(), event.xdata, f, self.home[0])
-        y = _zoomed(self.ax.get_ylim(), event.ydata, f, self.home[1])
+        x = scaling.zoomed(self.ax.get_xlim(), event.xdata, f,
+                           self.home[0])
+        y = scaling.zoomed(self.ax.get_ylim(), event.ydata, f,
+                           self.home[1])
         self.ax.set_xlim(x)
         self.ax.set_ylim(y)
         self.canvas.draw_idle()
@@ -213,7 +213,7 @@ class PlotView(QtCore.QObject):
         """The x range of the balance (None: the whole plot); y as is."""
         if self.home is None:
             return
-        self.ax.set_xlim(self.home[0] if xlim is None else _zoomed(
+        self.ax.set_xlim(self.home[0] if xlim is None else scaling.zoomed(
             xlim, 0.5 * (xlim[0] + xlim[1]), 1.0, self.home[0]))
         self.canvas.draw_idle()
 
@@ -291,7 +291,7 @@ class PlotView(QtCore.QObject):
         d = self._drag
         dx, dy = event.x - d["x"], event.y - d["y"]
         if not d["moved"]:
-            if not d["inside"] or np.hypot(dx, dy) < DRAG:
+            if not d["inside"] or np.hypot(dx, dy) < scaling.DRAG:
                 return False
             d["moved"] = True
             self._set(None)
@@ -302,8 +302,8 @@ class PlotView(QtCore.QObject):
         sx, sy = (x1 - x0) / box.width, (y1 - y0) / box.height
         x = (x0 - dx * sx, x1 - dx * sx)
         y = (y0 - dy * sy, y1 - dy * sy)
-        x = _zoomed(x, 0.5 * (x[0] + x[1]), 1.0, self.home[0])
-        y = _zoomed(y, 0.5 * (y[0] + y[1]), 1.0, self.home[1])
+        x = scaling.zoomed(x, 0.5 * (x[0] + x[1]), 1.0, self.home[0])
+        y = scaling.zoomed(y, 0.5 * (y[0] + y[1]), 1.0, self.home[1])
         self.ax.set_xlim(x)
         self.ax.set_ylim(y)
         self.canvas.draw_idle()
@@ -322,17 +322,6 @@ class PlotView(QtCore.QObject):
         i = d["hit"]
         if i is not None and self.items[i][1].key is not None:
             self.clicked.emit(self.items[i][1].key)
-
-
-def _zoomed(lim, at, f, home):
-    """Range lim zoomed by f around at, inside home (home if wider)."""
-    lo, hi = min(lim), max(lim)
-    hlo, hhi = min(home), max(home)
-    lo, hi = at - (at - lo) * f, at + (hi - at) * f
-    if hi - lo >= hhi - hlo:
-        return tuple(home)
-    shift = max(hlo - lo, 0.0) - max(hi - hhi, 0.0)
-    return (lo + shift, hi + shift)
 
 
 class _Clicks(QtCore.QObject):
@@ -355,11 +344,9 @@ class _Clicks(QtCore.QObject):
 _CLICKS = []
 
 
-class Scaled:
-    """A window whose content scales with it, as the main window does:
-    the aspect ratio of its first size is kept, the fonts follow the
-    width and the plots keep their size in inches (their resolution
-    follows the width). It stays over its owner window also when another
+class Scaled(scaling.Scaled):
+    """A window whose content scales with it, as the main window does
+    (scaling.Scaled). It stays over its owner window also when another
     program is active, and the windows it opened stay over it."""
 
     def scaled(self):
@@ -368,18 +355,7 @@ class Scaled:
             _CLICKS.append(_Clicks(app))
             app.installEventFilter(_CLICKS[0])
         self.setAttribute(Qt.WA_MacAlwaysShowToolWindow, True)
-        self.layout().setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
-        self._aspect = self._width = None
-        self._sizing = False
-        self._fonts = QtCore.QTimer(self)
-        self._fonts.setSingleShot(True)
-        self._fonts.setInterval(120)
-        self._fonts.timeout.connect(self.restyle)
-        self.restyle()
-
-    def views(self):
-        """The PlotViews of the window."""
-        return []
+        super().scaled()
 
     def opened(self):
         """The window this one opened (the next level), or None."""
@@ -396,111 +372,6 @@ class Scaled:
         if w is not None and w.isVisible():
             w.raise_()
             w.raise_opened()
-
-    def restyle(self):
-        """The stylesheet of the theme with the font of the width, then
-        the plots of that width, smaller if the rest (controls that do not
-        scale as much as the fonts) leaves them less room."""
-        base = QtWidgets.QApplication.font().pointSizeF()
-        k = self.width() / self._width if self._width else 1.0
-        self.setStyleSheet(theme.stylesheet("%.2fpt" % max(
-            (base if base > 0 else 13.0) * k, 4.0)))
-        if self._width:
-            QtCore.QTimer.singleShot(0, self._fit)
-
-    def refit(self):
-        """The plots fitted again (after a text changed), soon."""
-        if self._width:
-            QtCore.QTimer.singleShot(0, self, self._fit)
-
-    def _fit(self):
-        """The plots of the width once the fonts are there, smaller if
-        the rest leaves them less room (the largest that fits; their texts
-        are as wide as them)."""
-        views = self.views()
-        if not views:
-            return
-        k = self.width() / self._width
-        if self._over(k) <= 0:
-            return
-        # the narrower the plots, the more lines their texts take: the
-        # largest size that fits from the top, else the one missing least
-        low = max(20 / views[0].size0[1], 0.5 * k)
-        steps = np.linspace(k, low, 11)[1:]
-        over = []
-        for i, f in enumerate(steps):
-            over.append(self._over(f))
-            if over[-1] <= 0:
-                hi, lo = (k if i == 0 else steps[i - 1]), f
-                for _ in range(8):
-                    mid = 0.5 * (lo + hi)
-                    lo, hi = (mid, hi) if self._over(mid) <= 0 else (lo, mid)
-                self._over(lo)
-                return
-        self._over(steps[int(np.argmin(over))])
-
-    def _over(self, k):
-        """Height missing with the plots at k times their size at first."""
-        self._scale(k)
-        lay = self.layout()
-        lay.activate()
-        need = lay.heightForWidth(self.width()) if lay.hasHeightForWidth() \
-            else lay.sizeHint().height()
-        return need - self.height()
-
-    def prepare(self):
-        """The size of the content (the plots at their size at first),
-        set before the window is shown: the reference of the scaling from
-        then on, whatever happens to the window while it opens."""
-        if self._aspect is not None:
-            return
-        self.ensurePolished()
-        self.layout().activate()
-        w = self.sizeHint().width()
-        h = self.heightForWidth(w) if self.hasHeightForWidth() else -1
-        h = h if h > 0 else self.sizeHint().height()
-        self.resize(w, h)
-        self.setMinimumSize(round(SMALLEST * w), round(SMALLEST * h))
-        self._aspect, self._width = w / max(h, 1), w
-        for v in self.views():
-            v.canvas.freeze()
-
-    def showEvent(self, event):
-        self.prepare()
-        super().showEvent(event)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if self._aspect is None or self._sizing:
-            return
-        self._fonts.start()
-        w, h = event.size().width(), event.size().height()
-        if abs(w / max(h, 1) - self._aspect) * h < 2:
-            self._scale(w / self._width)
-            return
-        old = event.oldSize()
-        if abs(w - old.width()) >= abs(h - old.height()):
-            h = round(w / self._aspect)
-        else:
-            w = round(h * self._aspect)
-        QtCore.QTimer.singleShot(0, lambda: self._resize(w, h))
-
-    def _resize(self, w, h):
-        self._sizing = True
-        self.resize(w, h)
-        self._sizing = False
-        self._scale(self.width() / self._width)
-        self._fonts.start()
-
-    def _scale(self, k):
-        """The plots at k times their size at first, the rest of the
-        window at the scale of its width."""
-        for v in self.views():
-            v.scale(k)
-        self.scale_parts(self.width() / self._width if self._width else 1.0)
-
-    def scale_parts(self, k):
-        """Parts of the window at k times their size at first."""
 
 
 class SpeciesBox(QtWidgets.QToolButton):
@@ -604,7 +475,7 @@ class Output:
         return "balance"
 
     def save_plots(self, path=None, options=None):
-        """Print figure of the panels of the window (side by side);
+        """Save plot of the panels of the window (side by side);
         returns the path written or None."""
         panels = self.panels()
         if not panels:
@@ -645,9 +516,9 @@ class Output:
         if not panels:
             return None
         if path is None:
-            choice, ok = QtWidgets.QInputDialog.getItem(
-                self, "Export data", "Output format",
-                list(datafile.FORMATS), 0, False)
+            choice, ok = scaling.choose(self, "Export data",
+                                        "Output format",
+                                        list(datafile.FORMATS))
             if not ok:
                 return None
             ext = datafile.FORMATS[choice]

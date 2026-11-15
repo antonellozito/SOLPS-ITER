@@ -5,10 +5,11 @@ the list of the quantities saved by the user (kept in the settings by the
 
 from ..expression import FUNCTIONS, ExpressionError
 from ..presets import PRESETS, TEMPLATES
+from ..scaling import Scaled
 from ...qt import QtWidgets, Qt
 
 
-class CalculatorDialog(QtWidgets.QDialog):
+class CalculatorDialog(Scaled, QtWidgets.QDialog):
     """specs: list of dicts (expr, name, unit), edited in place; species:
     presets.Species of the run."""
 
@@ -74,6 +75,7 @@ class CalculatorDialog(QtWidgets.QDialog):
         self._show_params(())
         self._fill()
         self._check()
+        self.scaled()
 
     def _fill(self):
         self.saved.clear()

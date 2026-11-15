@@ -17,17 +17,16 @@ from .. import theme
 from .overlays import LayerMixin
 from .scalar import ScalarMixin
 from .masks import MaskMixin
-from .styles import LAYERS, LabelStyle, PlotStyle
-from .surface import SurfaceMixin
+from .styles import LAYER_KEYS, LAYERS, TRAJECTORIES, LabelStyle, PlotStyle
 from .texts import TextMixin
 from .vector import VectorMixin
 
 TOP = 3.0       # room over a fixed plot: title, header and extra label line
+READOUT = 0.6   # room under a fixed plot for the cursor readout (font sizes)
 
 
-class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
-             MaskMixin):
-    """One axes (a 3D one for surfaces) with a colour-bar slot at its right
+class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin):
+    """One axes with a colour-bar slot at its right
     and, right of it, the slot of the wall strip colour bar. fixed: the
     boxes do not depend on the texts and both slots are always there,
     empty ones with a placeholder (the plot of the GUI); otherwise the wall
@@ -44,7 +43,6 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         self.requested = None       # the view last asked for (R, Z box)
         ax_box, cax_box, wax_box = self._positions()
         self.ax = fig.add_axes(ax_box)
-        self.ax3d = None
         self.cax = fig.add_axes(cax_box)
         self.cax.set_visible(False)
         self.wax = fig.add_axes(wax_box)
@@ -53,6 +51,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         fig.canvas.mpl_connect("resize_event", self._place)
         self.run = None
         self.layer_styles = {k: replace(s) for k, (_, s) in LAYERS.items()}
+        self.layer_styles["trajectories"] = replace(TRAJECTORIES)
         self.layer_artists = {}
         self.field_artists = []
         self.data = None
@@ -73,7 +72,9 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         wall bar right of that, in the rectangle of the figure. Margins in
         points: scaled with the label size, or (fixed) those of the default
         size with one line for the header and the extra label and both bar
-        slots, so that the plot box never moves."""
+        slots, and a line under the axis label for the readout of the
+        cursor (the box a little lower, as wide), so that the plot box
+        never moves."""
         x, y, w, h = self.rect
         pw, ph = np.maximum(self.inches() * 72.0, 1.0)
         fs = 10.0 if self.fixed else 10.0 * self.label_style.size
@@ -83,6 +84,9 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         wall = bar + right if self.fixed or self.wall_bar else 0.0
         aw = max(w - left - gap - bar - right - wall, 0.1 * w)
         ah = max(h - bottom - top, 0.1 * h)
+        if self.fixed:                  # the box lower, as wide
+            room = min(READOUT * fs / ph, ah - 0.1 * h)
+            ah, bottom = ah - room, bottom + room
         x0 = x + left + aw + gap
         return [x + left, y + bottom, aw, ah], [x0, y + bottom, bar, ah], [
             x0 + bar + right, y + bottom, bar, ah]
@@ -108,8 +112,6 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         if not np.allclose(self.ax.get_position().bounds, ax_box):
             self.ax.set_position(ax_box)
             self._keep_aspect()
-        if self.ax3d is not None:
-            self.ax3d.set_position(ax_box)
 
     def _reset_axes(self):
         self.ax.set_aspect("equal", adjustable="datalim")
@@ -122,10 +124,8 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         drawn again by show)."""
         self.fig.set_facecolor(theme.figure_bg())
         self.ax.set_facecolor(theme.axes_bg())
-        if self.ax3d is not None:
-            self.ax3d.set_facecolor(theme.figure_bg())
         if self.run is not None:
-            for key in LAYERS:
+            for key in LAYER_KEYS:
                 self._build_layer(key)
             self.draw_masks()
 
@@ -148,7 +148,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
             self.etri = mtri.Triangulation(t.x, t.y, t.triangles)
             self.efinder = self.etri.get_trifinder() if hover else None
             self.ecentres = np.column_stack((t.x, t.y))[t.triangles].mean(1)
-        for key in LAYERS:
+        for key in LAYER_KEYS:
             self._build_layer(key)
         self.masks, self.mask_artists = [], []  # of the run: set again
         self.set_view(self.full_box())
@@ -172,7 +172,6 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         """Nothing plotted: the layers, an empty colour-bar slot and no
         title."""
         self.clear_field()
-        self._axes3d(False)
         self.data = None
         self._placeholder()
         self.ax.set_title("")
@@ -191,11 +190,8 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, SurfaceMixin, TextMixin,
         cond = (overlays or {}).get("mask", (None, None))[0]
         self.mask = self._cell_mask(style, cond)
         self._mask_name = getattr(cond, "name", None)
-        self._axes3d(style.kind == "surface" and not hasattr(data, "vr"))
         if hasattr(data, "vr"):
             self._vectors(data, style)
-        elif style.kind == "surface":
-            self._surface(data, style)
         elif data.location == "cells":
             self._cell_field(data, style)
         else:

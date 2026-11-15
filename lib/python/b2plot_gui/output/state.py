@@ -10,7 +10,7 @@ SKIP = {"search", "play", "slider", "tree", "info", "current", "partial",
 PANELS = __package__.rsplit(".", 1)[0] + ".panels"
 VALUES = (ColorButton, QtWidgets.QComboBox, QtWidgets.QAbstractButton,
           QtWidgets.QAbstractSpinBox, QtWidgets.QLineEdit,
-          QtWidgets.QListWidget)
+          QtWidgets.QListWidget, QtWidgets.QTabBar)
 
 
 def _widgets(obj, prefix="", seen=None):
@@ -45,6 +45,8 @@ def _get(w):
         return w.value()
     if isinstance(w, QtWidgets.QLineEdit):
         return w.text()
+    if isinstance(w, QtWidgets.QTabBar):
+        return w.currentIndex()
     return [i for i in range(w.count())
             if w.item(i).checkState() == Qt.Checked]
 
@@ -65,6 +67,9 @@ def _set(w, v):
         w.setValue(v)
     elif isinstance(w, QtWidgets.QLineEdit):
         w.setText(v)
+    elif isinstance(w, QtWidgets.QTabBar):
+        if w.isTabEnabled(v):
+            w.setCurrentIndex(v)
     else:
         for i in range(w.count()):
             w.item(i).setCheckState(Qt.Checked if i in v else Qt.Unchecked)

@@ -7,19 +7,21 @@ view. There is no console and no b2plot command input. Outside a run
 directory the window opens empty (Open run). The window opens on the
 whole screen and keeps that aspect ratio; nothing is saved on the system
 but the list of runs opened in the SOLPS-ITER session (session.Recent):
-every start begins from the same state.
+every start begins from the same state. The logo (resources/logo.png) is
+the icon of the program.
 """
 
 import os
 import time
 
 from ..b2plot import backend
-from . import data, runline, session, theme
+from . import data, runline, scaling, session, theme
 from ..qt import QtCore, QtGui, QtWidgets
 from .output import state
 from .output.composer import Composer
 from .tab2d import Tab2D
 
+LOGO = os.path.join(os.path.dirname(__file__), "resources", "logo.png")
 POLL_MS = 20
 POLL_BUDGET = 0.05
 LIVE = ((0, "off"), (10, "every 10 s"), (30, "every 30 s"),
@@ -57,6 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.args = args
         self.settings = SessionSettings()
+        self.setWindowIcon(QtGui.QIcon(LOGO))
         self.recent_runs = session.Recent()
         theme.install_indicators(QtWidgets.QApplication.instance())
         self.setStyleSheet(theme.stylesheet())  # before the widgets exist
@@ -127,6 +130,7 @@ class MainWindow(QtWidgets.QMainWindow):
                  "plot settings (Ctrl+R)", self.reload)):
             b = QtWidgets.QPushButton(text)
             b.setToolTip(tip)
+            b.setProperty("bold", True)
             if slot is not None:
                 b.clicked.connect(lambda *_, f=slot: f())
             row.addWidget(b)
@@ -383,8 +387,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.theme_combo.setCurrentText(name)
         self.setStyleSheet(theme.stylesheet(self._font))
         self.tab2d.apply_theme()
+        scaling.restyle_all()           # the other windows, shown or not
         self._species_line()
-        if self.composer.isVisible():
+        if self.composer.snaps:
             self.composer._changed()
 
     # ------------------------------------------------------------ geometry
@@ -468,6 +473,7 @@ def main(args):
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(
         ["b2plot_gui"])
     app.setApplicationName("b2plot_gui")
+    app.setWindowIcon(QtGui.QIcon(LOGO))        # the icon of the program
     win = MainWindow(args)
     win.show()
     if session.is_run(args.rundir):

@@ -1,7 +1,8 @@
-"""Time group of the 2D quantity panel: final state or movie frames
-(b2movies.nc, eirenemovies.nc, b2tallies.nc), one frame, the means b2plot
-computes over a range, a rolling window or consecutive blocks of frames,
-the standard deviation over a range, each minus a reference."""
+"""Tabs at the top of the 2D quantity panel: Final state or Run movies
+(b2movies.nc, eirenemovies.nc, b2tallies.nc); with the movies, one frame,
+the means b2plot computes over a range, a rolling window or consecutive
+blocks of frames, the standard deviation over a range, each minus a
+reference."""
 
 from ...qt import QtCore, QtWidgets, Qt, Signal
 
@@ -14,24 +15,37 @@ MINUS = [("nothing", None), ("the first frame", "first"),
 RANGE = ("range", "std")            # modes over the frames first to last
 
 
-class TimeBox(QtWidgets.QGroupBox):
-    """Source of the plotted data and the movie frames of the plot."""
+TABS = (("Final state", "The final state of the run (b2fstate)"),
+        ("Run movies", "The movie frames of the run: b2movies.nc, "
+         "eirenemovies.nc and b2tallies.nc of the run directory"))
+
+
+class TimeBox(QtWidgets.QWidget):
+    """Source of the plotted data (the tabs, source: placed by the 2D tab
+    over the scrolled panel, so that they never scroll away) and, with the
+    movies, the frames of the plot."""
 
     source_changed = Signal()       # final state or movie frames
     frames_changed = Signal()       # frames of the movie plot
     export_frames = Signal()
 
     def __init__(self, parent=None):
-        super().__init__("Time", parent)
+        super().__init__(parent)
         self.times = {}                 # file -> frame times (s)
         self.file = 1                   # file of the quantity shown
         self.ready = lambda: True       # plot of the frame drawn
-        form = QtWidgets.QFormLayout(self)
-        self.source = QtWidgets.QComboBox()
-        self.source.addItem("Final state (b2fstate)", False)
-        self.source.addItem("Movie frames", True)
-        self.source.setToolTip("Movie frames: b2movies.nc, eirenemovies.nc "
-                               "and b2tallies.nc of the run directory")
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.source = QtWidgets.QTabBar()
+        self.source.setExpanding(True)
+        self.source.setDrawBase(True)
+        for i, (text, tip) in enumerate(TABS):
+            self.source.addTab(text)
+            self.source.setTabToolTip(i, tip)
+        self.movie_part = QtWidgets.QWidget()
+        lay.addWidget(self.movie_part)
+        form = QtWidgets.QFormLayout(self.movie_part)
+        form.setContentsMargins(0, 4, 0, 0)
         self.mode = QtWidgets.QComboBox()
         for text, key in MODES:
             self.mode.addItem(text, key)
@@ -82,7 +96,6 @@ class TimeBox(QtWidgets.QGroupBox):
             for w in widgets:
                 box.addWidget(w)
             return box
-        form.addRow("Data", self.source)
         form.addRow("Show", self.mode)
         form.addRow("Minus", self.minus)
         form.addRow("Position", row(self.slider, self.pos))
@@ -94,7 +107,7 @@ class TimeBox(QtWidgets.QGroupBox):
         self.form = form
         self._timer = QtCore.QTimer(self)
         self._timer.timeout.connect(self._tick)
-        self.source.currentIndexChanged.connect(self._source_changed)
+        self.source.currentChanged.connect(self._source_changed)
         self.mode.currentIndexChanged.connect(lambda *_: self._layout())
         self.minus.currentIndexChanged.connect(lambda *_: self._layout())
         self.slider.valueChanged.connect(self.pos.setValue)
@@ -115,8 +128,11 @@ class TimeBox(QtWidgets.QGroupBox):
         self.source.blockSignals(True)
         self.source.setCurrentIndex(0)
         self.source.blockSignals(False)
-        item = self.source.model().item(1)
-        item.setEnabled(bool(self.times))
+        self.source.setTabEnabled(1, bool(self.times))
+        self.source.setTabToolTip(1, TABS[1][1] if self.times else
+                                  "No movie files (b2movies.nc, "
+                                  "eirenemovies.nc, b2tallies.nc) in the run "
+                                  "directory")
         self.file = min(self.times) if self.times else 1
         nt = self.nt()
         for s in (self.first, self.last):
@@ -133,7 +149,7 @@ class TimeBox(QtWidgets.QGroupBox):
         self._layout(emit=False)
 
     def movie(self):
-        return bool(self.source.currentData()) and bool(self.times)
+        return self.source.currentIndex() == 1 and bool(self.times)
 
     def key(self):
         return self.mode.currentData()
@@ -235,12 +251,11 @@ class TimeBox(QtWidgets.QGroupBox):
     def _layout(self, emit=True):
         movie = self.movie()
         key = self.key()
-        for i in range(1, 8):
-            self.form.setRowVisible(i, movie)
+        self.movie_part.setVisible(movie)
         if movie:
-            self.form.setRowVisible(3, key not in RANGE)
-            self.form.setRowVisible(4, key in RANGE)
-            self.form.setRowVisible(5, key in ("rolling", "batch"))
+            self.form.setRowVisible(2, key not in RANGE)
+            self.form.setRowVisible(3, key in RANGE)
+            self.form.setRowVisible(4, key in ("rolling", "batch"))
             self.align.setVisible(key == "rolling")
             self.play.setEnabled(key not in RANGE)
             lo, hi = self._span()
