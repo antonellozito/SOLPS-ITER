@@ -35,7 +35,6 @@ LAYERS = {
     "separatrices": ("Separatrices", LayerStyle(True, "#d62728", 1.2)),
     "opoints": ("O-points", LayerStyle(False, "#d62728", 8.0)),
     "xpoints": ("X-points", LayerStyle(False, "#d62728", 8.0)),
-    "boundary": ("Grid boundary", LayerStyle(False, "#1f3b8c", 0.8)),
     "flux": ("Flux surfaces",
              LayerStyle(False, "#2ca02c", 0.6, ":", 1.0,
                         "0.90 0.95 1.00 1.02 1.04 1.06", rho=True)),
@@ -44,7 +43,7 @@ LAYERS = {
 }
 TRAJECTORIES = LayerStyle(False, "#000000", 0.6)   # styled in their box
 LAYER_KEYS = tuple(LAYERS) + ("trajectories",)
-ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2, "boundary": 3.3,
+ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2,
           "structure": 3.45, "separatrices": 3.5, "midplanes": 3.52,
           "targets": 3.55, "opoints": 3.6, "xpoints": 3.6,
           "trajectories": 3.75}

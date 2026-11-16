@@ -36,21 +36,24 @@ class _Box(QtWidgets.QGroupBox):
 
 
 class ColourBox(_Box):
-    """Colormap, scale, range, factor, colour bar and cell edges."""
+    """Colormap (reversed or not), scale and range."""
 
     def __init__(self, parent=None):
         super().__init__("Colour scale", parent)
-        cf = QtWidgets.QFormLayout(self)
-        row = QtWidgets.QHBoxLayout()
+        lay = QtWidgets.QVBoxLayout(self)
+        row = QtWidgets.QHBoxLayout()   # colormap, reversed, scale
         self.cmap = CmapChooser("turbo")
+        self.cmap.setToolTip("Colour map")
         self.reverse = QtWidgets.QCheckBox("reversed")
-        row.addWidget(self.cmap, 1)
-        row.addWidget(self.reverse)
-        cf.addRow("Colormap", row)
         self.scale = QtWidgets.QComboBox()
         self.scale.addItems(["linear", "log", "symlog"])
-        cf.addRow("Scale", self.scale)
-        row = QtWidgets.QHBoxLayout()
+        self.scale.setToolTip("Scale: linear, logarithmic or symmetric "
+                              "logarithmic")
+        row.addWidget(self.cmap, 1)
+        row.addWidget(self.reverse)
+        row.addWidget(self.scale)
+        lay.addLayout(row)
+        row = QtWidgets.QHBoxLayout()   # range
         self.auto = QtWidgets.QCheckBox("auto")
         self.auto.setChecked(True)
         self.vmin = QtWidgets.QLineEdit()
@@ -60,56 +63,18 @@ class ColourBox(_Box):
             w.setValidator(Number())
             w.setEnabled(False)
             w.editingFinished.connect(self._emit)
+        row.addWidget(QtWidgets.QLabel("Range"))
         row.addWidget(self.auto)
         row.addWidget(self.vmin, 1)
         row.addWidget(self.vmax, 1)
-        cf.addRow("Range", row)
-        row = QtWidgets.QHBoxLayout()
-        self.factor = QtWidgets.QLineEdit("1")
-        self.factor.setValidator(Number())
-        self.factor.setToolTip("Values multiplied by this factor (b2plot "
-                               "rm*, rem*)")
-        self.factor.editingFinished.connect(self._emit)
-        self.decades = QtWidgets.QSpinBox()
-        self.decades.setRange(0, 30)
-        self.decades.setSpecialValueText("all")
-        self.decades.setToolTip("Log scale: decades shown below the "
-                                "maximum")
-        self.decades.setKeyboardTracking(False)
-        row.addWidget(self.factor, 1)
-        row.addWidget(QtWidgets.QLabel("decades"))
-        row.addWidget(self.decades)
-        cf.addRow("Factor", row)
-        row = QtWidgets.QHBoxLayout()
-        self.colorbar = QtWidgets.QCheckBox("colour bar")
-        self.colorbar.setChecked(True)
-        self.edges = QtWidgets.QCheckBox("cell edges")
-        row.addWidget(self.colorbar)
-        row.addWidget(self.edges)
-        cf.addRow(row)
-        row = QtWidgets.QHBoxLayout()
-        self.bw = QtWidgets.QCheckBox("black and white")
-        self.bw.setToolTip("Grey patches, hatched filled contours, black "
-                           "lines (b2plot bw)")
-        self.cell_values = QtWidgets.QCheckBox("values in cells")
-        self.cell_values.setToolTip("Values written in the cells when at "
-                                    "most 400 are in the view")
-        row.addWidget(self.bw)
-        row.addWidget(self.cell_values)
-        cf.addRow(row)
-        self._watch((self.cmap, self.scale), (self.reverse, self.colorbar,
-                                              self.edges, self.bw,
-                                              self.cell_values),
-                    (self.decades,))
+        lay.addLayout(row)
+        self._watch((self.cmap, self.scale), (self.reverse,))
         self.auto.toggled.connect(self._auto_toggled)
 
     def _auto_toggled(self, on):
         self.vmin.setEnabled(not on)
         self.vmax.setEnabled(not on)
         self._emit()
-
-    def factor_value(self):
-        return _number(self.factor.text(), 1.0)
 
     def set_range(self, lo, hi):
         """Show the automatic range in the min and max boxes."""
@@ -122,11 +87,7 @@ class ColourBox(_Box):
                     reverse=self.reverse.isChecked(),
                     scale=self.scale.currentText(), auto=self.auto.isChecked(),
                     vmin=_number(self.vmin.text(), 0.0),
-                    vmax=_number(self.vmax.text(), 1.0),
-                    colorbar=self.colorbar.isChecked(),
-                    edges=self.edges.isChecked(),
-                    decades=self.decades.value(), bw=self.bw.isChecked(),
-                    cell_values=self.cell_values.isChecked())
+                    vmax=_number(self.vmax.text(), 1.0))
 
 
 class LinesBox(_Box):
@@ -172,29 +133,36 @@ class ArrowsBox(_Box):
 
     def __init__(self, parent=None):
         super().__init__("Arrows", parent)
-        af = QtWidgets.QFormLayout(self)
-        self.normalize = QtWidgets.QCheckBox("same length for all")
-        af.addRow(self.normalize)
+        grid = QtWidgets.QGridLayout(self)
+        self.normalize = QtWidgets.QCheckBox("same length")
+        self.normalize.setToolTip("The same length for all arrows")
         self.arrow_length = spin(0.0, 10.0, 0.005, 0.0, 3,
                                  "Arrow length in m (0: automatic) for the "
                                  "98th percentile of the magnitudes; longer "
                                  "arrows are capped at 1.5 times")
-        af.addRow("Length (m)", self.arrow_length)
         self.arrow_width = spin(0.1, 10.0, 0.1, 1.0, tip="Relative width")
-        af.addRow("Width", self.arrow_width)
         self.every = QtWidgets.QSpinBox()
         self.every.setRange(0, 1000)
         self.every.setSpecialValueText("auto")
         self.every.setKeyboardTracking(False)
-        af.addRow("One arrow every", self.every)
-        row = QtWidgets.QHBoxLayout()
+        self.every.setToolTip("One arrow every so many cells (auto: as "
+                              "many as fit the view)")
         self.by_magnitude = QtWidgets.QCheckBox("colour by magnitude")
         self.by_magnitude.setChecked(True)
         self.arrow_color = ColorButton("#000000")
+        length = QtWidgets.QLabel("Length")
+        length.setToolTip("Arrow length in m (0: automatic)")
+        for c, w in enumerate((length, self.arrow_length,
+                               QtWidgets.QLabel("Width"), self.arrow_width)):
+            grid.addWidget(w, 0, c)
+        grid.addWidget(QtWidgets.QLabel("Every"), 1, 0)
+        grid.addWidget(self.every, 1, 1)
+        grid.addWidget(self.normalize, 1, 2, 1, 2)
+        row = QtWidgets.QHBoxLayout()
         row.addWidget(self.by_magnitude)
         row.addWidget(self.arrow_color)
         row.addStretch(1)
-        af.addRow(row)
+        grid.addLayout(row, 2, 0, 1, 4)
         self._watch((), (self.normalize, self.by_magnitude),
                     (self.every, self.arrow_length, self.arrow_width),
                     (self.arrow_color,))
@@ -219,21 +187,29 @@ class StreamBox(_Box):
         super().__init__("Streamlines", parent)
         sf = QtWidgets.QFormLayout(self)
         self.density = spin(0.2, 10.0, 0.1, 1.5, tip="Density")
-        sf.addRow("Density", self.density)
-        row = QtWidgets.QHBoxLayout()
-        self.stream_width = WidthChooser(0.8)
-        self.stream_style = style_combo("-")
-        self.stream_color = ColorButton("#1f77b4")
-        row.addWidget(self.stream_width)
-        row.addWidget(self.stream_style)
-        row.addWidget(self.stream_color)
-        sf.addRow("Line", row)
         self.num_arrows = QtWidgets.QSpinBox()
         self.num_arrows.setRange(1, 20)
         self.num_arrows.setEnabled(NUM_ARROWS)
         self.num_arrows.setToolTip("Arrows along each streamline" + (
             "" if NUM_ARROWS else " (needs matplotlib 3.10)"))
-        sf.addRow("Arrows per line", self.num_arrows)
+        row = QtWidgets.QHBoxLayout()   # density, arrows per line
+        row.addWidget(self.density)
+        arrows = QtWidgets.QLabel("Arrows")
+        arrows.setToolTip(self.num_arrows.toolTip())
+        row.addWidget(arrows)
+        row.addWidget(self.num_arrows)
+        row.addStretch(1)
+        sf.addRow("Density", row)
+        row = QtWidgets.QHBoxLayout()
+        self.stream_width = WidthChooser(0.8)
+        self.stream_style = style_combo("-")
+        self.stream_color = ColorButton("#1f77b4")
+        self.markers = QtWidgets.QCheckBox("markers")
+        self.markers.setToolTip("Red circles at the seeds")
+        row.addWidget(self.stream_width)
+        row.addWidget(self.stream_style)
+        row.addWidget(self.stream_color)
+        sf.addRow("Line", row)
         row = QtWidgets.QHBoxLayout()
         self.seed_kind = QtWidgets.QComboBox()
         for text, key in SEEDS:
@@ -247,6 +223,7 @@ class StreamBox(_Box):
         self.nseeds.valueChanged.connect(lambda *_: self._seed_kind(False))
         row.addWidget(self.seed_kind, 1)
         row.addWidget(self.nseeds)
+        row.addWidget(self.markers)
         sf.addRow("Seeds", row)
         row = QtWidgets.QHBoxLayout()
         self.seed_button = QtWidgets.QPushButton("Draw seed line")
@@ -257,11 +234,8 @@ class StreamBox(_Box):
             lambda on: self.seed_line.emit(bool(on)))
         self.clear_seeds = QtWidgets.QPushButton("Clear")
         self.clear_seeds.clicked.connect(lambda *_: self.set_seeds([]))
-        self.markers = QtWidgets.QCheckBox("markers")
-        self.markers.setToolTip("Red circles at the seeds")
         row.addWidget(self.seed_button)
         row.addWidget(self.clear_seeds)
-        row.addWidget(self.markers)
         row.addStretch(1)
         sf.addRow(row)
         self.seeds = []

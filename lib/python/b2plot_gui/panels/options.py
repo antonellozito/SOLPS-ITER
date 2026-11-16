@@ -1,5 +1,5 @@
-"""Option groups of the 2D quantity panel: contour levels, the cells shown
-and the labels."""
+"""Option groups of the 2D quantity panel: contour levels, the volume
+regions shown and the labels."""
 
 import numpy as np
 
@@ -11,7 +11,6 @@ from .layers import ColorButton, spin
 LEVEL_MODES = [("Number of levels", "number"), ("Step", "step"),
                ("List of values", "list"),
                ("Proportion (b2plot clvp)", "proportion")]
-STANDARD_LABEL = "${HOST} ${RUN} `date` T=${TIME}"     # b2plot stdl
 
 
 def _row(*widgets, stretch=True):
@@ -96,98 +95,61 @@ class LevelsBox(QtWidgets.QGroupBox):
 
 
 class CellsBox(QtWidgets.QGroupBox):
-    """B2.5 cells shown: index intervals on classical grids and regions."""
+    """B2.5 cells shown: the volume regions checked in a menu (all at
+    first); the button says which."""
 
     changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Cells shown", parent)
-        self.form = QtWidgets.QFormLayout(self)
-        self.spins = []
-        for _ in range(4):
-            s = QtWidgets.QSpinBox()
-            s.setKeyboardTracking(False)
-            s.valueChanged.connect(lambda *_: self.changed.emit())
-            self.spins.append(s)
-        self.form.addRow("ix from, to", _row(*self.spins[:2]))
-        self.form.addRow("iy from, to", _row(*self.spins[2:]))
-        self.regions = QtWidgets.QWidget()
-        self.region_layout = QtWidgets.QHBoxLayout(self.regions)
-        self.region_layout.setContentsMargins(0, 0, 0, 0)
-        self.form.addRow("Regions", self.regions)
-        self.where = QtWidgets.QComboBox()
-        self.where.setToolTip("Cells where a derived quantity (a mask, e.g. "
-                              "te > 10, made with the Calculator) is "
-                              "positive")
-        self.where.currentIndexChanged.connect(lambda *_: self.changed.emit())
-        self.form.addRow("Only where", self.where)
+        form = QtWidgets.QFormLayout(self)
+        self.button = QtWidgets.QToolButton()
+        self.button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.button.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                  QtWidgets.QSizePolicy.Fixed)
+        self.button.setToolTip("The volume regions whose cells are shown")
+        self.menu = QtWidgets.QMenu(self.button)
+        self.button.setMenu(self.menu)
+        form.addRow("Volume regions", self.button)
         self.checks = []
-        self.full = None
 
     def set_geometry(self, g):
-        """Index ranges and regions of the run, all shown."""
-        for c in self.checks:
-            c.deleteLater()
+        """The volume regions of the run, all shown."""
+        self.menu.clear()
         self.checks = []
         for reg, n in zip(*np.unique(g.region[g.visible],
                                      return_counts=True)):
-            c = QtWidgets.QCheckBox(str(int(reg)))
-            c.setToolTip("Region %d: %d cells" % (reg, n))
+            c = QtWidgets.QCheckBox("Region %d (%d cells)" % (reg, n))
+            c.region = int(reg)
             c.setChecked(True)
-            c.toggled.connect(lambda *_: self.changed.emit())
-            self.region_layout.addWidget(c)
+            c.toggled.connect(self._toggled)
+            act = QtWidgets.QWidgetAction(self.menu)  # the menu stays open
+            act.setDefaultWidget(c)
+            self.menu.addAction(act)
             self.checks.append(c)
-        self.region_layout.addStretch(1)
-        classical = bool(g.classical and (g.ix >= 0).any())
-        self.form.setRowVisible(0, classical)
-        self.form.setRowVisible(1, classical)
-        self.full = None
-        if classical:
-            ix, iy = g.ix[g.visible], g.iy[g.visible]
-            self.full = (int(ix.min()), int(ix.max()), int(iy.min()),
-                         int(iy.max()))
-            for s, (lo, hi), v in zip(self.spins,
-                                      [self.full[:2]] * 2 + [self.full[2:]]
-                                      * 2, self.full):
-                s.blockSignals(True)
-                s.setRange(lo, hi)
-                s.setValue(v)
-                s.blockSignals(False)
+        self._label()
 
-    def set_conditions(self, quantities):
-        """Derived B2.5 quantities offered as masks (keeps the choice)."""
-        old = self.where.currentText()
-        self.where.blockSignals(True)
-        self.where.clear()
-        self.where.addItem("all cells", None)
-        for q in quantities:
-            self.where.addItem(q.label, q)
-        self.where.setCurrentIndex(max(self.where.findText(old), 0))
-        self.where.blockSignals(False)
+    def _toggled(self, *_):
+        self._label()
+        self.changed.emit()
 
-    def wanted(self):
-        """[("mask", Quantity)] when a mask is chosen."""
-        q = self.where.currentData()
-        return [("mask", q)] if q is not None else []
+    def _label(self):
+        on = [c.region for c in self.checks if c.isChecked()]
+        self.button.setText("all" if len(on) == len(self.checks) else
+                            ", ".join(str(r) for r in on) or "none")
 
     def style_fields(self):
-        """ix_range, iy_range and regions, None where nothing is hidden."""
+        """regions, None when all are shown."""
         out = dict(ix_range=None, iy_range=None, regions=None)
-        if self.full is not None:
-            v = tuple(s.value() for s in self.spins)
-            if v[:2] != self.full[:2]:
-                out["ix_range"] = (min(v[:2]), max(v[:2]))
-            if v[2:] != self.full[2:]:
-                out["iy_range"] = (min(v[2:]), max(v[2:]))
         if self.checks and not all(c.isChecked() for c in self.checks):
-            out["regions"] = tuple(int(c.text()) for c in self.checks
+            out["regions"] = tuple(c.region for c in self.checks
                                    if c.isChecked())
         return out
 
 
 class LabelsBox(QtWidgets.QGroupBox):
-    """Texts of the plot (b2plot extl, xlab, ylab, glob, lbsz, bold, noax
-    and xcol); ${NAME} and `date` are expanded as in b2plot."""
+    """Texts of the plot (b2plot xlab, ylab, lbsz, bold, noax and xcol);
+    ${NAME} and `date` are expanded as in b2plot."""
 
     changed = Signal()
 
@@ -195,21 +157,11 @@ class LabelsBox(QtWidgets.QGroupBox):
         super().__init__("Labels", parent)
         form = QtWidgets.QFormLayout(self)
         self.title = QtWidgets.QLineEdit()
-        self.extra = QtWidgets.QLineEdit()
-        self.extra.setPlaceholderText("extra label over the plot")
-        self.standard = QtWidgets.QToolButton()
-        self.standard.setText("Standard")
-        self.standard.setToolTip("Host, run directory, date and time of the "
-                                 "run (b2plot stdl)")
-        self.standard.clicked.connect(lambda *_: self._standard())
         self.xlabel = QtWidgets.QLineEdit()
         self.xlabel.setPlaceholderText("R (m)")
         self.ylabel = QtWidgets.QLineEdit()
         self.ylabel.setPlaceholderText("Z (m)")
-        self.header = QtWidgets.QLineEdit()
-        self.header.setPlaceholderText("global header over the figure")
-        for w in (self.title, self.extra, self.xlabel, self.ylabel,
-                  self.header):
+        for w in (self.title, self.xlabel, self.ylabel):
             w.setToolTip("${NAME}: environment, RUN, HOST or TIME; `date`; "
                          "^{...} and _{...} for super- and subscripts")
             w.setClearButtonEnabled(True)
@@ -220,30 +172,21 @@ class LabelsBox(QtWidgets.QGroupBox):
         self.axes.setChecked(True)
         self.axes.setToolTip("Axes, ticks and axis labels (b2plot noax)")
         self.color = ColorButton("#000000")
-        form.addRow("Title", self.title)
-        form.addRow("Extra", _row(self.extra, self.standard,
-                                  stretch=False))
+        form.addRow("Title", _row(self.title, self.color, stretch=False))
         form.addRow("x label", self.xlabel)
         form.addRow("y label", self.ylabel)
-        form.addRow("Header", self.header)
-        form.addRow("Size", _row(self.size, self.bold, self.axes,
-                                 self.color))
+        form.addRow("Size", _row(self.size, self.bold, self.axes))
         self.size.valueChanged.connect(lambda *_: self.changed.emit())
         for w in (self.bold, self.axes):
             w.toggled.connect(lambda *_: self.changed.emit())
         self.color.changed.connect(lambda *_: self.changed.emit())
-
-    def _standard(self):
-        self.extra.setText(STANDARD_LABEL)
-        self.changed.emit()
 
     def set_title_hint(self, text):
         self.title.setPlaceholderText(text)
 
     def style(self):
         return LabelStyle(
-            title=self.title.text(), extra=self.extra.text(),
-            xlabel=self.xlabel.text(), ylabel=self.ylabel.text(),
-            header=self.header.text(), size=self.size.value(),
+            title=self.title.text(), xlabel=self.xlabel.text(),
+            ylabel=self.ylabel.text(), size=self.size.value(),
             bold=self.bold.isChecked(), axes=self.axes.isChecked(),
             color=self.color.color())

@@ -108,9 +108,7 @@ def restore(tab, st, view=True):
     panel.wanted_species = st.get("species")
     tab._set_quantities()
     ok = panel.select(st.get("quantity") or "te")
-    for b in panel.kind_buttons.buttons():
-        if b.property("kind") == st.get("kind") and b.isEnabled():
-            b.setChecked(True)
+    panel.set_kind(st.get("kind"))
     panel._kind_changed()
     if view and st.get("view"):
         tab.plot.set_view(st["view"])

@@ -1,6 +1,7 @@
-"""2D view: quantity panel, one plot with its commands at its right,
-layers panel, in columns of fixed width (28, 50, 5 and, after 1 % of
-space, 16 % of the window)."""
+"""2D view: quantity panel, one plot with its commands at its right, how
+the plot looks (plot type, colour scale, contours, arrows, streamlines,
+layers, masks, volume regions, labels), in columns of fixed width (28, 50,
+5 and, after 1 % of space, 16 % of the window)."""
 
 import json
 import os
@@ -12,7 +13,7 @@ import numpy as np
 import matplotlib.tri as mtri
 from matplotlib.figure import Figure
 
-from . import catalog, presets, scaling, session, theme
+from . import catalog, presets, runstate, scaling, theme
 from .plot import shapes
 from .plot.canvas import Plot2D
 from .plot.styles import KINDS_FLAT, LAYERS, TRAJECTORIES
@@ -46,17 +47,13 @@ def _scrolled(widget):
 
 
 def movies_of_state(run):
-    """Only the movie files of the run of the present state in run.movies
-    (written within session.SLACK of b2fstate, b2fplasma, as balance.nc);
-    why the others are left out."""
-    why = {}
-    for f, m in run.movies.items():
-        path = m.path if os.path.isfile(m.path) else os.path.join(
-            run.rundir, os.path.basename(m.path))
-        if os.path.isfile(path):
-            why[f] = session.of_state(run.rundir, path)
-    run.movies = {f: m for f, m in run.movies.items() if not why.get(f)}
-    return [w for w in why.values() if w]
+    """Only the movie files of the latest run in run.movies (runstate:
+    with a final state those written with it, as balance.nc; else those
+    written since the start of the run); why the others are left out."""
+    files = runstate.movies(run.rundir, run.state[0])
+    run.movies = {f: m for f, m in run.movies.items()
+                  if not files.get(os.path.basename(m.path), ("", ""))[1]}
+    return [why for _, why in files.values() if why]
 
 
 class Tab2D(TabOutput, QtWidgets.QWidget):
@@ -125,11 +122,12 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.masks = MasksPanel()
         self.mask_keys = []             # the masks drawn
         self.masks.changed.connect(self._masks_changed)
-        right = QtWidgets.QWidget()
+        right = QtWidgets.QWidget()     # how the plot looks
         rl = QtWidgets.QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.addWidget(self.layers)
-        rl.addWidget(self.masks)
+        for w in self.quantity.style_boxes + (self.layers, self.masks) + \
+                self.quantity.lower_boxes:
+            rl.addWidget(w)
         rl.addStretch(1)
         left = QtWidgets.QWidget()      # the tabs stay over the scrolling
         ll = QtWidgets.QVBoxLayout(left)
@@ -195,7 +193,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self._set_available()
         self.translate = catalog.translator(run.catalog)
         stale = movies_of_state(run)
-        self.time_box.set_movies(run.movies, stale)
+        kind, why = run.state
+        self.time_box.set_movies(run.movies, stale, kind == "finished", why)
         self.quantity.cells_box.set_geometry(run.geometry)
         self._set_quantities()
         self._ask_species(run)
@@ -284,14 +283,12 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.movie_quantities = catalog.movie_quantities(self.run.movies,
                                                          derived)
         quantities = self.movie_quantities if self.time_box.movie() else \
-            self.final_quantities
+            self.final_quantities if self.time_box.final() else []
         self.quantity.set_quantities(quantities)
         self.quantity.overlay_box.set_choices(
             [q for q in quantities if q.source in ("vector", "evector")],
             [q for q in quantities if q.source in ("matrix", "eirene")],
             walls=walls)
-        self.quantity.cells_box.set_conditions(
-            [q for q in quantities if q.expr and q.source == "matrix"])
 
     def _derived_specs(self):
         try:
@@ -361,12 +358,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _overlays_needed(self):
         """[(role, Quantity)] of the active overlays (scalar plots only)."""
-        cells = self.quantity.cells_box.wanted() if self.wanted is not None \
-            and self.wanted.source in ("matrix", "vector",
-                                       "equilibrium") else []
         if self.quantity.kind() not in KINDS_FLAT:
-            return cells
-        return self.quantity.overlay_box.wanted() + cells
+            return []
+        return self.quantity.overlay_box.wanted()
 
     def _fetch(self):
         """Ask for the chosen quantity (with the current b2plot operations)
@@ -501,9 +495,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _unit(self):
         unit = split_unit(self.wanted.description)[1] if self.wanted else None
-        factor = self.quantity.factor_value()
-        if factor != 1.0:
-            unit = "%s  (\u00d7 %g)" % (unit or "", factor)
         return unit or None
 
     def _overlay_data(self):
@@ -543,10 +534,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         q = self.wanted
         weight = self.run._head(q.name, None) if q is not None and \
             q.source == "matrix" else ""
-        mask = self.quantity.cells_box.where.currentData()
         self.status.emit("Computing trajectories\u2026")
-        self.request.emit(("traj", q, (box.words(weight, self.run._head(
-            mask.name, None) if mask is not None else ""),), None))
+        self.request.emit(("traj", q, (box.words(weight, ""),), None))
 
     def _show_trajectories(self, seg):
         if seg is None or not len(seg):
@@ -697,10 +686,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.toolbar.push_current()
 
     def _view_moved(self):
-        """Arrows, streamlines and cell values follow zoom and pan."""
+        """Arrows and streamlines follow zoom and pan."""
         if (self.data is not None and hasattr(self.data, "vr")) or any(
-                r.startswith("arrows") for r in self.odata) or \
-                self.quantity.colour.cell_values.isChecked():
+                r.startswith("arrows") for r in self.odata):
             self._vector_timer.start()
 
     def _redraw_vectors(self):

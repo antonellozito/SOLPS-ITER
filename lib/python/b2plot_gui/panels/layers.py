@@ -47,8 +47,13 @@ class ColorButton(QtWidgets.QToolButton):
         k = self.font().pointSizeF() / base if base > 0 else 1.0
         self.setIconSize(QtCore.QSize(round(18 * k), round(14 * k)))
         pix = QtGui.QPixmap(self.iconSize())     # follows the font
-        pix.fill(QtGui.QColor(mcolors.to_hex(theme.rgb(self._color))))
+        c = QtGui.QColor(mcolors.to_hex(theme.rgb(self._color)))
+        c.setAlphaF(self.opacity())
+        pix.fill(c)
         self.setIcon(QtGui.QIcon(pix))
+
+    def opacity(self):
+        return 1.0
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -61,6 +66,36 @@ class ColorButton(QtWidgets.QToolButton):
     def _pick(self):
         c = QtWidgets.QColorDialog.getColor(QtGui.QColor(self._color), self)
         if c.isValid():
+            self.set_color(c.name())
+            self.changed.emit(self._color)
+
+
+class LayerColour(ColorButton):
+    """Colour and opacity of a layer: the colour dialog with its opacity
+    (alpha), the swatch as opaque as the layer; the opacity kept in a
+    spin box that is not shown (alpha)."""
+
+    def __init__(self, color, alpha, parent=None):
+        super().__init__(color, parent)
+        self.alpha = alpha
+        self.setToolTip("Colour and opacity")
+        alpha.valueChanged.connect(lambda *_: self._swatch())
+        self._swatch()
+
+    def opacity(self):
+        alpha = getattr(self, "alpha", None)
+        return alpha.value() if alpha is not None else 1.0
+
+    def _pick(self):
+        c = QtGui.QColor(self._color)
+        c.setAlphaF(self.opacity())
+        c = QtWidgets.QColorDialog.getColor(
+            c, self, "Colour and opacity",
+            QtWidgets.QColorDialog.ShowAlphaChannel)
+        if c.isValid():
+            self.alpha.blockSignals(True)
+            self.alpha.setValue(max(c.alphaF(), self.alpha.minimum()))
+            self.alpha.blockSignals(False)
             self.set_color(c.name())
             self.changed.emit(self._color)
 
@@ -84,12 +119,13 @@ def _narrow(w):
     """A box that shares the room of its column (squeezed with it)."""
     w.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
                     QtWidgets.QSizePolicy.Fixed)
-    w.setMinimumWidth(24)
+    w.setMinimumWidth(18)
 
 
 class LayersPanel(QtWidgets.QGroupBox):
-    """Two lines per overlay: shown (with its name), then colour, width,
-    line style and opacity under the column heads."""
+    """One line per overlay: shown (with its name), colour and opacity,
+    width (or marker size) and line style; the fill of the structure and
+    the levels of the flux surfaces on one more line each."""
 
     changed = Signal(str, object)
 
@@ -97,37 +133,33 @@ class LayersPanel(QtWidgets.QGroupBox):
         super().__init__("Layers", parent)
         self.rows = {}
         grid = QtWidgets.QGridLayout(self)
-        grid.setContentsMargins(6, 6, 6, 6)
-        grid.setHorizontalSpacing(6)
+        grid.setContentsMargins(4, 6, 4, 6)
+        grid.setHorizontalSpacing(4)
         grid.setColumnStretch(2, 1)         # width and style share the room
         grid.setColumnStretch(3, 1)
-        for col, text in enumerate(("", "Colour", "Width", "Style",
-                                    "Opacity")):
-            head = QtWidgets.QLabel(text)
-            head.setProperty("muted", True)
-            grid.addWidget(head, 0, col)
-        r = 1
+        r = 0
         for key, (name, default) in LAYERS.items():
             st = (styles or {}).get(key, default)
             check = QtWidgets.QCheckBox(name)
             check.setChecked(st.visible)
-            color = ColorButton(st.color)
+            alpha = spin(0.05, 1.0, 0.1, st.alpha, tip="Opacity")
+            alpha.setParent(self)           # in the colour dialog
+            alpha.hide()
+            color = LayerColour(st.color, alpha)
             width = SizeChooser(st.width, MARKER_SIZES, "Marker size (pt)",
                                 {"xpoints": "x"}.get(key, "o")) \
                 if key in NO_STYLE else WidthChooser(st.width)
             style = style_combo(st.style)
             for w in (width, style):        # narrow: the glyph is enough
                 _narrow(w)
-            alpha = spin(0.05, 1.0, 0.1, st.alpha, tip="Opacity")
             if key in NO_STYLE:
                 style.setEnabled(False)
             row = dict(check=check, color=color, width=width, style=style,
                        alpha=alpha, levels=None, rho=None,
                        fill_style=None, fill=None, base=st)
-            grid.addWidget(check, r, 0, 1, 5)
-            for c, w in enumerate((color, width, style, alpha), 1):
-                grid.addWidget(w, r + 1, c)
-            r += 2
+            for c, w in enumerate((check, color, width, style)):
+                grid.addWidget(w, r, c)
+            r += 1
             if key == "structure":      # the fill of the closed parts
                 fill = ColorButton(st.fill)
                 fill.setToolTip("Fill colour of the closed parts")
@@ -139,11 +171,11 @@ class LayersPanel(QtWidgets.QGroupBox):
                 fill_style.setToolTip("Fill of the closed parts of the "
                                       "structure: none, full or hatched")
                 _narrow(fill_style)
-                label = QtWidgets.QLabel("fill")
+                label = QtWidgets.QLabel("    fill")
                 label.setProperty("muted", True)
                 grid.addWidget(label, r, 0)
                 grid.addWidget(fill, r, 1)
-                grid.addWidget(fill_style, r, 3)
+                grid.addWidget(fill_style, r, 2, 1, 2)
                 r += 1
                 row.update(fill_style=fill_style, fill=fill)
                 fill_style.currentIndexChanged.connect(
@@ -157,9 +189,11 @@ class LayersPanel(QtWidgets.QGroupBox):
                 rho.addItem("rhop", True)
                 rho.setCurrentIndex(1 if st.rho else 0)
                 _narrow(rho)
-                grid.addWidget(QtWidgets.QLabel("levels"), r, 1)
-                grid.addWidget(levels, r, 2, 1, 2)
-                grid.addWidget(rho, r, 4)
+                label = QtWidgets.QLabel("    levels")
+                label.setProperty("muted", True)
+                grid.addWidget(label, r, 0)
+                grid.addWidget(levels, r, 1, 1, 2)
+                grid.addWidget(rho, r, 3)
                 r += 1
                 row.update(levels=levels, rho=rho)
                 levels.editingFinished.connect(
@@ -222,7 +256,7 @@ def from_dict(d, default):
 MASKS = (("volume", "Volume regions"), ("face", "Face regions"),
          ("topological", "Topological regions"),
          ("labels", "Boundary labels"),
-         ("strata", "Recycling strata labels"))
+         ("strata", "Strata labels"))
 CELL_MASKS = ("volume", "topological")      # filled cells, one at a time
 MASK_MISSING = {"volume": "No b2fgmtry with the unstructured geometry",
                 "face": "No b2fgmtry with the unstructured geometry",
@@ -242,14 +276,54 @@ class MasksPanel(QtWidgets.QGroupBox):
 
     def __init__(self, parent=None):
         super().__init__("Masks", parent)
-        lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(6, 6, 6, 6)
+        self.grid = grid = QtWidgets.QGridLayout(self)
+        grid.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
+        grid.setContentsMargins(6, 9, 6, 13)
+        grid.setHorizontalSpacing(6)
+        space = self.style().layoutSpacing(       # one for every row
+            QtWidgets.QSizePolicy.CheckBox, QtWidgets.QSizePolicy.CheckBox,
+            QtCore.Qt.Vertical)
+        grid.setVerticalSpacing(space if space >= 0 else 6)
         self.checks = {}
         for key, text in MASKS:
             check = QtWidgets.QCheckBox(text)
             check.toggled.connect(lambda on, k=key: self._toggled(k, on))
-            lay.addWidget(check)
             self.checks[key] = check
+        self.two = None
+        self._arrange(True)
+
+    RIGHT = ("labels", "strata")    # the labels in the second column
+
+    def _arrange(self, two):
+        """Regions left and labels right, or all in one column when the
+        two do not fit the width of the column."""
+        if two == self.two:
+            return
+        self.two = two
+        rows = [0, 0]
+        for r in range(len(MASKS) + 1):
+            self.grid.setRowStretch(r, 0)
+        for key, check in self.checks.items():
+            c = int(two and key in self.RIGHT)
+            self.grid.addWidget(check, rows[c], c)
+            rows[c] += 1
+        self.grid.setRowStretch(max(rows), 1)   # the room left under them
+
+    def _width(self, keys):
+        m = self.grid.contentsMargins()
+        return max(self.checks[k].sizeHint().width() for k in keys) + \
+            m.left() + m.right() + 2
+
+    def minimumSizeHint(self):          # one column at least
+        return QtCore.QSize(self._width(self.checks),
+                            super().minimumSizeHint().height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        left = [k for k in self.checks if k not in self.RIGHT]
+        need = self._width(left) + self.grid.horizontalSpacing() + max(
+            self.checks[k].sizeHint().width() for k in self.RIGHT)
+        self._arrange(self.width() >= need)
 
     def _toggled(self, key, on):
         if on:                  # the other mask of the same kind goes off

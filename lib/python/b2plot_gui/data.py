@@ -41,9 +41,11 @@ class Request:
 class Run:
     """One b2pl.exe serving the data of one run directory."""
 
-    def __init__(self, cmd, rundir, record=None):
-        self.backend = backend.Backend(cmd, rundir, record)
+    def __init__(self, cmd, rundir, record=None, cwd=None):
+        """cwd: where b2plot runs (default the run directory)."""
+        self.backend = backend.Backend(cmd, cwd or rundir, record)
         self.rundir = rundir
+        self.state = ("finished", "")   # runstate.state of the run
         self.info = None
         self.catalog = []
         self.geometry = None
