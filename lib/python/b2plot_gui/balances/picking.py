@@ -53,7 +53,7 @@ class ParallelPicking:
         self.tool._draw_candidate(
             [] if s is None else [s.segments[u] for u in
                                   parallel.span_tubes(s, span)],
-            style.UP if which == "up" else style.DOWN)
+            style.colour("up") if which == "up" else style.colour("down"))
 
     def choose(self, s):
         self.picked = s
@@ -127,7 +127,7 @@ class ParallelPicking:
         first, last, _ = parallel.sides(tool.grid, vol, self.up)
         which = tool.mode[5:]
         faces = first if which == "first" else last
-        tool._lines("candidate", tool._segments(faces), style.SOURCE, WIDTH)
+        tool._lines("candidate", tool._segments(faces), style.colour("source"), WIDTH)
         if not faces:
             tool._dot("candidate", parallel.corner(tool.grid, vol, self.up,
                                                    which))
@@ -228,7 +228,7 @@ class RadialPicking:
             return
         tool.candidate = s
         tool._draw_candidate(tool._segments(s.faces) if s else [],
-                             style.UP if which == "inner" else style.DOWN)
+                             style.colour("up") if which == "inner" else style.colour("down"))
 
     def choose(self, s):
         self.first = s
@@ -258,7 +258,7 @@ class RadialPicking:
         """Surface s dragged to: yellow, over the tubes of the volume."""
         keep = set(self.tool.vol.tubes)
         self.tool._draw_candidate([] if s is None else [
-            s.segments[t] for t in s.tubes if t in keep], style.SOURCE)
+            s.segments[t] for t in s.tubes if t in keep], style.colour("source"))
 
     def move_end(self, which, s):
         if s is None:
@@ -294,7 +294,7 @@ class RadialPicking:
         first = tool.mode == "drag-first"
         tool._lines("candidate", tool._segments(
             vol.sides[0] if first else vol.sides[1]),
-            style.UP if first else style.DOWN, WIDTH)
+            style.colour("up") if first else style.colour("down"), WIDTH)
         tool.tab.canvas.draw_idle()
 
     def set_span(self, span):

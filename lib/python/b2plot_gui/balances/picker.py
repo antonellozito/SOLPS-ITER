@@ -2,17 +2,18 @@
 volume (picking.py: its two surfaces, the surfaces nearest to the mouse
 or the end faces of the flux tubes when the mouse is near them; dragging
 its surfaces and its limits), the volume drawn filled with its surfaces,
-the glowing segments of a recycling stratum; and the balance window."""
+the glowing segments of a recycling stratum; and the balance section of
+the Balances tab (section.py)."""
 
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
 
 from .. import theme
 from ...qt import QtWidgets, Qt
-from . import calc, ncfile, strata, style, terms, topology
+from . import calc, ncfile, plots, strata, style, terms, topology
 from .kinds import KINDS
 from .picking import NEAR, PICKINGS, REACH, WIDTH
-from .windows import BalanceWindow, screen_room
+from .section import BalancePage, BalanceSection
 
 ZORDER = 7.0
 FILL = {False: (1.0, 1.0), True: (2.6, 0.45)}   # z-order and opacity of the
@@ -51,18 +52,21 @@ class BalanceTool:
         self.sides = ([], [], [])       # faces to the cells out of it
         self.corners = {}               # side without faces -> its point
         self.candidate = None
-        self.window = None
+        self.section = None             # the balance of the volume
         self.cache = {}                 # face -> Surface
         self._terms = {}
         self.stratum = None
         self.artists = {}
         self._rows = None
         self.xzoom = {}                 # (side, x label) -> x range
+        self.looks = {}                 # (plot title, line) -> its look
         c = tab.canvas
         c.mpl_connect("motion_notify_event", self._motion)
         c.mpl_connect("button_press_event", self._press)
         c.mpl_connect("button_release_event", self._release)
         c.mpl_connect("key_press_event", self._key)
+        self.shown = False              # the Balances tab open
+        self.page = BalancePage(list(self.buttons.values()))
         self.set_run(None)
 
     @property
@@ -74,9 +78,7 @@ class BalanceTool:
     def set_run(self, run):
         """A new run (or reload): nothing picked; the buttons only with a
         balance.nc of this state of the run."""
-        if self.window is not None:
-            self.window.close()
-        self.window = None
+        self._set_section(None)
         self._clear()
         self.run, self.mode = run, None
         self.vol = None
@@ -87,10 +89,13 @@ class BalanceTool:
             self.bf.close()
         self.bf = self.grid = self.strata = self.rc = None
         self.cache, self._terms, self._rows = {}, {}, None
+        self.looks = {}
+        style.reset_colours()
         if run is None:
             self.path, why = None, "No run"
         else:
             self.path, why = ncfile.status(run.rundir)
+        self.why = why                  # no balance.nc of this state
         for key, b in self.buttons.items():
             b.setChecked(False)
             b.setEnabled(self.path is not None)
@@ -136,7 +141,7 @@ class BalanceTool:
 
     def _clicked(self, kind):
         """A balance button: picking a volume of that kind (the volume of
-        the other kind and its window go)."""
+        the other kind and its balance go)."""
         if self._picking() and self.kind == kind:
             self.cancel()
             return
@@ -144,8 +149,6 @@ class BalanceTool:
             self._buttons()
             return
         if kind != self.kind:
-            if self.window is not None:
-                self.window.close()
             self.cancel()
             self.closed()
             self.kind = kind
@@ -161,10 +164,11 @@ class BalanceTool:
             self.name, self.picking.first_name))
 
     def _buttons(self):
-        """The button of the kind being picked pressed, the other not."""
-        picking = self._picking()
+        """The button of the kind being picked or shown pressed, the other
+        not."""
+        on = self._picking() or self.section is not None
         for key, b in self.buttons.items():
-            b.setChecked(picking and self.kind == key)
+            b.setChecked(on and self.kind == key)
 
     def cancel(self):
         """Picking stopped; the volume picked before stays."""
@@ -254,7 +258,7 @@ class BalanceTool:
                 p.choose(self.candidate)
                 self.mode, self.candidate = p.picks[1], None
                 self._remove("candidate")
-                self._lines("picked", p.pending(), style.UP, WIDTH)
+                self._lines("picked", p.pending(), style.colour("up"), WIDTH)
                 self.tab.canvas.draw_idle()
                 self.status(p.chosen_text())
             elif p.complete(self.candidate):
@@ -365,46 +369,38 @@ class BalanceTool:
 
     def zoom(self, side, xlim, source):
         """The x range of the plots of one part of the balance in every
-        window but source (None: the whole plot)."""
+        plot but source (None: the whole plot)."""
         label = source.panel.xlabel if source.panel is not None else ""
         self.xzoom[(side, label)] = xlim
-        w = self.window
-        views = [w.radial, w.poloidal] if w is not None else []
-        d = w.detail if w is not None else None
-        while d is not None and d.isVisible():
-            views.append(d.view)
-            d = d.child
+        sec = self.section
+        views = sec.views() + sec.detail_views() if sec is not None else []
         for v in views:
             if v is not source and v.side == side and v.panel is not None \
                     and v.panel.xlabel == label:     # the same x axis
                 v.set_x(xlim)
 
     def _open(self):
-        """The balance window: at first sized to its content and put at
-        the right of the main window, on its screen."""
-        main = self.tab.window()
-        if self.window is None:
-            self.window = BalanceWindow(self, main)
-            self.window.set_file(self.bf, self.run.psimap is not None)
-            self.window.refresh()
-            self.window.prepare()
-            top = main.frameGeometry()
-            self.window.move(top.x() + top.width() - self.window.width() - 30,
-                             top.y() + 60)
-            screen_room(self.window, main)
-        else:
-            self.window.refresh()
-        self.window.show()
-        self.window.raise_()
+        """The balance of the volume picked in the Balances tab."""
+        if self.section is None:
+            tab = self.tab
+            self._set_section(BalanceSection(self, tab, tab.left_column,
+                                             tab.quantity_area))
+            self.section.set_file(self.bf, self.run.psimap is not None)
+        self.section.refresh()
 
     def _refresh(self):
-        """The balance window again after the volume changed."""
-        if self.window is not None:
-            self.window.refresh()
+        """The balance again after the volume changed."""
+        if self.section is not None:
+            self.section.refresh()
+
+    def _set_section(self, section):
+        self.section = section
+        self.page.set_section(section)
+        self._buttons()
 
     def closed(self):
-        """The balance window was closed: the volume goes."""
-        self.window = None
+        """The volume and its balance go."""
+        self._set_section(None)
         self.vol = None
         self.span, self.sides, self.corners = None, ([], [], []), {}
         for p in self.pickings.values():
@@ -412,6 +408,17 @@ class BalanceTool:
         self.mode = None
         self._buttons()
         self._clear()
+
+    def set_shown(self, on):
+        """The Balances tab open or not: the volume drawn only with it,
+        no picking without it."""
+        self.shown = on
+        if not on:
+            self.cancel()
+        for artists in self.artists.values():
+            for a in artists:
+                a.set_visible(on)
+        self.tab.canvas.draw_idle()
 
     # ---------------------------------------------------------- drawing
     def _remove(self, key):
@@ -437,6 +444,7 @@ class BalanceTool:
                             capstyle="round", joinstyle="round")
         lc.set_path_effects(style.glow(width, color, strong, on_map=True))
         self.tab.plot.ax.add_collection(lc, autolim=False)
+        lc.set_visible(self.shown)
         self.artists[key] = [lc]
 
     def _dot(self, key, point, size=2.4 * WIDTH):
@@ -446,20 +454,21 @@ class BalanceTool:
             return
         line, = self.tab.plot.ax.plot(
             [point[0]], [point[1]], linestyle="none", marker="o",
-            markersize=size, color=theme.rgb(style.SOURCE),
+            markersize=size, color=theme.rgb(style.colour("source")),
             markeredgecolor="white", markeredgewidth=0.8,
             zorder=ZORDER + 0.5)
-        line.set_path_effects(style.glow(0.5 * size, style.SOURCE,
+        line.set_path_effects(style.glow(0.5 * size, style.colour("source"),
                                          on_map=True))
+        line.set_visible(self.shown)
         self.artists.setdefault(key, []).append(line)
 
     def _segments(self, faces):
         faces = np.asarray(list(faces), int)
         return self.grid.vx[self.grid.fv[faces]] if len(faces) else []
 
-    def _draw_candidate(self, segments, color=style.UP):
+    def _draw_candidate(self, segments, color=None):
         """The surface under the mouse (its segments; none: nothing)."""
-        self._lines("candidate", segments, color, 2.4)
+        self._lines("candidate", segments, color or style.colour("up"), 2.4)
         self.tab.canvas.draw_idle()
 
     def _fill(self):
@@ -475,11 +484,33 @@ class BalanceTool:
         rows = self._rows[self.vol.cell]
         z, alpha = FILL[self.tab.plot.data is not None]
         pc = PolyCollection([g.polygons[r] for r in rows if r >= 0],
-                            facecolors=[theme.rgb(style.SOURCE)],
+                            facecolors=[theme.rgb(style.colour("source"))],
                             edgecolors="face", linewidths=0.3, alpha=alpha,
                             zorder=z)
         self.tab.plot.ax.add_collection(pc, autolim=False)
+        pc.set_visible(self.shown)
         self.artists["fill"] = [pc]
+
+    def recolour(self, role, c):
+        """A colour of the total balances changed: both plots and the
+        volume on the 2D plot in it."""
+        style.set_colour(role, c)
+        if self.section is not None:
+            self.section.draw()
+        self._draw_volume()
+
+    def axes_options(self):
+        """Grid and logarithmic y axis of every balance plot (the boxes
+        of the section)."""
+        s = self.section
+        return dict(grid=s.grid.isChecked() if s is not None else True,
+                    logy=s.logy.isChecked() if s is not None else False)
+
+    def end_names(self):
+        """Names of the lines of the flux in and out (whose colours the
+        flux across the volume goes between)."""
+        w = plots.WORDS[self.kind]
+        return [w[k].split(" (")[0].lower() for k in ("inflow", "outflow")]
 
     def restyle(self):
         """The fill again after the quantity shown changed."""
@@ -496,14 +527,14 @@ class BalanceTool:
         v, p = self.vol, self.picking
         pending = p.pending() if self.mode == p.picks[1] else None
         if pending is not None:
-            self._lines("picked", pending, style.UP, WIDTH)
+            self._lines("picked", pending, style.colour("up"), WIDTH)
         elif v is not None:
             self._fill()
-            self._lines("sides", self._segments(p.limits()), style.SOURCE,
+            self._lines("sides", self._segments(p.limits()), style.colour("source"),
                         0.5 * WIDTH)
-            self._lines("out", self._segments(v.ends.outflow), style.DOWN,
+            self._lines("out", self._segments(v.ends.outflow), style.colour("down"),
                         WIDTH)
-            self._lines("in", self._segments(v.ends.inflow), style.UP, WIDTH)
+            self._lines("in", self._segments(v.ends.inflow), style.colour("up"), WIDTH)
             for point in self.corners.values():
                 self._dot("corners", point)
         self.tab.canvas.draw_idle()
@@ -527,14 +558,11 @@ class BalanceTool:
         self.tab.canvas.draw_idle()
 
     def apply_theme(self):
-        """Overlays and windows in the colours of the theme."""
+        """Overlays and the balance in the colours of the theme."""
         stratum = self.stratum
         self._draw_volume()
         if stratum is not None:
             self.stratum = None
             self.highlight_stratum(stratum)
-        if self.window is not None:
-            self.window.apply_theme()
-            d = self.window.detail
-            if d is not None and d.isVisible():
-                d.apply_theme()
+        if self.section is not None:
+            self.section.apply_theme()
