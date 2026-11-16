@@ -25,6 +25,7 @@ from .panels.plotarea import (READOUT, Columns, PlotCommands, Readout,
                               ScaledCanvas)
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel, column_names
+from .panels.timebox import BALANCES
 from .output.actions import TabOutput
 from .output.frames import FrameExport
 from .tools import cellfiles, equilibrium, inspect, regions
@@ -96,6 +97,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.time_box.export_frames.connect(lambda: self.frames.start())
         self.time_box.ready = self._shown
         self.final_quantities, self.movie_quantities = [], []
+        self._tab, self._tab_plot = 0, {}   # the tab open, what each plots
         self.layers = LayersPanel(self._saved_layers())
         self.layers.changed.connect(self._layer_changed)
         for key, st in self.layers.styles().items():
@@ -134,7 +136,11 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         ll.setContentsMargins(6, 6, 6, 0)
         ll.setSpacing(6)                # the panel scrolls apart from them
         ll.addWidget(self.time_box.source)
-        ll.addWidget(_scrolled(self.quantity), 1)
+        self.left_column = left         # the balance extensions start right
+        self.quantity_area = _scrolled(self.quantity)   # of it
+        ll.addWidget(self.quantity_area, 1)
+        self.quantity.page_slot.addWidget(self.balance.page)
+        self.quantity.show_balances(False)
         self.columns = Columns((left, centre, self.commands,
                                 _scrolled(right)), COLUMNS, SPACE)
         for column in (self.quantity, right):  # never scrolled sideways
@@ -196,6 +202,11 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         kind, why = run.state
         self.time_box.set_movies(run.movies, stale,
                                  kind in ("finished", "crashed"), why)
+        self.time_box.set_balances(self.balance.path is not None,
+                                   self.balance.why)
+        self._tab = self.time_box.source.currentIndex()
+        self._tab_plot = {}             # tab -> the quantity plotted there
+        self._balances_shown()
         self.quantity.cells_box.set_geometry(run.geometry)
         self._set_quantities()
         self._ask_species(run)
@@ -308,20 +319,34 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.settings.setValue("derived2d", json.dumps(specs))
         self._source_changed()
 
+    def _balances_shown(self):
+        """The Balances tab: its page in the column instead of the
+        quantities, the volume drawn and picked only there; the chords
+        and statistics drawn on the plot go (their results are kept)."""
+        on = self.time_box.balances()
+        if on and self.tools.section is not None:
+            self.tools.open_section(None)
+        self.quantity.show_balances(on)
+        self.balance.set_shown(on)
+
     def _source_changed(self):
-        """Final state or movie frames: the quantities of that source,
-        the same quantity again where it exists (nothing if nothing was
-        plotted)."""
-        movie = self.time_box.movie()
+        """Another tab: what the tab left plotted goes, the plot of the
+        tab opened comes back (Final state, Run movies: the quantity last
+        plotted there, the layers alone if none; Balances: its volume),
+        with the quantities of its source."""
+        old, new = self._tab, self.time_box.source.currentIndex()
+        self._tab = new
+        if old != BALANCES:
+            self._tab_plot[old] = self.wanted.name if self.wanted else None
+        self._balances_shown()
         self._set_quantities()
         self.odata = {}
-        if self.wanted is None:
+        name = None if new == BALANCES else self._tab_plot.get(new)
+        if name is not None and self.quantity.select(name):
             return
-        name = self.wanted.name
-        if not self.quantity.select(name):
-            self.quantity.unselect()
-            self.status.emit("No %s in the %s" % (name, "movie files" if
-                                                  movie else "final state"))
+        self.quantity.unselect()
+        if self.wanted is not None:
+            self._chosen(None)
 
     def _chosen(self, q):
         """A quantity chosen in the tree, None: nothing plotted (as at the

@@ -19497,8 +19497,12 @@ the commands of the plot (5 \%) and, after 1 \% of space, the layers
 
 The {\bf quantity panel} (left):
 \begin{itemize}
-\item the tabs {\tt Final state} ({\tt b2fstate}) and {\tt Run movies}
-  (the movie frames of the latest run), read by \btwoplot with
+\item the tabs {\tt Final state} ({\tt b2fstate}), {\tt Run movies}
+  and {\tt Balances} (the balances of {\tt balance.nc}, below); what a
+  tab plots is shown only while it is open (the layers always): each tab
+  shows again the quantity last plotted in it, the Balances tab its
+  volume, and opening it closes the {\tt Chords} and {\tt Statistics}
+  sections; the movie frames of the latest run are read by \btwoplot with
   {\bf mvframe} and
   {\bf mvframev}
   (\ref{sec:mvframe}): one frame, the mean over a range of frames, a
@@ -19591,9 +19595,7 @@ box, in groups: {\tt Zoom}, {\tt Unzoom},
 {\tt Rezoom}, {\tt Restore}; {\tt Inspect cell}; {\tt Add to page},
 {\tt Page composer}; {\tt Save plot} (png, jpg, eps, pdf or svg;
 vector or raster content at a resolution; colour space rgb, cmyk or
-gray; light or dark theme), {\tt Export field};
-at the bottom, level with the bottom of the plot box, {\tt Calculate
-parallel balance}. Under the plot box, from its left edge, the readout of
+gray; light or dark theme), {\tt Export field}. Under the plot box, from its left edge, the readout of
 the cursor in one line: $R$, $Z$, $\rho_{pol}$ (with {\tt rzpsi.dat})
 and the value of the quantity shown with its unit in bold. The view
 starts on
@@ -19678,9 +19680,14 @@ over them), dragging moves them. The wheel never changes a menu or a
 number box of the window. The seed line of the streamlines is drawn with
 {\tt Draw seed line} of the streamline options.
 
-The {\bf parallel balance}, only with a {\tt balance.nc} written with
-the {\tt b2fstate} and {\tt b2fplasma} of the run (within ten minutes of
-them), computes the
+The {\bf Balances} tab, right of {\tt Run movies} and only with a
+{\tt balance.nc} written with the {\tt b2fstate} and {\tt b2fplasma} of
+the run (within ten minutes of them), shows the final state on the plot
+and, in the quantity column instead of the quantities, the buttons
+{\tt Parallel fluxes} and {\tt Radial fluxes}, then the balance of the
+volume picked. The volume is drawn and picked only in this tab.
+
+The {\bf parallel balance} ({\tt Parallel fluxes}) computes the
 balances of the scripts of {\tt scripts/Balance} in a volume picked on
 the plot: a click on the upstream surface, then one on the downstream
 surface (the end faces of the flux tubes when the mouse is near them),
@@ -19695,36 +19702,49 @@ quantity), with its upstream surface and its downstream surface and walls
 drawn, and its two sides (yellow; a yellow dot where the two surfaces
 meet); either surface can be dragged along
 the flux tubes, and either side across them to narrow the volume within
-its region. A window
-over the main one, scaling with its size, has the quantity (particles,
+its region. The column then has the quantity (particles,
 momentum and force (the momentum balance per ion, with the viscous
 fluxes as forces) of the species checked, total pressure, electron, ion and total
 heat, total energy, potential; in a coupled run the species B2.5 does not
 solve are greyed out), the area type and end, the radial coordinate
 ($\rho_{pol}$ with {\tt rzpsi.dat}, or the distance from the separatrix
-along the upstream surface), the poloidal distance, the smoothing and the
-residuals, and shows the total radial balance (per flux tube: upstream
-and downstream flux, sources) and the total poloidal balance (per slice
-of the volume, radially integrated, along the flux tube next to the
-separatrix), each with its equation, and the comparison of the B2.5 and
-post-processed residuals. A click on a line opens its parts; a group of
-sources opens its terms, an EIRENE one its strata, and a recycling
-stratum shows its segments on the plot. The mouse wheel zooms a plot
+along the upstream surface), the poloidal distance, the residuals, the
+grid lines (on at first) and a logarithmic $y$ axis (values that are not
+positive left out), the last two for every balance plot, each with its
+label, and under them, in two sections, the total radial
+balance (per flux tube: upstream and downstream flux, sources) and the
+total poloidal balance (per slice of the volume, radially integrated,
+along the flux tube next to the separatrix), each with its equation over
+it and the comparison of the B2.5 and post-processed residuals under it,
+from the left edge of the plot; the plots are as wide as the column,
+their boxes 4:3, as those of the chords and statistics. A click on a line
+opens its parts right of the column, over the 2D plot, the plot box
+level with and as large as the one clicked in, and the line glows while
+they are shown; a click there on a group of sources opens its terms (an
+EIRENE one its strata) over the legend of the parts, the box again as
+large, and a recycling stratum shows its segments on the plot. They take
+the radial coordinate and the poloidal distance of the column, follow
+their plot when the column scrolls, shrink only where the window has no
+room and close with their {\tt \texttimes} (the parts close the terms
+too); another quantity closes them, the other choices update them. A right click on a line (or its
+legend entry) of any of these plots opens a small window with its
+colour, width, style and marker (none or a glyph), kept for that line
+while the run is open; the colours of the total balances are shared by
+both plots and the volume on the 2D plot (flux in: its surface, flux out:
+its surface and the walls, sources: the fill and the sides), and the flux
+across the volume, coloured from the one to the other, has both. The mouse wheel zooms a plot
 (never out of the whole plot) and dragging with the left button moves it;
-the other plots of the same balance follow in $x$. In the windows of the
-parts and of the terms, the radial coordinate (or the poloidal distance,
-as their $x$ axis) and the smoothing are their own, at first those of
-the window the line was clicked in, and {\tt Show total} draws the sum of
-the lines; the equation of the term under the mouse (line or legend
-entry) is shown next to it, simplified from the model equations of B2.5
+the other plots of the same balance follow in $x$. In the plots of the
+parts and of the terms the equation of the term under the mouse (line or
+legend entry) is shown next to it, simplified from the model equations of B2.5
 (a group: the equations of its terms); there is none for boundary
 conditions and recycling, numerics and time derivatives, discretisation
-corrections, residuals and EIRENE. Every
-window saves its plots as
+corrections, residuals and EIRENE. The
+balance and each of these plots save their plots as
 {\tt Save plot} does and exports their values (CSV, text, netCDF,
 HDF5).
 
-The {\bf radial balance}, under it, is the same across the flux surfaces:
+The {\bf radial balance} ({\tt Radial fluxes}) is the same across the flux surfaces:
 a click on the inner flux surface, then one on the outer flux surface,
 outside it in the same region (inner: towards the magnetic axis in the
 core and the SOL, the separatrix side in a PFR). The volume holds the
@@ -19732,7 +19752,7 @@ flux tubes from one to the other over their whole poloidal extent (in
 the core a whole turn from a cut at the primary X-point, the lower one
 with two); its inner surface is drawn blue, its outer surface red, its
 start and end yellow, and they can be dragged as in the parallel
-balance. The window is the same, but for the total pressure and the
+balance. The column is the same, but for the total pressure and the
 force, defined along the field lines only, and the area (none, or the
 contact area of the inner or outer surface): the total radial balance
 (per flux tube) shows the flux across the flux surfaces and the sources

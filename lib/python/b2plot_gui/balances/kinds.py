@@ -15,7 +15,7 @@ from .terms import POLOIDAL, RADIAL
 @dataclass(frozen=True)
 class Kind:
     key: str
-    name: str                       # window title, status messages
+    name: str                       # title, status messages
     button: str                     # text of its button
     tip: str                        # tooltip of its button
     ends_units: str                 # "tubes" or "slices"
@@ -45,19 +45,19 @@ class Kind:
 
 
 PARALLEL = Kind(
-    "parallel", "Parallel balance", "Calculate\nparallel\nbalance",
+    "parallel", "Parallel balance", "Parallel fluxes",
     "Pick the upstream and the downstream surface of a volume on the plot "
     "(both in one region: core, SOL or PFR); the balances of balance.nc "
-    "along the field lines in it open in their own window",
+    "along the field lines in it appear below",
     "tubes", "Radial transport", RADIAL, "flux", True, True,
     (("none", "None"), ("parallel", "Parallel"), ("contact", "Contact")),
     (("down", "Downstream"), ("up", "Upstream")),
     "End of each flux tube whose area divides its fluxes and sources")
 RADIAL_KIND = Kind(
-    "radial", "Radial balance", "Calculate\nradial\nbalance",
+    "radial", "Radial balance", "Radial fluxes",
     "Pick the inner and the outer flux surface of a volume on the plot "
     "(both in one region: core, SOL or PFR); the balances of balance.nc "
-    "across the flux surfaces in it open in their own window",
+    "across the flux surfaces in it appear below",
     "slices", "Poloidal transport", POLOIDAL, "radial", False, False,
     (("none", "None"), ("contact", "Contact")),
     (("outer", "Outer"), ("inner", "Inner")),

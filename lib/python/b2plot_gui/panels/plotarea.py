@@ -212,9 +212,6 @@ class PlotCommands(QtWidgets.QWidget):
                 self.buttons[key] = _button(text, tip, slot)
                 lay.addWidget(self.buttons[key])
         lay.addStretch(1)
-        for key, b in tab.balance.buttons.items():
-            self.buttons[key] = b
-            lay.addWidget(b)
         for b in self.all_buttons():
             b.setProperty("bold", True)
         self._base, self._busy = None, False

@@ -64,6 +64,13 @@ class QuantityPanel(QtWidgets.QWidget):
         lay.setContentsMargins(0, 0, 6, 6)   # the tabs: 6 px over it
         self.time_box = TimeBox()
         lay.addWidget(self.time_box)
+        self.page_slot = QtWidgets.QVBoxLayout()    # the Balances tab
+        self.page_slot.setContentsMargins(0, 0, 0, 0)
+        lay.addLayout(self.page_slot)
+        self.main_part = QtWidgets.QWidget()        # the other tabs
+        column, lay = lay, QtWidgets.QVBoxLayout(self.main_part)
+        lay.setContentsMargins(0, 0, 0, 0)
+        column.addWidget(self.main_part)
 
         self.search = QtWidgets.QLineEdit()
         self.search.setPlaceholderText("Search quantities (te, flux, ...)")
@@ -154,7 +161,7 @@ class QuantityPanel(QtWidgets.QWidget):
         lay.addWidget(self.traj_box)
         self.labels_box = LabelsBox()
         self.labels_box.changed.connect(self._changed)
-        lay.addStretch(1)               # the room left under the boxes
+        column.addStretch(1)            # the room left under the boxes
         # the graphic options, placed in the right column by the 2D tab
         self.style_boxes = (kinds, self.colour, self.levels_box, self.lines,
                             self.arrows, self.streams)
@@ -167,6 +174,14 @@ class QuantityPanel(QtWidgets.QWidget):
         if event.type() in (QtCore.QEvent.FontChange,
                             QtCore.QEvent.StyleChange):
             self._tree_height()
+
+    def show_balances(self, on):
+        """The page of the Balances tab, or what the other tabs show."""
+        self.main_part.setVisible(not on)
+        for i in range(self.page_slot.count()):
+            w = self.page_slot.itemAt(i).widget()
+            if w is not None:
+                w.setVisible(on)
 
     def _tree_height(self):
         """The quantity tree TREE_ROWS rows high, whatever is shown under

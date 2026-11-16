@@ -1,23 +1,24 @@
-"""Parts of the balance windows: a plot with its equation (the line under
-the mouse glows, a click on a line opens what it is made of), the scaling
-of a window with its size as the main window does, the species check
-boxes, and save and export of the plots."""
+"""Parts of the balance section and of its extensions: a plot with its
+equation (the line under the mouse glows, a click on a line opens what it
+is made of), the species check boxes, and save and export of the
+plots."""
 
 import os
 import re
 
+import matplotlib
 import numpy as np
 from matplotlib.figure import Figure
 
 from .. import scaling, theme
 from ..output import printfig
 from ..panels.plotarea import ScaledCanvas
-from ...qt import QtCore, QtWidgets, Qt, Signal
-from . import datafile, plots, style
+from ..tools.figure import BOTTOM, LEFT, PLOT_ASPECT, RIGHT, TOP
+from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
+from . import datafile, look, plots, style
 
-BOX = (420, 315)                    # plot box at first (pixels, 4:3)
-LEFT, RIGHT, TOP, BOTTOM = 80, 18, 34, 54   # around it (pixels)
-LEGEND = 300                        # legend column of a decomposition
+LEGEND = 22.0                       # legend column of a decomposition
+#                                     (font sizes, as the room around the box)
 HOT = 2.2                           # points added to a line under the mouse
 PICK = 6.0                          # pixels from a line that take it
 TIE = 1.5                           # pixels preferring a line that opens more
@@ -56,42 +57,20 @@ def shrinkable(*widgets):
 
 class Text(QtWidgets.QLabel):
     """A text wrapped at a fixed width, always tall enough for all its
-    lines, and for those of the longest of reserve (the texts it may show:
-    its height, and so the plots, does not change with the text)."""
+    lines (and no taller)."""
 
     def __init__(self):
         super().__init__()
         self.setWordWrap(True)
         self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.reserve = ()
-        self._probe, self._room = None, {}
 
     def fit(self):
         self.setMinimumHeight(0)        # else it bounds the height below
-        w = self.maximumWidth()
-        h = self.heightForWidth(w) if self.text() else 0
-        self.setMinimumHeight(max(h, self._reserved(w)))
+        self.setMinimumHeight(self.need(self.maximumWidth()))
 
-    def _reserved(self, w):
-        """Height of the longest text of reserve at width w."""
-        if not self.reserve:
-            return 0
-        m = self.contentsMargins()
-        key = (w, self.font().key(), m.left(), self.reserve)
-        if key not in self._room:
-            if self._probe is None:
-                self._probe = QtWidgets.QLabel()
-                self._probe.setWordWrap(True)
-            p = self._probe
-            p.setTextFormat(self.textFormat())
-            p.setFont(self.font())
-            p.setContentsMargins(m)
-            heights = []
-            for t in self.reserve:
-                p.setText(t)
-                heights.append(p.heightForWidth(w))
-            self._room[key] = max(heights)
-        return self._room[key]
+    def need(self, w):
+        """Height at width w."""
+        return self.heightForWidth(w) if self.text() else 0
 
     def setText(self, text):
         super().setText(text)
@@ -106,89 +85,127 @@ class Text(QtWidgets.QLabel):
 
 class PlotView(QtCore.QObject):
     """An equation (a label) and one plot of a Panel (a canvas), placed
-    by the window; emits clicked(key) for a click on a line (or its legend
-    entry) that opens something, hovered(series or None, global point)
-    for the line under the mouse. Every plot box has the same size at
-    first (BOX, 4:3) and the same margins; a decomposition has the column
-    of its legend at the right. The layout is fixed, so that nothing moves
-    when a line glows. The mouse wheel zooms in and out (never out of the
-    view of the whole plot), dragging with the left button moves the view
-    (inside the whole plot; a press without moving is a click); group.zoom
-    passes the x range to the other plots of the same part of the balance
-    with the same x axis."""
+    by their owner; emits clicked(key) for a click on a line (or its
+    legend entry) that opens something, hovered(series or None, global
+    point) for the line under the mouse. The plot box is 4:3 with the room
+    around it in font sizes (the texts as large as the font of the
+    window), as the figures of the chords and statistics; a decomposition
+    has the column of its legend at the right. follow: the height follows
+    the width (the column), else set_box gives the size. The layout is
+    fixed, so that nothing moves when a line glows. The mouse wheel zooms
+    in and out (never out of the view of the whole plot), dragging with
+    the left button moves the view (inside the whole plot; a press without
+    moving is a click); group.zoom passes the x range to the other plots of
+    the same part of the balance with the same x axis."""
 
     clicked = Signal(object)
     hovered = Signal(object, object)
-    ylabel_left = Signal(float)     # left edge of the y label of the whole
-    #                                 plot (fraction of the canvas width)
 
-    def __init__(self, group, column=False, parent=None):
+    def __init__(self, group, column=False, follow=False, parent=None):
         super().__init__(parent)
         self.group, self.side, self.home = group, "", None
+        self.column, self.follow = column, follow
         self.equation = Text()
         self.equation.setTextFormat(Qt.RichText)
         self.equation.setProperty("muted", True)
         self.below = Text()                 # a text under the plot box
         self.below.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        w = LEFT + BOX[0] + RIGHT + (LEGEND if column else 0)
-        self.text_width = LEFT + BOX[0] + (LEGEND if column else 0)
-        h = TOP + BOX[1] + BOTTOM
-        self.figure = Figure(figsize=(w / 100.0, h / 100.0))
-        self.canvas = ScaledCanvas(self.figure)
-        self.canvas.setFixedSize(w, h)
-        self.size0 = (w, h)
-        self.ax = self.figure.add_axes([LEFT / w, BOTTOM / h, BOX[0] / w,
-                                        BOX[1] / h])
-        self.legend_box = ((LEFT + BOX[0] + RIGHT) / w, (h - TOP) / h,
-                           (LEGEND - RIGHT) / w, (h - TOP) / h) if column \
-            else None
+        self.figure = Figure(figsize=(5.0, 4.0))
+        self.canvas = ScaledCanvas(self.figure, self._resized)
+        if follow:                          # never wider than the column
+            self.canvas.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                                      QtWidgets.QSizePolicy.Fixed)
+            self.canvas.setMinimumWidth(0)
+        self.ax = self.figure.add_axes([0.15, 0.15, 0.7, 0.7])
+        self.legend_box = None
         self.panel, self.items, self.legend, self.hot = None, [], None, None
+        self.pinned = None              # key of the line kept glowing
         self._drag = None
         self.canvas.mpl_connect("motion_notify_event", self._motion)
         self.canvas.mpl_connect("button_press_event", self._press)
         self.canvas.mpl_connect("button_release_event", self._release)
         self.canvas.mpl_connect("figure_leave_event", self._leave)
         self.canvas.mpl_connect("scroll_event", self._scroll)
-        self.canvas.mpl_connect("draw_event", self._drawn)
-        self._measure = False
-        self.scale(1.0)
 
-    def scale(self, k):
-        """The plot at k times its size at first, the equation over its
-        box (and its legend column) and the text under it (as wide as the
-        box)."""
-        self.canvas.setFixedSize(round(self.size0[0] * k),
-                                 round(self.size0[1] * k))
-        for label, width in ((self.equation, self.text_width),
-                             (self.below, LEFT + BOX[0])):
-            label.setContentsMargins(round(LEFT * k), 0, 0, 0)
-            label.setFixedWidth(round(width * k))
-            label.fit()
+    # ------------------------------------------------------------- size
+    def px(self):
+        """Pixels of the font of the window."""
+        return max(QtGui.QFontInfo(self.canvas.font()).pixelSize(), 1)
+
+    def margins(self):
+        """Room left, right (with the legend column), top, bottom of the
+        plot box in pixels."""
+        px = self.px()
+        return (LEFT * px, (RIGHT + (LEGEND if self.column else 0.0)) * px,
+                TOP * px, BOTTOM * px)
+
+    def size_for(self, box):
+        """Canvas size (pixels) of a plot box box pixels wide."""
+        left, right, top, bottom = self.margins()
+        return (round(left + box + right),
+                round(top + bottom + PLOT_ASPECT * box))
+
+    def box_for(self, width, height=None):
+        """Width of the plot box in a canvas of this size (or width)."""
+        left, right, top, bottom = self.margins()
+        box = width - left - right
+        if height is not None:
+            box = min(box, (height - top - bottom) / PLOT_ASPECT)
+        return max(box, 40.0)
+
+    def set_box(self, box):
+        """The canvas for a plot box box pixels wide."""
+        self.canvas.setFixedSize(*self.size_for(box))
+
+    def _resized(self):
+        """The plot for the size of the canvas: its height from the width
+        (follow), the texts as large as the font of the window, the box
+        and the legend column at their place, the texts as wide as the
+        box."""
+        w, h = self.canvas.width(), self.canvas.height()
+        if w <= 0:
+            return
+        if self.follow:
+            need = self.size_for(self.box_for(w))[1]
+            if h != need:
+                self.canvas.setFixedHeight(need)    # resized again
+                return
+        px = self.px()
+        dpi = 72.0 * px / matplotlib.rcParams["font.size"]
+        fig = self.figure
+        fig._original_dpi = dpi
+        fig._set_dpi(dpi * self.canvas.device_pixel_ratio, forward=False)
+        fig.set_size_inches(max(w, 1) / dpi, max(h, 1) / dpi, forward=False)
+        left, right, top, bottom = self.margins()
+        box = self.box_for(w, h)
+        self.ax.set_position([left / w, bottom / h, box / w,
+                              PLOT_ASPECT * box / h])
+        if self.column:
+            x0 = (left + box + RIGHT * px) / w
+            self.legend_box = (x0, (h - top) / h,
+                               (LEGEND - RIGHT) * px / w, (h - top) / h)
+        if self.follow:                 # the texts from the left edge of
+            for label in (self.equation, self.below):   # the canvas
+                label.setContentsMargins(0, 0, 0, 0)
+                label.setMaximumWidth(w)
+                label.fit()
+        if self.panel is not None:
+            self.redraw()
 
     def show_panel(self, panel):
+        panel = look.apply(panel, self.group.looks)    # the looks chosen
         self.panel, self.side = panel, panel.side
         self.equation.setText(panel.equation)
         self.hot = None
         self.hovered.emit(None, None)
-        self.items, self.legend = plots.draw(self.ax, panel, self.legend_box)
+        self.items, self.legend = plots.draw(
+            self.ax, panel, self.legend_box, **self.group.axes_options())
+        for j in range(len(self.items)):
+            if self._pinned(j):
+                self._glow(j, True)
         self.home = (self.ax.get_xlim(), self.ax.get_ylim())
-        self._measure = True            # at the next draw: the whole plot
-        win = self.canvas.window()
-        if isinstance(win, Scaled):     # the text may need more lines
-            win.refit()
         self.set_x(self.group.xzoom.get((self.side, panel.xlabel)))
         self.canvas.draw_idle()
-
-    def _drawn(self, event):
-        """After the first draw of a panel (the whole plot, not zoomed):
-        the left edge of its y label, as a fraction of the canvas width;
-        not after a zoom, so that what is aligned to it stays."""
-        if not self._measure:
-            return
-        self._measure = False
-        box = self.ax.yaxis.label.get_window_extent(event.renderer)
-        width = float(self.figure.bbox.width) or 1.0
-        self.ylabel_left.emit(max(float(box.x0), 0.0) / width)
 
     # --------------------------------------------------------------- zoom
     def _scroll(self, event):
@@ -256,22 +273,40 @@ class PlotView(QtCore.QObject):
         self._set(None)
         self.hovered.emit(None, None)
 
+    def _glow(self, j, on):
+        """Line j glowing and its legend entry highlighted, or not."""
+        art, s = self.items[j]
+        width = s.width + (HOT if on else 0.0)
+        art.set_linewidth(width)
+        art.set_path_effects(style.glow(width, s.color) if on else [])
+        if self.legend is not None:
+            self.legend.get_texts()[j].set_bbox(
+                dict(facecolor=style.line(s.color) if s.color !=
+                     "#000000" else "#888888", alpha=0.3,
+                     edgecolor="none", pad=0.6) if on else None)
+
+    def _pinned(self, j):
+        return self.pinned is not None and self.items[j][1].key == \
+            self.pinned
+
+    def pin(self, key):
+        """The line of key glows while what it opened is shown (None:
+        none)."""
+        old, self.pinned = self.pinned, key
+        for j, (_, s) in enumerate(self.items):
+            if s.key is not None and s.key in (old, key):
+                self._glow(j, j == self.hot or self._pinned(j))
+        self.canvas.draw_idle()
+
     def _set(self, i):
-        """Line i glowing and its legend entry highlighted (None: none)."""
+        """Line i glowing and its legend entry highlighted (None: none);
+        the pinned line glows anyway."""
         if i == self.hot:
             return
         for j, on in ((self.hot, False), (i, True)):
             if j is None or j >= len(self.items):
                 continue
-            art, s = self.items[j]
-            width = s.width + (HOT if on else 0.0)
-            art.set_linewidth(width)
-            art.set_path_effects(style.glow(width, s.color) if on else [])
-            if self.legend is not None:
-                self.legend.get_texts()[j].set_bbox(
-                    dict(facecolor=style.line(s.color) if s.color !=
-                         "#000000" else "#888888", alpha=0.3,
-                         edgecolor="none", pad=0.6) if on else None)
+            self._glow(j, on or self._pinned(j))
         self.hot = i
         key = self.items[i][1].key if i is not None else None
         self.canvas.setCursor(Qt.PointingHandCursor if key is not None
@@ -279,11 +314,35 @@ class PlotView(QtCore.QObject):
         self.canvas.draw_idle()
 
     def _press(self, event):
+        if event.button == 3 and self.home is not None:
+            self._look(event)
+            return
         if event.button != 1 or self.home is None:
             return
         self._drag = dict(x=event.x, y=event.y, hit=self._hit(event),
                           inside=event.inaxes is self.ax, moved=False,
                           xlim=self.ax.get_xlim(), ylim=self.ax.get_ylim())
+
+    def _look(self, event):
+        """Right click on a line or its legend entry: its colour, width,
+        style and marker in a small window at the mouse."""
+        i = self._hit(event)
+        if i is None:
+            return
+        s = self.items[i][1]
+        key = (self.panel.title, s.label)
+
+        def changed(fields):
+            self.group.looks[key] = fields
+            self.redraw()
+        self._set(None)
+        self.hovered.emit(None, None)
+        dpr = getattr(self.canvas, "device_pixel_ratio", 1.0) or 1.0
+        at = self.canvas.mapToGlobal(QtCore.QPoint(
+            round(event.x / dpr), round(self.canvas.height() - event.y / dpr)))
+        self._popup = look.LinePopup(s, changed, self.group.recolour,
+                                     self.group.end_names(), self.canvas)
+        self._popup.show_at(at)
 
     def _pan(self, event):
         """The view moved with the mouse (left button held); False while
@@ -322,56 +381,6 @@ class PlotView(QtCore.QObject):
         i = d["hit"]
         if i is not None and self.items[i][1].key is not None:
             self.clicked.emit(self.items[i][1].key)
-
-
-class _Clicks(QtCore.QObject):
-    """A click in a balance window: the system brings it to the front,
-    then the windows opened from it go over it again (a window already
-    active gets no activation event)."""
-
-    PRESSES = (QtCore.QEvent.MouseButtonPress,
-               QtCore.QEvent.NonClientAreaMouseButtonPress)
-
-    def eventFilter(self, obj, event):
-        if event.type() in self.PRESSES and isinstance(obj,
-                                                       QtWidgets.QWidget):
-            win = obj.window()
-            if isinstance(win, Scaled):
-                QtCore.QTimer.singleShot(0, win, win.raise_opened)
-        return False
-
-
-_CLICKS = []
-
-
-class Scaled(scaling.Scaled):
-    """A window whose content scales with it, as the main window does
-    (scaling.Scaled). It stays over its owner window also when another
-    program is active, and the windows it opened stay over it."""
-
-    def scaled(self):
-        if not _CLICKS:
-            app = QtWidgets.QApplication.instance()
-            _CLICKS.append(_Clicks(app))
-            app.installEventFilter(_CLICKS[0])
-        self.setAttribute(Qt.WA_MacAlwaysShowToolWindow, True)
-        super().scaled()
-
-    def opened(self):
-        """The window this one opened (the next level), or None."""
-        return None
-
-    def event(self, event):
-        if event.type() == QtCore.QEvent.WindowActivate:
-            QtCore.QTimer.singleShot(0, self, self.raise_opened)
-        return super().event(event)
-
-    def raise_opened(self):
-        """The windows opened from this one over it, level by level."""
-        w = self.opened()
-        if w is not None and w.isVisible():
-            w.raise_()
-            w.raise_opened()
 
 
 class SpeciesBox(QtWidgets.QToolButton):
@@ -466,7 +475,8 @@ class SpeciesBox(QtWidgets.QToolButton):
 
 
 class Output:
-    """Save the plots and export the values of a balance window."""
+    """Save the plots and export the values of the balance section or of
+    one of its extensions."""
 
     def panels(self):
         raise NotImplementedError
@@ -474,8 +484,11 @@ class Output:
     def stem(self):
         return "balance"
 
+    def title(self):
+        return self.controller.name
+
     def save_plots(self, path=None, options=None):
-        """Save plot of the panels of the window (side by side);
+        """Save plot of the panels (side by side);
         returns the path written or None."""
         panels = self.panels()
         if not panels:
@@ -500,7 +513,7 @@ class Output:
             fig.set_layout_engine("constrained")
             for k, p in enumerate(panels):
                 plots.draw(fig.add_subplot(1, len(panels), k + 1), p,
-                           marks=False)
+                           marks=False, **self.controller.axes_options())
             note = printfig.save(fig, path, options)
         except (OSError, ValueError, RuntimeError) as err:
             self.status("Cannot save the plots: %s" % err)
@@ -534,7 +547,7 @@ class Output:
                 xnames[name] = re.sub(r"\$\\rho_\\mathrm\{pol\}\$",
                                       "rho poloidal", p.xlabel)
         try:
-            datafile.write(path, self.windowTitle(), tables,
+            datafile.write(path, self.title(), tables,
                            lambda n: xnames.get(n, "x"),
                            self.result_unit(), self.meta())
         except (OSError, ValueError) as err:

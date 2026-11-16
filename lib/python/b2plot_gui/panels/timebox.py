@@ -1,5 +1,6 @@
-"""Tabs at the top of the 2D quantity panel: Final state or Run movies
-(b2movies.nc, eirenemovies.nc, b2tallies.nc); with the movies, one frame,
+"""Tabs at the top of the 2D quantity panel: Final state, Run movies
+(b2movies.nc, eirenemovies.nc, b2tallies.nc) or Balances (balance.nc,
+the final state shown); with the movies, one frame,
 the means b2plot computes over a range, a rolling window or consecutive
 blocks of frames, the standard deviation over a range, each minus a
 reference."""
@@ -17,7 +18,10 @@ RANGE = ("range", "std")            # modes over the frames first to last
 
 TABS = (("Final state", "The final state of the run (b2fstate)"),
         ("Run movies", "The movie frames of the run: b2movies.nc, "
-         "eirenemovies.nc and b2tallies.nc of the run directory"))
+         "eirenemovies.nc and b2tallies.nc of the run directory"),
+        ("Balances", "Parallel and radial balances of volumes picked on "
+         "the plot, from balance.nc (the final state shown)"))
+BALANCES = 2                        # index of the Balances tab
 
 
 class TimeBox(QtWidgets.QWidget):
@@ -120,6 +124,7 @@ class TimeBox(QtWidgets.QWidget):
             lambda v: self._timer.setInterval(int(1000 / v)))
         self._timer.setInterval(250)
         self.set_movies({})
+        self.set_balances(False, "no run")
 
     # ------------------------------------------------------------- state
     def set_movies(self, movies, stale=(), final=True, why=""):
@@ -157,6 +162,16 @@ class TimeBox(QtWidgets.QWidget):
 
     def movie(self):
         return self.source.currentIndex() == 1 and bool(self.times)
+
+    def balances(self):
+        return self.source.currentIndex() == BALANCES
+
+    def set_balances(self, ok, why=""):
+        """The Balances tab only with a balance.nc of this state (else
+        why not in its tooltip)."""
+        self.source.setTabEnabled(BALANCES, ok)
+        self.source.setTabToolTip(BALANCES, TABS[BALANCES][1] if ok else
+                                  "No balances: " + why)
 
     def final(self):
         """The final state of the run can be shown."""
