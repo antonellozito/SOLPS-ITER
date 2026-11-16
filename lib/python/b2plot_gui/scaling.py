@@ -1,18 +1,21 @@
 """Windows whose content scales with their size, as the main window: the
 aspect ratio of the first size is kept and the fonts follow the width;
-and the mouse navigation of a small plot (wheel zoom, drag to pan, never
-out of the whole plot)."""
+the mouse navigation of a small plot (wheel zoom, drag to pan, never
+out of the whole plot); the wheel never changes a menu or a number box
+and scrolls on over a plot; number fields that may be emptied."""
 
+import time
 import weakref
 
 import numpy as np
 
 from . import theme
-from ..qt import QtCore, QtWidgets, Qt
+from ..qt import QtCore, QtGui, QtWidgets, Qt
 
 SMALLEST = 0.6                      # of its first size, a window at least
 _WINDOWS = weakref.WeakSet()        # the scaled windows (theme switch)
 DRAG = 4.0                          # pixels the mouse moves to pan
+WHEEL_GAP = 0.8                     # s between the wheel steps of one scroll
 
 
 class Scaled:
@@ -299,3 +302,62 @@ class Navigator:
         if self._drag is not None and self._drag[4]:
             self.canvas.unsetCursor()
         self._drag = None
+
+
+class Number(QtGui.QDoubleValidator):
+    """A number or nothing: an emptied field reports its change (empty:
+    automatic or the default), as a number typed does."""
+
+    def validate(self, text, pos):
+        if not text.strip():
+            return QtGui.QValidator.Acceptable, text, pos
+        return super().validate(text, pos)
+
+
+class WheelGuard(QtCore.QObject):
+    """The wheel never changes a menu or a number box (the area around
+    them scrolls instead); a plot inside a scrolled area zooms only when
+    the wheel starts over it: while the area scrolls (steps less than
+    WHEEL_GAP apart) it goes on scrolling over the plots it meets."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.scrolled = 0.0             # time of the last step that scrolled
+
+    def eventFilter(self, obj, event):
+        if event.type() != QtCore.QEvent.Wheel or \
+                not isinstance(obj, QtWidgets.QWidget):
+            return False
+        now = time.monotonic()
+        if isinstance(obj, (QtWidgets.QComboBox,
+                            QtWidgets.QAbstractSpinBox)):
+            event.ignore()              # on to the widgets around it
+            return True
+        area = obj.parentWidget()
+        if isinstance(area, QtWidgets.QAbstractScrollArea) and \
+                obj is area.viewport():
+            self.scrolled = now
+            return False
+        if hasattr(obj, "figure") and _scrolled_area(obj) is not None and \
+                now - self.scrolled < WHEEL_GAP:
+            self.scrolled = now
+            event.ignore()              # the area goes on scrolling
+            return True
+        return False
+
+
+def _scrolled_area(w):
+    """The scroll area that w is inside, or None."""
+    w = w.parentWidget()
+    while w is not None:
+        if isinstance(w, QtWidgets.QScrollArea):
+            return w
+        w = w.parentWidget()
+    return None
+
+
+def guard_wheel(app):
+    """WheelGuard on the whole application (once)."""
+    if getattr(app, "wheel_guard", None) is None:
+        app.wheel_guard = WheelGuard(app)
+        app.installEventFilter(app.wheel_guard)

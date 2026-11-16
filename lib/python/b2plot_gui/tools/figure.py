@@ -1,0 +1,451 @@
+"""A small figure of the tools (line profiles, chord sums, histograms) in
+the colours of the theme, with its options under it (colour, style,
+width and markers of each curve, bins, x axis of a profile, axis limits,
+logarithmic axes, grid): a 4:3 plot box, wheel zoom and drag, Save plot
+and Export (CSV) of the rows behind it; and the ends of a chord (R, Z and
+the toroidal angle)."""
+
+import csv
+import os
+import re
+
+import matplotlib
+from matplotlib import colormaps, colors as mcolors
+from matplotlib.figure import Figure
+
+from .. import theme
+from ..output import printfig
+from ..panels.glyphs import CmapChooser, LineStyleChooser, MarkerChooser, \
+    WidthChooser
+from ..panels.layers import ColorButton
+from ..panels.plotarea import ScaledCanvas
+from ..scaling import Navigator, Number, squeezable
+from ...qt import QtCore, QtGui, QtWidgets
+
+PLOT_ASPECT = 0.75                  # height / width of the plot box (4:3)
+BOX = (0.18, 0.13, 0.78)            # left, bottom, width (of the figure)
+XAXES = (("distance along the line", "s"), ("R", "R"), ("Z", "Z"),
+         ("rho poloidal", "rhop"),
+         ("distance from the separatrix", "dssep"))
+HIST = "#4c72b0"                    # bars of a histogram at first
+FAMILY = {"frames": "line", "sumframes": "sums"}   # of all the frames
+FRAMES_CMAP = "viridis"             # colours along the frames at first
+OTHER = 0.2                         # width, marker size: frames not shown
+OTHER_ALPHA = 0.6                   # opacity of their lines
+
+
+def main_lines(lines):
+    """The lines of the frame shown (all, without the frames)."""
+    return [ln for ln in lines if getattr(ln, "frame", (0, True))[1]]
+
+
+def _number(edit):
+    try:
+        return float(edit.text())
+    except ValueError:
+        return None
+
+
+class FigureOptions(QtWidgets.QGroupBox):
+    """Options of the small figure: a row per curve (colour, style, width,
+    markers) or the bars of a histogram (colour, bins), then the axes
+    (limits, empty: automatic; logarithmic; grid); for values against the
+    chord number ("sums") only the colour and symbol of the markers and
+    the y axis; with all the frames of a movie ("frames", "sumframes") a
+    colour map along the frames instead of a colour, the frames not
+    shown a fifth as wide (lines, at 60 percent opacity) or as large
+    (markers); changed() after each choice."""
+
+    def __init__(self, changed, parent=None):
+        super().__init__("Plot options", parent)
+        self.changed = changed
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(6, 6, 6, 6)
+        self.grid = QtWidgets.QGridLayout()     # the curves or the bars
+        self.grid.setColumnStretch(5, 1)
+        axes = QtWidgets.QGridLayout()          # the axes, compact
+        axes.setColumnStretch(6, 1)
+        lay.addLayout(self.grid)
+        lay.addLayout(axes)
+        self.curves = []                # (name, colour, style, width, marker)
+        self.bars = ColorButton(HIST)
+        self.bars.changed.connect(lambda *_: changed())
+        self.bins = QtWidgets.QSpinBox()
+        self.bins.setRange(5, 500)
+        self.bins.setValue(30)
+        self.bins.setKeyboardTracking(False)
+        self.bins.setToolTip("Bins of the histogram")
+        self.bins.valueChanged.connect(lambda *_: changed())
+        self.limits = []
+        for _ in range(4):
+            e = QtWidgets.QLineEdit()
+            e.setValidator(Number())        # empty: automatic
+            e.setPlaceholderText("auto")
+            e.editingFinished.connect(lambda: changed())
+            self.limits.append(e)
+        self.logx, self.logy = (QtWidgets.QCheckBox("log x"),
+                                QtWidgets.QCheckBox("log y"))
+        self.show_grid = QtWidgets.QCheckBox("grid")
+        self.show_grid.setChecked(True)
+        for w in (self.logx, self.logy, self.show_grid):
+            w.toggled.connect(lambda *_: changed())
+        self.xrow = []                  # the widgets of the x axis row
+        for i, axis in enumerate("xy"):
+            lo, hi = self.limits[2 * i:2 * i + 2]
+            row = (QtWidgets.QLabel(axis + " from"), lo,
+                   QtWidgets.QLabel("to"), hi, (self.logx, self.logy)[i])
+            for c, w in enumerate(row):
+                axes.addWidget(w, i, c)
+            if axis == "x":
+                self.xrow = list(row)
+        axes.addWidget(self.show_grid, 1, 5)
+        self.xaxis = QtWidgets.QComboBox()      # of a line profile
+        for text, key in XAXES:
+            self.xaxis.addItem(text, key)
+        self.xaxis.setToolTip("The profile as a function of the distance "
+                              "along the line, of R, of Z, of rho poloidal "
+                              "or of the distance along it from the "
+                              "separatrix (the last two only where the "
+                              "profile is a function of them)")
+        self.xaxis.currentIndexChanged.connect(self._xaxis)
+        self.xaxis_label = QtWidgets.QLabel("x axis")
+        axes.addWidget(self.xaxis_label, 2, 0)
+        axes.addWidget(self.xaxis, 2, 1, 1, 3)
+        self.kind = None
+
+    def allow(self, keys):
+        """The x axes offered for this line (the others greyed out; one
+        chosen and no longer offered: the distance along the line)."""
+        model = self.xaxis.model()
+        for i, (_, key) in enumerate(XAXES):
+            model.item(i).setEnabled(key in keys)
+        if self.xaxis.currentData() not in keys:
+            self.xaxis.blockSignals(True)
+            self.xaxis.setCurrentIndex(0)
+            self.xaxis.blockSignals(False)
+
+    def _xaxis(self, *_):
+        """Another x axis: its limits automatic again."""
+        for e in self.limits[:2]:
+            e.clear()
+        self.changed()
+
+    def set_curves(self, kind, lines):
+        """The rows of a figure of this kind ("line", "frames": its lines,
+        Line2D; "hist"; "sums", "sumframes"), kept when the curves are the
+        same; the limits kept between one frame and all frames."""
+        base = FAMILY.get(kind, kind)
+        lines = main_lines(lines)
+        names = [ln.get_label() if not ln.get_label().startswith("_") else
+                 "Profile" for ln in lines] if base == "line" else \
+            ["Markers"] * len(lines[:1]) if base == "sums" else []
+        if kind == self.kind and names == [c[0] for c in self.curves]:
+            return
+        keep = FAMILY.get(self.kind, self.kind) == base and names == [
+            c[0] for c in self.curves]
+        self.kind = kind
+        while self.grid.count():
+            w = self.grid.takeAt(0).widget()
+            if w is not None:
+                w.hide()
+                w.setParent(None)
+                if w not in (self.bars, self.bins):
+                    w.deleteLater()
+        self.curves = []
+        line = base == "line"           # sums: markers only
+        for r, (name, ln) in enumerate(zip(names, lines)):
+            if kind in FAMILY:          # all the frames: a colour map
+                colour = CmapChooser(FRAMES_CMAP, diverging=False)
+                colour.setToolTip("Colours along the frames")
+                colour.currentIndexChanged.connect(
+                    lambda *_: self.changed())
+            else:
+                colour = ColorButton(mcolors.to_hex(ln.get_color()))
+                colour.changed.connect(lambda *_: self.changed())
+            row = (name, colour,
+                   LineStyleChooser(ln.get_linestyle(), with_none=True)
+                   if line else None,
+                   WidthChooser(ln.get_linewidth()) if line else None,
+                   MarkerChooser(str(ln.get_marker())))
+            for w in row[2:]:
+                if w is not None:
+                    w.currentIndexChanged.connect(lambda *_: self.changed())
+            self.grid.addWidget(QtWidgets.QLabel(name), r, 0)
+            for c, w in enumerate([w for w in row[1:] if w is not None], 1):
+                self.grid.addWidget(w, r, c)
+            self.curves.append(row)
+        if kind == "hist":
+            for c, w in enumerate((QtWidgets.QLabel("Bars"), self.bars,
+                                   QtWidgets.QLabel("bins"), self.bins)):
+                self.grid.addWidget(w, 0, c)
+        for i in range(self.grid.count()):
+            self.grid.itemAt(i).widget().show()
+        squeezable(self)                # new rows never widen the column
+        for e in self.limits if not keep else ():
+            e.clear()
+        for w in (self.xaxis_label, self.xaxis):
+            w.setVisible(base == "line")
+        for w in self.xrow + [self.show_grid]:  # sums: the y axis only
+            w.setVisible(base != "sums")
+
+    def apply(self, ax):
+        """The choices on the axes drawn (the curves in order)."""
+        lines = list(ax.lines)
+        if self.kind in FAMILY:         # all the frames
+            size = matplotlib.rcParams["lines.markersize"]
+            for ln in lines:
+                t, shown = getattr(ln, "frame", (1.0, True))
+                row = self.curves[min(getattr(ln, "curve", 0),
+                                      len(self.curves) - 1)]
+                _, cmap, style, width, marker = row
+                f = 1.0 if shown else OTHER
+                ln.set_gid(mcolors.to_hex(colormaps[cmap.name()](t)))
+                if style is not None:
+                    ln.set_linestyle(style.currentData())
+                    ln.set_linewidth(width.value() * f)
+                ln.set_marker(marker.currentData())
+                ln.set_markersize(size * f)
+                ln.set_alpha(None if shown or self.kind != "frames" else
+                             OTHER_ALPHA)
+                ln.set_zorder(2.5 if shown else 2.0)
+            lines = []
+        for (_, colour, style, width, marker), ln in zip(self.curves, lines):
+            ln.set_gid(colour.color())
+            if style is not None:
+                ln.set_linestyle(style.currentData())
+                ln.set_linewidth(width.value())
+            ln.set_marker(marker.currentData())
+        if self.kind == "hist":
+            for p in ax.patches:
+                p.set_gid(self.bars.color())
+        sums = self.kind == "sums"
+        x = "log" if self.logx.isChecked() and not sums else "linear"
+        y = "log" if self.logy.isChecked() else "linear"
+        if ax.get_xscale() != x:        # else the ticks drawn are kept
+            ax.set_xscale(x)
+        if ax.get_yscale() != y:
+            ax.set_yscale(y)
+        x0, x1, y0, y1 = (_number(e) for e in self.limits)
+        if not sums:
+            ax.set_xlim(left=x0, right=x1)
+        ax.set_ylim(bottom=y0, top=y1)
+        if sums or self.show_grid.isChecked():
+            ax.grid(True, alpha=0.3)
+        else:
+            ax.grid(False)
+
+
+class LineEnds(QtWidgets.QGroupBox):
+    """R, Z and the toroidal angle phi (degrees) of the two ends of a line
+    cut; moved(coords) when one is changed."""
+
+    def __init__(self, parent=None):
+        super().__init__("Start/End coordinates", parent)
+        grid = QtWidgets.QGridLayout(self)
+        grid.setContentsMargins(6, 6, 6, 6)
+        grid.setColumnStretch(7, 1)
+        self.moved = None
+        self.edits = []
+        for r, end in enumerate(("Start", "End")):
+            grid.addWidget(QtWidgets.QLabel(end), r, 0)
+            for c, name in enumerate(("R (m)", "Z (m)", "phi (°)")):
+                e = QtWidgets.QLineEdit()
+                e.setValidator(QtGui.QDoubleValidator())
+                e.setToolTip("%s of the %s of the line" % (name, end.lower()))
+                e.editingFinished.connect(self._changed)
+                grid.addWidget(QtWidgets.QLabel(name), r, 2 * c + 1)
+                grid.addWidget(e, r, 2 * c + 2)
+                self.edits.append(e)
+
+    FORMATS = ("%.4f", "%.4f", "%g") * 2
+
+    def set_editable(self, on):
+        for e in self.edits:
+            e.setReadOnly(not on)
+
+    def set(self, coords, moved):
+        """coords: R0, Z0, phi0, R1, Z1, phi1."""
+        self.moved = moved
+        for e, v, fmt in zip(self.edits, coords, self.FORMATS):
+            e.blockSignals(True)
+            e.setText(fmt % v)
+            e.blockSignals(False)
+        self._coords = tuple(float(v) for v in coords)
+
+    def _changed(self):
+        """The values typed; a field not changed keeps its value (not the
+        rounded text)."""
+        values = [old if e.text() == fmt % old else _number(e) for e, old,
+                  fmt in zip(self.edits, self._coords, self.FORMATS)]
+        if None in values or self.moved is None:
+            return
+        if any(abs(a - b) > 1e-12 for a, b in zip(values, self._coords)):
+            self._coords = tuple(values)
+            self.moved(self._coords)
+
+
+
+class FigureView(QtWidgets.QWidget):
+    """The figure (as high as 0.8 times its width, its texts as large as
+    those of the window) and its options; set_figure(draw, ...) shows
+    draw(ax, options)."""
+
+    def __init__(self, settings, parent=None):
+        super().__init__(parent)
+        self.settings = settings
+        self.draw, self.header, self.rows, self.name = None, [], [], "plot"
+        self.figure = Figure(figsize=(5.0, 4.0))
+        self.canvas = ScaledCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+        self.nav = Navigator(self.canvas, self.ax)
+        self.options = FigureOptions(self.redraw)
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(self.canvas)
+        lay.addWidget(self.options)
+        lay.addStretch(1)               # the options never stretched
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.canvas.setFixedHeight(max(round(0.8 * self.width()), 120))
+        self._fit_dpi()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QtCore.QEvent.FontChange,
+                            QtCore.QEvent.StyleChange):
+            self._fit_dpi()
+
+    def _fit_dpi(self):
+        """The texts of the figure as large as those of the window (they
+        follow its font when the window scales), whatever its width."""
+        px = QtGui.QFontInfo(self.font()).pixelSize()
+        dpi = 72.0 * px / matplotlib.rcParams["font.size"]
+        fig, c = self.figure, self.canvas
+        if px <= 0 or abs(fig._original_dpi - dpi) < 0.01:
+            return
+        fig._original_dpi = dpi
+        fig._set_dpi(dpi * c.device_pixel_ratio, forward=False)
+        fig.set_size_inches(max(c.width(), 1) / dpi,
+                            max(c.height(), 1) / dpi, forward=False)
+        if self.draw is not None:       # the zoom kept
+            self.apply_theme()
+
+    def set_figure(self, draw, header, rows, kind="line", logx=False,
+                   name="plot"):
+        """draw(ax, options) makes the figure (kind "line": curves,
+        "hist": a histogram, at first on a logarithmic axis with logx);
+        rows are what Export writes, name the file name offered."""
+        self.draw, self.header, self.rows, self.name = draw, list(header), \
+            list(rows), name
+        self.ax.clear()
+        draw(self.ax, self.options)
+        new = FAMILY.get(kind, kind) != FAMILY.get(self.options.kind,
+                                                   self.options.kind)
+        self.options.set_curves(kind, list(self.ax.lines))
+        if kind == "hist" and new:
+            self.options.logx.blockSignals(True)
+            self.options.logx.setChecked(logx)
+            self.options.logx.blockSignals(False)
+        self.redraw()
+
+    def redraw(self):
+        """The figure again with the options, its whole view the home of
+        the mouse zoom."""
+        if self.draw is None:
+            return
+        self.ax.clear()
+        self.draw(self.ax, self.options)
+        self.options.apply(self.ax)
+        self.ax.set_box_aspect(PLOT_ASPECT)
+        self.apply_theme()
+        self.nav.set_home()
+
+    def apply_theme(self):
+        """The figure in the colours of the theme (each curve and bar in
+        the colour chosen, its gid)."""
+        ax, color = self.ax, theme.text()
+        self.figure.set_facecolor(theme.figure_bg())
+        ax.set_facecolor("#424242" if theme.is_dark() else "#ffffff")
+        ax.tick_params(colors=color, which="both")
+        for item in (ax.xaxis.label, ax.yaxis.label, ax.title):
+            item.set_color(color)
+        for spine in ax.spines.values():
+            spine.set_color(color)
+        lines = list(ax.lines)
+        for a in lines + list(ax.patches):     # gid: the colour chosen
+            line = a in lines
+            if a.get_gid() is None:
+                a.set_gid(mcolors.to_hex(a.get_color() if line else
+                                         a.get_facecolor()))
+            (a.set_color if line else a.set_facecolor)(theme.rgb(a.get_gid()))
+        legend = ax.get_legend()
+        if legend is not None:           # again, with the new line colours
+            legend = ax.legend(fontsize="small")
+            legend.get_frame().set_facecolor(theme.figure_bg())
+            for t in legend.get_texts():
+                t.set_color(color)
+        self._place()
+        self.canvas.draw_idle()
+
+    def _place(self):
+        """The plot box at the same place whatever the labels (4:3, room
+        for the tick labels, the axis labels and the title)."""
+        left, bottom, width = BOX
+        w, h = self.figure.get_size_inches()
+        height = min(PLOT_ASPECT * width * w / max(h, 1e-6),
+                     0.96 - bottom)
+        self.ax.set_position([left, bottom, width, height])
+
+    def save(self, path=None, options=None):
+        """Save plot: the figure as Save plot of the main window does
+        (options dialog and file dialog unless given); the path or None."""
+        if self.draw is None:
+            return None
+        if options is None:
+            dlg = printfig.PrintDialog(theme.is_dark(), self, "Save plot")
+            if dlg.exec() != QtWidgets.QDialog.Accepted:
+                return None
+            options = dlg.options()
+        fmt = options["format"]
+        if path is None:
+            path = self._ask("Save plot", fmt, printfig.FILTERS[fmt])
+            if path is None:
+                return None
+        path = printfig.with_suffix(path, fmt)
+        dark = theme.is_dark()
+        try:
+            theme.set_dark(options.get("theme", theme.name().lower())
+                           == "dark")
+            self.apply_theme()
+            printfig.save(self.figure, path, options)
+        except (OSError, ValueError, RuntimeError):
+            return None
+        finally:                # the figure in the theme of the GUI again
+            theme.set_dark(dark)
+            self.apply_theme()
+        return path
+
+    def export(self, path=None):
+        """The rows as CSV (dialog unless path is given); the path or
+        None."""
+        if not self.rows:
+            return None
+        if path is None:
+            path = self._ask("Export values", "csv", "CSV (*.csv)")
+            if path is None:
+                return None
+        with open(path, "w", newline="") as f:
+            out = csv.writer(f)
+            out.writerow(self.header)
+            out.writerows(self.rows)
+        return path
+
+    def _ask(self, title, ext, filters):
+        folder = self.settings.value("export_dir", os.getcwd())
+        name = re.sub(r"[^A-Za-z0-9_.+-]+", "_", self.name) or "plot"
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, title, os.path.join(folder, name + "." + ext), filters)
+        if path:
+            self.settings.setValue("export_dir", os.path.dirname(path))
+        return path or None

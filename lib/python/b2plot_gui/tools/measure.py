@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.tri as mtri
 from matplotlib.path import Path
 
+from ...b2plot import labels
 from ..plot.scalar import node_values
 
 PER_M = re.compile(r"(?<![A-Za-z])m\^-(\d)")      # in plain units
@@ -22,6 +23,22 @@ def times_m(unit, power):
     if m:
         return (unit[:m.start()] + new + unit[m.end():]).strip(" .") or "1"
     return ("%s %s" % (unit or "", new)).strip()
+
+
+_POWER = re.compile(r"([\^_])(-?[\w.]+)")
+
+
+def math_unit(unit):
+    """Plain unit (m^-3 s^-1) as matplotlib math text: the powers
+    raised."""
+    return labels.tex_to_mathtext(_POWER.sub(r"\1{\2}", unit or ""))
+
+
+def html_unit(unit):
+    """Plain unit as rich text of a label: the powers raised."""
+    text = (unit or "").replace("&", "&amp;").replace("<", "&lt;")
+    return _POWER.sub(lambda m: "<{0}>{1}</{0}>".format(
+        "sup" if m.group(1) == "^" else "sub", m.group(2)), text)
 
 
 def _grid(plot, data):
@@ -66,6 +83,43 @@ def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0)):
     norm = np.maximum(np.hypot(dr, dz), 1e-300)
     return (s, r, z, ph, np.hypot(*vals),
             vals[0] * dz / norm - vals[1] * dr / norm, l)
+
+
+def chord_ends(r, z):
+    """R, Z and toroidal angle (degrees) of the two ends of a straight
+    chord in space from its (R, Z) at equal steps along it (as b2plot sends
+    the chords of the run): R squared is quadratic in the step, its
+    curvature the square of the horizontal length, which with the two radii
+    gives the angle between the ends (the first at 0)."""
+    t = np.linspace(0.0, 1.0, len(r))
+    c = np.polyfit(t, np.asarray(r, float) ** 2, 2)[0]
+    r0, r1 = float(r[0]), float(r[-1])
+    cos = (r0 ** 2 + r1 ** 2 - c) / max(2.0 * r0 * r1, 1e-300)
+    phi = float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
+    return (r0, float(z[0]), 0.0, r1, float(z[-1]),
+            phi if phi > 0.05 else 0.0)  # below: the precision of the points
+
+
+def separatrix_distance(s, rho):
+    """Distance along the line from where it crosses the separatrix (rho
+    poloidal 1), positive outside it; None if rho does not grow or fall
+    all along the line or the line does not cross the separatrix."""
+    ok = np.isfinite(rho)
+    r, d = np.asarray(rho, float)[ok], np.asarray(s, float)[ok]
+    if len(r) < 2 or not (np.all(np.diff(r) > 0) or np.all(np.diff(r) < 0)) \
+            or not r.min() <= 1.0 <= r.max():
+        return None
+    k = np.argsort(r)
+    at = float(np.interp(1.0, r[k], d[k]))
+    return (s - at) if r[-1] > r[0] else (at - s)
+
+
+def single_valued(x, values):
+    """True if x grows or falls all along the samples where both x and the
+    values are known (the values a function of x)."""
+    ok = np.isfinite(x) & np.isfinite(values)
+    d = np.diff(np.asarray(x, float)[ok])
+    return len(d) > 0 and (bool(np.all(d > 0)) or bool(np.all(d < 0)))
 
 
 def line_sums(s, r, values, normal, l=None):

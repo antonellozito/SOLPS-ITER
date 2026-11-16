@@ -3,6 +3,7 @@ layers panel, in columns of fixed width (28, 50, 5 and, after 1 % of
 space, 16 % of the window)."""
 
 import json
+import os
 import re
 import socket
 from dataclasses import replace
@@ -11,7 +12,7 @@ import numpy as np
 import matplotlib.tri as mtri
 from matplotlib.figure import Figure
 
-from . import catalog, presets, scaling, theme
+from . import catalog, presets, scaling, session, theme
 from .plot import shapes
 from .plot.canvas import Plot2D
 from .plot.styles import KINDS_FLAT, LAYERS, TRAJECTORIES
@@ -42,6 +43,20 @@ def _scrolled(widget):
     area.setWidgetResizable(True)
     area.setFrameShape(QtWidgets.QFrame.NoFrame)
     return area
+
+
+def movies_of_state(run):
+    """Only the movie files of the run of the present state in run.movies
+    (written within session.SLACK of b2fstate, b2fplasma, as balance.nc);
+    why the others are left out."""
+    why = {}
+    for f, m in run.movies.items():
+        path = m.path if os.path.isfile(m.path) else os.path.join(
+            run.rundir, os.path.basename(m.path))
+        if os.path.isfile(path):
+            why[f] = session.of_state(run.rundir, path)
+    run.movies = {f: m for f, m in run.movies.items() if not why.get(f)}
+    return [w for w in why.values() if w]
 
 
 class Tab2D(TabOutput, QtWidgets.QWidget):
@@ -92,6 +107,12 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.tools = Tools(self)
         self.tools.bar.changed.connect(lambda: self.quantity.streams.waiting(
             self.tools.bar.mode == "seeds"))
+        self.quantity.sections.addWidget(self.tools.chords_section)
+        self.quantity.sections.addWidget(self.tools.stats_section)
+        self.quantity.chords_button.toggled.connect(
+            lambda on: self.tools.open_section("chords" if on else None))
+        self.quantity.stats_button.toggled.connect(
+            lambda on: self.tools.open_section("stats" if on else None))
         self.balance = BalanceTool(self)
         self.tools.bar.changed.connect(
             lambda: self.tools.bar.mode is not None and self.balance.cancel())
@@ -173,7 +194,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.plot.ax.callbacks.connect(signal, self._lims_changed)
         self._set_available()
         self.translate = catalog.translator(run.catalog)
-        self.time_box.set_movies(run.movies)
+        stale = movies_of_state(run)
+        self.time_box.set_movies(run.movies, stale)
         self.quantity.cells_box.set_geometry(run.geometry)
         self._set_quantities()
         self._ask_species(run)
@@ -419,6 +441,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if role == "tools":
             self.tools.deliver(data)
             return
+        if role == "frames":            # all the frames of the chords
+            self.tools.frame_delivered(want, data)
+            return
         if role == "balance":
             self.balance.deliver_rc(data)
             return
@@ -621,16 +646,14 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.canvas.draw_idle()
 
     def _measures(self):
-        """Line, Box, Polygon and Statistics only with a quantity plotted
-        (Inspect also on the grid alone)."""
+        """Chords and Statistics only with a quantity plotted (Inspect cell
+        also on the grid alone); a section open closes without it."""
         on = self.run is not None and self.data is not None and \
             self.wanted is not None
-        bar = self.tools.bar
-        for b in [bar.buttons[k] for k in ("line", "box", "polygon")] + [
-                bar.stats]:
+        for b in (self.quantity.chords_button, self.quantity.stats_button):
             b.setEnabled(on)
-        if not on and bar.mode in ("line", "box", "polygon"):
-            bar.set_mode(None)
+        if not on and self.tools.section is not None:
+            self.tools.open_section(None)
 
     # -------------------------------------------------------------- views
     def _lims_changed(self, *_):
@@ -725,7 +748,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self._show_empty()
         else:
             self.redraw()
-        self.tools.bar.apply_theme()
+        self.tools.apply_theme()
         self.quantity.mark_groups()
         self.balance.apply_theme()
         self.canvas.draw_idle()

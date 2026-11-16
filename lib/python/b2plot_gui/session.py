@@ -10,12 +10,38 @@ import re
 import tempfile
 
 RUN_FILES = ("b2mn.dat", "b2fstate", "b2fstati")
+STATE = ("b2fstate", "b2fplasma")   # written at the end of a run
+SLACK = 600.0               # seconds between a file of a run and its state
 
 
 def is_run(path):
     """A run directory: b2mn.dat or a plasma state file in it."""
     return bool(path) and any(os.path.exists(os.path.join(path, f))
                               for f in RUN_FILES)
+
+
+def of_state(rundir, path):
+    """"" if the file at path was written by the run of the present state
+    (within SLACK of the newer of b2fstate and b2fplasma), else why not."""
+    name = os.path.basename(path)
+    times = [os.path.getmtime(p) for p in (os.path.join(rundir, n)
+                                           for n in STATE)
+             if os.path.isfile(p)]
+    if not times:
+        return "No b2fstate or b2fplasma next to %s" % name
+    gap = abs(os.path.getmtime(path) - max(times))
+    if gap > SLACK:
+        return "%s is %s older or newer than b2fstate and b2fplasma: it " \
+            "is not from the run of this state" % (name, _age(gap))
+    return ""
+
+
+def _age(seconds):
+    for unit, size in (("days", 86400.0), ("hours", 3600.0),
+                       ("minutes", 60.0)):
+        if seconds >= 2 * size:
+            return "%.0f %s" % (seconds / size, unit)
+    return "%.0f seconds" % seconds
 
 
 def runs_folder():

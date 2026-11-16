@@ -38,6 +38,15 @@ def _roomy(combo):
     combo.view().setMinimumWidth(text + 6 * fm.averageCharWidth())
 
 
+def _decimal_point():
+    """Numbers with a decimal point everywhere (fields, spin boxes), no
+    comma taken, whatever the language of the system."""
+    loc = QtCore.QLocale.c()
+    loc.setNumberOptions(QtCore.QLocale.RejectGroupSeparator |
+                         QtCore.QLocale.OmitGroupSeparator)
+    return loc
+
+
 class SessionSettings:
     """Settings of one session (QSettings interface), in memory only."""
 
@@ -56,12 +65,14 @@ class MainWindow(QtWidgets.QMainWindow):
     theme; the 2D view under it; no menu bar."""
 
     def __init__(self, args):
+        QtCore.QLocale.setDefault(_decimal_point())     # before any widget
         super().__init__()
         self.args = args
         self.settings = SessionSettings()
         self.setWindowIcon(QtGui.QIcon(LOGO))
         self.recent_runs = session.Recent()
         theme.install_indicators(QtWidgets.QApplication.instance())
+        scaling.guard_wheel(QtWidgets.QApplication.instance())
         self.setStyleSheet(theme.stylesheet())  # before the widgets exist
         self.run = None
         self.record = open(args.record, "wb") if args.record else None
@@ -301,7 +312,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
             if role not in ("prefetch", "species", "traj", "tools",
-                            "eqdata", "balance"):
+                            "eqdata", "balance", "frames"):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)

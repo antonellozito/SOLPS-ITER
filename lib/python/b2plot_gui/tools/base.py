@@ -1,8 +1,9 @@
-"""Mouse modes of the 2D plot: inspect a cell, draw a line, a box or a
-polygon, or the seed line of the streamlines (started from the
-streamline options, no button here). The shape drawn goes out with the
-signal done and stays drawn until the next one; Escape drops the points
-clicked so far; a polygon closes with a click near its first corner."""
+"""Mouse modes of the 2D plot: inspect a cell (its button here), draw a
+chord, a box or a polygon (started from the sections of the chords and
+the statistics) or the seed line of the streamlines (from the streamline
+options). The shape drawn goes out with the signal done; Escape drops
+the points clicked so far; a polygon closes with a click near its first
+corner."""
 
 import numpy as np
 from matplotlib.lines import Line2D
@@ -15,15 +16,8 @@ MODES = (
     ("Inspect\ncell", "inspect", "Click a B2.5 cell or an EIRENE triangle: "
      "the value shown there and the geometry of the cell and the "
      "triangle"),
-    ("Line\nprofile", "line", "Click the two ends of a line: profile of the "
-     "quantity shown, integral, average; flux through the line for flux "
-     "densities"),
-    ("Draw\nbox", "box", "Click two corners: statistics of the cells shown "
-     "inside"),
-    ("Draw\npolygon", "polygon", "Click the corners, then the first one again "
-     "(or double-click the last one): statistics of the cells shown "
-     "inside"))
-HIDDEN = ("seeds",)                 # modes without a button here
+    )
+HIDDEN = ("seeds", "line", "box", "polygon")    # modes without a button
 POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2}
 GOLD = "#e8b500"                    # the cell under the mouse (Inspect)
 HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
@@ -38,7 +32,6 @@ class MouseTools(QtWidgets.QWidget):
     while they are on)."""
 
     done = Signal(str, object)      # mode, (n, 2) array of R, Z
-    shown = Signal()                # statistics of the cells shown
     hint = Signal(str)
     changed = Signal()              # a mode went on or off
 
@@ -59,13 +52,6 @@ class MouseTools(QtWidgets.QWidget):
             b.toggled.connect(lambda on, k=key: self._toggled(k, on))
             row.addWidget(b)
             self.buttons[key] = b
-        self.stats = QtWidgets.QPushButton("Statistics")
-        self.stats.setToolTip(
-            "Volume integral, average, minimum, maximum and histogram of the "
-            "quantity over the cells shown (Cells shown: index ranges, "
-            "regions, Only where)")
-        self.stats.clicked.connect(lambda *_: self.shown.emit())
-        row.addWidget(self.stats)
         canvas.mpl_connect("button_press_event", self._press)
         canvas.mpl_connect("motion_notify_event", self._move)
         canvas.mpl_connect("key_press_event", self._key)
@@ -202,6 +188,14 @@ class MouseTools(QtWidgets.QWidget):
             p = np.vstack((p, p[:1]))
         self.shape.set_data(p[:, 0], p[:, 1])
         self.canvas.draw_idle()
+
+    def show_shape(self, mode, pts):
+        """A box (two corners) or a polygon drawn as the shape."""
+        p = np.asarray(pts, float).reshape(-1, 2)
+        if mode == "box" and len(p) == 2:
+            (x0, y0), (x1, y1) = p
+            p = np.array([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+        self._draw(np.vstack((p, p[:1])) if len(p) else p)
 
     def curve(self, r, z):
         """The line drawn as its projection (r, z) on the poloidal plane,

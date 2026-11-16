@@ -3,7 +3,8 @@ streamlines; each gives its part of the PlotStyle (style_fields)."""
 
 from ..plot.shapes import SEEDS
 from ..plot.vector import NUM_ARROWS
-from ...qt import QtGui, QtWidgets, Signal
+from ..scaling import Number
+from ...qt import QtWidgets, Signal
 from .glyphs import CmapChooser, WidthChooser
 from .layers import ColorButton, spin, style_combo
 
@@ -56,7 +57,7 @@ class ColourBox(_Box):
         self.vmax = QtWidgets.QLineEdit()
         for w, tip in ((self.vmin, "minimum"), (self.vmax, "maximum")):
             w.setPlaceholderText(tip)
-            w.setValidator(QtGui.QDoubleValidator())
+            w.setValidator(Number())
             w.setEnabled(False)
             w.editingFinished.connect(self._emit)
         row.addWidget(self.auto)
@@ -65,7 +66,7 @@ class ColourBox(_Box):
         cf.addRow("Range", row)
         row = QtWidgets.QHBoxLayout()
         self.factor = QtWidgets.QLineEdit("1")
-        self.factor.setValidator(QtGui.QDoubleValidator())
+        self.factor.setValidator(Number())
         self.factor.setToolTip("Values multiplied by this factor (b2plot "
                                "rm*, rem*)")
         self.factor.editingFinished.connect(self._emit)

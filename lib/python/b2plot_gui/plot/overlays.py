@@ -1,5 +1,5 @@
 """Overlays of the 2D plot: the layers of the run (structure, grids,
-separatrices, flux surfaces, midplanes, targets, chords, trajectories) and
+separatrices, flux surfaces, midplanes, targets, trajectories) and
 further quantities over the field (vectors, contour lines, the wall
 strip)."""
 
@@ -7,10 +7,8 @@ from dataclasses import replace
 
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
-from matplotlib.text import Text
 
 from .. import theme
-from ..catalog import CHORD_POINTS
 from . import shapes
 from .scalar import node_values
 from .styles import (FILL_ZORDER, HATCH, ZORDER, PlotStyle, cmap_for,
@@ -48,8 +46,6 @@ class LayerMixin:
                                       if k.startswith("target: ")])
             if seg is not None and len(seg):
                 art = LineCollection(seg.reshape(-1, 2, 2))
-        elif key == "chords":
-            art = self._chords(run.layers)
         elif key == "trajectories" and len(run.layers.get(key, [])):
             seg = run.layers[key]
             art = LineCollection(seg.reshape(-1, 2, 2), colors=theme.rgb_array(
@@ -106,22 +102,6 @@ class LayerMixin:
         if o.colorbar:
             self.wall_colorbar(strip, data.label)
 
-    def _chords(self, layers):
-        """Chords of every set, each numbered set.chord at its end."""
-        art = []
-        sets = [k for k in layers if k.startswith("chords: ")]
-        for i, key in enumerate(sets, 1):
-            seg = layers[key].reshape(-1, CHORD_POINTS - 1, 4)
-            if not len(seg):
-                continue
-            line = LineCollection(seg.reshape(-1, 2, 2))
-            self.ax.add_collection(line, autolim=False)
-            art.append(line)
-            art += [self.ax.text(c[-1, 2], c[-1, 3], "%d.%d" % (i, j),
-                                 clip_on=True, ha="left", va="center")
-                    for j, c in enumerate(seg, 1)]
-        return art or None
-
     def _flux_surfaces(self, st):
         try:
             lev = sorted(float(v) for v in st.levels.replace(",", " ").split())
@@ -152,17 +132,6 @@ class LayerMixin:
                       zorder=FILL_ZORDER)
                 if hasattr(a, "set_hatchcolor"):    # matplotlib 3.10
                     a.set_hatchcolor(fill)
-            return
-        if isinstance(art, list):
-            for a in art:
-                if isinstance(a, Text):
-                    a.set(color=theme.rgb(st.color), fontsize=7.0,
-                          alpha=st.alpha,
-                          visible=st.visible, zorder=ZORDER[key] + 0.01)
-                else:
-                    a.set(edgecolor=theme.rgb(st.color), linewidth=st.width,
-                          linestyle=st.style, alpha=st.alpha,
-                          visible=st.visible, zorder=ZORDER[key])
             return
         if key == "trajectories":
             art.set(linewidth=st.width, linestyle=st.style, alpha=st.alpha,
