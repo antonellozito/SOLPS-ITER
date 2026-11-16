@@ -47,10 +47,10 @@ class VectorMixin:
             return (self.ecentres, u, w, self.etri, node_values(t, u),
                     node_values(t, w))
         g = self.run.geometry
-        rows = np.flatnonzero(self.mask)
+        rows = np.flatnonzero(self.vector_mask)     # its own regions
         u = np.asarray(v.vr[col], float)[g.cells[rows] - 1]
         w = np.asarray(v.vz[col], float)[g.cells[rows] - 1]
-        return (g.centres[rows], u, w, self._cell_tri(),
+        return (g.centres[rows], u, w, self._cell_tri(self.vector_mask),
                 np.asarray(v.vxr[col], float), np.asarray(v.vxz[col], float))
 
     def _quiver(self, pos, u, w, st, box):

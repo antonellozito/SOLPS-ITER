@@ -1,12 +1,15 @@
-"""Option groups of the plot: colour scale, contour lines, arrows and
-streamlines; each gives its part of the PlotStyle (style_fields)."""
+"""Option groups of the plot: colour scales (of the plasma and of the
+vector plot, with their plot types), contour lines, arrows and
+streamlines, each giving its part of the PlotStyle (style_fields); the
+options of the wall plot (WallStyle)."""
 
 from ..plot.shapes import SEEDS
+from ..plot.styles import WallStyle
 from ..plot.vector import NUM_ARROWS
 from ..scaling import Number
 from ...qt import QtWidgets, Signal
-from .glyphs import CmapChooser, WidthChooser
-from .layers import ColorButton, spin, style_combo
+from .glyphs import CmapChooser, LineStyleChooser, WidthChooser
+from .layers import ColorButton, left_form, spin, style_combo
 
 
 def _number(text, default):
@@ -16,10 +19,8 @@ def _number(text, default):
         return default
 
 
-class _Box(QtWidgets.QGroupBox):
-    """A group whose widgets all emit changed."""
-
-    changed = Signal()
+class _Watched:
+    """_watch: the widgets given emit changed."""
 
     def _watch(self, combos=(), checks=(), values=(), colours=()):
         for w in combos:
@@ -35,20 +36,33 @@ class _Box(QtWidgets.QGroupBox):
         self.changed.emit()
 
 
+class _Box(_Watched, QtWidgets.QGroupBox):
+    """A group whose widgets all emit changed."""
+
+    changed = Signal()
+
+
+class _Part(_Watched, QtWidgets.QWidget):
+    """A part of a group (no frame) whose widgets all emit changed."""
+
+    changed = Signal()
+
+
 class ColourBox(_Box):
     """Colormap (reversed or not), scale and range."""
 
-    def __init__(self, parent=None):
-        super().__init__("Colour scale", parent)
+    def __init__(self, title="Colour scale", cmap="turbo",
+                 scales=("linear", "log", "symlog"), parent=None):
+        super().__init__(title, parent)
         lay = QtWidgets.QVBoxLayout(self)
         row = QtWidgets.QHBoxLayout()   # colormap, reversed, scale
-        self.cmap = CmapChooser("turbo")
-        self.cmap.setToolTip("Colour map")
+        self.cmap = CmapChooser(cmap)  # its name in its tooltip
         self.reverse = QtWidgets.QCheckBox("reversed")
         self.scale = QtWidgets.QComboBox()
-        self.scale.addItems(["linear", "log", "symlog"])
-        self.scale.setToolTip("Scale: linear, logarithmic or symmetric "
-                              "logarithmic")
+        self.scale.addItems(list(scales))
+        self.scale.setToolTip("Scale: " + ", ".join(
+            {"linear": "linear", "log": "logarithmic",
+             "symlog": "symmetric logarithmic"}[s] for s in scales))
         row.addWidget(self.cmap, 1)
         row.addWidget(self.reverse)
         row.addWidget(self.scale)
@@ -90,12 +104,47 @@ class ColourBox(_Box):
                     vmax=_number(self.vmax.text(), 1.0))
 
 
-class LinesBox(_Box):
-    """Contour lines: over the fill, one colour, width, style, labels."""
+STRIP_WIDTHS = (2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30)     # points
+
+
+class WallBox(ColourBox):
+    """Options of the wall plot: the width and style of its strip, its
+    colour map (reversed or not), linear or logarithmic, its range."""
 
     def __init__(self, parent=None):
-        super().__init__("Contour lines", parent)
-        lf = QtWidgets.QFormLayout(self)
+        super().__init__("Wall plot options", "viridis", ("linear", "log"),
+                         parent)
+        self.strip_width = WidthChooser(6.0, STRIP_WIDTHS, "Width of the "
+                                        "strip along the wall (pt)")
+        self.strip_style = LineStyleChooser("-")
+        self.strip_style.setToolTip("Line style of the strip")
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel("Line"))
+        row.addWidget(self.strip_width, 1)
+        row.addWidget(self.strip_style, 1)
+        self.layout().insertLayout(0, row)
+        self._watch((self.strip_width, self.strip_style))
+
+    def wall_style(self, columns):
+        """The WallStyle of the options, summing the columns given."""
+        f = self.style_fields()
+        return WallStyle(columns=tuple(columns),
+                         width=self.strip_width.value(),
+                         style=self.strip_style.currentData(),
+                         cmap=f["cmap"], reverse=f["reverse"],
+                         scale=f["scale"],
+                         auto=f["auto"], vmin=f["vmin"], vmax=f["vmax"])
+
+
+class LinesBox(_Part):
+    """Contour lines (under the levels in the Contours section): over the
+    fill (filled contours), one colour (contour lines), colour, width,
+    style, labels."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lf = left_form(self)
+        lf.setContentsMargins(0, 0, 0, 0)
         row = QtWidgets.QHBoxLayout()
         self.fill_lines = QtWidgets.QCheckBox("over the fill")
         self.fill_lines.setToolTip("Lines on the filled contours, as "
@@ -185,7 +234,7 @@ class StreamBox(_Box):
 
     def __init__(self, parent=None):
         super().__init__("Streamlines", parent)
-        sf = QtWidgets.QFormLayout(self)
+        sf = left_form(self)
         self.density = spin(0.2, 10.0, 0.1, 1.5, tip="Density")
         self.num_arrows = QtWidgets.QSpinBox()
         self.num_arrows.setRange(1, 20)

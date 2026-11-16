@@ -544,8 +544,8 @@ class Output:
         xnames = {}
         for p in panels:
             for name, _, _ in plots.table(p):
-                xnames[name] = re.sub(r"\$\\rho_\\mathrm\{pol\}\$",
-                                      "rho poloidal", p.xlabel)
+                xnames[name] = re.sub(r"\$\\rho_p\$", "rho poloidal",
+                                      p.xlabel)       # files: plain
         try:
             datafile.write(path, self.title(), tables,
                            lambda n: xnames.get(n, "x"),

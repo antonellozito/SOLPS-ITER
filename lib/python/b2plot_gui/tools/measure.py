@@ -1,6 +1,7 @@
-"""Line cuts and statistics of the quantity shown, from the values b2plot
-sent: linear interpolation of the vertex (or EIRENE node) values as for
-the contours, sums weighted with the b2plot volumes (vol, triavol)."""
+"""Line cuts (of the plasma or the vector quantity shown) and statistics
+(of the plasma quantity shown), from the values b2plot sent: linear
+interpolation of the vertex (or EIRENE node) values as for the contours,
+sums weighted with the b2plot volumes (vol, triavol)."""
 
 import re
 
@@ -41,13 +42,14 @@ def html_unit(unit):
         "sup" if m.group(1) == "^" else "sub", m.group(2)), text)
 
 
-def _grid(plot, data):
+def _grid(plot, data, col=None):
     """Triangulation and node values (one array per component) of the
-    quantity shown in its column."""
-    col = plot._column(data, plot.style)
+    quantity shown in its column (col, default the one of the plasma
+    plot)."""
+    col = plot._column(data, plot.style) if col is None else col
     vector = hasattr(data, "vr")
     if data.location == "cells":
-        tri = plot._cell_tri()
+        tri = plot._cell_tri(plot.vector_mask if vector else None)
         comps = [data.vxr[col], data.vxz[col]] if vector else \
             [data.vertex[col]]
     else:
@@ -58,13 +60,14 @@ def _grid(plot, data):
     return tri, [np.asarray(z, float) for z in comps]
 
 
-def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0)):
+def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0), col=None):
     """Samples along the straight line from (R, Z) p0 at the toroidal angle
     phi[0] to p1 at phi[1] (degrees; the same angle: a line in the poloidal
     plane, else a chord whose projection on it is curved): s along the
     line, R, Z, phi, the values (|v| and the normal component v.n for
     vectors, n to the right of the projection), and the length l along the
-    projection; NaN outside the cells shown."""
+    projection; NaN outside the cells shown. col: the column of data
+    (default: the one of the plasma plot)."""
     t = np.linspace(0.0, 1.0, n)
     a0, a1 = np.radians(np.asarray(phi, float))
     q0 = np.array([p0[0] * np.cos(a0), p0[0] * np.sin(a0), p0[1]], float)
@@ -74,7 +77,7 @@ def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0)):
     ph = np.degrees(np.unwrap(np.arctan2(q[:, 1], q[:, 0])))
     s = t * float(np.linalg.norm(q1 - q0))
     l = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(r), np.diff(z)))))
-    tri, comps = _grid(plot, data)
+    tri, comps = _grid(plot, data, col)
     vals = [np.ma.filled(mtri.LinearTriInterpolator(tri, c)(r, z), np.nan)
             for c in comps]
     if len(vals) == 1:

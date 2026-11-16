@@ -1,16 +1,16 @@
-"""Option groups of the 2D quantity panel: contour levels, the volume
-regions shown and the labels."""
+"""Option groups of the 2D quantity panel: the contour levels (a part of
+the Contours section), the menu of the volume regions shown (in the plasma
+and the vector plot options) and the labels."""
 
 import numpy as np
 
 from ..plot.styles import LabelStyle
 from ..scaling import Number
 from ...qt import QtWidgets, Signal
-from .layers import ColorButton, spin
+from .layers import ColorButton, left_form, spin
 
 LEVEL_MODES = [("Number of levels", "number"), ("Step", "step"),
-               ("List of values", "list"),
-               ("Proportion (b2plot clvp)", "proportion")]
+               ("List of values", "list"), ("Proportion", "proportion")]
 
 
 def _row(*widgets, stretch=True):
@@ -22,14 +22,16 @@ def _row(*widgets, stretch=True):
     return box
 
 
-class LevelsBox(QtWidgets.QGroupBox):
-    """How the contour levels are chosen."""
+class LevelsBox(QtWidgets.QWidget):
+    """How the contour levels are chosen (the top of the Contours
+    section)."""
 
     changed = Signal()
 
     def __init__(self, parent=None):
-        super().__init__("Contour levels", parent)
-        self.form = QtWidgets.QFormLayout(self)
+        super().__init__(parent)
+        self.form = left_form(self)
+        self.form.setContentsMargins(0, 0, 0, 0)
         self.mode = QtWidgets.QComboBox()
         for text, key in LEVEL_MODES:
             self.mode.addItem(text, key)
@@ -94,23 +96,26 @@ class LevelsBox(QtWidgets.QGroupBox):
                     level_step=step, level_list=self.values.text())
 
 
-class CellsBox(QtWidgets.QGroupBox):
-    """B2.5 cells shown: the volume regions checked in a menu (all at
-    first); the button says which."""
+class RegionsMenu(QtWidgets.QWidget):
+    """The B2.5 cells shown of a plot: "Volume regions shown" and the
+    regions checked in a menu (all at first); the button says which."""
 
     changed = Signal()
 
-    def __init__(self, parent=None):
-        super().__init__("Cells shown", parent)
-        form = QtWidgets.QFormLayout(self)
+    def __init__(self, what, parent=None):
+        super().__init__(parent)
+        row = QtWidgets.QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
         self.button = QtWidgets.QToolButton()
         self.button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         self.button.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                   QtWidgets.QSizePolicy.Fixed)
-        self.button.setToolTip("The volume regions whose cells are shown")
+        self.button.setToolTip("The volume regions whose cells the %s "
+                               "plot shows" % what)
         self.menu = QtWidgets.QMenu(self.button)
         self.button.setMenu(self.menu)
-        form.addRow("Volume regions", self.button)
+        row.addWidget(QtWidgets.QLabel("Volume regions shown"))
+        row.addWidget(self.button, 1)
         self.checks = []
 
     def set_geometry(self, g):
@@ -155,7 +160,7 @@ class LabelsBox(QtWidgets.QGroupBox):
 
     def __init__(self, parent=None):
         super().__init__("Labels", parent)
-        form = QtWidgets.QFormLayout(self)
+        form = left_form(self)
         self.title = QtWidgets.QLineEdit()
         self.xlabel = QtWidgets.QLineEdit()
         self.xlabel.setPlaceholderText("R (m)")

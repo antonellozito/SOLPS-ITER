@@ -18,9 +18,9 @@ from ..tools.figure import LogLabels
 from . import style
 from .kinds import KINDS
 
-COORDINATES = (("rhop", "ρ poloidal"),
+COORDINATES = (("rhop", "ρₚ"),
                ("dssep", "Distance from separatrix"))
-XLABELS = {"rhop": r"$\rho_\mathrm{pol}$"}
+XLABELS = {"rhop": r"$\rho_p$"}
 
 
 @dataclass

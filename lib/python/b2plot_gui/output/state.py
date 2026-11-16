@@ -6,7 +6,8 @@ from ..panels.layers import ColorButton
 from ...qt import QtWidgets, Qt
 
 SKIP = {"search", "play", "slider", "tree", "info", "current", "partial",
-        "base"}
+        "base", "plasma_species", "vector_species", "wall_species",
+        "overlay_species"}
 PANELS = __package__.rsplit(".", 1)[0] + ".panels"
 VALUES = (ColorButton, QtWidgets.QComboBox, QtWidgets.QAbstractButton,
           QtWidgets.QAbstractSpinBox, QtWidgets.QLineEdit,
@@ -85,7 +86,15 @@ def capture(tab):
     """The plot settings of a Tab2D."""
     panel = tab.quantity
     return {"quantity": tab.wanted.name if tab.wanted else None,
-            "species": panel.species.currentText(), "kind": panel.kind(),
+            "vector": tab.vector_wanted.name if tab.vector_wanted else None,
+            "wall": tab.wall_wanted.name if tab.wall_wanted else None,
+            "overlay": tab.overlay_wanted.name if tab.overlay_wanted
+            else None,
+            "species": panel.species.currentText(),
+            "vector_species": panel.vector_species.text(),
+            "wall_species": panel.wall_species.text(),
+            "overlay_species": panel.overlay_species.text(),
+            "kind": panel.kind(),
             "seeds": [[float(x), float(y)] for x, y in panel.streams.seeds],
             "view": [float(v) for v in tab.plot.get_view()],
             "panel": _values(panel), "layers": _values(tab.layers.rows),
@@ -105,11 +114,19 @@ def restore(tab, st, view=True):
         tab.layers._emit(key)
     panel.time_box._layout(emit=False)
     panel.streams.seeds = [tuple(p) for p in st.get("seeds", [])]
-    panel.wanted_species = st.get("species")
+    for menu, key in zip(panel.menus(), ("species", "vector_species",
+                                         "wall_species", "overlay_species")):
+        menu.wanted = st.get(key)
     tab._set_quantities()
-    ok = panel.select(st.get("quantity") or "te")
+    extra = [kind for kind in ("vector", "wall") if st.get(kind)]
+    for kind in extra:
+        panel.select_extra(kind, st[kind])
+    q = st.get("quantity")
+    ok = panel.select(q) if q else bool(extra) or panel.select("te")
     panel.set_kind(st.get("kind"))
     panel._kind_changed()
+    if st.get("overlay"):               # over the plasma plot
+        panel.select_extra("overlay", st["overlay"])
     if view and st.get("view"):
         tab.plot.set_view(st["view"])
     return ok

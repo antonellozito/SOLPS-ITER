@@ -4,65 +4,53 @@ import re
 import time
 from dataclasses import replace
 
-from ...b2plot import labels
 from .. import theme
 from ..catalog import FLAGS, GUARD, INTEGER
 from ..plot.styles import KINDS_FLAT, KINDS_VECTOR, PlotStyle
 from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
-from .options import CellsBox, LabelsBox, LevelsBox
-from .overlays import OverlayBox
-from .trajectories import TrajBox
-from .plotopts import ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox
+from .options import LabelsBox, LevelsBox, RegionsMenu
+from .overlays import OverlayOptions, OverlaySection
+from .plotopts import (ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox,
+                       WallBox)
+from .species import SUM, SpeciesMenu
 from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
-SUM = "Sum over species"
-TREE_ROWS = 14                      # rows of the quantity tree
+TREE_ROWS = 11                      # rows of the plasma quantity tree
+MOVIE_ROWS = 6                      # in the Run movies tab
+LEVELS = {"contourf": 100, "contour": 20}   # contour levels at first
+VECTOR_ROWS = 6                     # rows of the vector quantity tree
+WALL_ROWS = 6                       # rows of the wall quantity tree
+EXTRA = ("vector", "wall", "overlay")   # the trees apart from the plasma one
 ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
-CHARGE = re.compile(r"([A-Za-z]*)\s*\+?(\d*)")     # D0, D+, N+7, N7+
-
-
-def default_species(names):
-    """Index of the highest charge state of the first species in names
-    (D+ of D0, D+, N0, ...)."""
-    def parse(n):
-        m = CHARGE.match(n)
-        charge = int(m.group(2)) if m.group(2) else 1 if "+" in n else 0
-        return m.group(1), charge
-    first = parse(names[0])[0] if names else ""
-    same = [(parse(n)[1], -i) for i, n in enumerate(names)
-            if parse(n)[0] == first]
-    return -max(same)[1] if same else 0
-
-
-def column_names(columns, species=None):
-    """Species names of the field columns (the run species where b2plot
-    sends no name)."""
-    names = [labels.species_text(c) or (
-        labels.species_text(species[i]) if species and i < len(species)
-        else "") for i, c in enumerate(columns)]
-    return [n or "column %d" % (i + 1) for i, n in enumerate(names)]
 
 
 class QuantityPanel(QtWidgets.QWidget):
-    """Quantity tree, species, plot type and the plot options."""
+    """The plasma, vector and wall quantity trees (each plotted alone or
+    with the others, each with its species menu in its title), the
+    overlay tree in its section, and the plot options."""
 
     quantity_chosen = Signal(object)
+    vector_chosen = Signal(object)  # a vector quantity, None: none plotted
+    wall_chosen = Signal(object)    # a wall quantity, None: no wall plot
+    overlay_chosen = Signal(object)     # drawn over the plasma plot
     style_changed = Signal()
     seed_line = Signal(bool)
     calculator = Signal(str)        # open the calculator with this text
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.current = None
-        self.wanted_species = None      # species name to choose next
-        self.chosen_species = None      # the species last chosen by hand
+        self.current = None             # the plasma quantity plotted
+        self.vector_current = None      # the vector quantity plotted
+        self.wall_current = None        # the wall quantity plotted
+        self.overlay_current = None     # the quantity overlaid
         self._last_click = (None, 0.0)  # item, time (double clicks)
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 6, 6)   # the tabs: 6 px over it
         self.time_box = TimeBox()
+        self.time_box.source_changed.connect(lambda *_: self._tab_shown())
         lay.addWidget(self.time_box)
         self.page_slot = QtWidgets.QVBoxLayout()    # the Balances tab
         self.page_slot.setContentsMargins(0, 0, 0, 0)
@@ -85,31 +73,37 @@ class QuantityPanel(QtWidgets.QWidget):
         row = QtWidgets.QHBoxLayout()
         row.addWidget(self.search, 1)
         row.addWidget(calc)
-        self.tree = QtWidgets.QTreeWidget()
-        self.tree.setHeaderLabels(["Quantity", "Name"])
-        self.tree.setRootIsDecorated(True)
-        self.tree.setUniformRowHeights(True)
-        head = self.tree.header()
-        head.setStretchLastSection(False)
-        head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        head.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-        self.tree.setExpandsOnDoubleClick(False)
-        self.tree.setToolTip("Click a group to open or close it, a quantity "
-                             "to plot it, click it again to clear the plot")
-        self.tree.itemActivated.connect(self._clicked)
-        self.tree.itemClicked.connect(self._clicked)
-        self.tree.itemExpanded.connect(self._group_marked)
-        self.tree.itemCollapsed.connect(self._group_marked)
+        self.tree = self._make_tree("Plasma quantity", "plot it")
+        self.vector_tree = self._make_tree(
+            "Vector quantity", "plot it as arrows or streamlines (with a "
+            "plasma quantity or alone)")
+        self.wall_tree = self._make_tree("Wall quantity", "plot it along "
+                                         "the wall (with a plasma quantity "
+                                         "or alone)")
         lay.addLayout(row)
-        lay.addWidget(self.tree)        # fixed height (_tree_height)
+        lay.addWidget(self.tree)        # fixed heights (_tree_height)
+        lay.addWidget(self.vector_tree)
+        lay.addWidget(self.wall_tree)
+        self.plasma_species = SpeciesMenu(self.tree, "Plasma quantity",
+                                          "plasma")
+        self.vector_species = SpeciesMenu(self.vector_tree,
+                                          "Vector quantity", "vector")
+        self.wall_species = SpeciesMenu(self.wall_tree, "Wall quantity",
+                                        "wall")
+        self.overlay_tree = self._make_tree(    # in the Overlay section
+            "Overlay quantity", "draw it as contour lines over the plasma "
+            "plot")
+        self.overlay_species = SpeciesMenu(self.overlay_tree,
+                                           "Overlay quantity", "overlay")
+        for menu in self.menus():
+            menu.changed.connect(self._changed)
+        self.species = self.plasma_species.combo    # of the plasma plot
 
-        row = QtWidgets.QHBoxLayout()   # species, then the two sections
-        self.species = QtWidgets.QComboBox()
-        self.species.currentIndexChanged.connect(self._species_chosen)
-        label = QtWidgets.QLabel("Species")
-        label.setProperty("bold", True)
-        row.addWidget(label)
-        row.addWidget(self.species, 5)
+        row = QtWidgets.QHBoxLayout()   # the three sections
+        self.overlay_button = QtWidgets.QPushButton("Overlay")
+        self.overlay_button.setToolTip("Contour lines of a second quantity "
+                                       "over the plasma plot (not with "
+                                       "contour lines)")
         self.chords_button = QtWidgets.QPushButton("Chords")
         self.chords_button.setToolTip("Profiles of the quantity shown along "
                                       "chords drawn on the plot or typed, "
@@ -119,7 +113,8 @@ class QuantityPanel(QtWidgets.QWidget):
                                      "maximum and histogram of the quantity "
                                      "shown over the cells shown, a box or "
                                      "a polygon")
-        for b in (self.chords_button, self.stats_button):
+        for b in (self.chords_button, self.overlay_button,
+                  self.stats_button):
             b.setCheckable(True)
             b.setProperty("bold", True)
             row.addWidget(b, 2)
@@ -127,45 +122,69 @@ class QuantityPanel(QtWidgets.QWidget):
         self.sections = QtWidgets.QVBoxLayout()  # the open one (tab)
         self.sections.setContentsMargins(0, 0, 0, 0)
         lay.addLayout(self.sections)
+        self.overlay_section = OverlaySection(self.overlay_tree)
+        self.overlay_section.hide()
+        self.sections.addWidget(self.overlay_section)
         self.mask_box = MaskBox()
         self.mask_box.argument_changed.connect(self._argument)
         self.mask_box.changed.connect(self._changed)
         lay.addWidget(self.mask_box)
 
-        kinds = QtWidgets.QGroupBox("Plot type")    # a menu of the kinds
-        form = QtWidgets.QFormLayout(kinds)     # as the other groups
-        self.kind_combo = QtWidgets.QComboBox()
-        self.kind_combo.setToolTip("Cell data: patch, filled contour, "
-                                   "contour lines; face data (vectors): "
-                                   "quiver, streamlines or both")
-        form.addRow(self.kind_combo)
-        self._vector = None             # the kinds listed: of vectors?
-        self._fill_kinds(False, False)
+        self.kind_combo = QtWidgets.QComboBox()     # a menu of the kinds
+        self.kind_combo.setToolTip("Patch, filled contour or contour lines")
+        self._fill_kinds(False)
         self.kind_combo.currentIndexChanged.connect(self._kind_chosen)
+        self.vector_kind = QtWidgets.QComboBox()
+        self.vector_kind.setToolTip("Arrows, streamlines or both")
+        for k in KINDS_VECTOR:
+            self.vector_kind.addItem(KIND_TEXT[k], k)
+        self.vector_kind.currentIndexChanged.connect(self._kind_chosen)
 
-        self.colour = ColourBox()
-        self.levels_box = LevelsBox()
+        self.colour = ColourBox("Plasma plot options")  # with the plot type
+        kinds = QtWidgets.QHBoxLayout()
+        kinds.addWidget(QtWidgets.QLabel("Plot type"))
+        kinds.addWidget(self.kind_combo, 1)
+        self.colour.layout().insertLayout(0, kinds)
+        self.plasma_regions = RegionsMenu("plasma")     # at the end
+        self.colour.layout().addWidget(self.plasma_regions)
+        self.vector_box = ColourBox("Vector plot options", "magma",
+                                    ("linear", "log"))  # of the magnitude
+        kinds = QtWidgets.QHBoxLayout()
+        kinds.addWidget(QtWidgets.QLabel("Plot type"))
+        kinds.addWidget(self.vector_kind, 1)
+        self.vector_box.layout().insertLayout(0, kinds)
+        self.vector_regions = RegionsMenu("vector")
+        self.vector_box.layout().addWidget(self.vector_regions)
+        self.vector_box.changed.connect(self._changed)
+        self.wall_box = WallBox()
+        self.wall_box.changed.connect(self._changed)
+        self.levels_box = LevelsBox()   # one Contours section
         self.lines = LinesBox()
+        self.contour_box = QtWidgets.QGroupBox("Contours")
+        contour = QtWidgets.QVBoxLayout(self.contour_box)
+        contour.addWidget(self.levels_box)
+        contour.addWidget(self.lines)
         self.arrows = ArrowsBox()
         self.streams = StreamBox()
         self.streams.seed_line.connect(self.seed_line)
         for box in (self.colour, self.levels_box, self.lines, self.arrows,
-                    self.streams):
+                    self.streams, self.plasma_regions, self.vector_regions):
             box.changed.connect(self._changed)
-        self.overlay_box = OverlayBox()
-        self.overlay_box.changed.connect(self._changed)
-        lay.addWidget(self.overlay_box)
-        self.cells_box = CellsBox()
-        self.cells_box.changed.connect(self._changed)
-        self.traj_box = TrajBox()
-        lay.addWidget(self.traj_box)
+        self.overlay = OverlayOptions()
+        for box in self.overlay.parts():
+            box.changed.connect(self._changed)
         self.labels_box = LabelsBox()
         self.labels_box.changed.connect(self._changed)
         column.addStretch(1)            # the room left under the boxes
         # the graphic options, placed in the right column by the 2D tab
-        self.style_boxes = (kinds, self.colour, self.levels_box, self.lines,
-                            self.arrows, self.streams)
-        self.lower_boxes = (self.cells_box, self.labels_box)
+        self.style_boxes = (self.colour, self.contour_box, self.vector_box,
+                            self.arrows, self.streams, self.wall_box) + \
+            self.overlay.boxes()        # above the layers
+        self.lower_boxes = (self.labels_box,)
+        self._levels_of = dict(LEVELS)  # the number of each plot type
+        self._last_kind = self.kind()
+        self._shown = (False, False, False, False)  # plasma, vector, wall,
+        #                                             overlay
         self._kind_changed(emit=False)
         self._tree_height()
 
@@ -183,17 +202,74 @@ class QuantityPanel(QtWidgets.QWidget):
             if w is not None:
                 w.setVisible(on)
 
+    def _make_tree(self, title, what):
+        tree = QtWidgets.QTreeWidget()
+        tree.setHeaderLabels([title, "Name"])
+        tree.setRootIsDecorated(True)
+        tree.setUniformRowHeights(True)
+        tree.setVerticalScrollBarPolicy(    # columns as wide, groups open
+            Qt.ScrollBarAlwaysOn)           # or not
+        head = tree.header()
+        head.setStretchLastSection(False)
+        head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+        head.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        tree.setExpandsOnDoubleClick(False)
+        tree.setToolTip("Click a group to open or close it, a quantity to "
+                        "%s, click it again to clear it" % what)
+        tree.itemActivated.connect(self._clicked)
+        tree.itemClicked.connect(self._clicked)
+        tree.itemExpanded.connect(self._group_marked)
+        tree.itemCollapsed.connect(self._group_marked)
+        return tree
+
+    def _tab_shown(self):
+        """Another tab: the wall tree only in Final state (the movies have
+        no wall quantities), the heights of the trees."""
+        self.wall_tree.setVisible(not self.time_box.movie())
+        self._tree_height()
+
     def _tree_height(self):
-        """The quantity tree TREE_ROWS rows high, whatever is shown under
-        it (it follows the font as the window scales)."""
-        fm = QtGui.QFontMetrics(self.tree.font())
-        rows = TREE_ROWS * (fm.height() + 4)
-        self.tree.setFixedHeight(rows + self.tree.header().sizeHint()
-                                 .height() + 2 * self.tree.frameWidth())
+        """The plasma quantity tree TREE_ROWS rows high (MOVIE_ROWS in the
+        Run movies tab), the vector one VECTOR_ROWS, the wall one
+        WALL_ROWS, whatever is shown under them (they follow the font as
+        the window scales)."""
+        for menu in self.menus():
+            menu.fit()
+        rows = MOVIE_ROWS if self.time_box.movie() else TREE_ROWS
+        for tree, n in ((self.tree, rows), (self.vector_tree, VECTOR_ROWS),
+                        (self.wall_tree, WALL_ROWS),
+                        (self.overlay_tree, rows)):     # as the plasma one
+            fm = QtGui.QFontMetrics(tree.font())
+            head = tree.header()
+            tree.setFixedHeight(n * (fm.height() + 4) + max(
+                head.sizeHint().height(), head.minimumHeight()) +
+                2 * tree.frameWidth())
 
     # ---------------------------------------------------------- quantities
     def set_quantities(self, quantities):
-        self.tree.clear()
+        self._fill_tree(self.tree, quantities)
+
+    def set_vector_quantities(self, quantities):
+        self._fill_tree(self.vector_tree, quantities)
+
+    def set_wall_quantities(self, quantities):
+        self._fill_tree(self.wall_tree, quantities)
+
+    def set_overlay_quantities(self, quantities):
+        self._fill_tree(self.overlay_tree, quantities)
+
+    def trees(self):
+        return (self.tree, self.vector_tree, self.wall_tree,
+                self.overlay_tree)
+
+    def menus(self):
+        """The species menus of the plasma, vector, wall and overlay
+        trees."""
+        return (self.plasma_species, self.vector_species, self.wall_species,
+                self.overlay_species)
+
+    def _fill_tree(self, tree, quantities):
+        tree.clear()
         groups = {}
         for q in quantities:
             top = groups.get(q.group)
@@ -204,7 +280,7 @@ class QuantityPanel(QtWidgets.QWidget):
                 font.setBold(True)
                 top.setFont(0, font)
                 groups[q.group] = top
-                self.tree.addTopLevelItem(top)
+                tree.addTopLevelItem(top)
             item = QtWidgets.QTreeWidgetItem([q.text, q.label])
             item.setToolTip(0, q.text)
             item.setToolTip(1, q.label)
@@ -213,32 +289,35 @@ class QuantityPanel(QtWidgets.QWidget):
         self._filter(self.search.text())
 
     def _filter(self, text):
+        """The search in all the trees."""
         text = text.strip().lower()
-        for i in range(self.tree.topLevelItemCount()):
-            top = self.tree.topLevelItem(i)
-            shown = 0
-            for j in range(top.childCount()):
-                item = top.child(j)
-                q = item.data(0, Qt.UserRole)
-                hit = (not text or text in q.label.lower()
-                       or text in q.text.lower())
-                item.setHidden(not hit)
-                shown += hit
-            top.setHidden(shown == 0)
-            top.setExpanded(bool(text) and shown > 0)
+        for tree in self.trees():
+            for i in range(tree.topLevelItemCount()):
+                top = tree.topLevelItem(i)
+                shown = 0
+                for j in range(top.childCount()):
+                    item = top.child(j)
+                    q = item.data(0, Qt.UserRole)
+                    hit = (not text or text in q.label.lower()
+                           or text in q.text.lower())
+                    item.setHidden(not hit)
+                    shown += hit
+                top.setHidden(shown == 0)
+                top.setExpanded(bool(text) and shown > 0)
         self.mark_groups()
 
     def _group_marked(self, top):
         """An open group with the background of a selected quantity."""
         brush = QtGui.QBrush(QtGui.QColor(theme.COLORS[theme.name()][
             "selection"])) if top.isExpanded() else QtGui.QBrush()
-        for col in range(self.tree.columnCount()):
+        for col in range(top.treeWidget().columnCount()):
             top.setBackground(col, brush)
 
     def mark_groups(self):
         """The backgrounds of the groups (open or not, the theme)."""
-        for i in range(self.tree.topLevelItemCount()):
-            self._group_marked(self.tree.topLevelItem(i))
+        for tree in self.trees():
+            for i in range(tree.topLevelItemCount()):
+                self._group_marked(tree.topLevelItem(i))
 
     def _clicked(self, item, *_):
         """A click (or Return) on a group: open or close it; on a
@@ -254,6 +333,15 @@ class QuantityPanel(QtWidgets.QWidget):
             item.setExpanded(not item.isExpanded())
             return
         q = item.data(0, Qt.UserRole)
+        for kind in EXTRA:              # vector and wall trees
+            if item.treeWidget() is getattr(self, kind + "_tree"):
+                if q is not None and q is getattr(self, kind + "_current"):
+                    self.unselect_extra(kind)
+                    getattr(self, kind + "_chosen").emit(None)
+                elif q is not None:
+                    setattr(self, kind + "_current", q)
+                    getattr(self, kind + "_chosen").emit(q)
+                return
         if q is not None and q is self.current:
             self.unselect()
             self.quantity_chosen.emit(None)
@@ -261,19 +349,41 @@ class QuantityPanel(QtWidgets.QWidget):
         self._activated(item)
 
     def unselect(self):
-        """No quantity chosen (the state at the start)."""
+        """No plasma quantity chosen (the state at the start)."""
         self.current = None
         self.tree.clearSelection()
         self.tree.setCurrentItem(None)
+
+    def unselect_extra(self, kind):
+        """No vector or wall quantity chosen (kind "vector", "wall")."""
+        setattr(self, kind + "_current", None)
+        tree = getattr(self, kind + "_tree")
+        tree.clearSelection()
+        tree.setCurrentItem(None)
+
+    def select_extra(self, kind, name):
+        """Select (and plot) the vector or wall quantity with this name,
+        if listed."""
+        tree = getattr(self, kind + "_tree")
+        for i in range(tree.topLevelItemCount()):
+            top = tree.topLevelItem(i)
+            for j in range(top.childCount()):
+                item = top.child(j)
+                q = item.data(0, Qt.UserRole)
+                if q.name == name:
+                    tree.setCurrentItem(item)
+                    setattr(self, kind + "_current", q)
+                    getattr(self, kind + "_chosen").emit(q)
+                    return True
+        return False
 
     def _activated(self, item, *_):
         q = item.data(0, Qt.UserRole)
         if q is None or q is self.current:
             return
         self.current = q
-        vector = q.source in ("vector", "evector")
         patch = self.is_mask(q) or bool(GUARD.fullmatch(q.name))
-        self._fill_kinds(vector, patch)
+        self._fill_kinds(patch)
         self._kind_changed(emit=False)
         self.quantity_chosen.emit(self.wanted())
 
@@ -316,39 +426,20 @@ class QuantityPanel(QtWidgets.QWidget):
         return False
 
     def set_columns(self, columns, species=None):
-        """Species names of the field columns (keeps the choice if it can)."""
-        names = column_names(columns, species)
-        if len(columns) == 1 and not columns[0].strip():
-            names = ["\u2014"]
-        self.partial = {}
-        if len(names) > 1:
-            names.append(SUM)
-            elements = [re.match(r"[A-Za-z]*", n).group(0) for n in names]
-            for e in dict.fromkeys(elements[:-1]):
-                cols = [i for i, x in enumerate(elements[:-1]) if x == e]
-                if e and 1 < len(cols) < len(names) - 1:
-                    names.append("Sum %s" % e)
-                    self.partial[names[-1]] = (cols[0], cols[-1])
-        old = self.wanted_species or self.chosen_species
-        self.wanted_species = None
-        self.species.blockSignals(True)
-        self.species.clear()
-        self.species.addItems(names)
-        self.species.setCurrentIndex(names.index(old) if old in names else
-                                     default_species(names[:len(columns)]))
-        self.species.setEnabled(len(names) > 1)
-        self.species.blockSignals(False)
+        """Species of the plasma data columns (keeps the choice if it
+        can)."""
+        self.plasma_species.set_columns(columns, species)
 
     # -------------------------------------------------------------- style
-    def summed(self):
-        """True for the sum over all species or over one element."""
-        return self.species.currentText() == SUM or self._partial()
+    def summed(self, menu=None):
+        """True for the sum over all species or over one element (in the
+        species menu, default the plasma one)."""
+        menu = menu or self.plasma_species
+        return menu.text() == SUM or bool(menu.partial.get(menu.text()))
 
-    def _partial(self):
-        return getattr(self, "partial", {}).get(self.species.currentText())
-
-    def _sum_op(self, eirene):
-        lo, hi = self._partial() or (0, -1)
+    def _sum_op(self, eirene, menu=None):
+        menu = menu or self.plasma_species
+        lo, hi = menu.partial.get(menu.text()) or (0, -1)
         return "%d %d %s" % (lo, hi, "esumz" if eirene else "sumz")
 
     def proportion(self):
@@ -364,17 +455,27 @@ class QuantityPanel(QtWidgets.QWidget):
                                  and self.current.source in ("matrix",
                                                              "eirene"))
 
-    def ops(self, q):
-        """b2plot operations applied after the label of quantity q: species
-        sum or selection, clvp contour levels."""
+    def overlay_reduced(self):
+        """True if b2plot sends one column of the overlay quantity."""
+        q = self.overlay_current
+        return self.summed(self.overlay_species) or (
+            self.overlay.levels.proportion() is not None and q is not None
+            and q.source in ("matrix", "eirene"))
+
+    def ops(self, q, overlay=False):
+        """b2plot operations applied after the label of quantity q (the
+        plasma one, or the overlay one): species sum or selection, clvp
+        contour levels."""
+        menu = self.overlay_species if overlay else self.plasma_species
         eirene = q.source in ("eirene", "evector")
         ops = []
-        prop = self.proportion() if q.source in ("matrix", "eirene") \
+        prop = (self.overlay.levels.proportion() if overlay else
+                self.proportion()) if q.source in ("matrix", "eirene") \
             else None
-        if self.summed():
-            ops.append(self._sum_op(eirene))
+        if self.summed(menu):
+            ops.append(self._sum_op(eirene, menu))
         elif prop is not None:
-            col = max(self.species.currentIndex(), 0)
+            col = max(menu.combo.currentIndex(), 0)
             ops.append("%d %s" % (col, "ezsel" if eirene else "zsel"))
         if prop is not None:
             npos, nneg = prop
@@ -399,16 +500,14 @@ class QuantityPanel(QtWidgets.QWidget):
     def kind(self):
         return self.kind_combo.currentData() or "patch"
 
-    def _fill_kinds(self, vector, patch):
-        """The kinds of cell data or of face data (vectors) in the menu
-        (patch only for masks): the one chosen kept for data of the same
-        kind, else the first (patch, quiver)."""
+    def _fill_kinds(self, patch):
+        """The kinds of the plasma plot in the menu (patch only for masks):
+        the one chosen kept, else patch."""
         combo = self.kind_combo
-        old = self.kind() if vector == self._vector else None
-        self._vector = vector
+        old = combo.currentData()
         combo.blockSignals(True)
         combo.clear()
-        for k in KINDS_VECTOR if vector else KINDS_FLAT:
+        for k in KINDS_FLAT:
             combo.addItem(KIND_TEXT[k], k)
             combo.model().item(combo.count() - 1).setEnabled(
                 not patch or k == "patch")
@@ -423,49 +522,102 @@ class QuantityPanel(QtWidgets.QWidget):
             self.kind_combo.setCurrentIndex(i)
 
     def _kind_chosen(self, *_):
+        """Another plot type: the number of contour levels kept for each
+        (LEVELS at first: 100 filled contours, 20 contour lines)."""
+        old, new = self._last_kind, self.kind()
+        number = self.levels_box.number
+        if old in self._levels_of:
+            self._levels_of[old] = number.value()
+        if new != old and new in self._levels_of:
+            number.blockSignals(True)
+            number.setValue(self._levels_of[new])
+            number.blockSignals(False)
         self._kind_changed()
 
+    def set_plotted(self, plasma, vector, wall, overlay=False):
+        """The options of each plot only with its quantity plotted."""
+        self._shown = (plasma, vector, wall, overlay)
+        self._kind_changed(emit=False)
+
+    def vector_kind_name(self):
+        return self.vector_kind.currentData() or "quiver"
+
     def _kind_changed(self, emit=True):
-        kind = self.kind()
+        kind, vkind = self.kind(), self.vector_kind_name()
+        self._last_kind = kind
         source = self.current.source if self.current is not None else ""
-        self.lines.setVisible(kind in ("contour", "contourf"))
+        vsource = self.vector_current.source if self.vector_current else ""
+        on, vector, wall, overlay = self._shown
+        osource = self.overlay_current.source if self.overlay_current \
+            else ""
+        for box in self.overlay.boxes():
+            box.setVisible(overlay)
+        self.overlay.regions.setVisible(osource in ("matrix",
+                                                    "equilibrium"))
         self.lines.fill_lines.setVisible(kind == "contourf")
-        self.arrows.setVisible(kind in ("quiver", "quiverstream"))
-        self.streams.setVisible(kind in ("stream", "quiverstream"))
-        self.overlay_box.setVisible(kind in KINDS_FLAT)
-        self.cells_box.setVisible(source in ("matrix", "vector",
-                                             "equilibrium"))
+        self.lines.mono.setVisible(kind == "contour")   # filled: no use
+        self.vector_box.setVisible(vector)
+        self.arrows.setVisible(vector and vkind in ("quiver",
+                                                    "quiverstream"))
+        self.streams.setVisible(vector and vkind in ("stream",
+                                                     "quiverstream"))
+        self.wall_box.setVisible(wall)
+        self.plasma_regions.setVisible(source in ("matrix", "equilibrium"))
+        self.vector_regions.setVisible(vsource == "vector")  # B2.5 cells
         mask = self.is_mask()
         self.mask_box.setVisible(mask)
         self.mask_box.show_argument(mask and bool(INTEGER.fullmatch(
             self.current.name)))
-        self.colour.setVisible(not mask)
-        self.levels_box.setVisible(kind in ("contourf", "contour")
-                                   and not mask)
+        self.colour.setVisible(on and not mask)
+        self.contour_box.setVisible(on and kind in ("contourf", "contour")
+                                    and not mask)
         if emit:
             self._changed()
 
     def set_range(self, lo, hi):
         self.colour.set_range(lo, hi)
 
+    def set_wall_range(self, lo, hi):
+        self.wall_box.set_range(lo, hi)
+
     def set_seeds(self, seeds):
         self.streams.set_seeds(seeds)
 
     def style(self):
+        """The PlotStyle of the plasma plot."""
         fields = {}
-        for box in (self.colour, self.levels_box, self.lines, self.arrows,
-                    self.streams, self.cells_box):
+        for box in (self.colour, self.levels_box, self.lines,
+                    self.plasma_regions):
             fields.update(box.style_fields())
         if self.is_mask():
             fields.update(self.mask_box.style_fields())
         return PlotStyle(kind=self.kind(), column=0 if self.reduced()
                          else max(self.species.currentIndex(), 0), **fields)
 
-    def _species_chosen(self, *_):
-        """A species chosen (set_columns changes it silently): the one
-        offered first from now on, where a quantity has it."""
-        self.chosen_species = self.species.currentText()
-        self._changed()
+    def vector_style(self, column):
+        """The PlotStyle of the vector plot (species column column)."""
+        fields = {}
+        for box in (self.vector_box, self.arrows, self.streams,
+                    self.vector_regions):
+            fields.update(box.style_fields())
+        return PlotStyle(kind=self.vector_kind_name(), column=column,
+                         **fields)
+
+    def set_vector_range(self, lo, hi):
+        self.vector_box.set_range(lo, hi)
+
+    def overlay_style(self):
+        """The PlotStyle of the overlay: contour lines."""
+        fields = {}
+        for box in self.overlay.parts():
+            fields.update(box.style_fields())
+        fields["fill_lines"] = False
+        return PlotStyle(kind="contour", column=0 if self.overlay_reduced()
+                         else max(self.overlay_species.combo.currentIndex(),
+                                  0), **fields)
+
+    def set_overlay_range(self, lo, hi):
+        self.overlay.colour.set_range(lo, hi)
 
     def _changed(self, *_):
         self.style_changed.emit()

@@ -211,9 +211,34 @@ class CmapChooser(_Chooser):
                 self.setItemData(i, CENTRED_TIP, Qt.ToolTipRole)
         self.setCurrentIndex(max(self.findText(value), 0))
 
+        self.setMinimumContentsLength(4)
+        self.setSizeAdjustPolicy(
+            QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.currentIndexChanged.connect(self._named)
+        self._named()
+
     def name(self):
         """The matplotlib name of the map chosen."""
         return MPL_NAMES.get(self.currentText(), self.currentText())
+
+    def _named(self, *_):
+        """The name of the map shown is in the tooltip."""
+        self.setToolTip("Colour map: " + self.currentText())
+
+    def paintEvent(self, event):
+        """Closed: the colours of the map chosen instead of its name."""
+        p = QtWidgets.QStylePainter(self)
+        opt = QtWidgets.QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        opt.currentText = ""
+        p.drawComplexControl(QtWidgets.QStyle.CC_ComboBox, opt)
+        rect = self.style().subControlRect(
+            QtWidgets.QStyle.CC_ComboBox, opt,
+            QtWidgets.QStyle.SC_ComboBoxEditField, self).adjusted(3, 3, -3, -3)
+        if self.currentIndex() >= 0 and rect.width() > 4:
+            if not self.isEnabled():
+                p.setOpacity(0.4)
+            _colour_bar(p, rect, self.currentText(), opt.palette)
 
 
 class _GlyphChooser(_Chooser):

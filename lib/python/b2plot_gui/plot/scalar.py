@@ -47,14 +47,30 @@ class ScalarMixin:
             m &= np.asarray(cond.values[0], float)[g.cells - 1] > 0
         return m
 
-    def _cell_tri(self):
-        """Triangulation of the vertices restricted to the shown cells."""
+    def _cell_tri(self, mask=None):
+        """Triangulation of the vertices restricted to the shown cells (of
+        mask, default those of the plasma plot)."""
         g = self.run.geometry
-        hidden = ~self.mask[g.tri_cell]
+        hidden = ~(self.mask if mask is None else mask)[g.tri_cell]
         if not hidden.any():
             return self.tri
         return mtri.Triangulation(self.tri.x, self.tri.y, self.tri.triangles,
                                   mask=hidden)
+
+    def _finite_tri(self, z, mask=None):
+        """(triangulation of the cells shown (mask, default those of the
+        plasma plot) without the triangles at a vertex with no value, the
+        vertex values z with 0 there): no contours where there is no
+        value."""
+        tri = self._cell_tri(mask)
+        bad = ~np.isfinite(z)
+        if bad.any():
+            hide = bad[tri.triangles].any(axis=1)
+            if tri.mask is not None:
+                hide |= tri.mask
+            tri = mtri.Triangulation(tri.x, tri.y, tri.triangles, mask=hide)
+            z = np.where(bad, 0.0, z)
+        return tri, z
 
     def _column(self, data, style):
         return min(max(style.column, 0), len(data.columns) - 1)
@@ -132,16 +148,7 @@ class ScalarMixin:
             pc.set_linewidth(0.15 if st.edges else 0.3)
             self.mappable = pc
         else:
-            z = np.asarray(f.vertex[col], float)
-            tri = self._cell_tri()
-            bad = ~np.isfinite(z)
-            if bad.any():           # no contours where there is no value
-                hide = bad[tri.triangles].any(axis=1)
-                if tri.mask is not None:
-                    hide |= tri.mask
-                tri = mtri.Triangulation(tri.x, tri.y, tri.triangles,
-                                         mask=hide)
-                z = np.where(bad, 0.0, z)
+            tri, z = self._finite_tri(np.asarray(f.vertex[col], float))
             used = np.unique(tri.get_masked_triangles())
             self._contours(tri, z, norm_for(z[used], st), st, f.levels)
         if st.cell_values:

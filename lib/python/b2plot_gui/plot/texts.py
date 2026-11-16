@@ -12,10 +12,12 @@ from matplotlib.ticker import LogFormatterSciNotation, LogLocator, MaxNLocator
 from ...b2plot import labels
 from .. import theme
 
-PLACEHOLDER = "Quantity"
-TICK_CHARS = 5                  # longest tick label of a colour bar
-BAR_ROOM = 3.4                  # room for them beside a bar (font sizes)
+PLACEHOLDER = "Plasma quantity"
+TICK_DIGITS = 4                 # most digits of a colour-bar tick label
+BAR_ROOM = 2.5                  # room for them beside a bar (font sizes)
 WALL_PLACEHOLDER = "Wall quantity"
+VECTOR_PLACEHOLDER = "Vector quantity"
+OVERLAY_BAR = (0.15, 0.06, 0.7, 0.035)  # in the plot box (axes fraction)
 
 
 def fit_size(s, size, width, bold=False):
@@ -75,7 +77,10 @@ class TextMixin:
 
     def _drop_wall_bar(self):
         """The wall strip colour bar away: its placeholder in a fixed plot,
-        else the slot and its room."""
+        else the slot and its room (nothing to do when the placeholder is
+        there: every frame of a movie)."""
+        if self.wbar is None and self.wax in self.placeholders:
+            return
         _detach(self.wbar)
         self.wbar = None
         _empty(self.wax)
@@ -85,6 +90,57 @@ class TextMixin:
             self._place()
         self._placeholder(self.wax, WALL_PLACEHOLDER)
 
+    def _drop_vector_bar(self):
+        """The vector colour bar away: its placeholder in a fixed plot,
+        else the slot and its room (nothing to do when the placeholder is
+        there)."""
+        if self.vbar is None and self.vax in self.placeholders:
+            return
+        _detach(self.vbar)
+        self.vbar = None
+        _empty(self.vax)
+        self.vax.set_visible(False)
+        if self.vector_bar:
+            self.vector_bar = False
+            self._place()
+        self._placeholder(self.vax, VECTOR_PLACEHOLDER)
+
+    def vector_colorbar(self, mappable, label):
+        """The colour bar of the vector magnitude, between those of the
+        plasma and of the wall quantity."""
+        if not self.vector_bar:
+            self.vector_bar = True
+            self._place()
+        _empty(self.vax)
+        self.placeholders.discard(self.vax)
+        self.vax.set_visible(True)
+        self.vbar = self.fig.colorbar(mappable, cax=self.vax)
+        self._style_bar(self.vbar, label)
+
+    def _empty_slots(self):
+        """Placeholders in the vector and wall slots without a bar."""
+        for bar, cax, text in ((self.vbar, self.vax, VECTOR_PLACEHOLDER),
+                               (self.wbar, self.wax, WALL_PLACEHOLDER)):
+            if bar is None and cax not in self.placeholders:
+                self._placeholder(cax, text)
+
+    def _drop_overlay_bar(self):
+        """The colour bar of the overlay away (with its axes)."""
+        _detach(self.obar)
+        self.obar = None
+        if self.oax is not None:
+            self.oax.remove()
+            self.oax = None
+
+    def overlay_colorbar(self, mappable, label):
+        """The colour bar of the overlay inside the plot box: horizontal,
+        at its bottom, the name of the quantity on it."""
+        self._drop_overlay_bar()
+        self.oax = self.ax.inset_axes(OVERLAY_BAR, zorder=7.0)
+        self.obar = self.fig.colorbar(mappable, cax=self.oax,
+                                      orientation="horizontal")
+        self._style_bar(self.obar, label)
+
     def _placeholder(self, cax=None, text=PLACEHOLDER):
         """Empty colour-bar slot of a fixed plot (hidden otherwise)."""
         cax = self.cax if cax is None else cax
@@ -93,6 +149,8 @@ class TextMixin:
             return
         face, frame, color = theme.placeholder()
         _empty(cax)
+        if cax is not self.cax:         # the vector and wall slots: kept
+            self.placeholders.add(cax)  # until a bar or a new theme
         cax.set_visible(True)
         cax.set_facecolor(face)
         cax.set_xticks([])
@@ -120,6 +178,7 @@ class TextMixin:
             self.wall_bar = True
             self._place()
         _empty(self.wax)
+        self.placeholders.discard(self.wax)
         self.wax.set_visible(True)
         self.wbar = self.fig.colorbar(mappable, cax=self.wax)
         self._style_bar(self.wbar, label)
@@ -143,9 +202,14 @@ class TextMixin:
         bar.outline.set_edgecolor(color)
         bar.set_label("")
         text = labels.any_to_mathtext(label or "")
-        if text.strip():
+        if text.strip():            # smaller if longer than the bar
+            box = bar.ax.get_position()
+            w, h = self.inches() * 72.0
+            bar.label_factor = fit_size(text, fs, 0.95 * (
+                box.height * h if vertical else box.width * w)) / fs
             bar.ax.text(0.5, 0.5, text, rotation=90 if vertical else 0,
-                        ha="center", va="center", fontsize=fs, color=color,
+                        ha="center", va="center", color=color,
+                        fontsize=fs * bar.label_factor,
                         transform=bar.ax.transAxes, gid="bar-label",
                         bbox=dict(boxstyle="round,pad=0.15",
                                   facecolor=theme.figure_bg(),
@@ -155,23 +219,25 @@ class TextMixin:
     def _compact_ticks(bar, axis, vertical, fs, color):
         """Short tick labels: the values divided by a power of ten written
         above (or right of) the bar when they are large or small, with the
-        fewest decimals that keep them apart (nice values when they would
-        still be long), in a smaller font if they would not fit beside
-        the bar."""
+        fewest decimals that keep them apart (nice values, then plainer
+        ones, when they would have more than TICK_DIGITS digits), in a
+        smaller font if they would not fit beside the bar."""
         lo, hi = sorted(bar.mappable.get_clim())
         top = np.nanmax(np.abs([lo, hi])) if np.isfinite([lo, hi]).any() \
             else np.nan
         p = int(np.floor(np.log10(top))) if top > 0 and (
             top >= 1e3 or top < 1e-2) else 0
         tol = 1e-9 * max(hi - lo, abs(hi), 1e-300)
-        for nice in (False, True):
-            if nice:
-                bar.locator = MaxNLocator(nbins=6)
+        for locator in (None, MaxNLocator(nbins=6),
+                        MaxNLocator(nbins=6, steps=[1, 2, 5, 10])):
+            if locator is not None:
+                bar.locator = locator
             bar.update_ticks()
             ticks = np.asarray(bar.get_ticks(), float)
             ticks = ticks[(ticks >= lo - tol) & (ticks <= hi + tol)]
             texts = short_labels(ticks / 10.0 ** p)
-            if max([len(t) for t in texts] + [0]) <= TICK_CHARS:
+            if max([sum(c.isdigit() for c in t) for t in texts] + [0]) \
+                    <= TICK_DIGITS:
                 break
         bar.set_ticks(ticks, labels=texts)
         axis.get_offset_text().set_visible(False)
@@ -242,11 +308,12 @@ class TextMixin:
                 x + 0.5 * w, top - 0.4 * fs / pts, s, ha="center",
                 va="top", fontsize=fit_size(s, 1.2 * fs, wide, ls.bold),
                 **kw))
-        for bar in (self.cbar, self.wbar):
+        for bar in (self.cbar, self.vbar, self.wbar, self.obar):
             if bar is not None:
                 for t in bar.ax.texts:
-                    t.set(color=color, fontsize=fs if t.get_gid() ==
-                          "bar-label" else 0.9 * fs)
+                    t.set(color=color, fontsize=fs * getattr(
+                        bar, "label_factor", 1.0) if t.get_gid() ==
+                        "bar-label" else 0.9 * fs)
                 bar.ax.tick_params(labelsize=0.9 * fs * getattr(
                     bar, "tick_factor", 1.0), colors=color)
                 bar.outline.set_edgecolor(color)

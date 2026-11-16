@@ -129,7 +129,8 @@ def stylesheet(font=""):
     size = float(font[:-2]) if font.endswith("pt") else base if base > 0 \
         else 13.0
     k = size / (base if base > 0 else 13.0)     # sizes follow the font
-    c = dict(COLORS[name()], font="font-size: %s;" % font if font else "",
+    c = dict(COLORS[name()], accent=ACCENT,
+             font="font-size: %s;" % font if font else "",
              title="font-size: %s;" % (font or "%.2fpt" % (
                  base if base > 0 else 13.0)),
              gap=round(0.9 * size),     # under a group title
@@ -183,6 +184,13 @@ QScrollBar:vertical {{ background-color: {panel}; width: {px12}px;
     margin: 0px; border: 0px; }}
 QScrollBar:horizontal {{ background-color: {panel}; height: {px12}px;
     margin: 0px; border: 0px; }}
+QSlider::groove:horizontal {{ height: {px4}px; background: {soft_border};
+    border-radius: {px2}px; }}
+QSlider::sub-page:horizontal {{ background: {accent};
+    border-radius: {px2}px; }}
+QSlider::handle:horizontal {{ background: {control};
+    border: 1px solid {border}; width: {px14}px; margin: -{px6}px 0px;
+    border-radius: {px7}px; }}
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
     background-color: {control_alt}; border: 1px solid {soft_border};
     border-radius: 4px; min-height: {px24}px; min-width: {px24}px; }}
