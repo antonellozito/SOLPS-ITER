@@ -1,10 +1,13 @@
 """Cell inspector: at a point inside a B2.5 cell or an EIRENE triangle,
-groups of rows [quantity, name, value, unit]: the value of the quantity
-shown; the grid of the B2.5 cell and its magnetic equilibrium, basic
-quantities (the variables of b2fgmtry documented in b2cdcv, rhop and
-psiN of rzpsi.dat, the connection length of b2plot) and derived ones
-(equilibrium.derived_rows, no name); the EIRENE triangle (fort.33,
-fort.34, fort.35, area and volume of b2plot)."""
+groups of rows [quantity, name, value, unit]: the value of the plasma
+quantity shown, the components of the vector quantity shown, the values
+of the wall quantity shown on the wall elements the cell or triangle
+touches (each where it is plotted); the grid of the B2.5 cell and its
+magnetic equilibrium, basic quantities (the variables of b2fgmtry
+documented in b2cdcv, rhop and psiN of rzpsi.dat, the connection length
+of b2plot) and derived ones (equilibrium.derived_rows, no name); the
+EIRENE triangle (fort.33, fort.34, fort.35, area and volume of
+b2plot)."""
 
 import numpy as np
 
@@ -48,9 +51,11 @@ def groups(tab, x, y):
     if row < 0 and jt < 0:
         return []
     out = []
-    shown = _shown(tab, row, jt)
-    if shown:
-        out.append(("Quantity shown", shown))
+    for title, rows in (("Plasma quantity shown", _plasma(tab, row, jt)),
+                        ("Vector quantity shown", _vector(tab, row, jt)),
+                        ("Wall quantity shown", _wall(tab, row, jt))):
+        if rows:
+            out.append((title, rows))
     rho = run.psimap.rhop if run.psimap is not None else None
     geo, tri = files(run)
     if row >= 0:
@@ -67,11 +72,78 @@ def groups(tab, x, y):
     return out
 
 
-def _shown(tab, row, jt):
-    """The quantity shown (|v| and its components for vectors) there."""
+def _text(tab, q, sent):
+    """Description of quantity q (data as sent sent), with its species."""
+    text = labels.tex_to_plain(q.description) if hasattr(
+        q, "description") else q.label
+    species = tab.species_text(sent)
+    return text + (" (%s)" % species if species else "")
+
+
+def _plasma(tab, row, jt):
+    """The plasma quantity shown there."""
     d, plot = tab.data, tab.plot
     if d is None or not tab._current():
         return []
+    return _values(tab, d, plot._column(d, plot.style),
+                   _text(tab, tab.wanted, d), row, jt)
+
+
+def _vector(tab, row, jt):
+    """|v| and the components of the vector quantity shown there."""
+    args = tab._vector_args()
+    if args is None:
+        return []
+    return _values(tab, args[0], args[1].column,
+                   _text(tab, tab.vector_wanted, tab.vector_data), row, jt)
+
+
+def touching(seg, poly):
+    """Indices of the segments (n, 4: R, Z of both ends) along a stretch
+    of an edge of the polygon (m, 2), within a thousandth of its size."""
+    poly = np.asarray(poly, float)
+    tol = 1e-3 * float(np.ptp(poly, axis=0).max())
+    p = poly[None]
+    d = np.roll(poly, -1, axis=0)[None] - p
+    length = np.maximum(np.hypot(d[..., 0], d[..., 1]), 1e-300)
+    u = d / length[..., None]
+    ends = [np.asarray(seg, float)[:, None, k:k + 2] - p for k in (0, 2)]
+    off = [np.abs(e[..., 0] * u[..., 1] - e[..., 1] * u[..., 0])
+           for e in ends]
+    t = [np.sum(e * u, axis=-1) for e in ends]
+    lo = np.maximum(np.minimum(*t), 0.0)
+    hi = np.minimum(np.maximum(*t), length)
+    return np.flatnonzero(((off[0] < tol) & (off[1] < tol) &
+                           (hi - lo > tol)).any(axis=1))
+
+
+def _wall(tab, row, jt):
+    """The wall quantity shown on the wall elements the cell or the
+    triangle there touches."""
+    pair = tab._wall_pair()
+    if pair is None:
+        return []
+    data, style = pair[:2]
+    run = tab.run
+    seg = data.segments if data.segments is not None else \
+        run.layers.get("wall", np.zeros((0, 4)))
+    last = len(data.columns) - 1
+    v = sum(np.asarray(data.values[min(max(c, 0), last)], float)
+            for c in style.columns or (0,))
+    seg = np.asarray(seg, float)[:len(v)]
+    polys = ([run.geometry.polygons[row]] if row >= 0 else []) + (
+        [np.column_stack((run.trimesh.x, run.trimesh.y))[
+            run.trimesh.triangles[jt]]] if jt >= 0 else [])
+    near = sorted({int(k) for p in polys for k in touching(seg, p)})
+    text = _text(tab, tab.wall_wanted, data)
+    unit = labels.any_to_plain(data.unit)
+    return [["%s, wall element %d" % (text, k + 1), data.name,
+             _num(float(v[k])), unit] for k in near]
+
+
+def _values(tab, d, col, text, row, jt):
+    """The value of the field d (|v| and the components of a vector) in
+    column col at the cell (geometry row) or the triangle jt."""
     if d.location == "cells":
         if row < 0:
             return []
@@ -80,11 +152,6 @@ def _shown(tab, row, jt):
         return []
     else:
         i = jt
-    col = plot._column(d, plot.style)
-    text = labels.tex_to_plain(tab.wanted.description) if hasattr(
-        tab.wanted, "description") else tab.wanted.label
-    if tab.quantity.species.count() > 1:
-        text += " (%s)" % tab.quantity.species.currentText()
     unit = labels.any_to_plain(d.unit)
     if hasattr(d, "vr"):
         vr, vz = float(d.vr[col][i]), float(d.vz[col][i])
@@ -112,7 +179,7 @@ def cell_rows(run, row, geo, rho=None):
         grid.append(["Geometry file", "b2fgmtry",
                      "not found or not unstructured", ""])
         if rho is not None and np.isfinite(rho(cx, cy)):
-            eq.append(["Rho poloidal at the centre", "rhop (rzpsi.dat)",
+            eq.append(["ρₚ at the centre", "ρₚ (rzpsi.dat)",
                        _num(rho(cx, cy)), ""])
         return grid, eq, []
     i = icv - 1
@@ -167,7 +234,7 @@ def cell_rows(run, row, geo, rho=None):
     grid += faces + vertices
     # the magnetic equilibrium
     if rho is not None and cx is not None and np.isfinite(rho(cx, cy)):
-        add(eq, "Rho poloidal at the centre", "rhop (rzpsi.dat)",
+        add(eq, "ρₚ at the centre", "ρₚ (rzpsi.dat)",
             rho(cx, cy))
         add(eq, "Normalised poloidal flux at the centre", "psiN (rzpsi.dat)",
             rho(cx, cy) ** 2)
@@ -299,7 +366,7 @@ def triangle_rows(run, jt, tri, rho=None):
     out += [["Centroid R", "tr", _num(cr), "m"],
             ["Centroid Z", "tz", _num(cz), "m"]]
     if rho is not None and np.isfinite(rho(cr, cz)):
-        out.append(["Rho poloidal at the centroid", "rhop (rzpsi.dat)",
+        out.append(["ρₚ at the centroid", "ρₚ (rzpsi.dat)",
                     _num(rho(cr, cz)), ""])
     for name, text, unit in (("triarea", "Triangle area", "m^2"),
                              ("triavol", "Triangle volume", "m^3")):

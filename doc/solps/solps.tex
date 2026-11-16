@@ -19515,10 +19515,26 @@ The {\bf quantity panel} (left):
   rolling mean (a window of $W$ frames ending at the frame or centred on
   it, moved frame by frame) or a batch mean (consecutive blocks of $W$
   frames), each position being one request of the frames $k_1$ to $k_2$;
-  a slider selects the position, {\tt Play} shows them in turn while the
-  next one is read, and {\tt Export frames} writes every position as
-  numbered image files or as the pages of one PDF; all options of the tab
-  apply to movie data. A run started with {\tt b2run b2mn} deletes
+  a slider over the whole row selects the position (its frame or block
+  number at its right), {\tt Play} first draws every position once
+  ({\tt Preparing\ldots}, the status bar counts them, nothing is shown
+  meanwhile) and keeps it as an image, then shows the images at the frame
+  rate; they are kept until something changes the plot (quantity, option,
+  view, layers, window size): Pause and Play go on at once, and the
+  slider moved by hand shows them too (the plot is drawn again once it
+  rests); Pause or the end of the movie draws the plot of the position
+  shown; {\tt Save movie} (right of {\tt loop}) writes the images of all
+  positions, drawn first where missing, as a movie file at the frame rate
+  set: MP4, QuickTime or AVI (MPEG-4) and WebM with {\tt ffmpeg} where it
+  is installed, an animated GIF always; without images, a move of the
+  slider draws again only what
+  changes (the fields, vectors, title, colour bars) over a kept image of
+  the rest (layers, axes); the images take at
+  most half of the memory available when {\tt Play} is pressed, else the
+  movie is played as the frames are read (the status bar says so); the title of the plot gives the time, as
+  {\tt t = $t$ s} or {\tt mean between t = $t_1$ -- $t_2$ s}; the window of
+  the rolling and batch means right of {\tt Play}; {\tt Save plot} saves the plot of the
+  position shown; all options of the tab apply to movie data. A run started with {\tt b2run b2mn} deletes
   {\tt b2fstate}, {\tt b2fplasma}, {\tt b2fparam}, {\tt b2ftrack} and
   {\tt balance.nc} and runs in {\tt b2mn.exe.dir} until its end, when they
   are moved back, also after a crash. {\tt Final state} needs a final
@@ -19538,19 +19554,38 @@ The {\bf quantity panel} (left):
   those written since the start of the run, also while it runs (in the
   run directory, or in {\tt b2mn.exe.dir} when older ones were there);
   {\tt Live update} then reloads the run when they change;
-\item the quantity tree (description and \btwoplot name), with a search
-  field; a click opens or closes a group, plots a quantity, a second
-  click clears the plot; vector
-  quantities pair the poloidal and radial components (B2.5) or the
-  Cartesian components (EIRENE); the group {\tt Magnetic equilibrium
+\item the {\tt Plasma quantity} tree (description and \btwoplot name),
+  with a search field (for the three trees); a click opens or closes a
+  group, plots a quantity, a second click clears the plot; the
+  {\tt Name} column of the three trees has one fixed width (longer names
+  in the tooltips; the vertical scroll bar always shown); in the {\tt Run movies} tab the tree is as high as
+  the vector one; the group
+  {\tt Magnetic equilibrium
   (derived)} holds maps the GUI computes from {\tt b2fgmtry}, the derived
   quantities of {\tt Inspect cell} on every cell (vertex values with
-  inverse-volume weights), empty where a quantity has no meaning; the
-  grazing angle is a wall quantity of the wall strip ({\tt graze}, along
-  the wall and target faces of the B2.5 grid);
-\item the species, including the sum over the species (\btwoplot
-  {\tt sumz}, {\tt esumz}); at first the highest charge state of the
-  first species, then the species last chosen, where a quantity has it;
+  inverse-volume weights), empty where a quantity has no meaning;
+\item the {\tt Vector quantity} tree under it: the poloidal and radial
+  components (B2.5) or the Cartesian components (EIRENE) of a vector
+  quantity paired, drawn as arrows, streamlines or both, over the plasma
+  quantity or alone; a click plots one, a second click clears it;
+\item the {\tt Wall quantity} tree under that (only in {\tt Final
+  state}: the movie files have no wall quantities): the quantities of the wall
+  elements (the wall labels of \btwoplot) in groups (fluxes and loads,
+  temperatures, sputtering and reflection, geometry, bulk material,
+  coating, layers, indices), drawn as a strip along the wall, with a
+  plasma quantity or alone; the grazing angle ({\tt graze}, along the
+  wall and target faces of the B2.5 grid) is among the geometry; a click
+  plots one, a second click clears it;
+\item the species, in the title of each tree, as
+  {\tt Plasma quantity (species: \ldots)}: a menu of its own for the
+  plasma, the vector and the wall quantity plotted, grey without a
+  quantity or with one not resolved in species; the plasma species, or
+  the EIRENE atoms, molecules or test ions, with the sum over the species
+  (\btwoplot {\tt sumz}, {\tt esumz} for the plasma quantity; the
+  columns summed for the vector and the wall quantity) and the sum of
+  each element with several; at first the highest charge state of the
+  first species, then the species last chosen in that menu, where a
+  quantity has it;
 \item {\tt Mask}, shown for the masks of the group {\tt Cell masks and
   indices}: the labels with an integer argument ({\bf ixeq}, {\bf nreg},
   {\bf freg}, {\bf tlbl}, \ldots), with the argument $i$ (sent as
@@ -19562,28 +19597,45 @@ The {\bf quantity panel} (left):
   {\bf rc} (recycling stratum) and {\bf bc} (boundary condition), which
   B2.5 sets on the guard cells. A mask that is zero in every cell is
   reported in the status bar;
-\item the overlay on scalar plots: arrows of any vector quantity (as
-  {\tt arow}) and contour lines of a second quantity (as {\tt same});
-\item the trajectories.
+\item {\tt Overlay}, between {\tt Chords} and {\tt Statistics} (only
+  with a plasma quantity plotted that is not contour lines), opens the
+  section {\tt Overlay on the plot}: the tree of the plasma quantities,
+  with its own species menu, for a second quantity drawn as contour
+  lines over the plasma plot (as {\tt same}); a click draws one, a
+  second click clears it.
 \end{itemize}
 
 How the plot looks is set in the right column, from the top:
 \begin{itemize}
-\item the plot type, a menu: patch (at first), filled contour or contour
-  lines for cell data, quiver (at first), streamlines, or quiver and
-  streamlines for vectors (face data);
-\item the colour scale: colour map, reversed or not (the diverging ones,
+\item with a plasma quantity, the {\tt Plasma plot options}: the plot
+  type, a menu: patch (at first), filled contour or contour lines; the
+  colour scale: colour map, reversed or not
+  (the diverging ones,
   from {\tt twilight} to {\tt vanimo}, keep their centre colour at zero
   and show of each side as much as the range covers, or go from the
   centre to one end when all values have one sign), linear, logarithmic
-  or symmetric logarithmic scale, fixed or automatic range;
-\item with contours, the contour levels (number, step, list, or
-  proportion as computed by \btwoplot {\tt clvp} or {\tt eclvp}) and the
-  contour lines (over filled contours, as {\tt cont}); with vectors, the
-  arrows and the streamlines;
+  or symmetric logarithmic scale, fixed or automatic range; the volume
+  regions shown (B2.5 cells: a menu, all at first);
+\item with contours, the {\tt Contours} section: the levels (number:
+  100 at first for filled contours, 20 for contour lines, each plot type
+  keeping its own; step, list, or proportion as computed by \btwoplot
+  {\tt clvp} or {\tt eclvp}) and the lines (over the fill with filled contours, as
+  {\tt cont}; in one colour with contour lines);
+\item with a vector quantity, the {\tt Vector plot options}: the plot
+  type, a menu: quiver (at first), streamlines, or quiver and
+  streamlines; the colour scale of the magnitude: colour map, reversed or
+  not, linear or logarithmic scale, fixed or automatic range; the volume
+  regions shown (B2.5 vectors: a menu of their own, all at first); then
+  the arrows and the streamlines;
+\item with a wall quantity, the {\tt Wall plot options}: width and line
+  style of the strip, colour map, reversed or not, linear or logarithmic
+  scale, fixed or automatic range;
+\item with an overlay, the {\tt Overlay plot options} (colour scale and
+  volume regions shown, as for the plasma plot) and the
+  {\tt Overlay contours} (levels and lines, as the {\tt Contours}
+  section); coloured lines get a horizontal colour bar inside the plot
+  box, at its bottom, with the name and the unit of the quantity;
 \item the layers and the masks (below);
-\item the cells shown: the volume regions checked in a menu (all at
-  first);
 \item the labels: title, axis labels, size, bold, axes on or off and
   colour (as {\tt xlab}, {\tt ylab}, {\tt lbsz}, {\tt bold}, {\tt noax},
   {\tt xcol}); {\tt \$\{NAME\}} (environment, {\tt RUN}, {\tt HOST},
@@ -19592,18 +19644,28 @@ How the plot looks is set in the right column, from the top:
 \end{itemize}
 
 The {\bf plot} (centre) shows the physical domain only, in a box that
-never moves, from the top of its column; at its right the colour bar of
-the quantity and, right of it, the colour bar of the wall strip (empty
-frames when nothing is plotted; filled contours too get a plain
-rectangle). The {\bf commands} of the plot stand one under the other in
+never moves, from the top of its column; at its right the colour bars
+of the plasma, of the vector and of the wall quantity (empty frames
+when nothing is plotted; filled contours too get a plain rectangle),
+with tick labels of at most four digits (a power of ten above the bar).
+With one quantity plotted (plasma, vector or wall) the automatic title
+is its name and its colour bar its unit; with more, there is no
+automatic title (with the movie frames, their time only) and each colour
+bar shows the name of its quantity with the unit in parentheses. The {\bf commands} of the plot stand one under the other in
 the narrow column at its right, from the height of the top of the plot
 box, in groups: {\tt Zoom}, {\tt Unzoom},
 {\tt Rezoom}, {\tt Restore}; {\tt Inspect cell}; {\tt Add to page},
 {\tt Page composer}; {\tt Save plot} (png, jpg, eps, pdf or svg;
 vector or raster content at a resolution; colour space rgb, cmyk or
 gray; light or dark theme), {\tt Export field}. Under the plot box, from its left edge, the readout of
-the cursor in one line: $R$, $Z$, $\rho_{pol}$ (with {\tt rzpsi.dat})
-and the value of the quantity shown with its unit in bold. The view
+the cursor in one line: $R$, $Z$, $\rho_p$ (with {\tt rzpsi.dat}) and,
+each where it is plotted, {\tt Plasma quantity}, {\tt Vector quantity}
+(the magnitude) and {\tt Wall quantity} (on the strip under the cursor)
+with the value and the unit in bold, each only where its quantity is
+drawn under the cursor; $R$, $Z$ and $\rho_p$ at fixed places, the
+quantities shown one after the other at fixed places too (without the
+plasma quantity there, the vector quantity in its place); nothing with
+the cursor off the plot. The view
 starts on
 the grid and the device structure, which is also the widest view
 ({\tt Restore}). Dragging the plot with the left button pans it, the
@@ -19614,7 +19676,12 @@ redrawn after zoom and pan.
 {\tt Inspect cell} outlines the cell under the mouse in gold; a click in a
 B2.5 cell or an EIRENE triangle (elsewhere nothing happens) lists in up
 to five groups, with the quantity, its B2.5 or EIRENE name, the value
-and the unit: the value of the quantity shown; the grid of the B2.5 cell
+and the unit, each group where its quantity is plotted: the value of the
+plasma quantity shown ({\tt Plasma quantity shown}), the magnitude and
+the $R$ and $Z$ components of the vector quantity shown
+({\tt Vector quantity shown}), the values of the wall quantity shown on
+the wall elements along an edge of the cell or of the triangle
+({\tt Wall quantity shown}); the grid of the B2.5 cell
 from {\tt b2fgmtry} (the variables of \texttt{b2cdcv}: number, centre,
 {\tt ix}, {\tt iy}, region and region of its flux tube, named for the
 standard topologies of Appendix~\ref{cha:regions} as B2.5 identifies
@@ -19637,10 +19704,13 @@ tube); the EIRENE triangle from {\tt fort.33}, {\tt fort.34} and
 additional surfaces, its B2.5 cell and faces, centroid, area and volume
 of \btwoplotns), in a small window that can be exported as CSV.
 
-{\tt Chords} and {\tt Statistics}, right of the species (only with a
-quantity plotted, in both tabs: with the movie frames they follow the
-frame shown, also while playing), open their section in the quantity
-column, under that row; one at a time, a second click closes it. A menu
+{\tt Chords} (with a plasma or a vector quantity plotted) and
+{\tt Statistics} (with a plasma quantity plotted), under the trees
+(in both tabs: with the movie frames they follow the frame shown, also
+while playing), open their section in the quantity column, under that
+row; one at a time, a second click closes it. With a plasma and a vector
+quantity plotted, a menu left of {\tt Close} chooses the one the chords
+measure ({\tt Plasma} at first, or {\tt Vector}). A menu
 left of {\tt Draw chord} chooses the chords: {\tt Drawn}, drawn on the
 plot ({\tt Draw chord}, two clicks each as long as it is on) or typed
 ({\tt +}), or those of the {\tt *.chords} files of the run
@@ -19658,7 +19728,7 @@ chord sweeps around the axis ($\mathbf{n}$ to the right of the chord);
 its profile (linear in the vertex values, as the contours). With two
 chords or more, a plot under the tabs shows the line integrals or (menu)
 the line averages against the chord number. With the movie frames,
-{\tt Show all} (left of {\tt Close}) draws the profiles and the sums of
+{\tt Show all} (left of the menu of the quantity and of {\tt Close}) draws the profiles and the sums of
 all the frames (loaded in the background): the frames other than the one
 shown with lines a fifth as wide (60\,\% opaque) and markers a fifth as
 large, the colours
@@ -19774,14 +19844,14 @@ closed parts empty, filled or hatched in a colour of their own; from
 EIRENE grid, the separatrices (the structure, the B2.5 grid and the
 separatrices are shown at first), the O-point (of {\tt rzpsi.dat}), the
 X-points, flux surfaces (from {\tt rzpsi.dat}, at
-levels of $\rho_{pol}$ or of the normalised
+levels of $\rho_p$ or of the normalised
 $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$, with the O-point and the
 primary X-point found from the $\psi$ map), the midplanes (the segments
 {\tt RZIMP} and {\tt RZOMP} of {\tt b2.user.parameters}, where they cross
-the B2.5 grid), the divertor targets (the faces of the target face
-regions, as B2.5 collects them). The lines of the trajectories are set
-in their group of the quantity panel, the chords of the run are drawn
-from the {\tt Chords} section.
+the B2.5 grid), the targets (the faces of the target face
+regions, as B2.5 collects them). The chords of the run are drawn from
+the {\tt Chords} section. The trajectories of {\bf traj}
+(section~\ref{sec:traj}) are not drawn by the GUI.
 
 The {\bf masks panel}, under the layers, draws regions and labels of
 {\tt b2fgmtry} (Appendix~\ref{lis:b2cdcv}) over the plot, with a legend
@@ -19803,7 +19873,8 @@ mask is named after the title of the quantity.
 
 Export:
 \begin{itemize}
-\item {\tt Export field}: the quantity shown (every species, with the
+\item {\tt Export field}: the plasma or the vector quantity shown (a
+  menu asks which when both are plotted; every species, with the
   scale factor) with the grid it lives on: the vertices ($R$, $Z$,
   $\psi_N$), each cell or EIRENE triangle with its vertex numbers, centre,
   {\tt ix}, {\tt iy} and region (numbers from 1, as in \btwoplotns), as a

@@ -14,7 +14,12 @@ NAV = (("Zoom", "zoom", "Drag a box to zoom in"),
        ("Rezoom", "forward", "Forward to the next view"),
        ("Restore", "restore", "The full view of the run (the plot moves "
         "when dragged with the left button, the mouse wheel zooms)"))
-READOUT = "R = --   Z = --"
+READOUT = ""                        # the cursor off the plot: nothing
+VALUES = ("Plasma quantity", "Vector quantity", "Wall quantity")  # bold
+NAMES = {"rhop": "\u03c1<sub>p</sub>"}        # as written in the readout
+WIDEST = {"R": "88.8888 m", "Z": "-88.8888 m", "rhop": "8.8888"}
+GAP = "  "                          # between two items
+NUMBER = "-8.888e-88"               # the widest value of the quantities
 
 
 class ScaledCanvas(FigureCanvasQTAgg):
@@ -26,6 +31,18 @@ class ScaledCanvas(FigureCanvasQTAgg):
         super().__init__(figure)
         self.inches = None
         self.resized = resized      # called after each resize
+        self.held = False           # neither drawn nor shown (a movie is
+        #                             prepared: each frame drawn once)
+
+    def hold(self, on):
+        """Draws asked for are skipped and the screen keeps what it shows
+        (on), or both again (off)."""
+        self.held = on
+        self.setUpdatesEnabled(not on)
+
+    def draw_idle(self):
+        if not self.held:
+            super().draw_idle()
 
     def freeze(self):
         """The present size becomes the reference (again: with the
@@ -53,10 +70,13 @@ class ScaledCanvas(FigureCanvasQTAgg):
 
 class Readout(QtWidgets.QLabel):
     """The cursor readout in one line under the plot box, from its left
-    edge (a label over the canvas that lets the mouse through): R, Z, rho
-    poloidal (with a psi map) and the value of the quantity shown with its
-    unit in bold, in a font a little larger than the one of the window,
-    the same whatever is shown."""
+    edge (a label over the canvas that lets the mouse through): R, Z,
+    \u03c1_p (with a psi map) and the value of each quantity plotted
+    (plasma, vector, wall) with its unit in bold, in a font a little
+    larger than the one of the window, the same whatever is shown; each
+    item at a fixed place while the cursor moves: R, Z, rho_p in cells as
+    wide as their widest values, then the quantities with a value there,
+    one after the other in cells of one width."""
 
     SCALE = 1.15                    # of the font of the window
 
@@ -69,14 +89,49 @@ class Readout(QtWidgets.QLabel):
         self.setText(text)
 
     def setText(self, text):
+        """text: "name = value" items separated by three blanks (a value
+        "--" or "-- unit": none there). R, Z and rho_p keep their cells
+        (empty without a value); the quantities follow without a gap, in
+        cells as wide as the widest of them (with its unit), so that each
+        starts at the same place whichever are shown."""
         self._line = " ".join(str(text).splitlines()) or " "
-        parts = []
-        for part in self._line.split("   "):
-            name, _, value = part.strip().partition(" = ")
-            if value:
-                parts.append("%s = %s" % (name, "<b>%s</b>" % _html(
-                    value, True) if name == "value" else _html(value)))
-        super().setText("&nbsp;&nbsp;&nbsp;&nbsp;".join(parts) or " ")
+        self.ensurePolished()           # the font of the stylesheet
+        fm = QtGui.QFontMetrics(self.font())
+        bold = QtGui.QFont(self.font())
+        bold.setBold(True)
+        fb = QtGui.QFontMetrics(bold)
+        items = [(name, value) for name, _, value in (
+            p.strip().partition(" = ") for p in self._line.split("   "))
+            if value]
+
+        def head(name):
+            return fm.horizontalAdvance(re.sub(r"<[^>]*>", "", NAMES.get(
+                name, name)) + " = ") + fm.horizontalAdvance(GAP)
+
+        def widest(name, value):
+            if name not in VALUES:
+                return fm.horizontalAdvance(WIDEST.get(name, value))
+            unit = value.partition(" ")[2]      # exponents raised, smaller
+            power = "".join(re.findall(r"\^\{?([-+]?[0-9.]+)", unit))
+            return fb.horizontalAdvance(" ".join((NUMBER, re.sub(
+                r"\^\{?[-+]?[0-9.]+\}?", "", unit)))) + round(
+                0.7 * fb.horizontalAdvance(power))
+        common = max([head(n) + widest(n, v) for n, v in items
+                      if n in VALUES] + [0])
+        cells = []
+        for name, value in items:
+            empty = value.partition(" ")[0] == "--"
+            if name in VALUES and empty:
+                continue                # the next one takes its place
+            text = "" if empty else "%s = %s" % (
+                NAMES.get(name, name), "<b>%s</b>" % _html(value, True)
+                if name in VALUES else _html(value))
+            cells.append('<td width="%d">%s</td>' % (
+                common if name in VALUES else head(name) +
+                widest(name, value), text))
+        super().setText('<table border="0" cellspacing="0" cellpadding="0">'
+                        '<tr>%s</tr></table>' % "".join(cells) if cells
+                        else " ")
         self.adjustSize()
 
     def text(self):
@@ -102,7 +157,7 @@ class Readout(QtWidgets.QLabel):
             size = self.font().pointSizeF()
             self.setStyleSheet("background: transparent; font-size: %.2fpt;"
                                % (self.SCALE * (size if size > 0 else 13.0)))
-            self.adjustSize()
+            self.setText(self._line)    # the cells for the new font
         finally:
             self._busy = False
 

@@ -12,6 +12,7 @@ from ...qt import QtCore, QtWidgets, Qt
 from .figure import FigureView, LineEnds
 
 SOURCES = (("Drawn", "drawn"), (".chords files", "run"))
+TARGETS = (("Plasma", "plasma"), ("Vector", "vector"))
 LOOK = ("#d62728", 1.3, "--", True)     # colour, width, style, number
 SUMS = (("Line integrals", "integral"), ("Line averages", "average"))
 
@@ -108,7 +109,8 @@ class ChordsSection(QtWidgets.QGroupBox):
     """The chords drawn or typed, or (never mixed) those of the *.chords
     files of the run; Draw chord (two clicks on the plot, one chord each,
     as long as it is on), Show all (with the movies: the profiles and
-    sums of all the frames), Close;
+    sums of all the frames), with a plasma and a vector quantity plotted
+    the one measured, Close;
     tabs: one per chord (x removes a drawn one), "+" adds one to type its
     ends, Clear all removes them all; under them, with two or more, the
     line integrals or averages against the chord number. The owner
@@ -130,6 +132,13 @@ class ChordsSection(QtWidgets.QGroupBox):
                             "this is off)", owner.draw_chords, True)
         close = _button("Close", "Close the section (the chords are kept)",
                         lambda: owner.open_section(None))
+        self.target = QtWidgets.QComboBox()     # with both plotted only
+        for text, key in TARGETS:
+            self.target.addItem(text, key)
+        self.target.setToolTip("The chords along the plasma quantity or "
+                               "along the vector quantity plotted")
+        self.target.currentIndexChanged.connect(owner.set_target)
+        self.target.hide()
         self.show_all = QtWidgets.QCheckBox("Show all")
         self.show_all.setToolTip("The profiles and the sums of all the "
                                  "frames, the frame shown thicker, colours "
@@ -141,6 +150,7 @@ class ChordsSection(QtWidgets.QGroupBox):
             top.addWidget(w)
         top.addStretch(1)
         top.addWidget(self.show_all)
+        top.addWidget(self.target)
         top.addWidget(close)
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setTabsClosable(True)

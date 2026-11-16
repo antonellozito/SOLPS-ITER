@@ -1,18 +1,18 @@
 """Overlays of the 2D plot: the layers of the run (structure, grids,
-separatrices, flux surfaces, midplanes, targets, trajectories) and
-further quantities over the field (vectors, contour lines, the wall
-strip)."""
+separatrices, flux surfaces, midplanes, targets), the contour lines of a
+second quantity and the wall strip."""
 
 from dataclasses import replace
 
 import numpy as np
+from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection, PolyCollection
 
 from .. import theme
 from . import shapes
 from .scalar import node_values
-from .styles import (FILL_ZORDER, HATCH, ZORDER, PlotStyle, cmap_for,
-                     even_levels, norm_for)
+from .styles import FILL_ZORDER, HATCH, ZORDER, PlotStyle, cmap_for, \
+    norm_for
 
 
 def structure(run):
@@ -46,11 +46,6 @@ class LayerMixin:
                                       if k.startswith("target: ")])
             if seg is not None and len(seg):
                 art = LineCollection(seg.reshape(-1, 2, 2))
-        elif key == "trajectories" and len(run.layers.get(key, [])):
-            seg = run.layers[key]
-            art = LineCollection(seg.reshape(-1, 2, 2), colors=theme.rgb_array(
-                [run.palette.get(c, (0.5, 0.5, 0.5)) for c in
-                 run.layer_colours.get(key, [1] * len(seg))]))
         elif key == "grid":
             art = LineCollection([np.vstack((p, p[:1]))
                                   for p in run.geometry.polygons])
@@ -78,29 +73,32 @@ class LayerMixin:
             self.layer_artists[key] = art
             self._restyle(key)
 
-    def _wall_strip(self, data, o):
+    def _wall_strip(self, data, o, label=None):
         """A wall field (one value per wall element, WallStyle o) along the
-        wall elements, with its own colour scale and colour bar."""
+        wall elements, with its own colour scale and colour bar (label,
+        default the label of data)."""
         seg = data.segments if getattr(data, "segments", None) is not None \
             else self.run.layers.get("wall", np.zeros((0, 4)))
-        v = np.asarray(data.values[min(o.column, len(data.columns) - 1)],
-                       float)[:len(seg)]
-        if o.log:
+        last = len(data.columns) - 1
+        v = sum(np.asarray(data.values[min(max(c, 0), last)], float)
+                for c in o.columns or (0,))[:len(seg)]
+        if o.scale == "log":
             v = np.where(v > 0, v, np.nan)
         if not len(v) or not np.isfinite(v).any():
-            return
-        st = replace(PlotStyle(), cmap=o.cmap,
-                     scale="log" if o.log else "linear")
+            return None
+        st = replace(PlotStyle(), cmap=o.cmap, reverse=o.reverse,
+                     scale=o.scale, auto=o.auto, vmin=o.vmin, vmax=o.vmax)
         norm = norm_for(v, st)
         strip = LineCollection(seg[:len(v)].reshape(-1, 2, 2),
                                cmap=cmap_for(st, norm), norm=norm,
-                               linewidths=o.width, capstyle="butt",
-                               zorder=5.2)
+                               linewidths=o.width, linestyles=o.style,
+                               capstyle="butt", zorder=5.2)
         strip.set_array(np.ma.masked_invalid(v))
         self.ax.add_collection(strip, autolim=False)
-        self.field_artists.append(strip)
         if o.colorbar:
-            self.wall_colorbar(strip, data.label)
+            self.wall_colorbar(strip, data.label if label is None else
+                               label)
+        return strip
 
     def _flux_surfaces(self, st):
         try:
@@ -133,10 +131,6 @@ class LayerMixin:
                 if hasattr(a, "set_hatchcolor"):    # matplotlib 3.10
                     a.set_hatchcolor(fill)
             return
-        if key == "trajectories":
-            art.set(linewidth=st.width, linestyle=st.style, alpha=st.alpha,
-                    visible=st.visible, zorder=ZORDER[key])
-            return
         if key in ("xpoints", "opoints"):
             art.set(color=theme.rgb(st.color), markersize=st.width,
                     markeredgewidth=max(st.width / 5.0, 1.0) if key ==
@@ -160,53 +154,25 @@ class LayerMixin:
         else:
             self._restyle(key)
 
-    def _overlay(self, role, data, o, st):
-        """A vector as arrows or streamlines (VectorStyle o, species column
-        o.column) or contour lines of a second quantity (species column of
-        the main plot where it exists)."""
-        if role == "wall":
-            self._wall_strip(data, o)
-            return
-        col = min(max(st.column, 0), len(data.columns) - 1)
-        box = self.vector_box()
-        if role.startswith("arrows") and hasattr(data, "vr"):
-            col = min(max(o.column, 0), len(data.columns) - 1)
-            pos, u, w, tri, nu, nw = self._vector_data(data, col)
-            if o.stream:
-                self._streamlines(tri, nu, nw, replace(
-                    PlotStyle(), kind="stream", stream_width=o.width,
-                    stream_color=o.color, color_by_magnitude=False), box,
-                    zorder=5.4)
-                return
-            ast = replace(PlotStyle(), arrow_length=o.length,
-                          arrow_width=o.width, every=0, normalize=o.same,
-                          color_by_magnitude=False, arrow_color=o.color)
-            q = self._quiver(pos, u, w, ast, box)
-            if q is not None:
-                q.set_zorder(5.5)
-        elif role == "lines" and not hasattr(data, "vr"):
-            if data.location == "cells":
-                tri = self._cell_tri()
-                z = np.asarray(data.vertex[col], float)
-                used = np.unique(tri.get_masked_triangles())
-                zz = z[used]
-            elif self.etri is not None:
-                tri = self.etri
-                z = zz = node_values(self.run.trimesh,
-                                     np.asarray(data.values[col], float))
-            else:
-                return
-            lst = replace(PlotStyle(), scale="log" if o.line_log else "linear")
-            norm = norm_for(zz, lst)
-            lev = even_levels(norm, o.line_levels)
-            if o.line_log:
-                lev = lev[lev > 0]
-                z = np.where(z > 0, z, norm.vmin)
-            cs = self.ax.tricontour(tri, z, levels=lev, zorder=4.5,
-                                    colors=[theme.rgb(o.line_color)],
-                                    linewidths=o.line_width,
-                                    linestyles=o.line_style)
-            if o.line_labels:
-                self.ax.clabel(cs, fontsize="x-small",
-                               fmt=lambda v: f"{v:.3g}")
-            self.field_artists.append(cs)
+    def _overlay_lines(self, data, st, label=None):
+        """Contour lines of the overlay quantity (PlotStyle st: levels,
+        lines, colour scale, its own volume regions) over the plasma plot;
+        coloured ones with a horizontal colour bar inside the plot box, at
+        its bottom, with the name of the quantity (label, default the
+        label of data)."""
+        col = self._column(data, st)
+        field, self.mappable = self.mappable, None
+        if data.location == "cells":
+            tri, z = self._finite_tri(np.asarray(data.vertex[col], float),
+                                      self._cell_mask(st, None))
+            used = np.unique(tri.get_masked_triangles())
+            self._contours(tri, z, norm_for(z[used], st), st, data.levels)
+        elif self.etri is not None:
+            values = np.asarray(data.values[col], float)
+            self._contours(self.etri, node_values(self.run.trimesh, values),
+                           norm_for(values, st), st, data.levels)
+        self.overlay_mappable, self.mappable = self.mappable, field
+        if self.overlay_mappable is not None and st.colorbar:
+            cs = self.overlay_mappable      # a continuous scale: readable
+            self.overlay_colorbar(ScalarMappable(norm=cs.norm, cmap=cs.cmap),
+                                  data.label if label is None else label)

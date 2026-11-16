@@ -177,11 +177,35 @@ def quantities(categories, maps=()):
     return out
 
 
+WALL_GROUPS = [       # groups of the wall labels of b2plot, in this order
+    ("Fluxes and loads", r"ei|wallflux|wallhflx|thermev|qevap|qrad"),
+    ("Temperatures", r"walltemp|cooltemp|vaprtemp|vapprs|time"),
+    ("Sputtering and reflection",
+     r"sput\w*|backsca\w*|erosion|deposit|ero_ml|depo_ml|erel|stckcoef"),
+    ("Geometry", r"wallarea|[rz][12]|walldist|wallngth|nseg|north|south|"
+     r"west|east|ibnd|imap[xy]|plathick"),
+    ("Bulk material", r"kappa\w*|tgdns|cp_b\d|bbdyemis|vapprs_[ab]|"
+     r"sublheat"),
+    ("Coating", r"ckapp\w*|ctgdns|c_cp_b\d|coathick"),
+    ("Layers", r"l(kappa|rho|cp|emis|thick|depth)"),
+    ("Indices", r"i(s)?w\w*")]
+WALL_OTHER = "Other wall quantities"
+
+
+def _wall_group(name):
+    return next((g for g, pattern in WALL_GROUPS if re.fullmatch(
+        pattern, name)), WALL_OTHER)
+
+
 def wall_quantities(categories):
-    """Quantities of the wall stack (b2plot wall labels), for the strip."""
-    return [Quantity(n.strip(), d.strip() or n.strip(), "Wall", "wall")
-            for n, d, _ in dict(categories).get("Wall quantities", [])
-            if n.strip()]
+    """Quantities of the wall stack (b2plot wall labels) in their groups,
+    in the order of WALL_GROUPS."""
+    order = [g for g, _ in WALL_GROUPS] + [WALL_OTHER]
+    out = [Quantity(n.strip(), d.strip() or n.strip(), _wall_group(
+        n.strip()), "wall")
+           for n, d, _ in dict(categories).get("Wall quantities", [])
+           if n.strip()]
+    return sorted(out, key=lambda q: order.index(q.group))
 
 
 def chord_quantities(layers, eirene):

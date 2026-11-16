@@ -8,8 +8,8 @@ reference."""
 from ...qt import QtCore, QtWidgets, Qt, Signal
 
 MODES = [("One frame", "frame"), ("Mean over frames", "range"),
-         ("Rolling mean", "rolling"), ("Batch mean", "batch"),
-         ("Standard deviation over frames", "std")]
+         ("Standard deviation over frames", "std"),
+         ("Rolling mean", "rolling"), ("Batch mean", "batch")]
 MINUS = [("nothing", None), ("the first frame", "first"),
          ("the last frame", "last"), ("the mean of all frames", "all"),
          ("the final state", "final")]
@@ -31,13 +31,18 @@ class TimeBox(QtWidgets.QWidget):
 
     source_changed = Signal()       # final state or movie frames
     frames_changed = Signal()       # frames of the movie plot
-    export_frames = Signal()
+    save_movie = Signal()           # Save movie... pressed
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.times = {}                 # file -> frame times (s)
         self.file = 1                   # file of the quantity shown
         self.ready = lambda: True       # plot of the frame drawn
+        self.prepare = None     # Play: True images drawn beforehand, None
+        self.show_frame = None  # being drawn, False live; show_frame(p)
+        self.cancel = None      # shows the image of p; cancel: Pause
+        self._cached = False    # playing the images
+        self._silent = False    # the plot behind is of another position
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.source = QtWidgets.QTabBar()
@@ -48,8 +53,9 @@ class TimeBox(QtWidgets.QWidget):
             self.source.setTabToolTip(i, tip)
         self.movie_part = QtWidgets.QWidget()
         lay.addWidget(self.movie_part)
-        form = QtWidgets.QFormLayout(self.movie_part)
-        form.setContentsMargins(0, 4, 0, 0)
+        rows = QtWidgets.QVBoxLayout(self.movie_part)
+        rows.setContentsMargins(0, 4, 0, 0)
+        rows.setSpacing(4)
         self.mode = QtWidgets.QComboBox()
         for text, key in MODES:
             self.mode.addItem(text, key)
@@ -88,34 +94,52 @@ class TimeBox(QtWidgets.QWidget):
         self.align.addItem("centred", "centred")
         self.align.setToolTip("Trailing: the window ends at the frame; "
                               "centred: the frame is in its middle")
-        self.info = QtWidgets.QLabel(" ")
-        self.info.setWordWrap(True)
-        export = QtWidgets.QPushButton("Export frames…")
-        export.setToolTip("Every position of the slider as an image file "
-                          "or as the pages of one PDF")
-        export.clicked.connect(lambda *_: self.export_frames.emit())
 
-        def row(*widgets):
-            box = QtWidgets.QHBoxLayout()
-            for w in widgets:
-                box.addWidget(w)
-            return box
-        form.addRow("Show", self.mode)
-        form.addRow("Minus", self.minus)
-        form.addRow("Position", row(self.slider, self.pos))
-        form.addRow("Frames", row(self.first, QtWidgets.QLabel("to"),
-                                  self.last))
-        form.addRow("Window", row(self.window, self.align))
-        form.addRow("", row(self.play, self.fps, self.loop, export))
-        form.addRow(self.info)
-        self.form = form
+        def row(*widgets, stretch=()):
+            """A row of widgets (texts: labels), stretch: the indices that
+            take the room (none: the room left at the end)."""
+            w = QtWidgets.QWidget()
+            box = QtWidgets.QHBoxLayout(w)
+            box.setContentsMargins(0, 0, 0, 0)
+            for i, x in enumerate(widgets):
+                box.addWidget(QtWidgets.QLabel(x) if isinstance(x, str)
+                              else x, 1 if i in stretch else 0)
+            if not stretch:
+                box.addStretch(1)
+            rows.addWidget(w)
+            return w
+        row("Show", self.mode, "minus", self.minus, stretch=(1, 3))
+        self.position_row = row(self.slider, self.pos, stretch=(0,))
+        self.frames_row = row("Frames", self.first, "to", self.last,
+                              stretch=(1, 3))
+        self.place = QtWidgets.QStackedWidget()     # one of the two, in a
+        rows.insertWidget(1, self.place)            # place as high for both
+        for w in (self.position_row, self.frames_row):
+            self.place.addWidget(w)
+        self.window_row = QtWidgets.QWidget()   # rolling, batch: right of
+        box = QtWidgets.QHBoxLayout(self.window_row)    # Play, no own row
+        box.setContentsMargins(0, 0, 0, 0)
+        for w in (QtWidgets.QLabel("Window"), self.window, self.align):
+            box.addWidget(w)
+        save = QtWidgets.QPushButton("Save movie\u2026")
+        save.setToolTip("All positions of the slider as a movie file (MP4, "
+                        "MOV, WebM, AVI with ffmpeg; animated GIF) at the "
+                        "frame rate set")
+        save.clicked.connect(lambda *_: self.save_movie.emit())
+        row(self.play, self.fps, self.loop, save, QtWidgets.QWidget(),
+            self.window_row, stretch=(4,))
         self._timer = QtCore.QTimer(self)
         self._timer.timeout.connect(self._tick)
         self.source.currentChanged.connect(self._source_changed)
         self.mode.currentIndexChanged.connect(lambda *_: self._layout())
         self.minus.currentIndexChanged.connect(lambda *_: self._layout())
         self.slider.valueChanged.connect(self.pos.setValue)
+        self.slider.sliderMoved.connect(self._dragged)  # images: at once
         self.pos.valueChanged.connect(self._moved)
+        self._settle = QtCore.QTimer(self)  # the live plot once the slider
+        self._settle.setSingleShot(True)    # rests (images shown before)
+        self._settle.setInterval(300)
+        self._settle.timeout.connect(self._rest)
         for w in (self.first, self.last, self.window):
             w.valueChanged.connect(lambda *_: self._layout())
         self.align.currentIndexChanged.connect(lambda *_: self._layout())
@@ -236,7 +260,7 @@ class TimeBox(QtWidgets.QWidget):
             source + (stat, ref)
 
     def positions(self):
-        """Slider positions shown by Play and by Export frames."""
+        """Slider positions shown by Play (the chords: Show all)."""
         if self.key() in RANGE:
             return [self.pos.value()]
         lo, hi = self._span()
@@ -251,11 +275,10 @@ class TimeBox(QtWidgets.QWidget):
         minus = "" if self.minus.currentData() is None else \
             ", minus " + self.minus.currentText()
         if k1 == k2 and self.key() != "std":
-            return "frame %d of %d, t = %.4g s%s" % (k1, len(t), t[k1 - 1],
-                                                     minus)
-        return "%s of frames %d\u2013%d of %d, t = %.4g\u2013%.4g s%s" % (
-            "standard deviation" if self.key() == "std" else "mean", k1, k2,
-            len(t), t[k1 - 1], t[k2 - 1], minus)
+            return "t = %.4g s%s" % (t[k1 - 1], minus)
+        return "%s between t = %.4g \u2013 %.4g s%s" % (
+            "standard deviation" if self.key() == "std" else "mean",
+            t[k1 - 1], t[k2 - 1], minus)
 
     def time_value(self, f=None):
         """Time of the frame, or the middle of the frames averaged."""
@@ -264,6 +287,12 @@ class TimeBox(QtWidgets.QWidget):
             return None
         k1, k2 = self.frames(f)
         return 0.5 * (t[k1 - 1] + t[k2 - 1])
+
+    def _tip(self):
+        """The frames and times shown, in the tooltips of the position."""
+        text = self.time_text()
+        for w in (self.slider, self.pos, self.first, self.last):
+            w.setToolTip(text)
 
     def set_position(self, p):
         self.pos.setValue(p)
@@ -279,9 +308,9 @@ class TimeBox(QtWidgets.QWidget):
         key = self.key()
         self.movie_part.setVisible(movie)
         if movie:
-            self.form.setRowVisible(2, key not in RANGE)
-            self.form.setRowVisible(3, key in RANGE)
-            self.form.setRowVisible(4, key in ("rolling", "batch"))
+            self.place.setCurrentWidget(self.frames_row if key in RANGE
+                                        else self.position_row)
+            self.window_row.setVisible(key in ("rolling", "batch"))
             self.align.setVisible(key == "rolling")
             self.play.setEnabled(key not in RANGE)
             lo, hi = self._span()
@@ -297,15 +326,42 @@ class TimeBox(QtWidgets.QWidget):
             self.slider.setValue(self.pos.value())
             self.slider.blockSignals(False)
             self.pos.setPrefix({"batch": "block "}.get(key, "frame "))
-            self.info.setText(self.time_text())
+            self._tip()
         if emit and movie:
             self.frames_changed.emit()
 
+    def _image(self, p):
+        """The prepared image of position p shown (not playing), the plot
+        drawn once the slider rests; False if there is none for the plot
+        of now."""
+        if self.play.isChecked() or not self.show_frame or \
+                not self.show_frame(p, True):
+            return False
+        self.jump(p)
+        self._settle.start()
+        return True
+
+    def _dragged(self, p):
+        """The slider dragged: prepared images follow it at once."""
+        self._image(p)
+
+    def rest(self):
+        """The plot of the position shown drawn once the slider rests."""
+        self._settle.start()
+
+    def _rest(self):
+        if self._silent and not self.play.isChecked():
+            self._silent = False
+            self.frames_changed.emit()
+
     def _moved(self, p):
+        if self._image(p):
+            return
+        self._silent = False            # drawn now
         self.slider.blockSignals(True)
         self.slider.setValue(p)
         self.slider.blockSignals(False)
-        self.info.setText(self.time_text())
+        self._tip()
         if self.movie():
             self.frames_changed.emit()
 
@@ -318,16 +374,58 @@ class TimeBox(QtWidgets.QWidget):
         return p
 
     def _play(self, on):
+        """Play: the images of the positions drawn first (prepare), then
+        shown at the frame rate; Pause or the end: the plot of the
+        position shown drawn again."""
         self.play.setText("Pause" if on else "Play")
         if on:
-            self._timer.start()
+            ready = self.prepare() if self.prepare else False
+            if ready is None:           # start() once drawn
+                self.play.setText("Preparing\u2026")
+            else:
+                self._cached = bool(ready)
+                self._timer.start()
         else:
             self._timer.stop()
+            self._cached = False
+            if self.cancel:
+                self.cancel()
+            if self._silent:
+                self._silent = False
+                self.frames_changed.emit()
+
+    def start(self):
+        """The images drawn: the movie starts."""
+        if self.play.isChecked():
+            self.play.setText("Pause")
+            self._cached = True
+            self._timer.start()
+
+    def playing_images(self):
+        return self.play.isChecked() and self._cached
+
+    def jump(self, p):
+        """Position p shown by its image: the slider and the number
+        follow, nothing is read or drawn."""
+        for w in (self.slider, self.pos):
+            w.blockSignals(True)
+            w.setValue(p)
+            w.blockSignals(False)
+        self._tip()
+        self._silent = True
 
     def _tick(self):
+        p = self.next_position()
+        if self._cached:
+            if p is None:
+                self.play.setChecked(False)
+            elif self.show_frame and self.show_frame(p):
+                self.jump(p)
+            else:                       # no image: as the frames come
+                self._cached = False
+            return
         if not self.ready():
             return                      # the frame is still loading
-        p = self.next_position()
         if p is None:
             self.play.setChecked(False)
         else:

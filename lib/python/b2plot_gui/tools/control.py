@@ -1,7 +1,9 @@
 """What the mouse tools of a 2D tab do with the shapes drawn: the cell
 inspector in its window, the chords and the statistics in their sections
 of the quantity column (both follow the quantity, species or frame
-plotted; the statistics of the cells shown follow the view), the seed
+plotted: the chords the plasma or the vector quantity, the statistics the
+plasma quantity; the statistics of the cells shown follow the view), the
+seed
 line of the streamlines. The chords stay in memory when their section is
 closed; they are drawn on the plot (a dot at the start, an arrow at the
 end, the number) while it is open. With the movies, Show all draws the
@@ -26,7 +28,7 @@ from .sections import LOOK, ChordsSection, StatisticsSection
 VOLUMES = {"cells": ("field", "vol"), "triangles": ("efield", "triavol")}
 WHERE = {"shown": "the cells shown in the view", "box": "the box",
          "polygon": "the polygon"}
-XLABELS = {"R": "R (m)", "Z": "Z (m)", "rhop": "rho poloidal",
+XLABELS = {"R": "R (m)", "Z": "Z (m)", "rhop": r"$\rho_p$",
            "dssep": "distance from the separatrix along the line (m)"}
 
 
@@ -89,13 +91,16 @@ class Tools:
 
     # ------------------------------------------------------------ sections
     def open_section(self, which):
-        """The chords, the statistics or neither in the quantity column."""
+        """The chords, the overlay, the statistics or none in the quantity
+        column."""
         self.section = which
         self.chords_section.setVisible(which == "chords")
         self.stats_section.setVisible(which == "stats")
         q = self.tab.quantity
+        q.overlay_section.setVisible(which == "overlay")
         for b, key in ((q.chords_button, "chords"), (q.stats_button,
-                                                     "stats")):
+                                                     "stats"),
+                       (q.overlay_button, "overlay")):
             b.blockSignals(True)
             b.setChecked(which == key)
             b.blockSignals(False)
@@ -139,11 +144,18 @@ class Tools:
         self._statistics(mode, None)
 
     def data_changed(self):
-        """A new quantity, species or frame plotted: the open section and
-        the inspector again for it (the same chords, box, polygon, view or
-        cell)."""
+        """A new quantity, species or frame plotted (plasma, vector or
+        wall): the open section and the inspector again for it (the same
+        chords, box, polygon, view or cell)."""
         tab = self.tab
         key = (id(tab.data), tab.plot.style.column)
+        q = tab.quantity
+        for data, menu in ((tab.vector_data if tab.vector_wanted else None,
+                            q.vector_species),
+                           (tab.wall_data if tab.wall_wanted else None,
+                            q.wall_species)):
+            key += (id(data), None if data is None else
+                    tab._columns(data, menu))
         if key == self.shown:
             return
         self.shown = key
@@ -194,7 +206,8 @@ class Tools:
                                             y0 + t * (y1 - y0))))
             tab.status.emit("Seed line set")
             return
-        if tab.run is None or (mode != "inspect" and not tab._current()):
+        if tab.run is None or mode == "line" and self._measured() is None \
+                or mode in ("box", "polygon") and not tab._current():
             tab.status.emit("No plot to measure")
             return
         if mode == "inspect":
@@ -207,7 +220,7 @@ class Tools:
             title = []
             for t, _ in found:
                 t = t.split(":")[0]
-                if t != "Quantity shown" and t not in title:
+                if not t.endswith("quantity shown") and t not in title:
                     title.append(t)
             self.panel.show_groups(", ".join(title), inspect.HEADER, found)
         elif mode == "line":            # a new chord
@@ -223,22 +236,40 @@ class Tools:
             self.stats_last = (mode, pts)
             self._statistics(mode, pts)
 
-    def _what(self):
-        """Name of the quantity shown, with its species."""
-        tab = self.tab
-        text = tab.wanted.label
-        if tab.quantity.species.count() > 1:
-            text += " [%s]" % tab.quantity.species.currentText()
-        return text
+    def _what(self, q, data):
+        """Name of quantity q shown (data), with its species."""
+        species = self.tab.species_text(data)
+        return q.label + (" [%s]" % species if species else "")
 
-    def _name(self):
-        """The description of the quantity shown, as the title of the 2D
-        plot (without its unit), with its species."""
+    def _name(self, q, data):
+        """The description of quantity q shown (data), as the title of the
+        2D plot (without its unit), with its species."""
+        species = self.tab.species_text(data)
+        return labels.any_to_mathtext(split_unit(q.description)[0] + (
+            " [%s]" % species if species else ""))
+
+    def _measured(self):
+        """(data, Quantity, column, b2plot operations, data as sent) the
+        chords measure: the plasma or the vector quantity plotted (with
+        both, the one chosen in their section), or None."""
         tab = self.tab
-        name = split_unit(tab.wanted.description)[0]
-        if tab.quantity.species.count() > 1:
-            name += "  [%s]" % tab.quantity.species.currentText()
-        return labels.any_to_mathtext(name)
+        if tab.run is None:
+            return None
+        plasma = tab._current()
+        if tab._vector_args() is not None and (
+                not plasma or self.chords_section.target.currentData()
+                == "vector"):
+            v, col = tab.summed_vector(tab.vector_data)
+            return v, tab.vector_wanted, col, (), tab.vector_data
+        if plasma:
+            return (tab.data, tab.wanted, tab.plot._column(
+                tab.data, tab.plot.style), tuple(tab.quantity.ops(
+                    tab.wanted)), tab.data)
+        return None
+
+    def set_target(self, *_):
+        """The chords for the plasma or the vector quantity."""
+        self._chords_all()
 
     # -------------------------------------------------------------- chords
     @property
@@ -334,11 +365,12 @@ class Tools:
         the chords on the plot (with Show all, every frame loaded)."""
         sec = self.chords_section
         tab = self.tab
-        ok = self.section == "chords" and tab.run is not None and \
-            tab._current()
-        self.results = [self._chord(c) for c in self.chords] if ok else []
+        m = self._measured() if self.section == "chords" else None
+        sec.target.setVisible(tab.run is not None and tab._current() and
+                              tab._vector_args() is not None)
+        self.results = [self._chord(c, m) for c in self.chords] if m else []
         sec.show_all.setVisible(tab.time_box.movie())
-        self.all_frames = self._frames() if ok and self._every_frame() \
+        self.all_frames = self._frames(m) if m and self._every_frame(m) \
             else None
         if self.all_frames is None:
             self.queue = []
@@ -367,19 +399,21 @@ class Tools:
                                   "line",
                                   name="chord_%d_%s" % (k + 1, res["what"]))
         if len(self.results) >= 2:
-            self.show_sums()
+            self.show_sums(m)
         self._chord_artists()
 
-    def _chord(self, coords):
-        """The profile along a chord (R, Z, phi of its two ends) and its
-        sums, the figure and the rows of its tab."""
+    def _chord(self, coords, m):
+        """The profile along a chord (R, Z, phi of its two ends) of what
+        the chords measure (m, as _measured gives it) and its sums, the
+        figure and the rows of its tab."""
         tab = self.tab
-        data = tab.data
+        data, q, col, _, sent = m
         plain = labels.any_to_plain
         unit = plain(split_unit(data.label)[1])
         r0, z0, f0, r1, z1, f1 = coords
         s, r, z, ph, v, vn, l = measure.profile(tab.plot, data, (r0, z0),
-                                                (r1, z1), phi=(f0, f1))
+                                                (r1, z1), phi=(f0, f1),
+                                                col=col)
         _, total, mean, flux = measure.line_sums(s, r, v, vn, l)
         psimap = tab.run.psimap
         rho = psimap.rhop(r, z) if psimap is not None else None
@@ -404,7 +438,7 @@ class Tools:
             lines.append("No flux: the unit is not a flux density (%s)"
                          % html("m^-2"))
         ok = np.isfinite(v)
-        name = self._name()
+        name = self._name(q, sent)
         out = {}
 
         def draw(ax, options):
@@ -438,7 +472,7 @@ class Tools:
                    rows=[list(row) for row in zip(*cols)],
                    text="<br>".join(lines), integral=total, average=mean,
                    units=(plain(measure.times_m(unit, 1)), plain(unit)),
-                   what=tab.wanted.label, v=v, vn=vn, unit=plain(unit))
+                   what=q.label, v=v, vn=vn, unit=plain(unit))
         return out
 
     # ------------------------------------------------- all the movie frames
@@ -446,25 +480,26 @@ class Tools:
         self.show_all = on
         self._chords_all()
 
-    def _every_frame(self):
-        """Show all on, with a movie quantity in the movie tab."""
-        tab = self.tab
-        return self.show_all and tab.time_box.movie() and \
-            bool(getattr(tab.wanted, "movie", 0))
+    def _every_frame(self, m):
+        """Show all on, with a movie quantity measured (m) in the movie
+        tab."""
+        return self.show_all and self.tab.time_box.movie() and \
+            bool(getattr(m[1], "movie", 0))
 
-    def _frames(self):
+    def _frames(self, m):
         """(position of the frame shown along the frames from 0 to 1,
         [(position, frame, results of the chords)] of the other frames
-        loaded); asks b2plot for the frames not loaded yet."""
-        tab, tb = self.tab, self.tab.time_box
-        q, ops = tab.wanted, tuple(tab.quantity.ops(tab.wanted))
-        key = (q.name, ops, tab.plot.style.column,
-               tuple(tuple(c) for c in self.chords), self.source)
+        loaded) of what the chords measure (m); asks b2plot for the frames
+        not loaded yet."""
+        tb = self.tab.time_box
+        data, q, col, ops, _ = m
+        key = (q.name, ops, col, tuple(tuple(c) for c in self.chords),
+               self.source)
         if key != self.frames_key:
             self.frame_results, self.frames_key = {}, key
         positions = tb.positions()
         sources = [tb.source_of(q, p) for p in positions]
-        shown = tab.data.source
+        shown = data.source
         self.frame_results[shown] = [dict(v=r["v"], vn=r["vn"],
                                           integral=r["integral"],
                                           average=r["average"])
@@ -493,8 +528,10 @@ class Tools:
                 if x in self.frame_results:
                     continue
                 self.flight.add(x)
-                self.tab.request.emit(("frames", self.tab.wanted,
-                                       self.frames_key[1], x))
+                m = self._measured()
+                if m is not None:
+                    self.tab.request.emit(("frames", m[1],
+                                           self.frames_key[1], x))
         finally:
             self.pumping = False
 
@@ -518,14 +555,20 @@ class Tools:
         self._pump()
 
     def _frames_arrived(self):
-        if self.section == "chords" and self._every_frame():
+        m = self._measured()
+        if self.section == "chords" and m and self._every_frame(m):
             self._chords_all()
 
     def _profile(self, coords, data):
-        """Profile and sums along a chord for the field of another frame."""
+        """Profile and sums along a chord for the field or the vector of
+        another frame (its species summed as plotted)."""
+        col = None
+        if hasattr(data, "vr"):
+            data, col = self.tab.summed_vector(data)
         r0, z0, f0, r1, z1, f1 = coords
         s, r, _, _, v, vn, l = measure.profile(self.tab.plot, data, (r0, z0),
-                                               (r1, z1), phi=(f0, f1))
+                                               (r1, z1), phi=(f0, f1),
+                                               col=col)
         _, total, mean, _ = measure.line_sums(s, r, v, vn, l)
         return dict(v=v, vn=vn, integral=total, average=mean)
 
@@ -544,14 +587,15 @@ class Tools:
                         row.append(val)
         return header, rows
 
-    def show_sums(self):
+    def show_sums(self, m=None):
         """The line integrals or averages (as chosen) against the chord
-        number; Export writes both."""
+        number of what the chords measure (m); Export writes both."""
         sec = self.chords_section
-        if len(self.results) < 2:
+        m = m or self._measured()
+        if len(self.results) < 2 or m is None:
             return
         n = np.arange(1, len(self.results) + 1)
-        name = self._name()
+        name = self._name(m[1], m[4])
         units = self.results[0]["units"]
         rows = [[k, res["integral"], res["average"]]
                 for k, res in zip(n, self.results)]
@@ -672,8 +716,8 @@ class Tools:
         st = measure.statistics(values, volumes)
         plain = labels.any_to_plain
         unit = plain(split_unit(data.label)[1])
-        sec.heading.setText("Statistics over %s: %s" % (WHERE[mode],
-                                                      self._what()))
+        sec.heading.setText("Statistics over %s: %s" % (
+            WHERE[mode], self._what(tab.wanted, data)))
         html = measure.html_unit
         sec.text.setText("<br>".join((
             "%s: %d" % ("Cells" if cells else "Triangles", st["n"]),
@@ -684,7 +728,7 @@ class Tools:
             "Minimum: %.5g %s" % (st["min"], html(unit)),
             "Maximum: %.5g %s" % (st["max"], html(unit)))))
         ok = np.isfinite(values)
-        title = self._name()
+        title = self._name(tab.wanted, data)
 
         def draw(ax, options):
             v = values[ok]

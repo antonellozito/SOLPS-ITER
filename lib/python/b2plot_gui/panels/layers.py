@@ -104,6 +104,16 @@ def style_combo(value="-"):
     return LineStyleChooser(value)
 
 
+def left_form(parent):
+    """A form whose labels and fields are left aligned, the fields as wide
+    as the box (on every platform)."""
+    form = QtWidgets.QFormLayout(parent)
+    form.setLabelAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+    form.setFormAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+    form.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
+    return form
+
+
 def spin(lo, hi, step, value, decimals=2, tip=""):
     box = QtWidgets.QDoubleSpinBox()
     box.setRange(lo, hi)
@@ -133,7 +143,7 @@ class LayersPanel(QtWidgets.QGroupBox):
         super().__init__("Layers", parent)
         self.rows = {}
         grid = QtWidgets.QGridLayout(self)
-        grid.setContentsMargins(4, 6, 4, 6)
+        grid.setContentsMargins(6, 6, 4, 6)     # aligned with the masks
         grid.setHorizontalSpacing(4)
         grid.setColumnStretch(2, 1)         # width and style share the room
         grid.setColumnStretch(3, 1)
@@ -186,7 +196,7 @@ class LayersPanel(QtWidgets.QGroupBox):
                 levels.setToolTip("Levels, separated by blanks")
                 rho = QtWidgets.QComboBox()
                 rho.addItem("psiN", False)
-                rho.addItem("rhop", True)
+                rho.addItem("ρₚ", True)
                 rho.setCurrentIndex(1 if st.rho else 0)
                 _narrow(rho)
                 label = QtWidgets.QLabel("    levels")

@@ -11,7 +11,7 @@ import numpy as np
 
 from ...b2plot import labels
 from ..model import split_unit
-from ..panels.quantity import column_names
+from ..panels.species import column_names
 
 FORMATS = {"CSV table": ".csv", "ASCII text": ".txt", "NetCDF file": ".nc",
            "HDF5 file": ".h5"}

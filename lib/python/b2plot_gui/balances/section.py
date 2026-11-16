@@ -192,7 +192,7 @@ class BalanceSection(Output, QtWidgets.QWidget):
         self.species.set_file(bf)
         m = self.coord.model()
         m.item(0).setEnabled(rhop)
-        m.item(0).setToolTip("" if rhop else "rho poloidal needs the psi map "
+        m.item(0).setToolTip("" if rhop else "ρₚ needs the psi map "
                              "of rzpsi.dat")
         self.coord.setCurrentIndex(0 if rhop else 1)
         for w in (self.quantity, self.coord):

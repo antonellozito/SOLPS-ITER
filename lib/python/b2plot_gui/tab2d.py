@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from . import catalog, presets, runstate, scaling, theme
 from .plot import shapes
 from .plot.canvas import Plot2D
-from .plot.styles import KINDS_FLAT, LAYERS, TRAJECTORIES
+from .plot.styles import LAYERS
 from .model import split_unit
 from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Qt, Signal
 from .panels.layers import (CELL_MASKS, MASKS, LayersPanel, MasksPanel,
@@ -24,10 +24,11 @@ from .panels.layers import (CELL_MASKS, MASKS, LayersPanel, MasksPanel,
 from .panels.plotarea import (READOUT, Columns, PlotCommands, Readout,
                               ScaledCanvas)
 from .panels.calculator import CalculatorDialog
-from .panels.quantity import QuantityPanel, column_names
+from .panels.quantity import QuantityPanel
+from .panels.species import SUM, column_names
 from .panels.timebox import BALANCES
 from .output.actions import TabOutput
-from .output.frames import FrameExport
+from .output.movie import MovieFrames
 from .tools import cellfiles, equilibrium, inspect, regions
 from .tools.control import Tools
 from .balances.picker import BalanceTool
@@ -72,7 +73,12 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.run = None
         self.data = None
         self.wanted = None
-        self.odata = {}                 # overlay role -> Field or Vector
+        self.odata = {}                 # overlay role ("lines") -> Field
+        self.overlay_wanted = None      # the quantity overlaid
+        self.vector_wanted = None       # the vector quantity plotted
+        self.vector_data = None
+        self.wall_wanted = None         # the wall quantity plotted
+        self.wall_data = None
         self.eirene_names = {}          # a, m, i -> EIRENE species names
         self.figure = Figure()
         self.canvas = ScaledCanvas(self.figure, self._keep_view)
@@ -82,20 +88,24 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
         self.quantity = QuantityPanel()
         self.quantity.quantity_chosen.connect(self._chosen)
+        self.quantity.vector_chosen.connect(self._vector_chosen)
+        self.quantity.wall_chosen.connect(self._wall_chosen)
+        self.quantity.overlay_chosen.connect(self._overlay_chosen)
         self.quantity.style_changed.connect(self._options_changed)
         self.quantity.seed_line.connect(
             lambda on: self.tools.bar.set_mode("seeds" if on else None))
         self.quantity.streams.seed_preset.connect(self._seed_preset)
-        self.quantity.traj_box.draw.connect(self._draw_trajectories)
-        self.quantity.traj_box.clear.connect(self._clear_trajectories)
-        self.quantity.traj_box.style_changed.connect(self._traj_style)
         self.quantity.calculator.connect(self.open_calculator)
         self.time_box = self.quantity.time_box
         self.time_box.source_changed.connect(self._source_changed)
-        self.time_box.frames_changed.connect(self._fetch)
-        self.frames = FrameExport(self)
-        self.time_box.export_frames.connect(lambda: self.frames.start())
+        self.time_box.frames_changed.connect(self._frames_moved)
+        self._moving = False            # only the frames changed
         self.time_box.ready = self._shown
+        self.movie = MovieFrames(self)      # drawn before playing
+        self.time_box.prepare = self.movie.prepare
+        self.time_box.show_frame = self.movie.show
+        self.time_box.cancel = self.movie.cancel
+        self.time_box.save_movie.connect(lambda: self.movie.save())
         self.final_quantities, self.movie_quantities = [], []
         self._tab, self._tab_plot = 0, {}   # the tab open, what each plots
         self.layers = LayersPanel(self._saved_layers())
@@ -112,6 +122,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             lambda on: self.tools.open_section("chords" if on else None))
         self.quantity.stats_button.toggled.connect(
             lambda on: self.tools.open_section("stats" if on else None))
+        self.quantity.overlay_button.toggled.connect(
+            lambda on: self.tools.open_section("overlay" if on else None))
         self.balance = BalanceTool(self)
         self.tools.bar.changed.connect(
             lambda: self.tools.bar.mode is not None and self.balance.cancel())
@@ -154,6 +166,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.canvas.mpl_connect("motion_notify_event", self._motion)
         self.canvas.mpl_connect("button_release_event", self._nav_done)
         self.canvas.mpl_connect("scroll_event", self._scroll)
+        for name in ("axes_leave_event", "figure_leave_event"):
+            self.canvas.mpl_connect(        # off the plot: no readout
+                name, lambda e: self.hover.setText(READOUT))
         self.canvas.mpl_connect("draw_event", self._align_commands)
         self._lims = QtCore.QTimer(self)
         self._lims.setSingleShot(True)
@@ -161,7 +176,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self._vector_timer = QtCore.QTimer(self)
         self._vector_timer.setSingleShot(True)
         self._vector_timer.setInterval(150)
-        self._vector_timer.timeout.connect(self._redraw_vectors)
+        self._vector_timer.timeout.connect(self._draw_vectors)
         self._show_empty()
         self.setEnabled(False)
 
@@ -184,6 +199,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
     # ---------------------------------------------------------------- run
     def set_run(self, run):
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
+        self.vector_wanted = self.vector_data = None
+        self.wall_wanted = self.wall_data = self.overlay_wanted = None
+        for kind in ("vector", "wall", "overlay"):
+            self.quantity.unselect_extra(kind)
         self.mask_keys = []
         run.layers["midplanes"] = self._midplanes(run)
         self.plot.set_run(run)
@@ -192,8 +211,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.tools.last = None
         self.balance.set_run(run)
         self.quantity.unselect()
-        self.quantity.traj_box.set_species(column_names(
-            self._species() or []))
+        self._species_menus()
         for signal in ("xlim_changed", "ylim_changed"):   # after set_run
             self.plot.ax.callbacks.connect(signal, self._lims_changed)
         self._set_available()
@@ -207,7 +225,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self._tab = self.time_box.source.currentIndex()
         self._tab_plot = {}             # tab -> the quantity plotted there
         self._balances_shown()
-        self.quantity.cells_box.set_geometry(run.geometry)
+        for menu in (self.quantity.plasma_regions,
+                     self.quantity.vector_regions):
+            menu.set_geometry(run.geometry)
         self._set_quantities()
         self._ask_species(run)
         geometry = any(cellfiles.find(run.rundir, n)
@@ -287,7 +307,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                        for n in cellfiles.GEOMETRY)
         maps = equilibrium.MAPS if geometry else ()
         walls = catalog.wall_quantities(self.run.catalog) + ([
-            catalog.Quantity(*equilibrium.WALL, "Wall", "eqwall")]
+            catalog.Quantity(*equilibrium.WALL, "Geometry", "eqwall")]
             if geometry else [])
         self.final_quantities = derived + catalog.quantities(
             self.run.catalog, maps) + catalog.chord_quantities(
@@ -296,11 +316,15 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                                                          derived)
         quantities = self.movie_quantities if self.time_box.movie() else \
             self.final_quantities if self.time_box.final() else []
-        self.quantity.set_quantities(quantities)
-        self.quantity.overlay_box.set_choices(
-            [q for q in quantities if q.source in ("vector", "evector")],
-            [q for q in quantities if q.source in ("matrix", "eirene")],
-            walls=walls)
+        vectors = [q for q in quantities if q.source in ("vector", "evector")]
+        self.quantity.set_quantities([q for q in quantities
+                                      if q not in vectors])
+        self.quantity.set_vector_quantities(vectors)
+        self.quantity.set_wall_quantities(sorted(   # none in the movies
+            walls, key=lambda q: [w.group for w in walls].index(q.group))
+            if not self.time_box.movie() else [])
+        self.quantity.set_overlay_quantities([q for q in quantities
+                                              if q not in vectors])
 
     def _derived_specs(self):
         try:
@@ -337,11 +361,19 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         old, new = self._tab, self.time_box.source.currentIndex()
         self._tab = new
         if old != BALANCES:
-            self._tab_plot[old] = self.wanted.name if self.wanted else None
+            self._tab_plot[old] = tuple(q.name if q else None for q in (
+                self.wanted, self.vector_wanted, self.wall_wanted,
+                self.overlay_wanted))
         self._balances_shown()
         self._set_quantities()
         self.odata = {}
-        name = None if new == BALANCES else self._tab_plot.get(new)
+        name, *extra = (None,) * 4 if new == BALANCES else \
+            self._tab_plot.get(new, (None,) * 4)
+        for kind, other in zip(("vector", "wall", "overlay"), extra):
+            if other is None or not self.quantity.select_extra(kind, other):
+                self.quantity.unselect_extra(kind)
+                if getattr(self, kind + "_wanted") is not None:
+                    getattr(self, "_%s_chosen" % kind)(None)
         if name is not None and self.quantity.select(name):
             return
         self.quantity.unselect()
@@ -349,17 +381,197 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self._chosen(None)
 
     def _chosen(self, q):
-        """A quantity chosen in the tree, None: nothing plotted (as at the
-        start)."""
+        """A plasma quantity chosen in the tree, None: no plasma plot (the
+        vector and wall plots stay)."""
         self.wanted = q
+        self._set_plotted()
         if q is None:
             self.data, self.odata = None, {}
-            self.quantity.set_columns([""])
-            self._show_empty()
+            self._species_menus()
+            self.redraw()
             return
         if q.movie:
             self.time_box.set_file(q.movie)
         self._fetch()
+
+    def _set_plotted(self):
+        self.quantity.set_plotted(self.wanted is not None,
+                                  self.vector_wanted is not None,
+                                  self.wall_wanted is not None,
+                                  bool(self._overlays_needed()))
+
+    def _overlay_chosen(self, q):
+        """A quantity chosen in the Overlay section, None: no overlay."""
+        self.overlay_wanted = q
+        if q is None:
+            self.odata = {}
+        self._set_plotted()
+        self._species_menus()
+        self._fetch()
+
+    def _overlay_allowed(self):
+        """An overlay over a plasma plot that is not contour lines."""
+        return self.wanted is not None and self.quantity.kind() != "contour"
+
+    def _vector_chosen(self, q):
+        """A vector quantity chosen in its tree, None: no vector plot (the
+        plasma and wall plots stay)."""
+        self.vector_wanted = q
+        if q is None or not self._vector_loaded():
+            self.vector_data = None
+        if q is not None and q.movie and self.wanted is None:
+            self.time_box.set_file(q.movie)
+        self._set_plotted()
+        self._species_menus()
+        self._fetch_vector()
+        self.redraw()
+
+    def _vector_loaded(self):
+        """The vector data of the quantity and frames chosen are here (or
+        no vector quantity is chosen)."""
+        q, v = self.vector_wanted, self.vector_data
+        return q is None or v is not None and (v.name, v.source) == (
+            q.name, self._source(q))
+
+    def _fetch_vector(self):
+        """Ask for the vector quantity if it is not loaded (all species:
+        those chosen are summed here)."""
+        q = self.vector_wanted
+        if q is not None and not self._vector_loaded():
+            self.request.emit(("vector", q, (), self._source(q)))
+
+    def _vector_args(self):
+        """(vector data, PlotStyle, unit) of the vector plot shown, the
+        species chosen summed, or None."""
+        if self.vector_wanted is None or self.vector_data is None or \
+                not self._vector_loaded():
+            return None
+        v, col = self.summed_vector(self.vector_data)
+        return (v, self.quantity.vector_style(col),
+                self._bar_label(self.vector_wanted, self.vector_data))
+
+    def summed_vector(self, v):
+        """(vector data v with the species chosen summed, its column);
+        the frames of the chords too."""
+        menu = self.quantity.vector_species
+        cols = self._columns(v, menu)
+        if len(cols) == 1:
+            return v, cols[0]
+        return replace(v, columns=[menu.text()],
+                       **{k: np.asarray(getattr(v, k))[list(cols)].sum(
+                           0, keepdims=True) for k in ("vr", "vz", "vxr",
+                                                       "vxz")
+                          if getattr(v, k) is not None}), 0
+
+    def _draw_vectors(self):
+        """The vector plot (or none), over the plasma plot or alone; while
+        new frames are asked for, the old ones stay. True if drawn."""
+        args = self._vector_args()
+        if self.run is None or args is None and self.vector_wanted:
+            return False
+        try:
+            self.plot.set_vectors(*args or (None, None))
+        except Exception as err:     # a bad option must not end the GUI
+            self.status.emit("Cannot draw %s: %s" % (args[0].name, err))
+            return False
+        m = self.plot.vector_mappable
+        if m is not None:
+            self.quantity.set_vector_range(m.norm.vmin, m.norm.vmax)
+        self.tools.data_changed()       # the chords and the inspector
+        self.canvas.draw_idle()
+        return args is not None
+
+    def _wall_chosen(self, q):
+        """A wall quantity chosen in its tree, None: no wall plot (the
+        plasma and vector plots stay)."""
+        self.wall_wanted = q
+        if self.wall_data is not None and (q is None or
+                                           self.wall_data.name != q.name):
+            self.wall_data = None
+        self._set_plotted()
+        self._species_menus()
+        self._fetch_wall()
+        self.redraw()           # the other bars and the title too
+
+    def _fetch_wall(self):
+        """Ask for the wall quantity if it is not loaded (computed here for
+        the equilibrium one)."""
+        q = self.wall_wanted
+        if q is None or self.wall_data is not None:
+            return
+        if q.source == "eqwall":
+            geo = inspect.files(self.run)[0]
+            if geo is not None:
+                self.deliver(("wall", q, (), None),
+                             equilibrium.wall_field(geo))
+            return
+        self.request.emit(("wall", q, (), self._source(q)))
+
+    def _columns(self, data, menu):
+        """Columns of vector or wall data summed: the species chosen in
+        its menu, all of them (sum of the species), those of the element
+        (sum of an element), else the first."""
+        names = column_names(data.columns, self._species())
+        chosen = menu.text()
+        if len(names) <= 1:
+            return (0,)
+        if chosen in names:
+            return (names.index(chosen),)
+        if chosen == SUM:
+            return tuple(range(len(names)))
+        element = re.sub(r"^Sum ", "", chosen)
+        return tuple(i for i, n in enumerate(names) if re.match(
+            r"[A-Za-z]*", n).group(0) == element) or (0,)
+
+    def _species_menus(self):
+        """Each species menu with the species of its data: the plasma one
+        kept while the plasma data are asked for or b2plot sends one
+        column of them (sum, proportion), the vector one while the vector
+        data are asked for; grey without a quantity."""
+        q = self.quantity
+        d = self.data if self._current() else None
+        if self.wanted is None:
+            q.plasma_species.set_columns([""])
+        elif d is not None and not q.reduced():
+            q.plasma_species.set_columns(d.columns, self._species())
+        v = self.vector_data if self._vector_loaded() else None
+        for menu, wanted, data in ((q.vector_species, self.vector_wanted, v),
+                                   (q.wall_species, self.wall_wanted,
+                                    self.wall_data)):
+            if wanted is None:
+                menu.set_columns([""])
+            elif data is not None:
+                menu.set_columns(data.columns, self._species())
+        o = self.odata.get("lines")     # the overlay: as the plasma one
+        if self.overlay_wanted is None:
+            q.overlay_species.set_columns([""])
+        elif o is not None and self._loaded("lines", self.overlay_wanted) \
+                and not q.overlay_reduced():
+            q.overlay_species.set_columns(o.columns, self._species())
+
+    def _wall_pair(self):
+        """(wall data, WallStyle, colour-bar label) of the wall plot
+        shown, or None."""
+        if self.wall_wanted is None or self.wall_data is None:
+            return None
+        return (self.wall_data, self.quantity.wall_box.wall_style(
+            self._columns(self.wall_data, self.quantity.wall_species)),
+            self._bar_label(self.wall_wanted, self.wall_data))
+
+    def _draw_wall(self):
+        """The wall plot (or none), apart from the plasma plot."""
+        w = self.wall_data
+        if self.run is None:
+            return
+        if w is None or self.wall_wanted is None:
+            self.plot.set_wall(None, None)
+        else:
+            self.plot.set_wall(*self._wall_pair())
+            m = self.plot.wall_mappable
+            if m is not None:
+                self.quantity.set_wall_range(m.norm.vmin, m.norm.vmax)
+        self.tools.data_changed()       # the inspector
+        self.canvas.draw_idle()
 
     def _source(self, q):
         return self.time_box.source_of(q)
@@ -373,35 +585,52 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                     self._source(self.wanted)))
 
     def _loaded(self, role, q):
+        """The overlay data of q are here (its b2plot operations, its
+        frames)."""
         d = self.odata.get(role)
-        return d is not None and (d.name, d.source) == (q.name,
-                                                        self._source(q))
+        return d is not None and (d.name, tuple(d.ops), d.source) == (
+            q.name, self.quantity.ops(q, overlay=True), self._source(q))
 
     def _shown(self):
-        """The plot of the current frames is drawn, overlays included."""
-        return self._current() and all(self._loaded(r, q) for r, q in
-                                       self._overlays_needed())
+        """The plot of the current frames is drawn: the plasma quantity
+        with its overlays, the vector quantity."""
+        if self.wanted is None and self.vector_wanted is None:
+            return False
+        return self._vector_loaded() and (self.wanted is None or (
+            self._current() and all(self._loaded(r, q) for r, q in
+                                    self._overlays_needed())))
 
     def _overlays_needed(self):
-        """[(role, Quantity)] of the active overlays (scalar plots only)."""
-        if self.quantity.kind() not in KINDS_FLAT:
-            return []
-        return self.quantity.overlay_box.wanted()
+        """[(role, Quantity)] of the overlay drawn: the quantity of the
+        Overlay section over a plasma plot that is not contour lines."""
+        return [("lines", self.overlay_wanted)] if \
+            self.overlay_wanted is not None and self._overlay_allowed() \
+            else []
 
     def _fetch(self):
         """Ask for the chosen quantity (with the current b2plot operations)
-        and for the active overlays that are not loaded yet."""
+        and for the active overlays that are not loaded yet; the vector
+        and wall quantities too."""
+        self._fetch_wall()
+        self._fetch_vector()
         if self.wanted is None:
+            self.redraw()
             return
         for role, q in self._overlays_needed():
-            if not self._loaded(role, q):
-                if q.source == "eqwall":    # computed here, as the maps
-                    geo = inspect.files(self.run)[0]
-                    if geo is not None:
-                        self.deliver((role, q, (), None),
-                                     equilibrium.wall_field(geo))
-                else:
-                    self.request.emit((role, q, (), self._source(q)))
+            ops = self.quantity.ops(q, overlay=True)
+            if self._loaded(role, q):
+                continue
+            if q.source == "equilibrium":   # computed here, as the maps
+                geo = inspect.files(self.run)[0]
+                try:
+                    data = equilibrium.field(self.run, geo, q.name, ops)
+                except Exception as err:    # e.g. midplanes not asked
+                    data = None
+                    self.status.emit("Overlay of %s: %s" % (q.name, err))
+                if data is not None:
+                    self.deliver((role, q, ops, None), data)
+            else:
+                self.request.emit((role, q, ops, self._source(q)))
         if self._current():
             self.redraw()
         elif self.wanted.source == "equilibrium":
@@ -439,14 +668,25 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         p = self.time_box.next_position()
         if p is None or not self.time_box.play.isChecked():
             return
+        self.ask_frames([p])
+
+    def ask_frames(self, positions):
+        """Ask b2plot for the frames of the quantities plotted at these
+        slider positions (kept in the cache)."""
         wants = [("main", self.wanted, self.quantity.ops(self.wanted))] + [
-            (r, q, ()) for r, q in self._overlays_needed()]
-        for role, q, ops in wants:
-            if q.movie:
-                self.request.emit(("prefetch", q, ops,
-                                   self.time_box.source_of(q, p)))
+            (r, q, self.quantity.ops(q, overlay=True))
+            for r, q in self._overlays_needed()] if \
+            self.wanted is not None else []
+        wants += [("vector", self.vector_wanted, ())]
+        for p in positions:
+            for role, q, ops in wants:
+                if q is not None and q.movie:
+                    self.request.emit(("prefetch", q, ops,
+                                       self.time_box.source_of(q, p)))
 
     def _options_changed(self):
+        if self.time_box.playing_images():  # the images are of the old
+            self.time_box.play.setChecked(False)    # plot
         self._fetch()
 
     def deliver(self, want, data, console=""):
@@ -455,9 +695,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         role, q, ops, source = want
         lines = [x.strip() for x in console.splitlines() if x.strip()]
         tail = " ".join(lines[-3:])
-        if role == "traj":
-            self._show_trajectories(data)
-            return
         if role == "tools":
             self.tools.deliver(data)
             return
@@ -466,6 +703,25 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             return
         if role == "balance":
             self.balance.deliver_rc(data)
+            return
+        if role == "vector":
+            if data is not None and q is self.vector_wanted and \
+                    source == self._source(q):
+                self.vector_data = data
+                self._species_menus()
+                self.redraw()
+            elif data is None:
+                self.status.emit("b2plot returned no data for %s. %s"
+                                 % (q.name, tail))
+            return
+        if role == "wall":
+            if data is not None and q is self.wall_wanted:
+                self.wall_data = data
+                self._species_menus()
+                self.redraw()
+            elif data is None:
+                self.status.emit("b2plot returned no data for %s. %s"
+                                 % (q.name, tail))
             return
         if role == "eqdata":           # midplane cells: the map again
             if data is not None and self.wanted is not None and \
@@ -490,22 +746,17 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.status.emit("b2plot: " + warn[-1])
         if role != "main":
             if (role, q) in self._overlays_needed() and \
-                    source == self._source(q):
+                    source == self._source(q) and tuple(ops) == \
+                    self.quantity.ops(q, overlay=True):
                 self.odata[role] = data
-                box = self.quantity.overlay_box
-                if role in box.ROLES:
-                    box.vectors[box.ROLES.index(role)].set_species(
-                        column_names(data.columns, self._species()))
-                elif role == "wall":
-                    box.set_wall_species(column_names(data.columns))
+                self._species_menus()
                 self.redraw()
             return
         if q is not self.wanted or ops != self.quantity.ops(q) or \
                 source != self._source(q):
             return
         self.data = data
-        if not self.quantity.reduced():
-            self.quantity.set_columns(data.columns, self._species())
+        self._species_menus()
         self.redraw()
 
     def _set_available(self):
@@ -520,74 +771,50 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         return (self.run.info or {}).get("species")
 
     def _unit(self):
-        unit = split_unit(self.wanted.description)[1] if self.wanted else None
-        return unit or None
+        """The label of the colour bar of the plasma quantity."""
+        return self._bar_label(self.wanted, self.data) if self.wanted \
+            else None
+
+    def _shown_pairs(self):
+        """[(Quantity, data as sent)] of the plots drawn: plasma, vector,
+        wall."""
+        return [(q, d) for q, d, on in (
+            (self.wanted, self.data, self.run is not None and
+             self._current()),
+            (self.vector_wanted, self.vector_data, self.vector_wanted and
+             self.vector_data is not None and self._vector_loaded()),
+            (self.wall_wanted, self.wall_data, self.wall_wanted and
+             self.wall_data is not None)) if on]
+
+    def _name_of(self, q, data):
+        """The description of quantity q (data as sent) without its unit,
+        with its species."""
+        species = self.species_text(data)
+        return split_unit(q.description)[0] + (
+            " [%s]" % species if species else "")
+
+    def _bar_label(self, q, data):
+        """Label of the colour bar of quantity q (data as sent): its unit
+        when it is the only plot (its name is the title), else its name
+        and the unit in parentheses (no title)."""
+        unit = split_unit(q.description)[1] or (data.unit if data else "")
+        if len(self._shown_pairs()) <= 1:
+            return unit or None
+        return self._name_of(q, data) + (" (%s)" % unit if unit else "")
 
     def _overlay_data(self):
-        box = self.quantity.overlay_box
-        overlays = {}
-        for role, q in self._overlays_needed():
-            if self._loaded(role, q):
-                d, o = self.odata[role], box.style(role)
-                if role in box.ROLES:
-                    o = replace(o, column=self._arrow_column(o.column, d))
-                overlays[role] = (d, o)
-        return overlays
+        """{"lines": (data, PlotStyle, label of its colour bar)} of the
+        overlay drawn (loaded), or {}."""
+        return {role: (self.odata[role], self.quantity.overlay_style(),
+                       self._overlay_label(q, self.odata[role]))
+                for role, q in self._overlays_needed()
+                if self._loaded(role, q)}
 
-    def _arrow_column(self, chosen, vec):
-        """Species column of a vector overlay: the one chosen, else the
-        species of the plot, else the first ion (of the element summed)."""
-        names = column_names(vec.columns, self._species())
-        if 0 <= chosen < len(names):
-            return chosen
-        plot = self.quantity.species.currentText()
-        if plot in names:
-            return names.index(plot)
-        element = re.sub(r"^Sum ", "", plot)
-        ions = [i for i, n in enumerate(names) if "+" in n]
-        same = [i for i in ions
-                if re.match(r"[A-Za-z]*", names[i]).group(0) == element]
-        return (same + ions + [0])[0]
-
-    def _draw_trajectories(self):
-        """b2plot traj with the settings of the box: weighting by the
-        quantity shown (matrix ones), start cells from the Only where
-        mask."""
-        box = self.quantity.traj_box
-        if self.run is None or not box.chosen():
-            self.status.emit("Trajectories: choose at least one species")
-            return
-        q = self.wanted
-        weight = self.run._head(q.name, None) if q is not None and \
-            q.source == "matrix" else ""
-        self.status.emit("Computing trajectories\u2026")
-        self.request.emit(("traj", q, (box.words(weight, ""),), None))
-
-    def _show_trajectories(self, seg):
-        if seg is None or not len(seg):
-            self.status.emit("b2plot drew no trajectories")
-            return
-        self.plot._build_layer("trajectories")
-        self._traj_style()
-        self.status.emit("%d trajectory segments" % len(seg))
-
-    def _clear_trajectories(self):
-        if self.run is not None:
-            self.run.layers.pop("trajectories", None)
-            self.plot._build_layer("trajectories")
-            self._traj_style()
-
-    def _traj_style(self):
-        """The trajectories (shown while drawn) with the lines of their
-        box."""
-        box = self.quantity.traj_box
-        drawn = self.run is not None and len(self.run.layers.get(
-            "trajectories", []))
-        self.plot.set_layer("trajectories", replace(
-            TRAJECTORIES, visible=bool(drawn),
-            width=box.line_width.value(), style=box.line_style.currentData(),
-            alpha=box.line_alpha.value()))
-        self.canvas.draw_idle()
+    def _overlay_label(self, q, data):
+        """Name of the overlay quantity, its species and its unit in
+        parentheses: always on its colour bar."""
+        unit = split_unit(q.description)[1] or data.unit
+        return self._name_of(q, data) + (" (%s)" % unit if unit else "")
 
     def _seed_preset(self, key):
         """Streamline seeds along a curve of the run (plot.shapes.SEEDS)."""
@@ -601,14 +828,31 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                          if len(pts) else "No %s in this run" % text)
         self.quantity.set_seeds([tuple(p) for p in pts])
 
+    def species_text(self, data):
+        """The species chosen, for the name of the plasma, vector or wall
+        data: '' unless data has several species (or b2plot reduced the
+        plasma data to the species chosen)."""
+        q = self.quantity
+        overlay = data is not None and data is self.odata.get("lines")
+        menu = q.plasma_species if data is self.data else \
+            q.vector_species if data is self.vector_data else \
+            q.overlay_species if overlay else q.wall_species
+        if data is None or menu.combo.count() <= 1 or not (
+                len(data.columns) > 1 or data is self.data and q.reduced()
+                or overlay and q.overlay_reduced()):
+            return ""
+        return menu.text()
+
     def _title(self):
-        q = self.wanted       # the unit is the one of the colour bar
-        title = split_unit(q.description if q is not None else
-                           self.data.label)[0]
-        if self.quantity.species.count() > 1:
-            title += "  [%s]" % self.quantity.species.currentText()
-        if q is not None and self._source(q):
-            title += "  \u2014  " + self.time_box.time_text(q.movie)
+        """The automatic title: the name of the quantity plotted when it is
+        the only plot (its unit in the colour bar), else none (the names
+        in the colour bars); the frames of a movie shown; the masks."""
+        shown = self._shown_pairs()
+        title = self._name_of(*shown[0]) if len(shown) == 1 else ""
+        movie = next((q for q, _ in shown if self._source(q)), None)
+        if movie is not None:
+            title = (title + "  \u2014  " if title else "") + \
+                self.time_box.time_text(movie.movie)
         return self._mask_title(title)
 
     def _mask_title(self, title):
@@ -631,9 +875,36 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                 "HOST": socket.gethostname().split(".")[0],
                 "TIME": "%.6g" % t}
 
+    def _frames_moved(self):
+        """Another position of the movie: once its frames are here, only
+        what changes is drawn again (Plot2D.fast_draw)."""
+        self._moving = True
+        self._fetch()
+
     def redraw(self):
-        if self.wanted is None:
+        """The plots again; after a move of the slider, by repainting only
+        what changes (no full draw of the canvas)."""
+        canvas = self.canvas
+        if not (self._moving and self._shown()) or canvas.held:
+            self._redraw()
+            return
+        self._moving = False
+        canvas.held = True              # the draws asked for: skipped
+        try:
+            self._redraw()
+        finally:
+            canvas.held = False
+        if not self.plot.fast_draw():
+            canvas.draw_idle()
+
+    def _redraw(self):
+        self._draw_wall()
+        if self.wanted is None:     # the vector or the wall plot alone, both
             self._show_empty()
+            self._draw_vectors()
+            if self._shown_pairs():
+                self._labels_and_prefetch()
+            return
         if self.run is None or self.data is None or not self._current():
             return
         try:
@@ -642,32 +913,49 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (self.data.name, err))
             return
+        self._draw_vectors()
         self.balance.restyle()
         self.tools.data_changed()       # the results window follows
         if self.plot.drawn == 0:
             self.status.emit("%s: zero in every cell shown" % self.data.name)
+        self._labels_and_prefetch()
+        if self.plot.mappable is not None:
+            norm = self.plot.mappable.norm
+            self.quantity.set_range(norm.vmin, norm.vmax)
+        if self.plot.overlay_mappable is not None:
+            norm = self.plot.overlay_mappable.norm
+            self.quantity.set_overlay_range(norm.vmin, norm.vmax)
+        self._measures()
+        self.canvas.draw_idle()
+
+    def _labels_and_prefetch(self):
+        """The title of the plot drawn, then the next frames asked for
+        (playing)."""
         title = self._title()
         self.quantity.labels_box.set_title_hint(title)
         self.plot.set_labels(self.quantity.labels_box.style(), title,
                              self.label_values())
         if self._shown():
             self._prefetch()
-            if self.frames.job is not None:
-                QtCore.QTimer.singleShot(0, self.frames.ready)
-        if self.plot.mappable is not None:
-            norm = self.plot.mappable.norm
-            self.quantity.set_range(norm.vmin, norm.vmax)
-        self._measures()
-        self.canvas.draw_idle()
 
     def _measures(self):
-        """Chords and Statistics only with a quantity plotted (Inspect cell
-        also on the grid alone); a section open closes without it."""
-        on = self.run is not None and self.data is not None and \
+        """Chords with a plasma or a vector quantity plotted, Statistics
+        with a plasma quantity, Overlay with a plasma quantity that is not
+        contour lines (Inspect cell also on the grid alone); a section
+        open closes without its quantity."""
+        plasma = self.run is not None and self.data is not None and \
             self.wanted is not None
-        for b in (self.quantity.chords_button, self.quantity.stats_button):
-            b.setEnabled(on)
-        if not on and self.tools.section is not None:
+        chords = plasma or self.run is not None and \
+            self._vector_args() is not None
+        overlay = plasma and self._overlay_allowed()
+        self.quantity.chords_button.setEnabled(chords)
+        self.quantity.stats_button.setEnabled(plasma)
+        self.quantity.overlay_button.setEnabled(overlay)
+        self._set_plotted()             # the overlay options or not
+        section = self.tools.section
+        if section == "chords" and not chords or \
+                section == "stats" and not plasma or \
+                section == "overlay" and not overlay:
             self.tools.open_section(None)
 
     # -------------------------------------------------------------- views
@@ -713,12 +1001,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _view_moved(self):
         """Arrows and streamlines follow zoom and pan."""
-        if (self.data is not None and hasattr(self.data, "vr")) or any(
-                r.startswith("arrows") for r in self.odata):
+        if self.vector_wanted is not None and self.vector_data is not None:
             self._vector_timer.start()
-
-    def _redraw_vectors(self):
-        self.redraw()
 
     # -------------------------------------------------------------- mouse
     def _motion(self, event):

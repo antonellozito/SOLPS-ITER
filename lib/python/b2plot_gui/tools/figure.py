@@ -31,7 +31,7 @@ PLOT_ASPECT = 0.75                  # height / width of the plot box (4:3)
 # and the axis label under it
 LEFT, RIGHT, TOP, BOTTOM = 5.6, 1.5, 1.9, 3.25
 XAXES = (("distance along the line", "s"), ("R", "R"), ("Z", "Z"),
-         ("rho poloidal", "rhop"),
+         ("ρₚ", "rhop"),
          ("distance from the separatrix", "dssep"))
 HIST = "#4c72b0"                    # bars of a histogram at first
 FAMILY = {"frames": "line", "sumframes": "sums"}   # of all the frames
@@ -132,7 +132,7 @@ class FigureOptions(QtWidgets.QGroupBox):
         for text, key in XAXES:
             self.xaxis.addItem(text, key)
         self.xaxis.setToolTip("The profile as a function of the distance "
-                              "along the line, of R, of Z, of rho poloidal "
+                              "along the line, of R, of Z, of ρₚ "
                               "or of the distance along it from the "
                               "separatrix (the last two only where the "
                               "profile is a function of them)")

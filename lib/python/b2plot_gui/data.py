@@ -22,7 +22,7 @@ CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 OP = protocol.OPCODES
 # overlay roles of b2plot: 1 mesh.extra, 4 structure.dat
 LAYER_ROLES = {1: "vessel", 2: "separatrices", 3: "boundary",
-               4: "structure", 5: "wall", 7: "trajectories"}
+               4: "structure", 5: "wall"}
 NAMED = {6: "chords: ", 8: "target: "}  # overlay roles sent per name
 
 
@@ -50,8 +50,6 @@ class Run:
         self.catalog = []
         self.geometry = None
         self.layers = {}            # role name -> (n, 4) segments
-        self.layer_colours = {}     # role name -> colour index per segment
-        self.palette = {}           # colour index -> (r, g, b) of b2plot
         self.trimesh = None
         self.psimap = None
         self.movies = {}            # 1, 2 -> MovieFile
@@ -63,7 +61,7 @@ class Run:
         self.exit_status = None
         self.console = []
         self._layer = None
-        self._segments, self._colours, self._colour = [], [], 1
+        self._segments = []
         self._result = None
         self._levels = None
 
@@ -142,12 +140,6 @@ class Run:
         text = " ".join(self._push(name, source, ops, eirene) + [cmd])
         return self._request(kind, name, text + "\n", ops, source)
 
-    def overlay(self, layer, text):
-        """Request running the b2plot commands text, whose result is the
-        overlay layer they send (e.g. trajectories); never cached."""
-        self.layers.pop(layer, None)
-        return self._request("overlay", layer, text + "\n")
-
     def vector(self, first, second, eirene=False, ops=(), source=None):
         """Vector from two quantities (poloidal and radial for B2.5,
         Cartesian R and Z for EIRENE); ops apply to both."""
@@ -208,21 +200,13 @@ class Run:
         return done
 
     def _message(self, op, payload):
-        if op == OP["COLOR_REP"]:
-            m = protocol.decode(op, payload)
-            self.palette[m.ci] = (m.r, m.g, m.b)
-            return None
-        if self._layer is not None and op in (21, 40, 41):
-            n = len(self._segments)
-            if op == 21:
-                self._colour = protocol.decode(op, payload).ci
-            elif op == 40:
+        if self._layer is not None and op in (40, 41):
+            if op == 40:
                 self._segments.append(struct.unpack_from("=4f", payload))
             else:
                 m = protocol.decode(op, payload)
                 pts = np.column_stack((m.x, m.y))
                 self._segments.extend(np.hstack((pts[:-1], pts[1:])))
-            self._colours += [self._colour] * (len(self._segments) - n)
             return None
         if op not in (1, 2, 3, 4, 5, 70, 71, 72, 73, 74, 75, 77, 78, 79,
                       80):
@@ -238,11 +222,10 @@ class Run:
             name = m.fields["name"]       # m.name is the message name
             self._layer = (NAMED[m.role] + name if m.role in NAMED else
                            LAYER_ROLES.get(m.role, name))
-            self._segments, self._colours, self._colour = [], [], 1
+            self._segments = []
         elif op == OP["OVERLAY_END"]:
             self.layers[self._layer] = np.asarray(self._segments,
                                                   float).reshape(-1, 4)
-            self.layer_colours[self._layer] = np.asarray(self._colours)
             self._layer = None
         elif op == OP["TRIMESH"]:
             self.trimesh = TriMesh(np.asarray(m.x, float),
@@ -286,9 +269,7 @@ class Run:
             req.result.source = req.source
         elif req.kind == "init":
             req.result = self.geometry
-        elif req.kind == "overlay":
-            req.result = self.layers.get(req.name)
-        if req.result is not None and req.kind not in ("init", "overlay"):
+        if req.result is not None and req.kind != "init":
             self.cache[(req.kind, req.name, req.ops, req.source)] = \
                 req.result
             self._trim_cache()
