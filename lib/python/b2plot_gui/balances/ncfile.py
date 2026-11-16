@@ -7,9 +7,9 @@ import os
 
 import numpy as np
 
+from .. import session
+
 NAME = "balance.nc"
-STATE = ("b2fstate", "b2fplasma")
-SLACK = 300.0               # seconds between balance.nc and the state files
 # fields of older balance.nc files under their old names
 OLD_NAMES = {"eirene_mc_mppl_smo_bal": "eirene_mc_cppv_smo_bal"}
 
@@ -31,24 +31,8 @@ def status(rundir):
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         return None, "No balance.nc in the run directory (balance_netcdf " \
             "set in b2mn.dat writes it)"
-    times = [os.path.getmtime(p) for p in (os.path.join(rundir, n)
-                                           for n in STATE)
-             if os.path.isfile(p)]
-    if not times:
-        return None, "No b2fstate or b2fplasma next to balance.nc"
-    gap = abs(os.path.getmtime(path) - max(times))
-    if gap > SLACK:
-        return None, "balance.nc is %s older or newer than b2fstate and " \
-            "b2fplasma: it is not from the run of this state" % _age(gap)
-    return path, ""
-
-
-def _age(seconds):
-    for unit, size in (("days", 86400.0), ("hours", 3600.0),
-                       ("minutes", 60.0)):
-        if seconds >= 2 * size:
-            return "%.0f %s" % (seconds / size, unit)
-    return "%.0f seconds" % seconds
+    why = session.of_state(rundir, path)
+    return (None, why) if why else (path, "")
 
 
 class BalanceFile:

@@ -19490,7 +19490,10 @@ the commands of the plot (5 \%) and, after 1 \% of space, the layers
 The {\bf quantity panel} (left):
 \begin{itemize}
 \item the tabs {\tt Final state} ({\tt b2fstate}) and {\tt Run movies}
-  (the movie frames), read by \btwoplot with {\bf mvframe} and
+  (the movie frames of the movie files written by the run of the present
+  state: within ten minutes of {\tt b2fstate} and {\tt b2fplasma}, as
+  {\tt balance.nc}; the tooltip of a greyed-out tab says why), read by
+  \btwoplot with {\bf mvframe} and
   {\bf mvframev}
   (\ref{sec:mvframe}): one frame, the mean over a range of frames, a
   rolling mean (a window of $W$ frames ending at the frame or centred on
@@ -19554,7 +19557,7 @@ frames when nothing is plotted; filled contours too get a plain
 rectangle). The {\bf commands} of the plot stand one under the other in
 the narrow column at its right, from the height of the top of the plot
 box, in groups: {\tt Zoom}, {\tt Unzoom},
-{\tt Rezoom}, {\tt Restore}; the mouse tools; {\tt Add to page},
+{\tt Rezoom}, {\tt Restore}; {\tt Inspect cell}; {\tt Add to page},
 {\tt Page composer}; {\tt Save plot} (png, jpg, eps, pdf or svg;
 vector or raster content at a resolution; colour space rgb, cmyk or
 gray; light or dark theme), {\tt Export field};
@@ -19569,10 +19572,8 @@ mouse wheel zooms around the cursor (10\,\% a wheel step); neither goes
 outside the widest view. Arrows are binned over the current view and
 redrawn after zoom and pan.
 
-The mouse tools set what a click on the plot does ({\tt Line profile},
-{\tt Draw box}, {\tt Draw polygon} and {\tt Statistics} only with a quantity
-plotted). {\tt Inspect cell} outlines the cell under the mouse in gold; in a
-B2.5 cell or an EIRENE triangle (elsewhere nothing happens), lists in up
+{\tt Inspect cell} outlines the cell under the mouse in gold; a click in a
+B2.5 cell or an EIRENE triangle (elsewhere nothing happens) lists in up
 to five groups, with the quantity, its B2.5 or EIRENE name, the value
 and the unit: the value of the quantity shown; the grid of the B2.5 cell
 from {\tt b2fgmtry} (the variables of \texttt{b2cdcv}: number, centre,
@@ -19595,31 +19596,60 @@ $q = \frac{1}{2\pi}\oint B_{tor}/(R B_{pol})\,dl_{pol}$ of a closed
 tube); the EIRENE triangle from {\tt fort.33}, {\tt fort.34} and
 {\tt fort.35} (nodes and their coordinates, neighbours and their sides,
 additional surfaces, its B2.5 cell and faces, centroid, area and volume
-of \btwoplotns). {\tt Line profile} (two clicks) gives the profile of the quantity
-shown along the line (linear in the vertex values, as the contours, the
-plot from its first to its last value), its integral and average over
-the part inside the cells shown and, for a flux density (unit m$^{-2}$),
-the flux $\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the
-surface the line sweeps around the axis ($\mathbf{n}$ to the right of
-the line); in its window the two ends can be moved, also in the toroidal
-angle $\phi$ (degrees, 0 and 0 at first): the profile is then taken
-along the straight line between the two points in space, whose
-projection on the poloidal plane (drawn on the plot) is curved.
-{\tt Draw box}, {\tt Draw polygon} (closed by a click near its first
-corner, or a double click) and {\tt Statistics} (the cells shown in the
-view, again after each zoom or pan) give the number of cells or
-triangles, their volume ({\tt vol}, {\tt triavol}), the volume integral
-and average, the minimum, the maximum and a histogram of the quantity
-shown. The results appear, one per line, in a small window and can be
-exported as CSV ({\tt Save plot} saves the profile or the histogram as the one of the
-main window does); they have their options
-(colour, line style, width and markers of each curve, the bins, the axis
-limits, logarithmic axes, grid), the mouse wheel zooms them and dragging
-moves them. The seed line of the streamlines is drawn with
+of \btwoplotns), in a small window that can be exported as CSV.
+
+{\tt Chords} and {\tt Statistics}, right of the species (only with a
+quantity plotted, in both tabs: with the movie frames they follow the
+frame shown, also while playing), open their section in the quantity
+column, under that row; one at a time, a second click closes it. A menu
+left of {\tt Draw chord} chooses the chords: {\tt Drawn}, drawn on the
+plot ({\tt Draw chord}, two clicks each as long as it is on) or typed
+({\tt +}), or those of the {\tt *.chords} files of the run
+({\tt .chords files}, read-only; the two are never mixed). On the plot
+each chord has a dot at its start, an arrow at its end and its number.
+The chords have a tab each, numbered as on the plot: how the chord is
+drawn on the plot (colour, width, line style, its number or not); its
+start and end coordinates, $R$, $Z$ and the toroidal angle $\phi$
+(degrees, 0 and 0 at first: the profile is taken along the straight line
+between the two points in space, whose projection on the poloidal plane
+is curved); the integral and the average of the quantity along the chord
+and, for a flux density (unit m$^{-2}$), the flux
+$\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the surface the
+chord sweeps around the axis ($\mathbf{n}$ to the right of the chord);
+its profile (linear in the vertex values, as the contours). With two
+chords or more, a plot under the tabs shows the line integrals or (menu)
+the line averages against the chord number. With the movie frames,
+{\tt Show all} (left of {\tt Close}) draws the profiles and the sums of
+all the frames (loaded in the background): the frames other than the one
+shown with lines a fifth as wide (60\,\% opaque) and markers a fifth as
+large, the colours
+of a colour map (not a diverging one, chosen in the plot options in
+place of the colour) along the frames; {\tt Export} then writes the
+values of every frame. A tab closes with its cross,
+{\tt Clear all} removes every chord; the chords stay when the section
+closes and are drawn on the plot while it is open. The statistics of the
+cells shown in the view ({\tt Whole domain}, again after each zoom or
+pan), of a box or of a polygon ({\tt Draw box}, {\tt Draw polygon}:
+closed by a click near its first corner, or a double click) give the
+number of cells or triangles, their volume ({\tt vol}, {\tt triavol}),
+the volume integral and average, the minimum, the maximum and a histogram.
+{\tt Save plot} saves a plot as the one of the main window does,
+{\tt Export} its values as CSV. The plots keep their size and place
+whatever their labels and have their options (colour, line style, width
+and markers of each curve, the profile against the distance along the
+chord, $R$, $Z$, or, where the profile is a function of them,
+$\rho_{pol}$ and the distance along the chord from the separatrix (with
+{\tt rzpsi.dat}), the bins, the axis limits, empty for automatic,
+logarithmic axes, grid; against the chord number only the colour and
+symbol of the markers and the $y$ axis). The mouse wheel zooms them when
+it starts over them (while it scrolls the column, it goes on scrolling
+over them), dragging moves them. The wheel never changes a menu or a
+number box of the window. The seed line of the streamlines is drawn with
 {\tt Draw seed line} of the streamline options.
 
 The {\bf parallel balance}, only with a {\tt balance.nc} written with
-the {\tt b2fstate} and {\tt b2fplasma} of the run, computes the
+the {\tt b2fstate} and {\tt b2fplasma} of the run (within ten minutes of
+them), computes the
 balances of the scripts of {\tt scripts/Balance} in a volume picked on
 the plot: a click on the upstream surface, then one on the downstream
 surface (the end faces of the flux tubes when the mouse is near them),
@@ -19690,8 +19720,9 @@ $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$, with the O-point and the
 primary X-point found from the $\psi$ map), the midplanes (the segments
 {\tt RZIMP} and {\tt RZOMP} of {\tt b2.user.parameters}, where they cross
 the B2.5 grid), the divertor targets (the faces of the target face
-regions, as B2.5 collects them) and the chords. The lines of the
-trajectories are set in their group of the quantity panel.
+regions, as B2.5 collects them). The lines of the trajectories are set
+in their group of the quantity panel, the chords of the run are drawn
+from the {\tt Chords} section.
 
 The {\bf masks panel}, under the layers, draws regions and labels of
 {\tt b2fgmtry} (Appendix~\ref{lis:b2cdcv}) over the plot, with a legend

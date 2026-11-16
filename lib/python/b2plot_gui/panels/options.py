@@ -4,7 +4,8 @@ and the labels."""
 import numpy as np
 
 from ..plot.styles import LabelStyle
-from ...qt import QtGui, QtWidgets, Signal
+from ..scaling import Number
+from ...qt import QtWidgets, Signal
 from .layers import ColorButton, spin
 
 LEVEL_MODES = [("Number of levels", "number"), ("Step", "step"),
@@ -41,7 +42,7 @@ class LevelsBox(QtWidgets.QGroupBox):
         self.number.setValue(20)
         self.number.setKeyboardTracking(False)
         self.step = QtWidgets.QLineEdit()
-        self.step.setValidator(QtGui.QDoubleValidator())
+        self.step.setValidator(Number())
         self.step.setPlaceholderText("step from the minimum")
         self.values = QtWidgets.QLineEdit()
         self.values.setPlaceholderText("values separated by blanks")

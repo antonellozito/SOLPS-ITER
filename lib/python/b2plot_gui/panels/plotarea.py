@@ -191,7 +191,7 @@ class PlotCommands(QtWidgets.QWidget):
             lay.addWidget(self.buttons[key])
         gap()
         bar = tab.tools.bar
-        for b in list(bar.buttons.values()) + [bar.stats]:
+        for b in bar.buttons.values():
             b.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
                             QtWidgets.QSizePolicy.Fixed)
         lay.addWidget(bar)
@@ -239,8 +239,7 @@ class PlotCommands(QtWidgets.QWidget):
 
     def all_buttons(self):
         bar = self.tab.tools.bar
-        return list(self.buttons.values()) + list(bar.buttons.values()) + \
-            [bar.stats]
+        return list(self.buttons.values()) + list(bar.buttons.values())
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

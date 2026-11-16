@@ -97,13 +97,30 @@ class QuantityPanel(QtWidgets.QWidget):
         lay.addLayout(row)
         lay.addWidget(self.tree, 1)
 
-        form = QtWidgets.QFormLayout()
+        row = QtWidgets.QHBoxLayout()   # species, then the two sections
         self.species = QtWidgets.QComboBox()
         self.species.currentIndexChanged.connect(self._species_chosen)
         label = QtWidgets.QLabel("Species")
         label.setProperty("bold", True)
-        form.addRow(label, self.species)
-        lay.addLayout(form)
+        row.addWidget(label)
+        row.addWidget(self.species, 5)
+        self.chords_button = QtWidgets.QPushButton("Chords")
+        self.chords_button.setToolTip("Profiles of the quantity shown along "
+                                      "chords drawn on the plot or typed, "
+                                      "their integrals and averages")
+        self.stats_button = QtWidgets.QPushButton("Statistics")
+        self.stats_button.setToolTip("Volume integral, average, minimum, "
+                                     "maximum and histogram of the quantity "
+                                     "shown over the cells shown, a box or "
+                                     "a polygon")
+        for b in (self.chords_button, self.stats_button):
+            b.setCheckable(True)
+            b.setProperty("bold", True)
+            row.addWidget(b, 2)
+        lay.addLayout(row)
+        self.sections = QtWidgets.QVBoxLayout()  # the open one (tab)
+        self.sections.setContentsMargins(0, 0, 0, 0)
+        lay.addLayout(self.sections)
         self.mask_box = MaskBox()
         self.mask_box.argument_changed.connect(self._argument)
         self.mask_box.changed.connect(self._changed)

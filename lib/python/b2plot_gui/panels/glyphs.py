@@ -198,13 +198,15 @@ class _Chooser(QtWidgets.QComboBox):
 
 class CmapChooser(_Chooser):
     """Colour maps by name (data: the name of the list); the diverging
-    ones with their tip."""
+    ones with their tip, or (diverging False) without them."""
 
     KIND = "cmap"
 
-    def __init__(self, value="turbo", parent=None):
-        super().__init__([(n, n) for n in CMAPS], parent)
-        for i, n in enumerate(CMAPS):
+    def __init__(self, value="turbo", parent=None, diverging=True):
+        names = [n for n in CMAPS if diverging or
+                 MPL_NAMES.get(n, n) not in DIVERGING]
+        super().__init__([(n, n) for n in names], parent)
+        for i, n in enumerate(names):
             if MPL_NAMES.get(n, n) in DIVERGING:
                 self.setItemData(i, CENTRED_TIP, Qt.ToolTipRole)
         self.setCurrentIndex(max(self.findText(value), 0))

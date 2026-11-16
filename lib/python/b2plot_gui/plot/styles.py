@@ -41,14 +41,12 @@ LAYERS = {
                         "0.90 0.95 1.00 1.02 1.04 1.06", rho=True)),
     "midplanes": ("Midplanes", LayerStyle(False, "#1f77b4", 1.5, "--")),
     "targets": ("Divertor targets", LayerStyle(False, "#ff7f0e", 2.0)),
-    "chords": ("Chords (*.chords files), numbered",
-               LayerStyle(False, "#9467bd", 0.8)),
 }
 TRAJECTORIES = LayerStyle(False, "#000000", 0.6)   # styled in their box
 LAYER_KEYS = tuple(LAYERS) + ("trajectories",)
 ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2, "boundary": 3.3,
           "structure": 3.45, "separatrices": 3.5, "midplanes": 3.52,
-          "targets": 3.55, "opoints": 3.6, "xpoints": 3.6, "chords": 3.7,
+          "targets": 3.55, "opoints": 3.6, "xpoints": 3.6,
           "trajectories": 3.75}
 FILL_ZORDER = 3.38              # the filled parts of the structure
 HATCH = "////"                  # their pattern
