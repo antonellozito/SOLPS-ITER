@@ -15,7 +15,7 @@ import os
 import time
 
 from ..b2plot import backend
-from . import data, runline, scaling, session, theme
+from . import data, runline, runstate, scaling, session, theme
 from ..qt import QtCore, QtGui, QtWidgets
 from .output import state
 from .output.composer import Composer
@@ -235,22 +235,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self._stamp = self._state_time()
             self._live.start(int(secs * 1000))
             self._status("Live update every %d s: the run is reloaded when "
-                         "its b2fstate changes" % secs)
+                         "its b2fstate (in a run, its movie files) changes"
+                         % secs)
         self._live_info()
 
     def _live_info(self):
         """b2fstate of HH:MM:SS next to Live update, while it is on."""
         on = self._live.isActive() and self._stamp is not None
         if on:
-            self.live_info.setText("b2fstate of %s" % time.strftime(
-                "%H:%M:%S", time.localtime(self._stamp)))
+            self.live_info.setText("%s of %s" % (
+                "b2fstate" if self.run is None or self.run.state[0] ==
+                "finished" else "frames", time.strftime(
+                    "%H:%M:%S", time.localtime(self._stamp))))
         self.live_info.setVisible(on)
 
     def _state_time(self):
         if self.run is None:
             return None
-        times = [os.path.getmtime(p) for p in (os.path.join(
-            self.run.rundir, f) for f in STATE_FILES) if os.path.isfile(p)]
+        paths = [os.path.join(self.run.rundir, f) for f in STATE_FILES]
+        kind = self.run.state[0]
+        if kind != "finished":          # and the frames the run writes
+            paths += [p for p, why in runstate.movies(
+                self.run.rundir, kind).values() if not why]
+        times = [os.path.getmtime(p) for p in paths if os.path.isfile(p)]
         return max(times) if times else None
 
     def _live_check(self):
@@ -270,7 +277,16 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.stop_run()
         self.args.rundir = path
-        self.run = data.Run(backend.command(self.args), path, self.record)
+        kind, why = runstate.state(path)
+        cwd = path
+        if kind != "finished":          # b2plot with b2fstati, no b2fplasma
+            try:
+                cwd = runstate.view_folder(path, kind)
+            except OSError as err:
+                self._status("Cannot prepare the run for b2plot: %s" % err)
+        self.run = data.Run(backend.command(self.args), path, self.record,
+                            cwd=cwd)
+        self.run.state = (kind, why)
         self.crash_shown = False
         try:
             req = self.run.start()
@@ -291,6 +307,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def stop_run(self):
         if self.run is not None:
             self.run.stop()
+            if self.run.backend.rundir != self.run.rundir:
+                runstate.remove_view(self.run.backend.rundir)
         self.run = None
         self.waiting.clear()
 
@@ -360,8 +378,10 @@ class MainWindow(QtWidgets.QMainWindow):
         keep, self._keep = self._keep, None
         if keep is not None:
             state.restore(self.tab2d, keep)
-        self._status("Reloaded, with the plot settings" if keep is not None
-                     else "Ready")
+        kind, why = run.state
+        self._status(("Reloaded, with the plot settings" if keep is not None
+                      else "Ready") + ("" if kind == "finished" else
+                                       ". No final state: " + why))
         self._live_info()
         self._species_line()
 

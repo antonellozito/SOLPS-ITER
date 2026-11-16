@@ -122,17 +122,22 @@ class TimeBox(QtWidgets.QWidget):
         self.set_movies({})
 
     # ------------------------------------------------------------- state
-    def set_movies(self, movies, stale=()):
-        """Frame times of the movie files of a new run (data.MovieFile) of
-        its present state; stale: why the other ones are left out."""
+    def set_movies(self, movies, stale=(), final=True, why=""):
+        """Frame times of the movie files of the latest run of a new run
+        directory (data.MovieFile); stale: why the other ones are left out;
+        final: a final state of the run (else why not)."""
         self.times = {f: list(m.times) for f, m in movies.items() if m.nt}
-        self.source.blockSignals(True)
-        self.source.setCurrentIndex(0)
-        self.source.blockSignals(False)
+        self.source.setTabEnabled(0, final)
+        self.source.setTabToolTip(0, TABS[0][1] if final else
+                                  "No final state: " + why)
         self.source.setTabEnabled(1, bool(self.times))
         tip = TABS[1][1] if self.times else "No movie files (b2movies.nc, " \
-            "eirenemovies.nc, b2tallies.nc) of this run in the run directory"
+            "eirenemovies.nc, b2tallies.nc) of the latest run in the run " \
+            "directory"
         self.source.setTabToolTip(1, "\n".join([tip] + list(stale)))
+        self.source.blockSignals(True)
+        self.source.setCurrentIndex(1 if not final and self.times else 0)
+        self.source.blockSignals(False)
         self.file = min(self.times) if self.times else 1
         nt = self.nt()
         for s in (self.first, self.last):
@@ -150,6 +155,10 @@ class TimeBox(QtWidgets.QWidget):
 
     def movie(self):
         return self.source.currentIndex() == 1 and bool(self.times)
+
+    def final(self):
+        """The final state of the run can be shown."""
+        return self.source.isTabEnabled(0)
 
     def key(self):
         return self.mode.currentData()

@@ -7,9 +7,8 @@ from dataclasses import replace
 from ...b2plot import labels
 from .. import theme
 from ..catalog import FLAGS, GUARD, INTEGER
-from ..expression import real_token
 from ..plot.styles import KINDS_FLAT, KINDS_VECTOR, PlotStyle
-from ...qt import QtGui, QtWidgets, Qt, Signal
+from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
 from .options import CellsBox, LabelsBox, LevelsBox
 from .overlays import OverlayBox
 from .trajectories import TrajBox
@@ -20,6 +19,7 @@ KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
 SUM = "Sum over species"
+TREE_ROWS = 14                      # rows of the quantity tree
 ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
 CHARGE = re.compile(r"([A-Za-z]*)\s*\+?(\d*)")     # D0, D+, N+7, N7+
 
@@ -82,7 +82,6 @@ class QuantityPanel(QtWidgets.QWidget):
         self.tree.setHeaderLabels(["Quantity", "Name"])
         self.tree.setRootIsDecorated(True)
         self.tree.setUniformRowHeights(True)
-        self.tree.setMinimumHeight(220)
         head = self.tree.header()
         head.setStretchLastSection(False)
         head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
@@ -95,7 +94,7 @@ class QuantityPanel(QtWidgets.QWidget):
         self.tree.itemExpanded.connect(self._group_marked)
         self.tree.itemCollapsed.connect(self._group_marked)
         lay.addLayout(row)
-        lay.addWidget(self.tree, 1)
+        lay.addWidget(self.tree)        # fixed height (_tree_height)
 
         row = QtWidgets.QHBoxLayout()   # species, then the two sections
         self.species = QtWidgets.QComboBox()
@@ -126,23 +125,16 @@ class QuantityPanel(QtWidgets.QWidget):
         self.mask_box.changed.connect(self._changed)
         lay.addWidget(self.mask_box)
 
-        kinds = QtWidgets.QGroupBox("Plot type")
+        kinds = QtWidgets.QGroupBox("Plot type")    # a menu of the kinds
         form = QtWidgets.QFormLayout(kinds)     # as the other groups
-        kgrid = QtWidgets.QGridLayout()
-        kgrid.setContentsMargins(0, 0, 0, 0)
-        kgrid.setVerticalSpacing(form.verticalSpacing())
-        form.addRow(kgrid)
-        self.kind_buttons = QtWidgets.QButtonGroup(self)
-        for i, kind in enumerate(KINDS_FLAT + KINDS_VECTOR):
-            b = QtWidgets.QRadioButton(KIND_TEXT[kind])
-            b.setProperty("kind", kind)
-            self.kind_buttons.addButton(b, i)
-            vector = kind in KINDS_VECTOR
-            kgrid.addWidget(b, i - len(KINDS_FLAT) * vector, int(vector))
-        self.kind_buttons.button(0).setChecked(True)
-        self.kind_buttons.idToggled.connect(
-            lambda i, on: on and self._kind_changed())
-        lay.addWidget(kinds)
+        self.kind_combo = QtWidgets.QComboBox()
+        self.kind_combo.setToolTip("Cell data: patch, filled contour, "
+                                   "contour lines; face data (vectors): "
+                                   "quiver, streamlines or both")
+        form.addRow(self.kind_combo)
+        self._vector = None             # the kinds listed: of vectors?
+        self._fill_kinds(False, False)
+        self.kind_combo.currentIndexChanged.connect(self._kind_chosen)
 
         self.colour = ColourBox()
         self.levels_box = LevelsBox()
@@ -153,19 +145,36 @@ class QuantityPanel(QtWidgets.QWidget):
         for box in (self.colour, self.levels_box, self.lines, self.arrows,
                     self.streams):
             box.changed.connect(self._changed)
-            lay.addWidget(box)
         self.overlay_box = OverlayBox()
         self.overlay_box.changed.connect(self._changed)
         lay.addWidget(self.overlay_box)
         self.cells_box = CellsBox()
         self.cells_box.changed.connect(self._changed)
-        lay.addWidget(self.cells_box)
         self.traj_box = TrajBox()
         lay.addWidget(self.traj_box)
         self.labels_box = LabelsBox()
         self.labels_box.changed.connect(self._changed)
-        lay.addWidget(self.labels_box)
+        lay.addStretch(1)               # the room left under the boxes
+        # the graphic options, placed in the right column by the 2D tab
+        self.style_boxes = (kinds, self.colour, self.levels_box, self.lines,
+                            self.arrows, self.streams)
+        self.lower_boxes = (self.cells_box, self.labels_box)
         self._kind_changed(emit=False)
+        self._tree_height()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QtCore.QEvent.FontChange,
+                            QtCore.QEvent.StyleChange):
+            self._tree_height()
+
+    def _tree_height(self):
+        """The quantity tree TREE_ROWS rows high, whatever is shown under
+        it (it follows the font as the window scales)."""
+        fm = QtGui.QFontMetrics(self.tree.font())
+        rows = TREE_ROWS * (fm.height() + 4)
+        self.tree.setFixedHeight(rows + self.tree.header().sizeHint()
+                                 .height() + 2 * self.tree.frameWidth())
 
     # ---------------------------------------------------------- quantities
     def set_quantities(self, quantities):
@@ -249,14 +258,7 @@ class QuantityPanel(QtWidgets.QWidget):
         self.current = q
         vector = q.source in ("vector", "evector")
         patch = self.is_mask(q) or bool(GUARD.fullmatch(q.name))
-        for b in self.kind_buttons.buttons():
-            b.setEnabled((b.property("kind") in KINDS_VECTOR) == vector
-                         and (not patch or b.property("kind") == "patch"))
-        kind = self.kind()
-        if (kind in KINDS_VECTOR) != vector or (patch and kind != "patch"):
-            self.kind_buttons.button(len(KINDS_FLAT) if vector else 0
-                                     ).setChecked(True)
-        self.colour.edges.setEnabled(not vector)
+        self._fill_kinds(vector, patch)
         self._kind_changed(emit=False)
         self.quantity_chosen.emit(self.wanted())
 
@@ -334,9 +336,6 @@ class QuantityPanel(QtWidgets.QWidget):
         lo, hi = self._partial() or (0, -1)
         return "%d %d %s" % (lo, hi, "esumz" if eirene else "sumz")
 
-    def factor_value(self):
-        return self.colour.factor_value()
-
     def proportion(self):
         """clvp intervals when b2plot computes the contour levels."""
         if self.kind() not in ("contourf", "contour"):
@@ -352,7 +351,7 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def ops(self, q):
         """b2plot operations applied after the label of quantity q: species
-        sum or selection, scale factor, clvp contour levels."""
+        sum or selection, clvp contour levels."""
         eirene = q.source in ("eirene", "evector")
         ops = []
         prop = self.proportion() if q.source in ("matrix", "eirene") \
@@ -362,9 +361,6 @@ class QuantityPanel(QtWidgets.QWidget):
         elif prop is not None:
             col = max(self.species.currentIndex(), 0)
             ops.append("%d %s" % (col, "ezsel" if eirene else "zsel"))
-        f = self.factor_value()
-        if f != 1.0:
-            ops.append("%s %s" % (real_token(f), "rem*" if eirene else "rm*"))
         if prop is not None:
             npos, nneg = prop
             if eirene:
@@ -375,7 +371,7 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def value_ops(self, q, all_species=False):
         """b2plot operations for writing the values of q as plotted: sum
-        or species shown (unless all_species), and the scale factor."""
+        or species shown (unless all_species)."""
         eirene = q.source in ("eirene", "evector")
         ops = []
         if self.summed():
@@ -383,14 +379,36 @@ class QuantityPanel(QtWidgets.QWidget):
         elif not all_species and self.species.count() > 1:
             ops.append("%d %s" % (max(self.species.currentIndex(), 0),
                                   "ezsel" if eirene else "zsel"))
-        f = self.factor_value()
-        if f != 1.0:
-            ops.append("%s %s" % (real_token(f), "rem*" if eirene else "rm*"))
         return tuple(ops)
 
     def kind(self):
-        b = self.kind_buttons.checkedButton()
-        return b.property("kind") if b else "patch"
+        return self.kind_combo.currentData() or "patch"
+
+    def _fill_kinds(self, vector, patch):
+        """The kinds of cell data or of face data (vectors) in the menu
+        (patch only for masks): the one chosen kept for data of the same
+        kind, else the first (patch, quiver)."""
+        combo = self.kind_combo
+        old = self.kind() if vector == self._vector else None
+        self._vector = vector
+        combo.blockSignals(True)
+        combo.clear()
+        for k in KINDS_VECTOR if vector else KINDS_FLAT:
+            combo.addItem(KIND_TEXT[k], k)
+            combo.model().item(combo.count() - 1).setEnabled(
+                not patch or k == "patch")
+        combo.setCurrentIndex(0 if patch or old is None else
+                              max(combo.findData(old), 0))
+        combo.blockSignals(False)
+
+    def set_kind(self, kind):
+        """Choose this kind if the menu offers it."""
+        i = self.kind_combo.findData(kind)
+        if i >= 0 and self.kind_combo.model().item(i).isEnabled():
+            self.kind_combo.setCurrentIndex(i)
+
+    def _kind_chosen(self, *_):
+        self._kind_changed()
 
     def _kind_changed(self, emit=True):
         kind = self.kind()

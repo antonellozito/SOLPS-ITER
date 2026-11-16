@@ -6,12 +6,14 @@ and Export (CSV) of the rows behind it; and the ends of a chord (R, Z and
 the toroidal angle)."""
 
 import csv
+import math
 import os
 import re
 
 import matplotlib
 from matplotlib import colormaps, colors as mcolors
 from matplotlib.figure import Figure
+from matplotlib.ticker import LogFormatterSciNotation
 
 from .. import theme
 from ..output import printfig
@@ -23,7 +25,11 @@ from ..scaling import Navigator, Number, squeezable
 from ...qt import QtCore, QtGui, QtWidgets
 
 PLOT_ASPECT = 0.75                  # height / width of the plot box (4:3)
-BOX = (0.18, 0.13, 0.78)            # left, bottom, width (of the figure)
+# room around the plot box in font sizes (the texts of the figure are as
+# large as the font of the window): the widest tick labels (-0.03, -5000,
+# 10^-12) with the axis label at its left, the title above, the tick labels
+# and the axis label under it
+LEFT, RIGHT, TOP, BOTTOM = 5.6, 1.5, 1.9, 3.25
 XAXES = (("distance along the line", "s"), ("R", "R"), ("Z", "Z"),
          ("rho poloidal", "rhop"),
          ("distance from the separatrix", "dssep"))
@@ -44,6 +50,29 @@ def _number(edit):
         return float(edit.text())
     except ValueError:
         return None
+
+
+class LogLabels(LogFormatterSciNotation):
+    """Labels of a logarithmic axis as narrow as those of a linear one: the
+    decades as powers of ten, the other ticks labelled by their digits;
+    within one decade its power over the axis (as the offset of a linear
+    axis)."""
+
+    def __call__(self, x, pos=None):
+        label = super().__call__(x, pos)
+        if not label or x <= 0:
+            return label
+        e = math.floor(math.log10(x) + 1e-9)
+        m = x / 10.0 ** e
+        return label if abs(m - 1.0) < 1e-6 else "%g" % round(m, 3)
+
+    def get_offset(self):
+        lo, hi = sorted(self.axis.get_view_interval())
+        if lo <= 0:
+            return ""
+        e0 = math.floor(math.log10(lo) + 1e-9)
+        e1 = math.floor(math.log10(hi) - 1e-9)
+        return r"$\times\mathdefault{10^{%d}}$" % e0 if e0 == e1 else ""
 
 
 class FigureOptions(QtWidgets.QGroupBox):
@@ -225,6 +254,12 @@ class FigureOptions(QtWidgets.QGroupBox):
             ax.set_xscale(x)
         if ax.get_yscale() != y:
             ax.set_yscale(y)
+        for axis, scale in ((ax.xaxis, x), (ax.yaxis, y)):
+            if scale == "log":          # labels as narrow as linear ones
+                axis.set_major_formatter(LogLabels())
+                axis.set_minor_formatter(LogLabels())
+        if y == "linear":               # plain from 0.01 to 9999
+            ax.ticklabel_format(axis="y", style="sci", scilimits=(-2, 4))
         x0, x1, y0, y1 = (_number(e) for e in self.limits)
         if not sums:
             ax.set_xlim(left=x0, right=x1)
@@ -286,9 +321,9 @@ class LineEnds(QtWidgets.QGroupBox):
 
 
 class FigureView(QtWidgets.QWidget):
-    """The figure (as high as 0.8 times its width, its texts as large as
-    those of the window) and its options; set_figure(draw, ...) shows
-    draw(ax, options)."""
+    """The figure (a 4:3 plot box at a fixed place, the room around it
+    and the texts as large as the font of the window) and its options;
+    set_figure(draw, ...) shows draw(ax, options)."""
 
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -296,18 +331,23 @@ class FigureView(QtWidgets.QWidget):
         self.draw, self.header, self.rows, self.name = None, [], [], "plot"
         self.figure = Figure(figsize=(5.0, 4.0))
         self.canvas = ScaledCanvas(self.figure)
+        self.canvas.resized = self._resized     # the box placed again
         self.ax = self.figure.add_subplot(111)
         self.nav = Navigator(self.canvas, self.ax)
         self.options = FigureOptions(self.redraw)
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)               # the options right under the plot
         lay.addWidget(self.canvas)
         lay.addWidget(self.options)
         lay.addStretch(1)               # the options never stretched
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.canvas.setFixedHeight(max(round(0.8 * self.width()), 120))
+        px = max(QtGui.QFontInfo(self.font()).pixelSize(), 1)
+        box = self.width() - (LEFT + RIGHT) * px
+        self.canvas.setFixedHeight(max(round(
+            (TOP + BOTTOM) * px + PLOT_ASPECT * box), 120))
         self._fit_dpi()
 
     def changeEvent(self, event):
@@ -388,14 +428,23 @@ class FigureView(QtWidgets.QWidget):
         self._place()
         self.canvas.draw_idle()
 
+    def _resized(self):
+        """The plot box for the new size of the figure (a figure drawn
+        before its tab had its size kept the box of the first size)."""
+        if self.draw is not None:
+            self._place()
+            self.canvas.draw_idle()
+
     def _place(self):
-        """The plot box at the same place whatever the labels (4:3, room
-        for the tick labels, the axis labels and the title)."""
-        left, bottom, width = BOX
+        """The plot box at the same place whatever the labels (4:3, the
+        room around it in font sizes)."""
+        font = matplotlib.rcParams["font.size"] / 72.0     # inches
         w, h = self.figure.get_size_inches()
-        height = min(PLOT_ASPECT * width * w / max(h, 1e-6),
-                     0.96 - bottom)
-        self.ax.set_position([left, bottom, width, height])
+        w, h = max(w, 1e-6), max(h, 1e-6)
+        width = max(1.0 - (LEFT + RIGHT) * font / w, 0.1)
+        bottom = BOTTOM * font / h
+        height = min(PLOT_ASPECT * width * w / h, 1.0 - bottom - 0.02)
+        self.ax.set_position([LEFT * font / w, bottom, width, height])
 
     def save(self, path=None, options=None):
         """Save plot: the figure as Save plot of the main window does

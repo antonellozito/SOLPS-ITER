@@ -40,7 +40,7 @@ class LayerMixin:
                 polys = shapes.solid(seg, run.geometry.centres)
                 art = [LineCollection(seg.reshape(-1, 2, 2))] + (
                     [PolyCollection(polys)] if polys else [])
-        elif key in ("separatrices", "boundary", "targets", "midplanes"):
+        elif key in ("separatrices", "targets", "midplanes"):
             seg = run.layers.get(key) if key != "targets" else np.vstack(
                 [np.zeros((0, 4))] + [v for k, v in run.layers.items()
                                       if k.startswith("target: ")])

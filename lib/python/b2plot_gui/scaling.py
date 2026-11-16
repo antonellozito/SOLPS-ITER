@@ -213,6 +213,10 @@ def squeezable(root, minimum=24):
         for w in root.findChildren(cls):
             if w.minimumWidth() == 0 or w.minimumWidth() > minimum:
                 w.setMinimumWidth(minimum)
+            policy = w.sizePolicy()     # spin boxes: Minimum, no shrinking
+            if policy.horizontalPolicy() == QtWidgets.QSizePolicy.Minimum:
+                policy.setHorizontalPolicy(QtWidgets.QSizePolicy.Preferred)
+                w.setSizePolicy(policy)
 
 
 def zoomed(lim, at, f, home):

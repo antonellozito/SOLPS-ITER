@@ -63,6 +63,9 @@ prints = b2uf.prt b2fu.prt b2pl.prt b2yi.prt b2yn.prt b2md.prt b2rd.prt b2yi_gnu
 target_uf = b2uf.prt
 target_fu = b2fu.prt
 target_pl = b2pl.prt
+# b2fplasma and b2ftrack when present (none during a run or after one
+# stopped before its end: b2pl computes the sources from the state)
+OPTIONAL_PL = $(wildcard b2fplasma b2ftrack)
 target_pl.dbx = b2pl.dbx
 target_yi = b2yi.prt b2yi.${PLT}
 target_yi_gnuplot = b2yi_gnuplot.prt
@@ -127,9 +130,9 @@ $(target_fu) : b2fgmtry b2fparam b2fstate b2fplasmf
 	-rmdir b2fu.exe.dir
 
 ifndef STAND_ALONE
-$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
+$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
 else
-$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL
+$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL
 endif
 	rm -rf b2pl.exe.dir >& /dev/null ; mkdir b2pl.exe.dir ; cp $^ b2pl.exe.dir
 	[ -e param.dg ] && cp param.dg b2pl.exe.dir/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg b2pl.exe.dir/ || echo > /dev/null )
@@ -151,9 +154,9 @@ endif
 	-rmdir b2pl.exe.dir
 
 ifndef STAND_ALONE
-$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
+$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
 else
-$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate b2fplasma b2frates b2ftrack AMJUEL
+$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL
 endif
 	rm -rf b2pl.exe.dir >& /dev/null ; mkdir b2pl.exe.dir ; cp $^ b2pl.exe.dir
 	[ -e param.dg ] && cp param.dg b2pl.exe.dir/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg b2pl.exe.dir/ || echo > /dev/null )
