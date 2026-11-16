@@ -63,9 +63,13 @@ prints = b2uf.prt b2fu.prt b2pl.prt b2yi.prt b2yn.prt b2md.prt b2rd.prt b2yi_gnu
 target_uf = b2uf.prt
 target_fu = b2fu.prt
 target_pl = b2pl.prt
-# b2fplasma and b2ftrack when present (none during a run or after one
-# stopped before its end: b2pl computes the sources from the state)
+# b2fplasma and b2ftrack when present (none during a run: b2pl computes
+# the sources from the state)
 OPTIONAL_PL = $(wildcard b2fplasma b2ftrack)
+# b2fstate; empty or absent (B2.5 writes b2fplasma when an error stops
+# the run): b2fstati for the species, the plasma of b2fplasma (b2fplasmf)
+STATE_UF = $(if $(shell [ -s b2fstate ] || echo y),$(wildcard b2fstate) b2fstati,b2fstate)
+STATE_PL = $(if $(wildcard b2fplasma),$(STATE_UF),b2fstate)
 target_pl.dbx = b2pl.dbx
 target_yi = b2yi.prt b2yi.${PLT}
 target_yi_gnuplot = b2yi_gnuplot.prt
@@ -117,22 +121,22 @@ prt : $(prints)
 .PRECIOUS : $(prints)
 .SUFFIXES : $(nil)
 
-$(target_uf) : b2fgmtry b2fparam b2fstate b2fplasma
+$(target_uf) : b2fgmtry b2fparam $(STATE_UF) b2fplasma
 	rm -rf b2uf.exe.dir >& /dev/null ; mkdir b2uf.exe.dir ; cp $^ b2uf.exe.dir
 	rm -f $(target_uf)
 	cd b2uf.exe.dir ; ${TIME} ${B2OBJ}/b2uf.exe ${RUN_OPTIONS} ; mv $(target_uf) b2fplasmf .. ; rm -f $(notdir $^) .quit >& /dev/null
 	-rmdir b2uf.exe.dir
 
-$(target_fu) : b2fgmtry b2fparam b2fstate b2fplasmf
+$(target_fu) : b2fgmtry b2fparam $(STATE_UF) b2fplasmf
 	rm -rf b2fu.exe.dir >& /dev/null ; mkdir b2fu.exe.dir ; cp $^ b2fu.exe.dir
 	rm -f $(target_fu)
 	cd b2fu.exe.dir ; ${TIME} ${B2OBJ}/b2fu.exe ${RUN_OPTIONS} ; mv $(target_fu) b2fplasma .. ; rm -f $(notdir $^) .quit >& /dev/null
 	-rmdir b2fu.exe.dir
 
 ifndef STAND_ALONE
-$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
+$(target_pl) : b2mn.dat b2fgmtry b2fparam $(STATE_PL) $(OPTIONAL_PL) b2frates AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
 else
-$(target_pl) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL
+$(target_pl) : b2mn.dat b2fgmtry b2fparam $(STATE_PL) $(OPTIONAL_PL) b2frates AMJUEL
 endif
 	rm -rf b2pl.exe.dir >& /dev/null ; mkdir b2pl.exe.dir ; cp $^ b2pl.exe.dir
 	[ -e param.dg ] && cp param.dg b2pl.exe.dir/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg b2pl.exe.dir/ || echo > /dev/null )
@@ -154,9 +158,9 @@ endif
 	-rmdir b2pl.exe.dir
 
 ifndef STAND_ALONE
-$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
+$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam $(STATE_PL) $(OPTIONAL_PL) b2frates AMJUEL ${fort_lc}33 ${fort_lc}34 ${fort_lc}35
 else
-$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam b2fstate $(OPTIONAL_PL) b2frates AMJUEL
+$(target_pl.dbx) : b2mn.dat b2fgmtry b2fparam $(STATE_PL) $(OPTIONAL_PL) b2frates AMJUEL
 endif
 	rm -rf b2pl.exe.dir >& /dev/null ; mkdir b2pl.exe.dir ; cp $^ b2pl.exe.dir
 	[ -e param.dg ] && cp param.dg b2pl.exe.dir/ || ( [ -e ../baserun/param.dg ] && cp ../baserun/param.dg b2pl.exe.dir/ || echo > /dev/null )

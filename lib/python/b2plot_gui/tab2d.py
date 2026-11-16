@@ -194,7 +194,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.translate = catalog.translator(run.catalog)
         stale = movies_of_state(run)
         kind, why = run.state
-        self.time_box.set_movies(run.movies, stale, kind == "finished", why)
+        self.time_box.set_movies(run.movies, stale,
+                                 kind in ("finished", "crashed"), why)
         self.quantity.cells_box.set_geometry(run.geometry)
         self._set_quantities()
         self._ask_species(run)

@@ -243,9 +243,10 @@ class MainWindow(QtWidgets.QMainWindow):
         """b2fstate of HH:MM:SS next to Live update, while it is on."""
         on = self._live.isActive() and self._stamp is not None
         if on:
+            kind = "finished" if self.run is None else self.run.state[0]
             self.live_info.setText("%s of %s" % (
-                "b2fstate" if self.run is None or self.run.state[0] ==
-                "finished" else "frames", time.strftime(
+                {"finished": "b2fstate", "crashed": "b2fplasma"}.get(
+                    kind, "frames"), time.strftime(
                     "%H:%M:%S", time.localtime(self._stamp))))
         self.live_info.setVisible(on)
 
@@ -254,7 +255,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return None
         paths = [os.path.join(self.run.rundir, f) for f in STATE_FILES]
         kind = self.run.state[0]
-        if kind != "finished":          # and the frames the run writes
+        if kind == "crashed":           # the plasma of the error
+            paths.append(os.path.join(self.run.rundir, "b2fplasma"))
+        elif kind != "finished":        # and the frames the run writes
             paths += [p for p, why in runstate.movies(
                 self.run.rundir, kind).values() if not why]
         times = [os.path.getmtime(p) for p in paths if os.path.isfile(p)]
@@ -279,7 +282,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.args.rundir = path
         kind, why = runstate.state(path)
         cwd = path
-        if kind != "finished":          # b2plot with b2fstati, no b2fplasma
+        if kind in ("running", "stopped"):   # b2fstati, no b2fplasma
             try:
                 cwd = runstate.view_folder(path, kind)
             except OSError as err:
@@ -380,8 +383,9 @@ class MainWindow(QtWidgets.QMainWindow):
             state.restore(self.tab2d, keep)
         kind, why = run.state
         self._status(("Reloaded, with the plot settings" if keep is not None
-                      else "Ready") + ("" if kind == "finished" else
-                                       ". No final state: " + why))
+                      else "Ready") + {"finished": "", "crashed":
+                                       ". Final state: "}.get(
+                          kind, ". No final state: ") + why)
         self._live_info()
         self._species_line()
 

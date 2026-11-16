@@ -4452,6 +4452,14 @@ It is also possible to use the {\tt b2co} utility {\em while} {\tt SOLPS} is run
 \end{enumerate}
 \end{sloppypar}
 
+\begin{sloppypar}
+When an error stops B2.5 during the run (the message {\tt *** XERRAB:
+program will stop. ***}), {\tt b2mn} writes {\tt b2fplasma} with the
+plasma of that moment, which can be in the middle of a time step and
+hold NaN, and leaves {\tt b2fstate} empty; the run output names the time
+step ({\tt xerrab: b2fplasma written with the plasma of itim}).
+\end{sloppypar}
+
 \newpage
 \section{b2uf \& b2fu, converting the plasma output file}
 \label{sec:b2uf}\label{sec:b2fu}\index{b2uf}\index{b2fu}\index{b2fplasma}\index{b2fplasmf}\index{b2run}
@@ -19511,7 +19519,10 @@ The {\bf quantity panel} (left):
   tab is greyed out, its tooltip says why, and \btwoplot reads the run
   from a folder of links with {\tt b2fstati} as its state, the default
   parameters {\tt b2fpardf} (with those of {\tt b2mn.dat}) and no
-  {\tt b2fplasma} (the sources computed from the state). {\tt Run movies}
+  {\tt b2fplasma} (the sources computed from the state). When an error
+  stopped B2.5, which then wrote {\tt b2fplasma} and left {\tt b2fstate}
+  empty (section~\ref{sec:b2co}), {\tt Final state} shows that plasma,
+  with the species of {\tt b2fstati}, and its tooltip says so. {\tt Run movies}
   shows the movie files of the latest run: with a final state those
   written with it (within ten minutes, as {\tt balance.nc}), otherwise
   those written since the start of the run, also while it runs (in the

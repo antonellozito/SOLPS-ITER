@@ -125,10 +125,12 @@ class TimeBox(QtWidgets.QWidget):
     def set_movies(self, movies, stale=(), final=True, why=""):
         """Frame times of the movie files of the latest run of a new run
         directory (data.MovieFile); stale: why the other ones are left out;
-        final: a final state of the run (else why not)."""
+        final: a final state of the run (else why not; with why: what it
+        is, the plasma when an error stopped B2.5)."""
         self.times = {f: list(m.times) for f, m in movies.items() if m.nt}
         self.source.setTabEnabled(0, final)
-        self.source.setTabToolTip(0, TABS[0][1] if final else
+        self.source.setTabToolTip(0, ("Final state: " + why if why else
+                                      TABS[0][1]) if final else
                                   "No final state: " + why)
         self.source.setTabEnabled(1, bool(self.times))
         tip = TABS[1][1] if self.times else "No movie files (b2movies.nc, " \
