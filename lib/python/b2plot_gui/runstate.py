@@ -6,11 +6,14 @@ when older ones are there); at the end, also after a crash, it moves the
 outputs back and removes the folder when it is empty.
 
 finished: b2fstate passes the test of scripts/b2fstate_OK (at least as
-long as b2fstati) and b2fplasma was written with it; running: b2mn.exe.dir
-of a run started after any final state (in progress, or stopped before
-the end of the Makefile); stopped: no complete final state (crashed).
-Without a final state b2plot runs in a folder of links to the run
-directory, with b2fstati as its state."""
+long as b2fstati) and b2fplasma was written with it; crashed: b2fstate
+empty or absent, and the b2fplasma B2.5 writes when an error stops it
+(b2plot shows that plasma with the species of b2fstati); running:
+b2mn.exe.dir of a run started after any final state (in progress, or
+stopped before the end of the Makefile); stopped: no complete final state
+(crashed before b2mn wrote b2fplasma on errors). Running or stopped,
+b2plot runs in a folder of links to the run directory, with b2fstati as
+its state."""
 
 import os
 import shutil
@@ -82,11 +85,21 @@ def _start(rundir):
 
 
 def state(rundir):
-    """("finished" | "running" | "stopped", why: empty when finished)."""
+    """("finished" | "crashed" | "running" | "stopped", why: empty when
+    finished)."""
     path = os.path.join(rundir, "b2fstate")
     t_state = _mtime(path) if os.path.isfile(path) and \
         os.path.getsize(path) > 0 else None
     start = _start(rundir)
+    plasma = os.path.join(rundir, "b2fplasma")
+    begun = _mtime(path) or start   # an empty b2fstate: the run start
+    if t_state is None and os.path.isfile(plasma) and (
+            begun is None or _mtime(plasma) >= begun - SLACK):
+        return "crashed", (
+            "plasma of b2fplasma, written when an error stopped B2.5 (%s): "
+            "that of the start of the failing time step; no b2fstate" %
+            time.strftime("%Y-%m-%d %H:%M", time.localtime(
+                _mtime(plasma))))
     if start is not None and (t_state is None or start > t_state + SLACK):
         exe = os.path.join(rundir, EXE)
         last = max([_mtime(e.path) or start for e in os.scandir(exe)] +
@@ -102,7 +115,6 @@ def state(rundir):
     if not complete(rundir):
         return "stopped", "b2fstate is shorter than b2fstati (the test of " \
             "scripts/b2fstate_OK): the latest run stopped before its end"
-    plasma = os.path.join(rundir, "b2fplasma")
     if not os.path.isfile(plasma):
         return "stopped", "No b2fplasma: the latest run stopped before " \
             "its end"
@@ -117,10 +129,13 @@ def movies(rundir, kind):
     """{name: (path, why)} of the movie files: those of the latest run
     (why empty) and why the others are left out. Finished run: written
     with its final state (as balance.nc); otherwise written since its
-    start (b2mn.exe.dir, else b2fstati), those b2mn writes in b2mn.exe.dir
-    first."""
+    start (b2mn.exe.dir; ended: its empty b2fstate, else b2fstati), those
+    b2mn writes in b2mn.exe.dir first."""
     exe = os.path.join(rundir, EXE)
-    start = _start(rundir) if kind == "running" else _mtime(
+    st = os.path.join(rundir, "b2fstate")
+    begun = _mtime(st) if os.path.isfile(st) and \
+        os.path.getsize(st) == 0 else None
+    start = _start(rundir) if kind == "running" else begun or _mtime(
         _initial(rundir) or "")
     out = {}
     for name in MOVIES:
