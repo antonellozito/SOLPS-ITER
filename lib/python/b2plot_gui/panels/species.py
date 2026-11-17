@@ -37,6 +37,21 @@ def column_names(columns, species=None):
     return [n or "column %d" % (i + 1) for i, n in enumerate(names)]
 
 
+def chosen_columns(names, chosen):
+    """Columns summed for the choice of a species menu (names: the
+    species of the columns): the species chosen, all of them (sum of the
+    species), those of the element (sum of an element), else the first."""
+    if len(names) <= 1:
+        return (0,)
+    if chosen in names:
+        return (names.index(chosen),)
+    if chosen == SUM:
+        return tuple(range(len(names)))
+    element = re.sub(r"^Sum ", "", chosen)
+    return tuple(i for i, n in enumerate(names) if re.match(
+        r"[A-Za-z]*", n).group(0) == element) or (0,)
+
+
 class SpeciesMenu(QtWidgets.QWidget):
     """The title of a tree and "(species: menu)" right of it, in one row
     over the first column of its header (the header has no text there);

@@ -27,6 +27,90 @@ EXTRA = ("vector", "wall", "overlay")   # the trees apart from the plasma one
 ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
 
 
+def make_tree(title, what):
+    """A tree of quantities in groups (title: its first column, what: what
+    a click does), the Name column right of it; its species menu
+    (SpeciesMenu) is added by the owner."""
+    tree = QtWidgets.QTreeWidget()
+    tree.setHeaderLabels([title, "Name"])
+    tree.setRootIsDecorated(True)
+    tree.setUniformRowHeights(True)
+    tree.setVerticalScrollBarPolicy(    # columns as wide, groups open
+        Qt.ScrollBarAlwaysOn)           # or not
+    head = tree.header()
+    head.setStretchLastSection(False)
+    head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
+    head.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+    tree.setExpandsOnDoubleClick(False)
+    tree.setToolTip("Click a group to open or close it, a quantity to "
+                    "%s, click it again to clear it" % what)
+    return tree
+
+
+def fill_tree(tree, quantities, always=()):
+    """The quantities (group, text, label) in their groups, in order; the
+    groups always (in this order, first) there too without quantities,
+    greyed out (no clicks)."""
+    tree.clear()
+    groups = {}
+    for name in list(always) + [q.group for q in quantities]:
+        if name not in groups:
+            top = QtWidgets.QTreeWidgetItem([name])
+            top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
+            font = top.font(0)
+            font.setBold(True)
+            top.setFont(0, font)
+            groups[name] = top
+            tree.addTopLevelItem(top)
+    for q in quantities:
+        top = groups[q.group]
+        item = QtWidgets.QTreeWidgetItem([q.text, q.label])
+        item.setToolTip(0, q.text)
+        item.setToolTip(1, q.label)
+        item.setData(0, Qt.UserRole, q)
+        top.addChild(item)
+    for top in groups.values():
+        top.setDisabled(not top.childCount())
+
+
+def mark_group(top):
+    """An open group with the background of a selected quantity, a group
+    greyed out (fill_tree) in the grey of the theme (the style sheet sets
+    the text colour of the trees, also of the items disabled)."""
+    colors = theme.COLORS[theme.name()]
+    brush = QtGui.QBrush(QtGui.QColor(colors["selection"])) if \
+        top.isExpanded() else QtGui.QBrush()
+    grey = QtGui.QBrush(QtGui.QColor(colors["disabled_text"])) if not \
+        top.flags() & Qt.ItemIsEnabled else QtGui.QBrush()
+    for col in range(top.treeWidget().columnCount()):
+        top.setBackground(col, brush)
+        top.setForeground(col, grey)
+
+
+def tree_height(tree, rows):
+    """The tree rows high (in its font, under its header)."""
+    fm = QtGui.QFontMetrics(tree.font())
+    head = tree.header()
+    tree.setFixedHeight(rows * (fm.height() + 4) + max(
+        head.sizeHint().height(), head.minimumHeight()) +
+        2 * tree.frameWidth())
+
+
+class SingleClicks:
+    """Clicks on the items of a tree: True for a new click, False for the
+    second click of a double click (no new click)."""
+
+    def __init__(self):
+        self._last = (None, 0.0)        # item, time
+
+    def __call__(self, item):
+        last, when = self._last
+        now = time.monotonic()
+        self._last = (item, now)
+        return not (item is last and now - when <
+                    QtWidgets.QApplication.doubleClickInterval() / 1000.0)
+
+
 class QuantityPanel(QtWidgets.QWidget):
     """The plasma, vector and wall quantity trees (each plotted alone or
     with the others, each with its species menu in its title), the
@@ -46,13 +130,13 @@ class QuantityPanel(QtWidgets.QWidget):
         self.vector_current = None      # the vector quantity plotted
         self.wall_current = None        # the wall quantity plotted
         self.overlay_current = None     # the quantity overlaid
-        self._last_click = (None, 0.0)  # item, time (double clicks)
+        self._new_click = SingleClicks()
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 6, 6)   # the tabs: 6 px over it
         self.time_box = TimeBox()
         self.time_box.source_changed.connect(lambda *_: self._tab_shown())
         lay.addWidget(self.time_box)
-        self.page_slot = QtWidgets.QVBoxLayout()    # the Balances tab
+        self.page_slot = QtWidgets.QVBoxLayout()    # the tabs with pages
         self.page_slot.setContentsMargins(0, 0, 0, 0)
         lay.addLayout(self.page_slot)
         self.main_part = QtWidgets.QWidget()        # the other tabs
@@ -194,28 +278,17 @@ class QuantityPanel(QtWidgets.QWidget):
                             QtCore.QEvent.StyleChange):
             self._tree_height()
 
-    def show_balances(self, on):
-        """The page of the Balances tab, or what the other tabs show."""
-        self.main_part.setVisible(not on)
+    def show_page(self, page):
+        """The page of the Run tracing or Balances tab (a widget of the
+        page slot), or (None) what the other tabs show."""
+        self.main_part.setVisible(page is None)
         for i in range(self.page_slot.count()):
             w = self.page_slot.itemAt(i).widget()
             if w is not None:
-                w.setVisible(on)
+                w.setVisible(w is page)
 
     def _make_tree(self, title, what):
-        tree = QtWidgets.QTreeWidget()
-        tree.setHeaderLabels([title, "Name"])
-        tree.setRootIsDecorated(True)
-        tree.setUniformRowHeights(True)
-        tree.setVerticalScrollBarPolicy(    # columns as wide, groups open
-            Qt.ScrollBarAlwaysOn)           # or not
-        head = tree.header()
-        head.setStretchLastSection(False)
-        head.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        head.setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-        tree.setExpandsOnDoubleClick(False)
-        tree.setToolTip("Click a group to open or close it, a quantity to "
-                        "%s, click it again to clear it" % what)
+        tree = make_tree(title, what)
         tree.itemActivated.connect(self._clicked)
         tree.itemClicked.connect(self._clicked)
         tree.itemExpanded.connect(self._group_marked)
@@ -239,11 +312,7 @@ class QuantityPanel(QtWidgets.QWidget):
         for tree, n in ((self.tree, rows), (self.vector_tree, VECTOR_ROWS),
                         (self.wall_tree, WALL_ROWS),
                         (self.overlay_tree, rows)):     # as the plasma one
-            fm = QtGui.QFontMetrics(tree.font())
-            head = tree.header()
-            tree.setFixedHeight(n * (fm.height() + 4) + max(
-                head.sizeHint().height(), head.minimumHeight()) +
-                2 * tree.frameWidth())
+            tree_height(tree, n)
 
     # ---------------------------------------------------------- quantities
     def set_quantities(self, quantities):
@@ -269,23 +338,7 @@ class QuantityPanel(QtWidgets.QWidget):
                 self.overlay_species)
 
     def _fill_tree(self, tree, quantities):
-        tree.clear()
-        groups = {}
-        for q in quantities:
-            top = groups.get(q.group)
-            if top is None:
-                top = QtWidgets.QTreeWidgetItem([q.group])
-                top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
-                font = top.font(0)
-                font.setBold(True)
-                top.setFont(0, font)
-                groups[q.group] = top
-                tree.addTopLevelItem(top)
-            item = QtWidgets.QTreeWidgetItem([q.text, q.label])
-            item.setToolTip(0, q.text)
-            item.setToolTip(1, q.label)
-            item.setData(0, Qt.UserRole, q)
-            top.addChild(item)
+        fill_tree(tree, quantities)
         self._filter(self.search.text())
 
     def _filter(self, text):
@@ -307,11 +360,7 @@ class QuantityPanel(QtWidgets.QWidget):
         self.mark_groups()
 
     def _group_marked(self, top):
-        """An open group with the background of a selected quantity."""
-        brush = QtGui.QBrush(QtGui.QColor(theme.COLORS[theme.name()][
-            "selection"])) if top.isExpanded() else QtGui.QBrush()
-        for col in range(top.treeWidget().columnCount()):
-            top.setBackground(col, brush)
+        mark_group(top)
 
     def mark_groups(self):
         """The backgrounds of the groups (open or not, the theme)."""
@@ -323,11 +372,7 @@ class QuantityPanel(QtWidgets.QWidget):
         """A click (or Return) on a group: open or close it; on a
         quantity: plot it, or clear the plot if it is the one plotted; the
         second click of a double click is no new click."""
-        last, when = self._last_click
-        now = time.monotonic()
-        self._last_click = (item, now)
-        if item is last and now - when < \
-                QtWidgets.QApplication.doubleClickInterval() / 1000.0:
+        if not self._new_click(item):
             return
         if item.parent() is None:
             item.setExpanded(not item.isExpanded())

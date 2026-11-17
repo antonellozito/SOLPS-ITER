@@ -5,7 +5,6 @@ layers, masks, volume regions, labels), in columns of fixed width (28, 50,
 
 import json
 import os
-import re
 import socket
 from dataclasses import replace
 
@@ -25,13 +24,14 @@ from .panels.plotarea import (READOUT, Columns, PlotCommands, Readout,
                               ScaledCanvas)
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel
-from .panels.species import SUM, column_names
-from .panels.timebox import BALANCES
+from .panels.species import chosen_columns, column_names
+from .panels.timebox import BALANCES, PAGES, TRACING
 from .output.actions import TabOutput
 from .output.movie import MovieFrames
 from .tools import cellfiles, equilibrium, inspect, regions
 from .tools.control import Tools
 from .balances.picker import BalanceTool
+from .timedata.tracing import RunTracing
 
 MASSES = {"massa": "a", "massm": "m", "massi": "i"}   # EIRENE species
 WARNINGS = ("no data found", "not found", "no adas file", "faulty",
@@ -125,6 +125,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.overlay_button.toggled.connect(
             lambda on: self.tools.open_section("overlay" if on else None))
         self.balance = BalanceTool(self)
+        self.tracing = RunTracing(self)
         self.tools.bar.changed.connect(
             lambda: self.tools.bar.mode is not None and self.balance.cancel())
         self.commands = PlotCommands(self)
@@ -151,8 +152,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.left_column = left         # the balance extensions start right
         self.quantity_area = _scrolled(self.quantity)   # of it
         ll.addWidget(self.quantity_area, 1)
+        self.quantity.page_slot.addWidget(self.tracing.page)
         self.quantity.page_slot.addWidget(self.balance.page)
-        self.quantity.show_balances(False)
+        self.quantity.show_page(None)
         self.columns = Columns((left, centre, self.commands,
                                 _scrolled(right)), COLUMNS, SPACE)
         for column in (self.quantity, right):  # never scrolled sideways
@@ -222,9 +224,11 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                                  kind in ("finished", "crashed"), why)
         self.time_box.set_balances(self.balance.path is not None,
                                    self.balance.why)
+        self.tracing.set_run(run)
+        self.time_box.set_tracing(self.tracing.ok(), self.tracing.why)
         self._tab = self.time_box.source.currentIndex()
         self._tab_plot = {}             # tab -> the quantity plotted there
-        self._balances_shown()
+        self.show_page()
         for menu in (self.quantity.plasma_regions,
                      self.quantity.vector_regions):
             menu.set_geometry(run.geometry)
@@ -343,31 +347,34 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.settings.setValue("derived2d", json.dumps(specs))
         self._source_changed()
 
-    def _balances_shown(self):
-        """The Balances tab: its page in the column instead of the
-        quantities, the volume drawn and picked only there; the chords
-        and statistics drawn on the plot go (their results are kept)."""
-        on = self.time_box.balances()
-        if on and self.tools.section is not None:
+    def show_page(self):
+        """The Run tracing and Balances tabs: their page in the column
+        instead of the quantities, their marks or volume drawn (and picked)
+        only there; the chords and statistics drawn on the plot go (their
+        results are kept)."""
+        page = self.time_box.page()
+        if page is not None and self.tools.section is not None:
             self.tools.open_section(None)
-        self.quantity.show_balances(on)
-        self.balance.set_shown(on)
+        self.quantity.show_page({TRACING: self.tracing.page,
+                                 BALANCES: self.balance.page}.get(page))
+        self.balance.set_shown(page == BALANCES)
+        self.tracing.set_shown(page == TRACING)
 
     def _source_changed(self):
         """Another tab: what the tab left plotted goes, the plot of the
         tab opened comes back (Final state, Run movies: the quantity last
-        plotted there, the layers alone if none; Balances: its volume),
-        with the quantities of its source."""
+        plotted there, the layers alone if none; Run tracing: its marks;
+        Balances: its volume), with the quantities of its source."""
         old, new = self._tab, self.time_box.source.currentIndex()
         self._tab = new
-        if old != BALANCES:
+        if old not in PAGES:
             self._tab_plot[old] = tuple(q.name if q else None for q in (
                 self.wanted, self.vector_wanted, self.wall_wanted,
                 self.overlay_wanted))
-        self._balances_shown()
+        self.show_page()
         self._set_quantities()
         self.odata = {}
-        name, *extra = (None,) * 4 if new == BALANCES else \
+        name, *extra = (None,) * 4 if new in PAGES else \
             self._tab_plot.get(new, (None,) * 4)
         for kind, other in zip(("vector", "wall", "overlay"), extra):
             if other is None or not self.quantity.select_extra(kind, other):
@@ -511,17 +518,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         """Columns of vector or wall data summed: the species chosen in
         its menu, all of them (sum of the species), those of the element
         (sum of an element), else the first."""
-        names = column_names(data.columns, self._species())
-        chosen = menu.text()
-        if len(names) <= 1:
-            return (0,)
-        if chosen in names:
-            return (names.index(chosen),)
-        if chosen == SUM:
-            return tuple(range(len(names)))
-        element = re.sub(r"^Sum ", "", chosen)
-        return tuple(i for i, n in enumerate(names) if re.match(
-            r"[A-Za-z]*", n).group(0) == element) or (0,)
+        return chosen_columns(column_names(data.columns, self._species()),
+                              menu.text())
 
     def _species_menus(self):
         """Each species menu with the species of its data: the plasma one
@@ -1049,6 +1047,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.tools.apply_theme()
         self.quantity.mark_groups()
         self.balance.apply_theme()
+        self.tracing.apply_theme()
         self.canvas.draw_idle()
 
     def _show_empty(self):

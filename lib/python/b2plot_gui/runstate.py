@@ -125,12 +125,13 @@ def state(rundir):
     return "finished", ""
 
 
-def movies(rundir, kind):
-    """{name: (path, why)} of the movie files: those of the latest run
-    (why empty) and why the others are left out. Finished run: written
-    with its final state (as balance.nc); otherwise written since its
-    start (b2mn.exe.dir; ended: its empty b2fstate, else b2fstati), those
-    b2mn writes in b2mn.exe.dir first."""
+def movies(rundir, kind, names=MOVIES):
+    """{name: (path, why)} of the movie files (or of other files the run
+    writes as them: names): those of the latest run (why empty) and why
+    the others are left out. Finished run: written with its final state
+    (as balance.nc); otherwise written since its start (b2mn.exe.dir;
+    ended: its empty b2fstate, else b2fstati), those b2mn writes in
+    b2mn.exe.dir first."""
     exe = os.path.join(rundir, EXE)
     st = os.path.join(rundir, "b2fstate")
     begun = _mtime(st) if os.path.isfile(st) and \
@@ -138,7 +139,7 @@ def movies(rundir, kind):
     start = _start(rundir) if kind == "running" else begun or _mtime(
         _initial(rundir) or "")
     out = {}
-    for name in MOVIES:
+    for name in names:
         local = os.path.join(exe, name)
         if kind == "running" and os.path.isfile(local) and \
                 not os.path.islink(local):
