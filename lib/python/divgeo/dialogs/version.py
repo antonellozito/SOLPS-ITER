@@ -8,22 +8,11 @@ import sys
 
 from ..core import prefs
 from . import files, helpwin
-from .base import MessageDialog
+from .base import MessageDialog, create_dialog_ex
 
 PSTR_PREFSPRESENT = "DG.Signature"
 PSTR_DGVERSION = "DG.LastUsedVersion"
 PVAL_PREFSPRESENT = "XDivGeo"
-
-
-def _message_dialog(window, name, no_cancel):
-    """CreateDialogEx with CDLG_MESSAGE: a message dialog that is not
-    unmanaged by its buttons; Cancel and the close button pop it down."""
-    dlg = MessageDialog(window, name, auto_unmanage=False)
-    dlg.callbacks["cancel"].append(dlg.popdown)
-    dlg.wm_close = dlg.popdown
-    if no_cancel:
-        dlg.cancel.hide()
-    return dlg
 
 
 def _set_message(dlg, fmt, *args):
@@ -51,7 +40,7 @@ def open_new_prefs_file_dlg(window, use_prefs_file):
             os._exit(1)
     dlg = window.findChild(MessageDialog, "dlgNewPrefsFile")
     if dlg is None:
-        dlg = _message_dialog(window, "dlgNewPrefsFile", True)
+        dlg = create_dialog_ex(window, "dlgNewPrefsFile", no_cancel=True)
         dlg.callbacks["ok"].append(dlg.popdown)
         dlg.callbacks["help"].append(lambda: window.help_on(dlg))
         fn = prefs.file_name()
@@ -81,7 +70,7 @@ def open_new_version_dlg(window, only_if_needed):
             return None
     dlg = window.findChild(MessageDialog, "dlgNewVersion")
     if dlg is None:
-        dlg = _message_dialog(window, "dlgNewVersion", False)
+        dlg = create_dialog_ex(window, "dlgNewVersion")
         dlg.callbacks["ok"].append(lambda: _new_version_ok(window, dlg))
         dlg.callbacks["help"].append(lambda: window.help_on(dlg))
         v = lambda k: lib.string_at(window.dll.GetPyVersionStr(k))

@@ -5,10 +5,10 @@ come from the dialogs package."""
 
 import ctypes
 
-from PySide6 import QtWidgets
-
 from ..core import api, lib as corelib, prefs
-from ..dialogs import boxes, files, helpwin, toolbox
+from ..dialogs import (boxes, creobj, files, helpwin, importexport, info,
+                       printdlg, rotmov, settings, setup, toolbox, topology,
+                       variables as varsdlg)
 
 # Show flags of the toggles of the Display and Mode menus
 # (ProcessXViewShowFlags): attribute of the window, flag
@@ -36,16 +36,6 @@ class Commands:
         result = getattr(self.w.dll, name)(self.w.view, *args)
         self.w.pump()
         return result
-
-    def _later(self, entry):
-        """A command whose dialog the Python interface does not have yet
-        (a box that does not stop the program)."""
-        box = QtWidgets.QMessageBox(
-            QtWidgets.QMessageBox.Information, "DivGeo",
-            "%s: not available in the Python interface of DivGeo yet."
-            % entry.action.text().replace("&", ""), parent=self.w)
-        box.setModal(False)
-        box.show()
 
     # File menu
 
@@ -93,10 +83,42 @@ class Commands:
             return
         files.open_file_save_dlg(w, False)
 
-    cb_file_output = cb_file_print = _later
-    cb_template = cb_equil = cb_sonnet = _later
-    cm_import_topology = cm_export_mesh = _later
-    cm_export_elems_as_template = _later
+    def cb_file_output(self, entry):
+        """CbFileOutput, with the two messages of the main window."""
+        w = self.w
+        res = [w.application.db.get(["DivGeo", "main", n],
+                                    ["DivGeo", "XmMainWindow", n]) or n
+               for n in ("msgOutputModeCarre", "msgOutputModeSonnet")]
+        self._core("PyCbFileOutput", *(corelib.cstr(r) for r in res))
+
+    def cb_file_print(self, entry):
+        printdlg.open_file_print_dlg(self.w)
+
+    def cb_equil(self, entry):
+        importexport.cb_equil(self.w)
+
+    def cb_template(self, entry):
+        importexport.cb_template(self.w)
+
+    def cb_sonnet(self, entry):
+        importexport.cb_sonnet(self.w)
+
+    def cm_import_topology(self, entry):
+        importexport.open_import_topology_dlg(self.w)
+
+    def cm_export_mesh(self, entry):
+        """CmExportMesh."""
+        w = self.w
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        importexport.open_export_mesh_dlg(w, False)
+
+    def cm_export_elems_as_template(self, entry):
+        """CmExportElemsAsTemplate."""
+        w = self.w
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        importexport.open_export_elems_as_template_dlg(w)
 
     def cb_quit(self, entry):
         """CbQuit: every view closed in turn, with the questions."""
@@ -124,7 +146,26 @@ class Commands:
     def cb_unmark_all(self, entry):
         self._core("PyCbUnmarkAll")
 
-    cb_cm_create_at = cb_cm_rot_move = _later
+    def cb_cm_create_at(self, entry):
+        creobj.cb_cm_create_at(self.w, entry.user)
+
+    def _open(self, opener, undo_mark=False):
+        """A dialog of the model: SetActiveView, the dialog, UndoMark when
+        the Motif callback marks."""
+        w = self.w
+        if not w.app:
+            return None
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        dlg = opener(w)
+        if undo_mark:
+            w.dll.UndoMark(w.app)
+            w.pump()
+        return dlg
+
+    def cb_cm_rot_move(self, entry):
+        """CbCmRotMove."""
+        self._open(rotmov.open_rot_move_dlg)
 
     def cb_cm_del_objects(self, entry):
         self._core("PyCbCmDelObjects", entry.user)
@@ -176,7 +217,26 @@ class Commands:
     def cb_reset_aspect_ratio(self, entry):
         self._core("PyCbResetAspectRatio")
 
-    cb_cm_set_angle = cb_cm_stretch = cm_view_mesh_header = _later
+    def cb_cm_set_angle(self, entry):
+        """CbCmSetAngle."""
+        self._open(rotmov.open_set_angle_dlg, True)
+
+    def cb_cm_stretch(self, entry):
+        """CbCmStretch."""
+        self._open(rotmov.open_stretch_dlg, True)
+
+    def cm_view_mesh_header(self, entry):
+        """CmViewMeshHeader."""
+        w = self.w
+        if not w.app:
+            return
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        mesh = w.lib.get(w.app, "App.mesh")
+        if not mesh:
+            w.error_box(w.str_(api.ERR_NOSONNET))
+            return
+        info.open_edit_mesh_header_dlg(w, mesh)
 
     def cm_prev_zoom(self, entry):
         self._core("PyCmPrevZoom")
@@ -211,13 +271,18 @@ class Commands:
         self._core("PyCbCmRenumber")
 
     def cb_cm_show_invalid_vars(self, entry):
+        """CbCmShowInvalidVars."""
         if self._core("PyCbCmShowInvalidVars"):
-            self._later(entry)
+            varsdlg.open_invalid_vars_dlg(self.w)
 
     def cm_rebuild_carre_info(self, entry):
         self._core("PyCmRebuildCarreInfo")
 
-    cb_glue_points = cb_reduce_elements = _later
+    def cb_glue_points(self, entry):
+        rotmov.open_glue_points_dlg(self.w)
+
+    def cb_reduce_elements(self, entry):
+        rotmov.open_glue_elems_dlg(self.w)
 
     def cb_group_normals(self, entry):
         """CbGroupNormals (x_rotmov.c): the normals of all elements, or of
@@ -240,24 +305,61 @@ class Commands:
             w.application.db, ["DivGeo", "main"], ["DivGeo", "XmMainWindow"],
             "msgNormalsGrouped", None, "$(COUNT)%d", count.value)))
         w.pump()
-    cm_edit_topology = _later
+
+    def cm_edit_topology(self, entry):
+        topology.open_topology_dlg(self.w)
 
     # Variables menu
 
     def cb_add_var_set(self, entry):
-        if self._core("PyCbAddVarSet", entry.user):
-            self._later(entry)
+        """CbAddVarSet: the new set, then its Variables dialog."""
+        vs = self._core("PyCbAddVarSet", entry.user)
+        if vs:
+            varsdlg.open_vars_edit_dlg(self.w, vs)
 
     def cb_del_var_set(self, entry):
         self._core("PyCbDelVarSet", entry.user)
 
-    cb_edit_var_set = _later
+    def cb_edit_var_set(self, entry):
+        """CbEditVarSet."""
+        w = self.w
+        w.dll.ValidatePtr(w.view, b"CbDelVarSet.view")
+        if not w.app:
+            return
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        varsdlg.open_vars_edit_dlg(w, entry.user)
 
     # Options menu
 
-    cm_set_output_mode_x = cm_set_mesh_options = _later
-    cb_edit_var_set_defs = cb_save_config = _later
-    cb_set_autosave_interval = _later
+    def cm_set_output_mode_x(self, entry):
+        """CmSetOutputModeX."""
+        w = self.w
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        settings.open_output_mode_dlg(w)
+
+    def cm_set_mesh_options(self, entry):
+        """CmSetMeshOptions."""
+        w = self.w
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        settings.open_mesh_options_dlg(w)
+
+    def cb_edit_var_set_defs(self, entry):
+        setup.cb_edit_var_set_defs(self.w)
+
+    def cb_save_config(self, entry):
+        setup.cb_save_config(self.w)
+
+    def cb_set_autosave_interval(self, entry):
+        """CbSetAutosaveInterval."""
+        w = self.w
+        w.dll.SetActiveView(w.view)
+        w.pump()
+        if not w.app:
+            return
+        settings.open_autosave_dlg(w)
 
     def cb_sw_menu(self, entry=None):
         """CbSwMenu: the menu bar, or the Menu button in the drawing
@@ -347,7 +449,15 @@ class Commands:
         w.pump()
         w.close_view(True)
 
-    cb_window_info = cb_about = _later
+    def cb_about(self, entry):
+        """CbAbout: the About box, modal."""
+        dlg = self._open(info.open_about_dlg)
+        if dlg is not None:
+            dlg.run_modal()
+
+    def cb_window_info(self, entry):
+        """CbWindowInfo."""
+        self._open(info.open_info_dlg)
 
     # Help menu
 

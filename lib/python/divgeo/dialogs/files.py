@@ -114,6 +114,8 @@ class FileSelectionDialog(XmDialog):
             b.clicked.connect(lambda checked=False, w=which:
                               self.activate(w))
             row.addWidget(b)
+            if which == "ok":
+                self.ok_button = b
         self.filter_label = self._label("FilterLabel", "filterLabelString",
                                         "Filter")
         self.dir_label = self._label("Dir", "dirListLabelString",
@@ -131,13 +133,19 @@ class FileSelectionDialog(XmDialog):
         lay.addWidget(self.items_label, 2, 1)
         lay.addWidget(self.dir_list, 3, 0)
         lay.addWidget(self.items_list, 3, 1)
-        lay.addWidget(self.selection_label, 4, 0, 1, 2)
-        lay.addWidget(self.text, 5, 0, 1, 2)
-        lay.addWidget(self.separator, 6, 0, 1, 2)
-        lay.addLayout(row, 7, 0, 1, 2)
+        # the work area (children created on the box) above the selection
+        self.extra = QtWidgets.QVBoxLayout()
+        lay.addLayout(self.extra, 4, 0, 1, 2)
+        lay.addWidget(self.selection_label, 5, 0, 1, 2)
+        lay.addWidget(self.text, 6, 0, 1, 2)
+        lay.addWidget(self.separator, 7, 0, 1, 2)
+        lay.addLayout(row, 8, 0, 1, 2)
         self.dir_mask = self.qualify(self.resource("dirMask", "DirMask")
                                      or "*")
         self.do_search()
+
+    def xm_place(self, w, x=None, y=None, attach=None):
+        self.extra.addWidget(w)
 
     def _label(self, name, res, default):
         label = gadget(QtWidgets.QLabel(self.resource(
@@ -414,6 +422,7 @@ def open_mesh_unsaved_dlg(window):
     def discard():
         window.discard_flags |= 2
         window.close_view(-1)
-    return _unsaved_dlg(window, "dlgMeshUnsaved",
-                        lambda: window.commands.cm_export_mesh(None),
-                        discard)
+    def save():
+        from .importexport import open_export_mesh_dlg
+        open_export_mesh_dlg(window, True)
+    return _unsaved_dlg(window, "dlgMeshUnsaved", save, discard)
