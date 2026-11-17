@@ -1056,6 +1056,7 @@ endif
 
 # Install XPrint library
 
+if ( $?USE_MOTIF ) then   # needed by the Motif DivGeo and amds only
 if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
 
   set pkg_check = `dpkg -l | grep -w libxpm4`
@@ -1115,6 +1116,7 @@ else if ("$OSTYPE" == "darwin") then
 
   endif
 
+endif
 endif
 
 # Install NetCDF library
@@ -1487,6 +1489,7 @@ endif
 
 # Install MOTIF library
 
+if ( $?USE_MOTIF ) then   # needed by the Motif DivGeo and amds only
 if ("$OSTYPE" == "linux" && "$HOST_NAME" == "LINUX") then
 
   set pkg_check = `dpkg -l | grep -w libmotif-dev`
@@ -1546,6 +1549,7 @@ else if ("$OSTYPE" == "darwin") then
 
   endif
 
+endif
 endif
 
 # Clond and compile JSON-Fortran library

@@ -1,6 +1,6 @@
 """Interpreter and module check of the Python tools of SOLPS-ITER (b2plot,
-b2plot_gui, the run plot scripts; no fallbacks), the Python they run with
-and the Qt libraries of its windows.
+b2plot_gui, the run plot scripts, DivGeo; no fallbacks), the Python they
+run with and the Qt libraries of its windows.
 
 Runs on any Python 3 (no f-strings, standard library only), so that the
 error message is printed even by an old interpreter. The module list must
@@ -19,11 +19,13 @@ REQUIRED = [("PySide6", "6.4"), ("numpy", "1.21"), ("matplotlib", "3.8")]
 # the windows, without the add-ons of the whole PySide6)
 DISTRIBUTIONS = {"PySide6": ("PySide6_Essentials", "PySide6")}
 
-# Name in messages, the program whose Python graphics are checked and
-# how to run it without windows, set by the program started
+# Name in messages, the program whose Python graphics are checked, how to
+# run it without windows and its part of the manual, set by the program
+# started
 NAME = "b2plot"
 GRAPHICS_OF = "b2plot"
 NO_WINDOW = ""
+MANUAL = "chapter \"b2plot manual\", section \"Python graphics\""
 
 # Settings of other Python, Qt and matplotlib installations that would
 # reach the Python graphics: removed for its Python, given back to the
@@ -464,8 +466,7 @@ def fail(found, extra=()):
                   "SOLPS-ITER-specific Python installation?\"",
                   "  2. close the shell, open a new one and source setup.csh "
                   "again."]
-    lines.append("See the SOLPS-ITER manual, chapter \"b2plot manual\", "
-                 "section \"Python graphics\".")
+    lines.append("See the SOLPS-ITER manual, %s." % MANUAL)
     sys.stderr.write("\n".join(lines) + "\n")
     sys.exit(2)
 

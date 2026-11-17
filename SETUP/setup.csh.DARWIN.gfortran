@@ -52,7 +52,9 @@ setenv LAPACK_DIR `brew --prefix lapack`
 if ( $?USE_NCAR ) then
 setenv LIBPNG_HOME `brew --prefix libpng`
 endif
+if ( $?USE_MOTIF ) then
 setenv LIBXP_HOME `brew --prefix libxp`
+endif
 setenv NETCDF_HOME `brew --prefix netcdf`
 setenv NETCDF_FORTRAN_HOME `brew --prefix netcdf-fortran`
 if ( $?USE_NCAR ) then
@@ -108,8 +110,10 @@ if ( `brew list | grep -c '^libpng$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
 endif
 endif
+if ( $?USE_MOTIF ) then
 if ( `brew list | grep -c '^libxp$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 if ( `brew list | grep -c '^netcdf$'` == 0 ) then
     set MISSING_DEPENDENCY = 1
@@ -137,8 +141,10 @@ if ( ! -e /opt/local/lib/libncarg.a ) then
     set MISSING_DEPENDENCY = 1
 endif
 endif
+if ( $?USE_MOTIF ) then
 if ( ! -e /opt/local/lib/libXm.a ) then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 if ( ! -e "${SOLPSTOP}/lib/DARWIN.gfortran/mscl/darwin.gfortran/libmscl.a" ) then
     set MISSING_DEPENDENCY = 1

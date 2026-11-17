@@ -2,13 +2,14 @@
 the checks of the Motif front end (x_xapp.c, ConfigureXApp), the views.
 
 The resources are those the Motif version reads: the fallback resources
-compiled into the library (x_~fbr.c), then the command line."""
+compiled into the library (x_~fbr.c), then the command line. The logo
+(resources/logo.png) is the icon of the program."""
 
 import ctypes
 import os
 import sys
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ...b2plot_gui import scaling, theme
 from ..core import api, lib as corelib, options, prefs, resources
@@ -27,6 +28,8 @@ USAGE = ("DivGeo version %s\n"
          "-nohelp       Do not require the help file\n"
          "filename...   Files to load\n\n"
          "Default configuration file is %s\n")
+LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources",
+                    "logo.png")
 
 
 class Application:
@@ -242,13 +245,17 @@ class Application:
 def main(argv, library_path=None):
     """Runs DivGeo: argv as the command line of the Motif program."""
     path = library_path or corelib.default_path()
-    if not os.path.exists(path):
-        sys.stderr.write(
-            "DivGeo: library %s not found; build DivGeo (make in "
-            "modules/DivGeo, without USE_MOTIF)\n" % path)
-        return 1
+    if library_path is None:
+        found = corelib.build_problems(path)
+    else:
+        found = [] if os.path.exists(path) else [path + " not found"]
+    if found:
+        for line in found:
+            sys.stderr.write("dg: " + line + "\n")
+        return 2
     qt = QtWidgets.QApplication.instance() or QtWidgets.QApplication(
         ["DivGeo"])
+    qt.setWindowIcon(QtGui.QIcon(LOGO))         # the icon of the program
     application = Application(corelib.Library(path), argv, qt)
     application.start()
     return qt.exec()
