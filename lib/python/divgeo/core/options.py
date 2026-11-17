@@ -103,16 +103,13 @@ def parse(argv):
             continue
         _, spec, kind, value = opt
         if kind == NOARG:
-            db.put_line("%s%s%s: %s" % (name, "" if spec[0] in ".*" else ".",
-                                        spec, value))
+            db.put(_comps(name, spec), value)
             k += 1
         elif k + 1 < len(argv):
             if kind == RESARG:
                 db.put_line(argv[k + 1])
             else:
-                db.put_line("%s%s%s:%s" % (name, "" if spec[0] in ".*"
-                                           else ".", spec,
-                                           _escape(argv[k + 1])))
+                db.put(_comps(name, spec), argv[k + 1])
             k += 2
         else:
             rest.append(word)
@@ -120,13 +117,10 @@ def parse(argv):
     return rest, name, db
 
 
-def _escape(value):
-    """A value as a resource line keeps it: leading blanks, newlines and
-    backslashes escaped."""
-    out = value.replace("\\", "\\\\").replace("\n", "\\n")
-    if out[:1] in (" ", "\t"):
-        out = "\\" + out
-    return out
+def _comps(name, spec):
+    """The entry of an option: the program name as one component (it may
+    contain dots, as dg.exe), then the specifier of the option table."""
+    return ((True, name),) + resources._parse_spec(spec)
 
 
 def strtol(text):
