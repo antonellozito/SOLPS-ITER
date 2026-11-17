@@ -394,6 +394,7 @@ alias   set_hess_tgt    'source $SOLPSTOP/SETUP/hess_tgt'
 alias unset_hess_tgt    'source $SOLPSTOP/SETUP/nohess_tgt'
 
 # Check for Motif library
+if ($?USE_MOTIF) then   # needed by the Motif DivGeo and amds only
 if (! -e `which mwm`) setenv NO_MOTIF 1
 if ($?NO_MOTIF) then
   if (`whereis libXm | wc -w` != 1) unsetenv NO_MOTIF
@@ -412,6 +413,7 @@ if (! $?NO_MOTIF) then
   if ($_xm_found == 0 && `uname` == Darwin) set _xm_found = `sh -c 'find -L /opt/homebrew/include /usr/local/include -name "Xm.h" -print 2>/dev/null' | wc -l`
   if ($_xm_found == 0) setenv NO_MOTIF 1
   unset _xm_found
+endif
 endif
 
 # Check if Manual can be built

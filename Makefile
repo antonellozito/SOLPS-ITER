@@ -432,11 +432,7 @@ carre_nox:
 	cd modules/Carre2; ${MAKE} NCARG_ROOT="" LD_NCARG=""
 
 divgeo:
-ifndef NO_MOTIF
 	+cd modules/DivGeo;         ${MAKEO}
-else
-	$(warning DivGeo will not be compiled because Motif library is not installed.)
-endif
 	+cd modules/DivGeo/equtrn;  ${MAKEO}
 	+cd modules/DivGeo/convert; ${MAKEO}
 
@@ -827,7 +823,7 @@ triang_nox_mpi:
 	cd modules/Triang; ${MAKE} ${MPI_OPTS} ${OPT_NOX} mods
 	cd modules/Triang; ${MAKE} -j1 ${MPI_OPTS} ${OPT_NOX}
 
-ifndef NO_MOTIF
+ifdef USE_MOTIF
 amds: b25eirene
 	+cd modules/amds; ${MAKEO}
 
@@ -844,7 +840,7 @@ amds:
 amds_mpi:
 amds_openmp:
 amds_openmp_mpi:
-	$(warning AMDS will not be compiled because Motif library file is not installed.)
+	$(warning AMDS will not be compiled because it needs Motif and USE_MOTIF is not set.)
 endif
 
 fxdr: sonnet-light
@@ -1056,8 +1052,8 @@ ifeq (,$(findstring ifx,${FC}))
 	cd modules/Eirene;         ${MAKEF} depend USE_B25=-DB25_EIRENE ${OMP_OPTE}
 	cd modules/B2.5;	   ${MAKE} depend USE_EIRENE=-DB25_EIRENE ${OMP_OPTB}
 endif
-ifndef NO_MOTIF
 	cd modules/DivGeo;         ${MAKE} depend
+ifdef USE_MOTIF
 	cd modules/amds;           ${MAKE} depend
 endif
 ifndef NO_MPI

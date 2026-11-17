@@ -19,15 +19,39 @@ _CTYPES = {("i", 4): ctypes.c_int, ("u", 8): ctypes.c_ulong,
            ("p", 8): ctypes.c_void_p, ("p", 4): ctypes.c_void_p}
 
 
-def default_path():
-    """The library of the DivGeo build of this SOLPS-ITER session, in the
-    build folder of the Python flavour (as the Makefile names it)."""
+def build_folder():
+    """The DivGeo build folder of this SOLPS-ITER session (as the Makefile
+    names it)."""
     env = os.environ
     folder = "%s.%s%s" % (env.get("HOST_NAME", ""), env.get("COMPILER", ""),
                           ".debug" if env.get("SOLPS_DEBUG") else "")
-    name = "libdivgeo.dylib" if sys.platform == "darwin" else "libdivgeo.so"
     return os.path.join(env.get("SOLPSTOP", ""), "modules", "DivGeo",
-                        "builds", folder, "python", name)
+                        "builds", folder)
+
+
+def default_path():
+    """The library of the DivGeo build of this SOLPS-ITER session, in the
+    folder of the Python flavour."""
+    name = "libdivgeo.dylib" if sys.platform == "darwin" else "libdivgeo.so"
+    return os.path.join(build_folder(), "python", name)
+
+
+def build_problems(path):
+    """Why the library of this session cannot be loaded (empty if it can):
+    environment, a build made with Motif last (stamp of the Makefile), a
+    library not built."""
+    missing = [v for v in ("SOLPSTOP", "HOST_NAME", "COMPILER")
+               if not os.environ.get(v)]
+    if missing:
+        return [", ".join(missing) + " not set: source setup.csh first"]
+    build = build_folder()
+    if os.path.isfile(os.path.join(build, ".gui_motif")):
+        return ["%s was built with Motif (USE_MOTIF): the Python interface "
+                "needs a build without USE_MOTIF" % build]
+    if not os.path.isfile(path):
+        return ["libdivgeo not built: run gmake divgeo in $SOLPSTOP "
+                "(no %s)" % path]
+    return []
 
 
 def text(value):

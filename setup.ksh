@@ -352,6 +352,7 @@ alias unset_hess_tgt='. $SOLPSTOP/SETUP/nohess_tgt.ksh'
 
 # Check if Motif library is present
 
+if [ -n "$USE_MOTIF" ]; then   # needed by the Motif DivGeo and amds only
 [ -e "`which mwm`" ] || {
   export NO_MOTIF=1
 }
@@ -365,6 +366,7 @@ alias unset_hess_tgt='. $SOLPSTOP/SETUP/nohess_tgt.ksh'
 [ -z "$NO_MOTIF" ] && {
   [ "$(find /usr/include /usr/local/include ${EBROOTMOTIF} -name 'Xm.h' 2>/dev/null | wc -l)" -eq 0 ] && export NO_MOTIF=1
 }
+fi
 
 # Check if Manual can be built
 export LATEX=`${SOLPSTOP}/scripts/which_latex`

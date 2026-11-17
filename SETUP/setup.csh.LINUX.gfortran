@@ -65,10 +65,14 @@ setenv BLAS_LIB_DIR `find $lib_paths -type f -name "libblas*.so*" -exec dirname 
 if ( $?USE_NCAR ) then
 setenv LIBPNG_LIB_DIR `find $lib_paths -type f -name "libpng*.so*" -exec dirname {} \; | sort -u`
 endif
+if ( $?USE_MOTIF ) then
 setenv LIBXPM_LIB_DIR `find $lib_paths -type f -name "libXpm*.so*" -exec dirname {} \; | sort -u`
 setenv LIBXPM_INCLUDE_DIR `find /usr/include /usr/local/include -type f -name "xpm.h" -exec dirname {} \; | sort -u`
+endif
 setenv MOTIF_LIB_DIR `find $lib_paths -type f -name "libXm*.so*" -exec dirname {} \; | sort -u`
+if ( $?USE_MOTIF ) then
 setenv MOTIF_INCLUDE_DIR `find /usr/include /usr/local/include -type f -name "Xm.h" -exec dirname {} \; | sort -u`
+endif
 setenv NETCDF_LIB_DIR `find $lib_paths -type f -name "libnetcdf*.so*" -exec dirname {} \; | sort -u`
 setenv NETCDF_FORTRAN_LIB_DIR `find $lib_paths -type f -name "libnetcdff*.so*" -exec dirname {} \; | sort -u`
 
@@ -152,9 +156,11 @@ if ("$pkg_check" == "") then
     set MISSING_DEPENDENCY = 1
 endif
 endif
+if ( $?USE_MOTIF ) then
 set pkg_check = `dpkg -l | grep -w libxpm4`
 if ("$pkg_check" == "") then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 set pkg_check = `dpkg -l | grep -w libnetcdf-dev`
 if ("$pkg_check" == "") then
@@ -172,9 +178,11 @@ set pkg_check = `dpkg -l | grep -w openmpi-bin`
 if ("$pkg_check" == "") then
     set MISSING_DEPENDENCY = 1
 endif
+if ( $?USE_MOTIF ) then
 set pkg_check = `dpkg -l | grep -w libmotif-dev`
 if ("$pkg_check" == "") then
     set MISSING_DEPENDENCY = 1
+endif
 endif
 if ( $?USE_NCAR ) then
 set pkg_check = `dpkg -l | grep -w libcairo2-dev`

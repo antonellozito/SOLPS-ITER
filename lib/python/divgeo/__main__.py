@@ -35,6 +35,7 @@ def main(argv=None):
     words = sys.argv[1:] if argv is None else list(argv)
     requirements.NAME = "dg"
     requirements.GRAPHICS_OF = "DivGeo"
+    requirements.MANUAL = "chapter \"Running DivGeo\""
     requirements.check(True)
     from solpspy.divgeo.app import application
     return application.main([PROGRAM] + words)

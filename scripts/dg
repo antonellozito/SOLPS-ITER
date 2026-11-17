@@ -45,6 +45,20 @@ while true; do {
   } 
 }
 
+# DivGeo with the Python interface when the last DivGeo build was made
+# without USE_MOTIF (stamp in its build folder); an old dg.exe.VERSION
+# chosen with -v or .dg_version runs itself
+unset py
+gui="${SOLPSTOP}/modules/DivGeo/builds/$HOST_NAME.$COMPILER"
+[ -n "$SOLPS_DEBUG" ] && gui="$gui.debug"
+[ -e "$gui/.gui_python" ] && { [ -z "$vers" ] || ! command -v "dg.exe$vers" >/dev/null; } && {
+  py=${PYTHON:-python3}
+  $py -c "import sys" >/dev/null 2>&1 || {
+    print -u2 "dg: $py not found: DivGeo needs the SOLPS-ITER Python, see install_python"
+    exit 2
+  }
+}
+
 # Copy links to help files/config files to dir. where dg is called
 [ $PWD != "$DG" ] && {
 ln -sf $DG/dg.dgh ./dg.dgh
@@ -52,7 +66,11 @@ ln -sf $DG/dg.dgc ./dg.dgc
 }
 
 # Execute the program
+if [ -n "$py" ]; then
+  $py "${SOLPSTOP}/lib/python/divgeo" $cfg $* &
+else
 dg.exe${vers} $cfg $* &
+fi
 wait
 
 # Remove links again (if not in DG directory)
