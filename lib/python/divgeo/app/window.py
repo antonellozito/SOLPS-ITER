@@ -11,7 +11,7 @@ import sys
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core import api, prefs, resources
-from ..dialogs import boxes, files
+from ..dialogs import boxes, files, topology
 from ..view import canvas, modes
 from . import commands, contexthelp, menus
 
@@ -162,6 +162,7 @@ class ViewWindow(QtWidgets.QMainWindow):
         self.dependents = []
         self.tool_box = None
         self.vars_entries = []
+        self.vars_dialogs = []
         self.recent_entries = []
         self.entry_of = {}
         self.msg_type = None
@@ -452,9 +453,10 @@ class ViewWindow(QtWidgets.QMainWindow):
                 self.changes |= CHF_VARSMENU
         elif kind == api.N_MARK:
             self.changes |= CHF_MARK
+        elif kind == api.N_EXAMINE:
+            topology.notify_examine(self, obj)
         elif kind in (api.N_ADD, api.N_CHANGE, api.N_DEL, api.N_DELETED,
-                      api.N_EXAMINE, api.N_NEWTOOL, api.N_RECENTFILES,
-                      api.N_DESTROYVIEW):
+                      api.N_NEWTOOL, api.N_RECENTFILES, api.N_DESTROYVIEW):
             pass
         else:
             self.dll.PyFatalError2(b"NotifyView()-unknown event %s%s",
@@ -587,6 +589,10 @@ class ViewWindow(QtWidgets.QMainWindow):
     def help_on(self, dialog):
         """The Help button of a dialog."""
         contexthelp.show_dialog_topic(self, dialog)
+
+    def help_on_widget(self, widget):
+        """CbHelp from a widget of a dialog."""
+        contexthelp.show_widget_topic(self, widget)
 
     # Tools (CbChangeTool, XtActUseTool) ####################################
 

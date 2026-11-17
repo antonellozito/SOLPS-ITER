@@ -119,6 +119,15 @@ class XmDialog(QtWidgets.QDialog):
         self.wm_close()
 
 
+def find_dialog(window, name):
+    """XtNameToWidget(wMain, "*NAME"): the dialog of the view, None if it
+    was not made or is destroyed."""
+    for d in window.findChildren(XmDialog, name):
+        if not d.destroyed_:
+            return d
+    return None
+
+
 # The symbol of a message box (dialogType)
 SYMBOLS = {
     "dialog_error": QtWidgets.QStyle.SP_MessageBoxCritical,
@@ -197,10 +206,18 @@ class MessageDialog(XmDialog):
         b.setObjectName(name)
         b.setAutoDefault(False)
         b.clicked.connect(callback)
-        # after OK and the buttons added before
-        self.added = getattr(self, "added", 0) + 1
-        self.buttons.insertWidget(self.added, b)
+        self.xm_place(b)
         return b
+
+    def xm_place(self, w, x=None, y=None, attach=None):
+        """A child created on the message box: a push button in the row of
+        buttons, after OK and the buttons added before; anything else in
+        the work area."""
+        if isinstance(w, QtWidgets.QPushButton):
+            self.added = getattr(self, "added", 0) + 1
+            self.buttons.insertWidget(self.added, w)
+        else:
+            self.extra.addWidget(w)
 
     def set_message(self, text):
         self.message.setText(text)
@@ -218,3 +235,71 @@ class MessageDialog(XmDialog):
         if which in ("ok", "cancel") and self.auto_unmanage:
             # done inside Motif (autoUnmanage), not by DivGeo
             self.unmanage(trace=False)
+
+
+class FormDialog(XmDialog):
+    """XmCreateFormDialog: an XmForm in a dialog shell, its children one
+    below the other."""
+
+    widget_class = "XmForm"
+
+    def __init__(self, window, name, parent=None):
+        super().__init__(window, name, parent)
+        self.lay = QtWidgets.QVBoxLayout(self)
+
+    def message_text(self):
+        return ""
+
+    def xm_place(self, w, x=None, y=None, attach=None):
+        self.lay.addWidget(w)
+
+
+def create_dialog_ex(window, name, no_label=False, no_ok=False,
+                     no_cancel=False, no_help=False, parent=None):
+    """CreateDialogEx with CDLG_MESSAGE (CreateOkCancelDialog: no_label):
+    a message dialog not unmanaged by its buttons; Cancel and the close
+    button pop it down (CbUnmap)."""
+    dlg = MessageDialog(window, name, auto_unmanage=False, parent=parent)
+    dlg.callbacks["cancel"].append(dlg.popdown)
+    dlg.wm_close = dlg.popdown
+    for flag, w in ((no_label, dlg.message), (no_ok, dlg.ok),
+                    (no_cancel, dlg.cancel), (no_help, dlg.help)):
+        if flag:
+            w.hide()
+    return dlg
+
+
+def create_ok_cancel_dialog(window, name):
+    """CreateOkCancelDialog."""
+    return create_dialog_ex(window, name, no_label=True)
+
+
+class TemplateDialog(XmDialog):
+    """CreateMessageDialog (XmCreateTemplateDialog): a message box with a
+    separator only; push buttons created on it go below the separator,
+    other children above."""
+
+    widget_class = "XmMessageBox"
+
+    def __init__(self, window, name, parent=None):
+        super().__init__(window, name, parent)
+        lay = QtWidgets.QVBoxLayout(self)
+        self.extra = QtWidgets.QVBoxLayout()
+        self.separator = gadget(QtWidgets.QFrame(self), "XmSeparatorGadget")
+        self.separator.setObjectName("Separator")
+        self.separator.setFrameShape(QtWidgets.QFrame.HLine)
+        self.separator.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.buttons = QtWidgets.QHBoxLayout()
+        lay.addLayout(self.extra)
+        lay.addWidget(self.separator)
+        lay.addLayout(self.buttons)
+        self.callbacks = {"ok": [], "cancel": [], "help": []}
+
+    def message_text(self):
+        return ""
+
+    def xm_place(self, w, x=None, y=None, attach=None):
+        if isinstance(w, QtWidgets.QPushButton):
+            self.buttons.addWidget(w)
+        else:
+            self.extra.addWidget(w)

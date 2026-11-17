@@ -22,10 +22,12 @@ _CLASSES = ((QtWidgets.QPushButton, "XmPushButton"),
 def _xm_class(widget):
     if isinstance(widget, base.XmDialog):
         return widget.widget_class
+    if getattr(widget, "xm_class", None):
+        return widget.xm_class
     for cls, name in _CLASSES:
         if isinstance(widget, cls):
             return name
-    return getattr(widget, "xm_class", "XmForm")
+    return "XmForm"
 
 
 def show_topic(window, names, classes):
@@ -45,6 +47,15 @@ def show_dialog_topic(window, dialog):
     """The Help button of a dialog (a gadget: the event is on the
     dialog)."""
     show_topic(window, *dialog.path())
+
+
+def show_widget_topic(window, widget):
+    """CbHelp from a widget of a dialog (a widget of its own: the event is
+    on it)."""
+    if hasattr(widget, "xm_names"):
+        show_topic(window, list(widget.xm_names), list(widget.xm_classes))
+    else:
+        show_topic(window, *widget_path(window, widget))
 
 
 def _window_of(widget):
