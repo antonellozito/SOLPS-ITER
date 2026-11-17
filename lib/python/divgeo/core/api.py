@@ -24,6 +24,14 @@ EVENTPROC = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 # Called at the end of ConfigureXApp (argument: the XApp)
 CONFIGUREPROC = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 
+# Entries of the Variables menu: (menu, kind, object, label)
+VARSMENUPROC = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_int,
+                                ctypes.c_void_p, ctypes.c_char_p)
+
+# Message boxes of the commands: (View, kind, text) -> 0 for OK
+BOXPROC = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_int,
+                           ctypes.c_char_p)
+
 PROTOTYPES = {
     # XApp and documents (xapp.c, app.c, dgfile.c)
     "CreateXApp": (P, [PI, PS]),
@@ -37,9 +45,15 @@ PROTOTYPES = {
     "Undo": (None, [P]),
     "Redo": (None, [P]),
     "Cancel": (None, [P]),
+    "GlueNormals": (I, [P, P, P]),
     "UndoMark": (None, [P]),
     "Free": (P, [P]),
     "GetShortFName": (P, [S]),
+    "ExpandFilename": (P, [S]),
+    "DetectFileType": (I, [S]),
+    "SetAppFName": (None, [P, S]),
+    "IsAppUnsaved": (I, [P]),
+    "FreeView": (P, [P]),
     # Views (view.c)
     "SetViewApp": (None, [P, P]),
     "SetActiveView": (None, [P]),
@@ -75,7 +89,38 @@ PROTOTYPES = {
     "PyFatalError": (None, [S]),
     "PyFatalError2": (None, [S, S, S]),
     "PyNotifyView": (None, [P, I, P]),
+    # Commands (src/py/py_cmds.c)
+    "SetPyBoxProc": (None, [BOXPROC]),
+    "PyCbCmDelObjects": (None, [P, I]),
+    "PyCbChangeFlags": (None, [P, ctypes.c_ulong]),
+    "PyCbCmShowInvalidVars": (I, [P]),
+    "PyCbAddVarSet": (P, [P, P]),
+    "PyCbDelVarSet": (None, [P, P]),
+    "PyVarsMenu": (I, [P, VARSMENUPROC]),
+    "PyDwUndoButton": (I, [P, I]),
+    "PyDwIfExists": (I, [P, I]),
+    "PyDwIfNotExists": (I, [P, I]),
+    "PyDwShowFlags": (I, [P, I]),
+    "PyDwRebuildCarreInfo": (I, [P]),
+    "PyViewMsg": (None, [P, S]),
+    "PyViewMsgId": (None, [P, I]),
+    "PyGetStr": (P, [P, I]),
+    "PyMeshUnsaved": (I, [P]),
+    "PyVarFromVarSetDef": (I, [P]),
+    "PyVarIsLayerIndex": (I, [P]),
+    "PyAutosave": (I, [P]),
 }
+for _name in ("PyCbUndo", "PyCbRedo", "PyCbRedoAll", "PyCbMarkAll",
+              "PyCbMarkAllChords", "PyCbUnmarkAll", "PyCbCmRemoveSeparators",
+              "PyCbViewRefresh", "PyCbZoomIn", "PyCbZoomOut",
+              "PyCbShowPicture", "PyCbShowSelection", "PyCbIncAngle",
+              "PyCbDecAngle", "PyCbResetAngle", "PyCbStretchX",
+              "PyCbStretchY", "PyCbShrinkX", "PyCbShrinkY",
+              "PyCbResetAspectRatio", "PyCmPrevZoom", "PyCmRemoveLabels",
+              "PyCbCmAppendTemplate", "PyCmConvertElemsToChords",
+              "PyCmConvertChordsToElems", "PyCbCmRenumber", "PyCbCmExtChords",
+              "PyCmRebuildCarreInfo"):
+    PROTOTYPES[_name] = (None, [P])
 
 # The tools of the three slots, in the order of the tool menus
 TOOLS = ("TlZoom", "TlMark", "TlExamine", "TlRotate", "TlStretch",
@@ -103,4 +148,4 @@ N_RECENTFILES, N_NEWTOOL, N_NOW, N_USER = 0x1000, 0x2000, 0x4000, 0x8000
 UPDATE_MAX, UPDATE_INCR = 1000, 100
 DGFM_APP, DGFM_CONFIG, DGFM_TMP = 1, 2, 3
 # Error codes (msg.h)
-ERR_FWRITE, ERR_NOPREFS = 22, 75
+ERR_FWRITE, ERR_NOPREFS, ERR_NOCONFIG = 22, 75, 31

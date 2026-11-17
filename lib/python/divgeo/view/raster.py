@@ -210,11 +210,16 @@ class Raster:
         self.width = 0
         self.resize(width, height)
 
-    def resize(self, width, height):
+    def resize(self, width, height, keep=False):
+        old = getattr(self, "img", None)
         self.w = max(1, width)
         self.h = max(1, height)
         self.img = np.empty((self.h, self.w), np.uint32)
         self.clear()
+        if keep and old is not None:
+            h = min(self.h, old.shape[0])
+            w = min(self.w, old.shape[1])
+            self.img[:h, :w] = old[:h, :w]
 
     def clear(self):
         self.img.fill(OPAQUE | np.uint32(self.res["pxBackground"]))

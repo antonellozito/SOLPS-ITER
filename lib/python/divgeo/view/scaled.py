@@ -57,13 +57,18 @@ class Scaled(raster.Raster):
         self.F = self.dpr * ss
         super().__init__(res, width, height, use_squares)
 
-    def resize(self, width, height):
+    def resize(self, width, height, keep=False):
+        old = getattr(self, "img", None)
         self.lw = max(1, width)
         self.lh = max(1, height)
         self.w = self.lw * self.F
         self.h = self.lh * self.F
         self.img = np.empty((self.h, self.w), np.uint32)
         self.clear()
+        if keep and old is not None:
+            h = min(self.h, old.shape[0])
+            w = min(self.w, old.shape[1])
+            self.img[:h, :w] = old[:h, :w]
 
     def _pos(self, v):
         return np.asarray(v, np.float64) * self.F - 0.5

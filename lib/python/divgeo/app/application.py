@@ -8,11 +8,13 @@ import ctypes
 import os
 import sys
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtWidgets
 
+from ...b2plot_gui import scaling, theme
 from ..core import api, lib as corelib, options, prefs, resources
+from ..dialogs import boxes, version
 from ..view import records
-from . import window
+from . import contexthelp, window
 
 USAGE = ("DivGeo version %s\n"
          "Usage: %s [-display [Host]{:Number}] [-nores] [-nocfg] [-nohelp]"
@@ -45,6 +47,16 @@ class Application:
         self.geometry = self._geometry()
         self.canvas_size = None
         self.wid = 0
+        self.help_window = None
+        # the look of the b2plot GUI: its stylesheet (light theme), its
+        # check boxes and radio buttons, its wheel guard
+        theme.install_indicators(self.qt)
+        scaling.guard_wheel(self.qt)
+        self.qt.setStyleSheet(theme.stylesheet())
+        self.help_key = contexthelp.HelpKey()
+        self.qt.installEventFilter(self.help_key)
+        self._box_proc = api.BOXPROC(self._box)
+        library.dll.SetPyBoxProc(self._box_proc)
 
     # Resources of the program (application resources of the Motif shell)
 
@@ -157,40 +169,65 @@ class Application:
                     prefs.add_recent_file(self, self.lib.string_at(fname))
 
         w = self.windows[-1]
-        self.new_prefs_file(w)
-        self.new_version(w)
+        prefs_dlg = version.open_new_prefs_file_dlg(w, True)
+        version.open_new_version_dlg(w, True)
+        if prefs_dlg is not None:
+            prefs_dlg.popup()
+        if os.environ.get("DG_NO_OUTPUT_CHECK") is not None:
+            name = "errEnvNoCheckObsolete"
+            w.error_box(self.db.get(["DivGeo", "main", name],
+                                    ["DivGeo", "XmMainWindow", name]) or name)
 
-    # Start checks of the preferences file (x_verdlg.c) #####################
+    # Views ###################################################################
 
-    def new_prefs_file(self, w):
-        """OpenNewPrefsFileDlg(w, True)."""
-        lib = self.lib
-        if prefs.get_string(lib, "DG.Signature") == "XDivGeo":
+    def views_in_order(self):
+        """The windows of the open views, in the order of xapp->views."""
+        return [w for w in self.windows if w.view is not None]
+
+    def window_of(self, view):
+        for w in self.windows:
+            if w.view == view:
+                return w
+        return None
+
+    def find_view(self, name):
+        """FindViewByFilename."""
+        for w in self.views_in_order():
+            app = w.app
+            if app:
+                fname = self.lib.get(app, "App.fName")
+                if fname and self.lib.string_at(fname) == name:
+                    return w
+        return None
+
+    def view_destroyed(self, window):
+        """CbDestroyViewShell, after the current work (Xt destroys widgets
+        at the end of the event): with the last view the program ends
+        (FreeXApp, then the destroyed application shell exits with 1)."""
+        QtCore.QTimer.singleShot(0, self._check_last_view)
+
+    def _check_last_view(self):
+        if self.views_in_order():
             return
-        prefs.set_string(lib, "DG.Signature", "XDivGeo")
-        if prefs.get_string(lib, "DG.Signature") != "XDivGeo":
-            fn = prefs.file_name()
-            # the message of the Motif version, file name in single quotes
-            sys.stderr.write("Failure to initialize the preferences file "
-                             "\x27%s\x27\n" % ("(null)" if fn is None
-                                                  else fn))
-            sys.stderr.flush()
-            os._exit(1)
-        w.message_dialog("dlgNewPrefsFile")
+        self.dll.FreeXApp(self.xap)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(1)
 
-    def new_version(self, w):
-        """OpenNewVersionDlg(w, True)."""
-        lib = self.lib
-        new = self.dll.GetPyVersion()
-        if new % 10:
-            sys.stderr.write("OpenNewVersionDlg:Interim version\n")
-            sys.stderr.flush()
-        buf = "%d" % new
-        s = prefs.get_string(lib, "DG.LastUsedVersion")
-        prefs.set_string(lib, "DG.LastUsedVersion", buf)
-        if s == buf:
-            return
-        w.message_dialog("dlgNewVersion")
+    def _box(self, view, kind, text):
+        """The message boxes of the commands of the library."""
+        w = self.window_of(view)
+        t = text.decode("latin-1") if text else ""
+        if w is None:
+            return 1
+        w.pump()
+        if kind == 0:
+            boxes.error_box(w, t)
+            return 0
+        if kind == 1:
+            boxes.message_box(w, t)
+            return 0
+        return boxes.question_box(w, t)
 
     def create_view(self, app):
         w = window.ViewWindow(self, len(self.windows) + 1)
@@ -200,8 +237,6 @@ class Application:
         w.create(self.xap, app)
         return w
 
-    def quit(self):
-        os._exit(0)
 
 
 def main(argv, library_path=None):

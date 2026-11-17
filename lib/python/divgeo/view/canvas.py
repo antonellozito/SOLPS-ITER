@@ -28,6 +28,8 @@ HIDPI_RATIO = 1.5
 
 
 class Canvas(QtWidgets.QWidget):
+    xm_class = "XmDrawingArea"
+
     def __init__(self, window, res, renderer="auto"):
         super().__init__(window)
         self.setObjectName("draw")
@@ -113,13 +115,23 @@ class Canvas(QtWidgets.QWidget):
     # Size and exposure (CbResizeView, CbExposeView, CbViewExposeTimer)
 
     def resizeEvent(self, event):
+        """CbResizeView; the pixels kept at the top left, as the X window
+        of the drawing area; an exposure only when it grows."""
         size = event.size()
-        self.raster.resize(size.width(), size.height())
+        old = event.oldSize()
+        self.raster.resize(size.width(), size.height(), keep=True)
         self.window_.resized(size.width(), size.height())
-        self.post_expose()
+        if size.width() > old.width() or size.height() > old.height():
+            self.post_expose()
 
     def showEvent(self, event):
         self.post_expose()
+
+    def moveEvent(self, event):
+        """The drawing area moved in the window (menu bar or command row
+        shown): exposed, as the X window of the drawing area."""
+        if self.window_.view is not None:
+            self.post_expose()
 
     def post_expose(self):
         """An exposure arrives as an event, after the current work (as the
