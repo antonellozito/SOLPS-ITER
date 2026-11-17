@@ -141,16 +141,19 @@ class FigureOptions(QtWidgets.QGroupBox):
         axes.addWidget(self.xaxis_label, 2, 0)
         axes.addWidget(self.xaxis, 2, 1, 1, 3)
         self.kind = None
+        self.xaxes = True               # the x axis menu with the lines
 
     def allow(self, keys):
         """The x axes offered for this line (the others greyed out; one
-        chosen and no longer offered: the distance along the line)."""
+        chosen and no longer offered: the first offered, the distance
+        along the line for a chord)."""
         model = self.xaxis.model()
         for i, (_, key) in enumerate(XAXES):
             model.item(i).setEnabled(key in keys)
         if self.xaxis.currentData() not in keys:
             self.xaxis.blockSignals(True)
-            self.xaxis.setCurrentIndex(0)
+            self.xaxis.setCurrentIndex(next((i for i, (_, k) in enumerate(
+                XAXES) if k in keys), 0))
             self.xaxis.blockSignals(False)
 
     def _xaxis(self, *_):
@@ -213,7 +216,7 @@ class FigureOptions(QtWidgets.QGroupBox):
         for e in self.limits if not keep else ():
             e.clear()
         for w in (self.xaxis_label, self.xaxis):
-            w.setVisible(base == "line")
+            w.setVisible(base == "line" and self.xaxes)
         for w in self.xrow + [self.show_grid]:  # sums: the y axis only
             w.setVisible(base != "sums")
 

@@ -17,8 +17,7 @@ from .. import requirements
 
 def _version(name):
     try:
-        import importlib.metadata
-        return importlib.metadata.version(name)
+        return requirements.module_version(name)
     except Exception:
         return "missing"
 

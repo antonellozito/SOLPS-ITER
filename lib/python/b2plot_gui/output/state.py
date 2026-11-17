@@ -113,11 +113,17 @@ def restore(tab, st, view=True):
     for key in tab.layers.rows:
         tab.layers._emit(key)
     panel.time_box._layout(emit=False)
+    tab._tab = panel.time_box.source.currentIndex()
+    tab.show_page()                     # the page of the tab restored
     panel.streams.seeds = [tuple(p) for p in st.get("seeds", [])]
     for menu, key in zip(panel.menus(), ("species", "vector_species",
                                          "wall_species", "overlay_species")):
         menu.wanted = st.get(key)
     tab._set_quantities()
+    if panel.time_box.page() is not None:   # no quantity plotted there
+        if view and st.get("view"):
+            tab.plot.set_view(st["view"])
+        return True
     extra = [kind for kind in ("vector", "wall") if st.get(kind)]
     for kind in extra:
         panel.select_extra(kind, st[kind])

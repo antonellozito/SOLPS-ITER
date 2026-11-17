@@ -1,9 +1,9 @@
-"""Tabs at the top of the 2D quantity panel: Final state, Run movies
-(b2movies.nc, eirenemovies.nc, b2tallies.nc) or Balances (balance.nc,
-the final state shown); with the movies, one frame,
-the means b2plot computes over a range, a rolling window or consecutive
-blocks of frames, the standard deviation over a range, each minus a
-reference."""
+"""Tabs at the top of the 2D quantity panel: Final state, Run tracing
+(b2time.nc, b2chords.nc, eirenechords.nc), Run movies (b2movies.nc,
+eirenemovies.nc, b2tallies.nc) or Balances (balance.nc, the final state
+shown); with the movies (and in Run tracing), one frame, the means over a
+range, a rolling window or consecutive blocks of frames, the standard
+deviation over a range, each minus a reference."""
 
 from ...qt import QtCore, QtWidgets, Qt, Signal
 
@@ -17,23 +17,27 @@ RANGE = ("range", "std")            # modes over the frames first to last
 
 
 TABS = (("Final state", "The final state of the run (b2fstate)"),
+        ("Run tracing", "Time traces and profiles of b2time.nc, profiles "
+         "along the chords of b2chords.nc and eirenechords.nc, of the "
+         "latest run in the run directory"),
         ("Run movies", "The movie frames of the run: b2movies.nc, "
          "eirenemovies.nc and b2tallies.nc of the run directory"),
         ("Balances", "Parallel and radial balances of volumes picked on "
          "the plot, from balance.nc (the final state shown)"))
-BALANCES = 2                        # index of the Balances tab
+TRACING, MOVIES, BALANCES = 1, 2, 3     # indices of the tabs
+PAGES = (TRACING, BALANCES)         # tabs with a page of their own
 
 
-class TimeBox(QtWidgets.QWidget):
-    """Source of the plotted data (the tabs, source: placed by the 2D tab
-    over the scrolled panel, so that they never scroll away) and, with the
-    movies, the frames of the plot."""
+class FrameBox(QtWidgets.QWidget):
+    """The frames of a plot: one frame, a mean or standard deviation over
+    frames, minus a reference; the slider of the positions, Play; the
+    frame times of each file (set_times before use, set_file: the file of
+    the quantity shown)."""
 
-    source_changed = Signal()       # final state or movie frames
-    frames_changed = Signal()       # frames of the movie plot
+    frames_changed = Signal()       # frames of the plot
     save_movie = Signal()           # Save movie... pressed
 
-    def __init__(self, parent=None):
+    def __init__(self, final=True, save=True, parent=None):
         super().__init__(parent)
         self.times = {}                 # file -> frame times (s)
         self.file = 1                   # file of the quantity shown
@@ -45,12 +49,6 @@ class TimeBox(QtWidgets.QWidget):
         self._silent = False    # the plot behind is of another position
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        self.source = QtWidgets.QTabBar()
-        self.source.setExpanding(True)
-        self.source.setDrawBase(True)
-        for i, (text, tip) in enumerate(TABS):
-            self.source.addTab(text)
-            self.source.setTabToolTip(i, tip)
         self.movie_part = QtWidgets.QWidget()
         lay.addWidget(self.movie_part)
         rows = QtWidgets.QVBoxLayout(self.movie_part)
@@ -59,15 +57,13 @@ class TimeBox(QtWidgets.QWidget):
         self.mode = QtWidgets.QComboBox()
         for text, key in MODES:
             self.mode.addItem(text, key)
-        self.mode.setToolTip("Means are computed by b2plot over the frames "
-                             "(rolling: a window moved frame by frame; "
-                             "batch: consecutive blocks of frames)")
+        self.mode.setToolTip("Means over the frames (rolling: a window "
+                             "moved frame by frame; batch: consecutive "
+                             "blocks of frames)")
         self.minus = QtWidgets.QComboBox()
-        for text, key in MINUS:
+        for text, key in MINUS if final else MINUS[:-1]:
             self.minus.addItem(text, key)
-        self.minus.setToolTip("Reference subtracted from what is shown "
-                              "(b2plot m-); the final state needs a movie "
-                              "variable that is also a b2plot label")
+        self.minus.setToolTip("Reference subtracted from what is shown")
         self.slider = QtWidgets.QSlider(Qt.Horizontal)
         self.slider.setTracking(False)
         self.pos = QtWidgets.QSpinBox()
@@ -75,8 +71,7 @@ class TimeBox(QtWidgets.QWidget):
         self.play = QtWidgets.QToolButton()
         self.play.setText("Play")
         self.play.setCheckable(True)
-        self.play.setToolTip("Play the movie; the next frame is loaded "
-                             "while the current one is shown")
+        self.play.setToolTip("Play the frames one after the other")
         self.fps = QtWidgets.QSpinBox()
         self.fps.setRange(1, 30)
         self.fps.setValue(4)
@@ -121,16 +116,17 @@ class TimeBox(QtWidgets.QWidget):
         box.setContentsMargins(0, 0, 0, 0)
         for w in (QtWidgets.QLabel("Window"), self.window, self.align):
             box.addWidget(w)
-        save = QtWidgets.QPushButton("Save movie\u2026")
-        save.setToolTip("All positions of the slider as a movie file (MP4, "
-                        "MOV, WebM, AVI with ffmpeg; animated GIF) at the "
-                        "frame rate set")
-        save.clicked.connect(lambda *_: self.save_movie.emit())
-        row(self.play, self.fps, self.loop, save, QtWidgets.QWidget(),
-            self.window_row, stretch=(4,))
+        self.save = QtWidgets.QPushButton("Save movie…")
+        self.save.setToolTip("All positions of the slider as a movie file "
+                             "(MP4, MOV, WebM, AVI with ffmpeg; animated "
+                             "GIF) at the frame rate set")
+        self.save.clicked.connect(lambda *_: self.save_movie.emit())
+        self.save.setVisible(save)
+        self.play_row = row(self.play, self.fps, self.loop, self.save,
+                            QtWidgets.QWidget(), self.window_row,
+                            stretch=(4,))
         self._timer = QtCore.QTimer(self)
         self._timer.timeout.connect(self._tick)
-        self.source.currentChanged.connect(self._source_changed)
         self.mode.currentIndexChanged.connect(lambda *_: self._layout())
         self.minus.currentIndexChanged.connect(lambda *_: self._layout())
         self.slider.valueChanged.connect(self.pos.setValue)
@@ -147,59 +143,36 @@ class TimeBox(QtWidgets.QWidget):
         self.fps.valueChanged.connect(
             lambda v: self._timer.setInterval(int(1000 / v)))
         self._timer.setInterval(250)
-        self.set_movies({})
-        self.set_balances(False, "no run")
 
     # ------------------------------------------------------------- state
-    def set_movies(self, movies, stale=(), final=True, why=""):
-        """Frame times of the movie files of the latest run of a new run
-        directory (data.MovieFile); stale: why the other ones are left out;
-        final: a final state of the run (else why not; with why: what it
-        is, the plasma when an error stopped B2.5)."""
-        self.times = {f: list(m.times) for f, m in movies.items() if m.nt}
-        self.source.setTabEnabled(0, final)
-        self.source.setTabToolTip(0, ("Final state: " + why if why else
-                                      TABS[0][1]) if final else
-                                  "No final state: " + why)
-        self.source.setTabEnabled(1, bool(self.times))
-        tip = TABS[1][1] if self.times else "No movie files (b2movies.nc, " \
-            "eirenemovies.nc, b2tallies.nc) of the latest run in the run " \
-            "directory"
-        self.source.setTabToolTip(1, "\n".join([tip] + list(stale)))
-        self.source.blockSignals(True)
-        self.source.setCurrentIndex(1 if not final and self.times else 0)
-        self.source.blockSignals(False)
-        self.file = min(self.times) if self.times else 1
-        nt = self.nt()
-        for s in (self.first, self.last):
-            s.blockSignals(True)
-            s.setRange(1, max(nt, 1))
-            s.blockSignals(False)
+    def active(self):
+        """The frames are shown (the controls with them)."""
+        return bool(self.times)
+
+    def set_times(self, times, file=None):
+        """Frame times of each file (file -> times), the file shown (the
+        first by default); the whole range, a window of 5."""
+        self.times = {f: list(t) for f, t in times.items() if len(t)}
+        self.file = file if file in self.times else min(self.times) if \
+            self.times else 1
+        nt = self._ranges()
         self.first.setValue(1)
         self.last.setValue(max(nt, 1))
         self.window.blockSignals(True)
-        self.window.setRange(1, max(nt, 1))
         self.window.setValue(min(5, max(nt, 1)))
         self.window.blockSignals(False)
         self.play.setChecked(False)
         self._layout(emit=False)
 
-    def movie(self):
-        return self.source.currentIndex() == 1 and bool(self.times)
-
-    def balances(self):
-        return self.source.currentIndex() == BALANCES
-
-    def set_balances(self, ok, why=""):
-        """The Balances tab only with a balance.nc of this state (else
-        why not in its tooltip)."""
-        self.source.setTabEnabled(BALANCES, ok)
-        self.source.setTabToolTip(BALANCES, TABS[BALANCES][1] if ok else
-                                  "No balances: " + why)
-
-    def final(self):
-        """The final state of the run can be shown."""
-        return self.source.isTabEnabled(0)
+    def _ranges(self):
+        """The frames of the file shown in the ranges of the first and last
+        frames and of the window; its number of frames."""
+        nt = self.nt()
+        for s in (self.first, self.last, self.window):
+            s.blockSignals(True)
+            s.setRange(1, max(nt, 1))
+            s.blockSignals(False)
+        return nt
 
     def key(self):
         return self.mode.currentData()
@@ -208,10 +181,18 @@ class TimeBox(QtWidgets.QWidget):
         return len(self.times.get(self.file if f is None else f, []))
 
     def set_file(self, f):
-        """Movie file of the quantity shown (1 B2.5, 2 EIRENE)."""
+        """File of the quantity shown."""
         if f in self.times and f != self.file:
             self.file = f
+            self._ranges()
             self._layout(emit=False)
+
+    def reference(self, f=None):
+        """(first, last) frames of the reference subtracted, "final" or
+        None."""
+        nt = self.nt(f)
+        return {"first": (1, 1), "last": (nt, nt), "all": (1, nt),
+                "final": "final"}.get(self.minus.currentData())
 
     # ---------------------------------------------------------- frames
     def _span(self):
@@ -244,21 +225,6 @@ class TimeBox(QtWidgets.QWidget):
     def frames(self, f=None):
         return self.frames_at(self.pos.value(), f)
 
-    def source_of(self, q, p=None):
-        """(file, first, last[, statistic, reference]) of a movie quantity
-        at slider position p (default the current one), None for the
-        final state."""
-        if not getattr(q, "movie", 0) or not self.movie():
-            return None
-        source = (q.movie,) + (self.frames(q.movie) if p is None else
-                               self.frames_at(p, q.movie))
-        nt = self.nt(q.movie)
-        ref = {"first": (1, 1), "last": (nt, nt), "all": (1, nt),
-               "final": "final"}.get(self.minus.currentData())
-        stat = "std" if self.key() == "std" else "mean"
-        return source if stat == "mean" and ref is None else \
-            source + (stat, ref)
-
     def positions(self):
         """Slider positions shown by Play (the chords: Show all)."""
         if self.key() in RANGE:
@@ -276,7 +242,7 @@ class TimeBox(QtWidgets.QWidget):
             ", minus " + self.minus.currentText()
         if k1 == k2 and self.key() != "std":
             return "t = %.4g s%s" % (t[k1 - 1], minus)
-        return "%s between t = %.4g \u2013 %.4g s%s" % (
+        return "%s between t = %.4g – %.4g s%s" % (
             "standard deviation" if self.key() == "std" else "mean",
             t[k1 - 1], t[k2 - 1], minus)
 
@@ -298,16 +264,11 @@ class TimeBox(QtWidgets.QWidget):
         self.pos.setValue(p)
 
     # ---------------------------------------------------------- widgets
-    def _source_changed(self, *_):
-        self.play.setChecked(False)
-        self._layout(emit=False)
-        self.source_changed.emit()
-
     def _layout(self, emit=True):
-        movie = self.movie()
+        active = self.active()
         key = self.key()
-        self.movie_part.setVisible(movie)
-        if movie:
+        self.movie_part.setVisible(active)
+        if active:
             self.place.setCurrentWidget(self.frames_row if key in RANGE
                                         else self.position_row)
             self.window_row.setVisible(key in ("rolling", "batch"))
@@ -327,7 +288,7 @@ class TimeBox(QtWidgets.QWidget):
             self.slider.blockSignals(False)
             self.pos.setPrefix({"batch": "block "}.get(key, "frame "))
             self._tip()
-        if emit and movie:
+        if emit and active:
             self.frames_changed.emit()
 
     def _image(self, p):
@@ -362,7 +323,7 @@ class TimeBox(QtWidgets.QWidget):
         self.slider.setValue(p)
         self.slider.blockSignals(False)
         self._tip()
-        if self.movie():
+        if self.active():
             self.frames_changed.emit()
 
     def next_position(self):
@@ -381,7 +342,7 @@ class TimeBox(QtWidgets.QWidget):
         if on:
             ready = self.prepare() if self.prepare else False
             if ready is None:           # start() once drawn
-                self.play.setText("Preparing\u2026")
+                self.play.setText("Preparing…")
             else:
                 self._cached = bool(ready)
                 self._timer.start()
@@ -404,15 +365,16 @@ class TimeBox(QtWidgets.QWidget):
     def playing_images(self):
         return self.play.isChecked() and self._cached
 
-    def jump(self, p):
-        """Position p shown by its image: the slider and the number
-        follow, nothing is read or drawn."""
+    def jump(self, p, silent=True):
+        """Position p shown by its image (silent: the plot behind is of
+        another position): the slider and the number follow, nothing is
+        read or drawn."""
         for w in (self.slider, self.pos):
             w.blockSignals(True)
             w.setValue(p)
             w.blockSignals(False)
         self._tip()
-        self._silent = True
+        self._silent = silent
 
     def _tick(self):
         p = self.next_position()
@@ -430,3 +392,108 @@ class TimeBox(QtWidgets.QWidget):
             self.play.setChecked(False)
         else:
             self.pos.setValue(p)
+
+
+class TimeBox(FrameBox):
+    """Source of the plotted data (the tabs, source: placed by the 2D tab
+    over the scrolled panel, so that they never scroll away) and, with the
+    movies, the frames of the plot."""
+
+    source_changed = Signal()       # final state or movie frames
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.mode.setToolTip("Means are computed by b2plot over the frames "
+                             "(rolling: a window moved frame by frame; "
+                             "batch: consecutive blocks of frames)")
+        self.minus.setToolTip("Reference subtracted from what is shown "
+                              "(b2plot m-); the final state needs a movie "
+                              "variable that is also a b2plot label")
+        self.play.setToolTip("Play the movie; the next frame is loaded "
+                             "while the current one is shown")
+        self.source = QtWidgets.QTabBar()
+        self.source.setExpanding(True)
+        self.source.setDrawBase(True)
+        for i, (text, tip) in enumerate(TABS):
+            self.source.addTab(text)
+            self.source.setTabToolTip(i, tip)
+        self.source.currentChanged.connect(self._source_changed)
+        self.set_movies({})
+        self.set_tracing(False, "no run")
+        self.set_balances(False, "no run")
+
+    def active(self):
+        return self.movie()
+
+    # ------------------------------------------------------------- state
+    def set_movies(self, movies, stale=(), final=True, why=""):
+        """Frame times of the movie files of the latest run of a new run
+        directory (data.MovieFile); stale: why the other ones are left out;
+        final: a final state of the run (else why not; with why: what it
+        is, the plasma when an error stopped B2.5)."""
+        times = {f: m.times for f, m in movies.items() if m.nt}
+        self.source.setTabEnabled(0, final)
+        self.source.setTabToolTip(0, ("Final state: " + why if why else
+                                      TABS[0][1]) if final else
+                                  "No final state: " + why)
+        self.source.setTabEnabled(MOVIES, bool(times))
+        tip = TABS[MOVIES][1] if times else "No movie files (b2movies.nc, " \
+            "eirenemovies.nc, b2tallies.nc) of the latest run in the run " \
+            "directory"
+        self.source.setTabToolTip(MOVIES, "\n".join([tip] + list(stale)))
+        self.source.blockSignals(True)
+        self.source.setCurrentIndex(MOVIES if not final and times else 0)
+        self.source.blockSignals(False)
+        self.set_times(times)
+
+    def movie(self):
+        return self.source.currentIndex() == MOVIES and bool(self.times)
+
+    def balances(self):
+        return self.source.currentIndex() == BALANCES
+
+    def tracing(self):
+        return self.source.currentIndex() == TRACING
+
+    def page(self):
+        """The tab with a page of its own shown (TRACING, BALANCES), or
+        None."""
+        i = self.source.currentIndex()
+        return i if i in PAGES else None
+
+    def set_balances(self, ok, why=""):
+        """The Balances tab only with a balance.nc of this state (else
+        why not in its tooltip)."""
+        self.source.setTabEnabled(BALANCES, ok)
+        self.source.setTabToolTip(BALANCES, TABS[BALANCES][1] if ok else
+                                  "No balances: " + why)
+
+    def set_tracing(self, ok, why=""):
+        """The Run tracing tab only with tracing files of the latest run
+        (else why not in its tooltip)."""
+        self.source.setTabEnabled(TRACING, ok)
+        self.source.setTabToolTip(TRACING, TABS[TRACING][1] if ok else
+                                  "No run tracing: " + why)
+
+    def final(self):
+        """The final state of the run can be shown."""
+        return self.source.isTabEnabled(0)
+
+    def source_of(self, q, p=None):
+        """(file, first, last[, statistic, reference]) of a movie quantity
+        at slider position p (default the current one), None for the
+        final state."""
+        if not getattr(q, "movie", 0) or not self.movie():
+            return None
+        source = (q.movie,) + (self.frames(q.movie) if p is None else
+                               self.frames_at(p, q.movie))
+        ref = self.reference(q.movie)
+        stat = "std" if self.key() == "std" else "mean"
+        return source if stat == "mean" and ref is None else \
+            source + (stat, ref)
+
+    # ---------------------------------------------------------- widgets
+    def _source_changed(self, *_):
+        self.play.setChecked(False)
+        self._layout(emit=False)
+        self.source_changed.emit()

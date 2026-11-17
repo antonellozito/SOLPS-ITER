@@ -378,7 +378,7 @@ it is possible to automatically obtain several libraries which might be not alre
 
 \begin{sloppypar}
 \index{Python, local installation}\index{install\_dependencies}\index{install\_python}\label{sec:localpython}
-The {\tt install\_dependencies} script offers to build a local \SOLPSITERns-specific Python installation, a step which can also be run alone with the {\tt install\_python} script. This is useful even if another Python installation already exists on the system, since it guarantees that the Python version and the external Python modules needed by the \SOLPSITER Python tools, the graphics of \btwoplot included (Section~\ref{sec:b2plotpy}), are all present, in suitable versions. It is not needed to compile \SOLPSITERns. The Python source code is downloaded from \href{https://www.python.org/ftp/python/}{https://www.python.org/ftp/python/}, compiled and installed in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory. The latest released micro version of the 3.13 Python series set is currently used. The external Python modules listed in the script (currently {\tt numpy}, {\tt matplotlib} and {\tt PySide6}) are then installed into it with {\tt pip}.
+The {\tt install\_dependencies} script offers to build a local \SOLPSITERns-specific Python installation, a step which can also be run alone with the {\tt install\_python} script. This is useful even if another Python installation already exists on the system, since it guarantees that the Python version and the external Python modules needed by the \SOLPSITER Python tools, the graphics of \btwoplot included (Section~\ref{sec:b2plotpy}), are all present, in suitable versions. It is not needed to compile \SOLPSITERns. The Python source code is downloaded from \href{https://www.python.org/ftp/python/}{https://www.python.org/ftp/python/}, compiled and installed in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory. The latest released micro version of the 3.13 Python series set is currently used. The external Python modules listed in the script (currently {\tt numpy}, {\tt matplotlib} and {\tt PySide6-Essentials}) are then installed into it with {\tt pip}.
 If this is done, at every initialization of a \SOLPSITER session, the \SOLPSITERns-specific Python environment takes precedence over any other Python installation that may have been already active before in the system; the commands {\tt python}, {\tt python3}, {\tt pip} and {\tt pip3} will all refer to it.
 \end{sloppypar}
 
@@ -19497,12 +19497,13 @@ the commands of the plot (5 \%) and, after 1 \% of space, the layers
 
 The {\bf quantity panel} (left):
 \begin{itemize}
-\item the tabs {\tt Final state} ({\tt b2fstate}), {\tt Run movies}
-  and {\tt Balances} (the balances of {\tt balance.nc}, below); what a
-  tab plots is shown only while it is open (the layers always): each tab
-  shows again the quantity last plotted in it, the Balances tab its
-  volume, and opening it closes the {\tt Chords} and {\tt Statistics}
-  sections; the movie frames of the latest run are read by \btwoplot with
+\item the tabs {\tt Final state} ({\tt b2fstate}), {\tt Run tracing}
+  (below), {\tt Run movies} and {\tt Balances} (the balances of
+  {\tt balance.nc}, below); what a tab plots is shown only while it is
+  open (the layers always): each tab shows again the quantity last
+  plotted in it, the Run tracing tab its places, the Balances tab its
+  volume, and opening these two closes the {\tt Chords} and
+  {\tt Statistics} sections; the movie frames of the latest run are read by \btwoplot with
   {\bf mvframe} and
   {\bf mvframev}
   (\ref{sec:mvframe}): one frame, the mean over a range of frames, a
@@ -19548,6 +19549,38 @@ The {\bf quantity panel} (left):
   those written since the start of the run, also while it runs (in the
   run directory, or in {\tt b2mn.exe.dir} when older ones were there);
   {\tt Live update} then reloads the run when they change;
+\item {\tt Run tracing} reads the files of the latest run (chosen as the
+  movie files) that \btwoplot does not read: {\tt b2time.nc} and the
+  chord files {\tt b2chords.nc} and {\tt eirenechords.nc}
+  (chapter~\ref{cha:b2chords}); its page replaces the column, each of its
+  tabs only with its files: {\tt Time traces}, {\tt Profiles} (at the
+  midplanes and along the targets, against the distance from the
+  separatrix, $R$, $Z$ or $\rho_p$; temperatures written in J shown in
+  eV) and {\tt Chords} (along a chord of a set, against the distance
+  along it, $R$, $Z$, $\rho_p$ or the distance from the separatrix, with
+  its line integrals or averages in time over its parts inside the grid);
+  each tab has its table of quantities with a species menu in its title,
+  its plots with their options, {\tt Save plot} and {\tt Export}; the
+  profiles and chords the frames as in {\tt Run movies} (computed by the
+  GUI; {\tt Show all}: the profiles of all positions); the place of the
+  quantity glows on the plot (the line of a profile, the chords of the
+  set, the one shown thicker). The time traces are those of a place
+  clicked on the plot (on it or on its name), where the places are always
+  drawn with their names
+  (brighter under the mouse, the name of the one clicked in bold; the
+  outer midplane separatrix at first), in a table always with the groups
+  {\tt State variables}, {\tt Fluxes} and {\tt Integrated quantities}
+  (greyed out where the place has none): the separatrix at the outer
+  midplane (its state variables), a target (inner and outer by the major
+  radius of their cells: the state variables at the separatrix with their
+  maximum along the target in one plot, the integrated poloidal fluxes),
+  the wall and the private flux region boundaries (the radial fluxes
+  integrated over the main chamber and over the divertor region, on the
+  faces {\tt B2.5} sums them over in a single null), anywhere else in the
+  grid (no name; the total number of particles and the total electron and
+  ion energies); the trace alone, or with its mean and standard deviation
+  over the whole trace, its rolling or its batch means over a window of
+  frames;
 \item the {\tt Plasma quantity} tree (description and \btwoplot name),
   with a search field (for the three trees); a click opens or closes a
   group, plots a quantity, a second click clears the plot; the

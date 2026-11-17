@@ -15,6 +15,9 @@ import sys
 
 REQUIRED_PYTHON = (3, 9)
 REQUIRED = [("PySide6", "6.4"), ("numpy", "1.21"), ("matplotlib", "3.8")]
+# distributions that provide a module (PySide6-Essentials: the Qt modules of
+# the windows, without the add-ons of the whole PySide6)
+DISTRIBUTIONS = {"PySide6": ("PySide6_Essentials", "PySide6")}
 
 # Name in messages, the program whose Python graphics are checked and
 # how to run it without windows, set by the program started
@@ -181,6 +184,19 @@ def child_environment(**extra):
     return env
 
 
+def module_version(name):
+    """Version of the installed module name: of the distribution that
+    provides it, else its __version__ (an exception if it is missing)."""
+    import importlib
+    import importlib.metadata
+    for dist in DISTRIBUTIONS.get(name, (name,)):
+        try:
+            return importlib.metadata.version(dist)
+        except Exception:
+            pass
+    return importlib.import_module(name).__version__
+
+
 def problems(gui, extra=()):
     """List of missing or too old requirements (empty if all is fine);
     extra: (module, minimum version) needed on top of REQUIRED."""
@@ -188,12 +204,11 @@ def problems(gui, extra=()):
     if sys.version_info < REQUIRED_PYTHON:
         return ["Python (need >= %d.%d)" % REQUIRED_PYTHON]
     import importlib
-    import importlib.metadata
     for name, minimum in REQUIRED + list(extra):
         if name == "PySide6" and not gui:
             continue   # Qt only for windows: files need numpy and matplotlib
         try:
-            version = importlib.metadata.version(name)
+            version = module_version(name)
             importlib.import_module(name)
         except Exception:
             found.append("%s (need >= %s)" % (name, minimum))
