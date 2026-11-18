@@ -339,6 +339,7 @@ To best use the \SOLPSITER code suite, the user will need, locally installed:
 \item[NAG]\index{NAG} mathematical library (optional) (available from \href{http://www.nag.com/content/nag-library}{http://www.nag.com/content/nag-library})
 \item[BLAS/LAPACK] mathematical libraries (available from \href{http://www.netlib.org/}{http://www.netlib.org/})
 \item[NCAR] plotting library (optional, only for the NCAR Graphics versions of the {\tt B2.5} graphical programs and of {\tt Carre2}, built with {\tt USE\_NCAR}, see Section~\ref{sec:b2plotpy}; available from \href{https://www.ncl.ucar.edu/Download/}{https://www.ncl.ucar.edu/Download/})
+\item[Motif] user interface library, with {\tt libXp} and {\tt libXpm} (optional, only for the Motif version of {\tt DivGeo} and for {\tt AMDS}, built with {\tt USE\_MOTIF}, see Section~\ref{sec:dgpython})
 \item[GR] plotting library (optional, developed at FZ-J{\"u}lich, available as an open-source package at \href{https://github.com/iterorganization/GR-Software}{https://github.com/iterorganization/GR-Software})
 \item[GKS] graphical kernel library (available from \href{http://ngwww.ucar.edu}{http://ngwww.ucar.edu})
 \item[HDF5] data storage library (available from \href{http://support.hdfgroup.org/HDF5/}{http://support.hdfgroup.org/HDF5/})
@@ -352,7 +353,7 @@ To best use the \SOLPSITER code suite, the user will need, locally installed:
 \item[plotmtv] for obtaining graphs of the time evolution of various profiles (optional)
 \item[LaTeX interpreter] to produce this manual (optional)
 \item[GIT] version control software
-\item[python] scripting language (\SOLPSITER needs at least version 2.7, but version at least 3.5 is required for many additional features; a local \SOLPSITERns-specific Python installation can be built with the {\tt install\_dependencies} script, see Section~\ref{sec:localpython}; the graphics of \btwoplot and of the B2 post-processors need it, see Section~\ref{sec:b2plotpy})
+\item[python] scripting language (\SOLPSITER needs at least version 2.7, but version at least 3.5 is required for many additional features; a local \SOLPSITERns-specific Python installation can be built with the {\tt install\_dependencies} script, see Section~\ref{sec:localpython}; the graphics of \btwoplot and of the B2 post-processors need it, see Section~\ref{sec:b2plotpy}, and so does the graphical interface of {\tt DivGeo}, see Section~\ref{sec:dgpython})
 \item[/bin/bash] used by some scripts
 \item[/bin/csh] used by some scripts
 \item[/bin/ksh] used by some scripts
@@ -378,7 +379,7 @@ it is possible to automatically obtain several libraries which might be not alre
 
 \begin{sloppypar}
 \index{Python, local installation}\index{install\_dependencies}\index{install\_python}\label{sec:localpython}
-The {\tt install\_dependencies} script offers to build a local \SOLPSITERns-specific Python installation, a step which can also be run alone with the {\tt install\_python} script. This is useful even if another Python installation already exists on the system, since it guarantees that the Python version and the external Python modules needed by the \SOLPSITER Python tools, the graphics of \btwoplot included (Section~\ref{sec:b2plotpy}), are all present, in suitable versions. It is not needed to compile \SOLPSITERns. The Python source code is downloaded from \href{https://www.python.org/ftp/python/}{https://www.python.org/ftp/python/}, compiled and installed in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory. The latest released micro version of the 3.13 Python series set is currently used. The external Python modules listed in the script (currently {\tt numpy}, {\tt matplotlib} and {\tt PySide6-Essentials}) are then installed into it with {\tt pip}.
+The {\tt install\_dependencies} script offers to build a local \SOLPSITERns-specific Python installation, a step which can also be run alone with the {\tt install\_python} script. This is useful even if another Python installation already exists on the system, since it guarantees that the Python version and the external Python modules needed by the \SOLPSITER Python tools, the graphics of \btwoplot (Section~\ref{sec:b2plotpy}) and the graphical interface of {\tt DivGeo} (Section~\ref{sec:dgpython}) included, are all present, in suitable versions. It is not needed to compile \SOLPSITERns. The Python source code is downloaded from \href{https://www.python.org/ftp/python/}{https://www.python.org/ftp/python/}, compiled and installed in the {\tt \$\{SOLPSTOP\}/lib/\allowbreak\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}/python} directory. The latest released micro version of the 3.13 Python series set is currently used. The external Python modules listed in the script (currently {\tt numpy}, {\tt matplotlib} and {\tt PySide6-Essentials}) are then installed into it with {\tt pip}.
 If this is done, at every initialization of a \SOLPSITER session, the \SOLPSITERns-specific Python environment takes precedence over any other Python installation that may have been already active before in the system; the commands {\tt python}, {\tt python3}, {\tt pip} and {\tt pip3} will all refer to it.
 \end{sloppypar}
 
@@ -928,6 +929,7 @@ The {\tt setup.csh} file and its subsidiaries {\tt \$\{SOLPSTOP\}/SETUP/setup.cs
 \item {\tt PERFMON}\index{PERFMON}, an environment variable used by the compiler to know whether to enable the performance monitoring libraries
 \item {\tt SOLPS\_CPP}\index{SOLPS\_CPP}, an environment variable containing the global "defines" to use during compilation of {\tt SOLPS} code components
 \item {\tt USE\_NCAR}\index{USE\_NCAR}, if set, builds the {\tt B2.5} graphical programs and {\tt Carre2} with {\tt NCAR} Graphics instead of the Python graphics (Section~\ref{sec:b2plotpy}); it must be set before {\tt setup.csh} is sourced
+\item {\tt USE\_MOTIF}\index{USE\_MOTIF}, if set, builds the Motif version of {\tt DivGeo} instead of its Python interface, and builds {\tt AMDS} (Section~\ref{sec:dgpython}); it must be set before {\tt setup.csh} is sourced
 \item some aliases to move around the tree ({\tt sbb}, {\tt sei}, {\it etc.})
 \item some aliases for plotting ({\tt xyplot}, etc...)
 \item two aliases to swap between the debug and no\_debug versions of the code ({\tt set\_debug} and {\tt unset\_debug})
@@ -6127,18 +6129,12 @@ in Section~\ref{sec:setup}.
 
 If {\tt DivGeo} is not yet compiled, you will need to do \index{DivGeo, compiling}
 \begin{verbatim}
-  cd $DG
-  gmake tags
-  gmake listobj
-  gmake depend
-  gmake
-  cd equtrn
-  gmake depend
-  gmake
-  cd ../convert
-  gmake
+  cd $SOLPSTOP
+  gmake divgeo
 \end{verbatim}
 %$
+which builds {\tt DivGeo} (its Python interface by default, see
+Section~\ref{sec:dgpython}) and its equilibrium and template converters.
 
 The environment variable {\tt DG} contains the path
 {\tt \$\{SOLPSTOP\}/modules/DivGeo}.
@@ -6169,6 +6165,22 @@ The {\tt lns} script establishes a series of symbolic links from the {\tt DivGeo
 Then you will probably want to generate the grid --- this is described
 in the next chapter.  After the grid has been created, you can import
 it back into {\tt DG} ({\tt File|Import|Mesh}) to check it.
+
+\section{Python interface and Motif version}
+\label{sec:dgpython}\index{DivGeo, Python interface}\index{USE\_MOTIF}
+
+{\tt DivGeo} was originally written for Motif. By default {\tt gmake divgeo} builds
+its core as a library ({\tt libdivgeo}, in the {\tt python} folder of the
+build folder) for a Python interface ({\tt lib/python/divgeo}) with the
+same menus, dialogs, mouse tools, messages and files as the Motif program;
+Motif is not needed.
+
+With {\tt USE\_MOTIF} set, the original Motif program
+{\tt dg.exe} is built instead; this needs Motif (with {\tt libXp} and
+{\tt libXpm}), otherwise {\tt make} stops. {\tt AMDS} is also built only
+with {\tt USE\_MOTIF}. {\tt USE\_MOTIF} must be set before
+{\tt setup.csh} is sourced (for instance in
+{\tt \$\{SOLPSTOP\}/SETUP/setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.pre}).
 
 \chapter{Running Carre}
 \label{cha:carre}\index{Carre, running}
@@ -25910,8 +25922,9 @@ To install {\tt DG}, you need to:
 \item Make sure that the configuration file exists and has the right name
 \end{itemize}
 
-{\tt DG} is an X Windows application. The correct {\tt DISPLAY} setting is
-necessary.
+{\tt DG} is an X Windows application in its Motif version
+({\tt USE\_MOTIF}, Section~\ref{sec:dgpython}). The correct {\tt DISPLAY}
+setting is necessary, as it is for the Python interface on Linux.
 
 Some useful infos on installing are contained in the {\bf Customizing DG} section (\ref{sec:DGcustom}).
 
@@ -25919,7 +25932,8 @@ Some useful infos on installing are contained in the {\bf Customizing DG} sectio
 \index{DG, files needed by}
 
 \begin{description}
-  \item[dg] Executable file
+  \item[dg] Start script, which runs the Python interface or the Motif
+executable {\tt dg.exe} (Section~\ref{sec:dgpython})
   \item[dg.dgh] Help file
   \item[dg.dgc] Configuration file
 \end{description}
