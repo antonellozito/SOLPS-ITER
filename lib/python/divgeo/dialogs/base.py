@@ -45,7 +45,7 @@ class XmDialog(QtWidgets.QDialog):
         if self.parent_dialog is not None:
             pn, pc = self.parent_dialog.path()
         else:
-            pn, pc = list(MAIN_NAMES), list(MAIN_CLASSES)
+            pn, pc = self.window_.main_path()
         return (pn + [self.name + "_popup", self.name] + list(names),
                 pc + ["XmDialogShell", self.widget_class])
 

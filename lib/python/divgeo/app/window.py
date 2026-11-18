@@ -12,7 +12,7 @@ import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core import api, prefs, resources
-from ..dialogs import boxes, files, topology
+from ..dialogs import base, boxes, files, topology
 from ..view import canvas, modes, themes
 from . import commands, contexthelp, menus
 
@@ -309,6 +309,10 @@ class ViewWindow(QtWidgets.QMainWindow):
 
     def pump(self):
         self.application.pump.process()
+
+    def main_path(self):
+        """Names and classes of the main window (the paths of dialogs)."""
+        return list(base.MAIN_NAMES), list(base.MAIN_CLASSES)
 
     def str_(self, msg_id):
         return self.lib.string_at(self.dll.PyGetStr(self.view, msg_id))

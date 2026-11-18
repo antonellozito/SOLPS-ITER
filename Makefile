@@ -823,7 +823,6 @@ triang_nox_mpi:
 	cd modules/Triang; ${MAKE} ${MPI_OPTS} ${OPT_NOX} mods
 	cd modules/Triang; ${MAKE} -j1 ${MPI_OPTS} ${OPT_NOX}
 
-ifdef USE_MOTIF
 amds: b25eirene
 	+cd modules/amds; ${MAKEO}
 
@@ -835,13 +834,6 @@ amds_openmp: b25eirene_openmp
 
 amds_openmp_mpi: b25eirene_openmp_mpi
 	+cd modules/amds; ${MAKEO} ${OMP_OPTB} ${MPI_OPTS}
-else
-amds:
-amds_mpi:
-amds_openmp:
-amds_openmp_mpi:
-	$(warning AMDS will not be compiled because it needs Motif and USE_MOTIF is not set.)
-endif
 
 fxdr: sonnet-light
 	+cd modules/fxdr; ${MAKEO}
@@ -1053,9 +1045,7 @@ ifeq (,$(findstring ifx,${FC}))
 	cd modules/B2.5;	   ${MAKE} depend USE_EIRENE=-DB25_EIRENE ${OMP_OPTB}
 endif
 	cd modules/DivGeo;         ${MAKE} depend
-ifdef USE_MOTIF
 	cd modules/amds;           ${MAKE} depend
-endif
 ifndef NO_MPI
 	cd modules/Eirene;         ${MAKEF} depend ${MPI_OPTS}
 	cd modules/B2.5;           ${MAKE} depend ${MPI_OPTS}
