@@ -69,8 +69,9 @@ if ( $?USE_MOTIF ) then
 setenv LIBXPM_LIB_DIR `find $lib_paths -type f -name "libXpm*.so*" -exec dirname {} \; | sort -u`
 setenv LIBXPM_INCLUDE_DIR `find /usr/include /usr/local/include -type f -name "xpm.h" -exec dirname {} \; | sort -u`
 endif
-setenv MOTIF_LIB_DIR `find $lib_paths -type f -name "libXm*.so*" -exec dirname {} \; | sort -u`
+setenv LIBXMU_LIB_DIR `find $lib_paths -type f -name "libXmu.so*" -exec dirname {} \; | sort -u`
 if ( $?USE_MOTIF ) then
+setenv MOTIF_LIB_DIR `find $lib_paths -type f -name "libXm*.so*" -exec dirname {} \; | sort -u`
 setenv MOTIF_INCLUDE_DIR `find /usr/include /usr/local/include -type f -name "Xm.h" -exec dirname {} \; | sort -u`
 endif
 setenv NETCDF_LIB_DIR `find $lib_paths -type f -name "libnetcdf*.so*" -exec dirname {} \; | sort -u`
