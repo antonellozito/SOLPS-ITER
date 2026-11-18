@@ -457,20 +457,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def resizeEvent(self, event):
         """A resize keeps the aspect ratio of the start: the side moved
-        more decides the size."""
+        more decides the size, within the screen (scaling.aspect_size)."""
         super().resizeEvent(event)
         if self._aspect is None or self._sizing:
             return
         self._fonts.start()
-        w, h = event.size().width(), event.size().height()
-        if abs(w / max(h, 1) - self._aspect) * h < 2:
-            return
-        old = event.oldSize()
-        if abs(w - old.width()) >= abs(h - old.height()):
-            h = round(w / self._aspect)
-        else:
-            w = round(h * self._aspect)
-        QtCore.QTimer.singleShot(0, lambda: self._resize(w, h))
+        size, self._aspect = scaling.aspect_size(self, event, self._aspect)
+        if size is not None:
+            QtCore.QTimer.singleShot(0, lambda: self._resize(*size))
 
     def _resize(self, w, h):
         self._sizing = True
