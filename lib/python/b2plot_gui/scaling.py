@@ -18,6 +18,37 @@ DRAG = 4.0                          # pixels the mouse moves to pan
 WHEEL_GAP = 0.8                     # s between the wheel steps of one scroll
 
 
+def aspect_size(window, event, aspect):
+    """(size, aspect) for a resize (event) of a window that keeps its aspect
+    ratio: size is the corrected (w, h), the side moved more deciding,
+    smaller when the window and its frame would not fit the available area
+    of its screen; None when no correction is needed, or when the window
+    manager refused the same size before (a maximized or tiled window,
+    a frame added after the start), the window then keeping the size and
+    aspect it got."""
+    w, h = event.size().width(), event.size().height()
+    if abs(w / max(h, 1) - aspect) * h < 2:
+        window._asked = None
+        return None, aspect
+    old = event.oldSize()
+    if abs(w - old.width()) >= abs(h - old.height()):
+        h = round(w / aspect)
+    else:
+        w = round(h * aspect)
+    screen = window.screen() or QtGui.QGuiApplication.primaryScreen()
+    if screen is not None:
+        room, frame = screen.availableGeometry(), window.frameGeometry()
+        k = min(1.0, (room.width() - frame.width() + window.width()) /
+                max(w, 1), (room.height() - frame.height() +
+                            window.height()) / max(h, 1))
+        w, h = (int(w * k), int(h * k)) if k < 1.0 else (w, h)
+    if getattr(window, "_asked", None) == (w, h):
+        window._asked = None
+        return None, event.size().width() / max(event.size().height(), 1)
+    window._asked = (w, h)
+    return (w, h), aspect
+
+
 class Scaled:
     """Mixin of a window (with a layout) whose content scales with it;
     scaled() after the widgets exist. Its plots (views(): objects with a
@@ -133,16 +164,11 @@ class Scaled:
         if self._aspect is None or self._sizing:
             return
         self._fonts.start()
-        w, h = event.size().width(), event.size().height()
-        if abs(w / max(h, 1) - self._aspect) * h < 2:
-            self._scale(w / self._width)
+        size, self._aspect = aspect_size(self, event, self._aspect)
+        if size is None:
+            self._scale(event.size().width() / self._width)
             return
-        old = event.oldSize()
-        if abs(w - old.width()) >= abs(h - old.height()):
-            h = round(w / self._aspect)
-        else:
-            w = round(h * self._aspect)
-        QtCore.QTimer.singleShot(0, lambda: self._resize(w, h))
+        QtCore.QTimer.singleShot(0, lambda: self._resize(*size))
 
     def _resize(self, w, h):
         self._sizing = True
