@@ -8,11 +8,12 @@ import ctypes
 import os
 import sys
 
+import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core import api, prefs, resources
 from ..dialogs import boxes, files, topology
-from ..view import canvas, modes
+from ..view import canvas, modes, themes
 from . import commands, contexthelp, menus
 
 # The tools of the option menus of the command row: (widget name, tool,
@@ -94,11 +95,8 @@ class ToolOptionMenu(QtWidgets.QWidget):
         self.button.setObjectName("OptionButton")
         self.button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         color = db.get(names + ["foreground"], classes + ["Foreground"])
-        pixel = resources.to_pixel(color) if color else None
-        if pixel is not None:
-            style = "color: #%06x;" % pixel
-            self.label.setStyleSheet(style)
-            self.button.setStyleSheet(style)
+        self.pixel = resources.to_pixel(color) if color else None
+        self.apply_theme(window.application.theme)
         menu_name = "toolMenu%d" % slot
         self.menu = QtWidgets.QMenu(self.button)
         self.menu.setObjectName(menu_name)
@@ -138,6 +136,13 @@ class ToolOptionMenu(QtWidgets.QWidget):
         self.menu.aboutToHide.connect(window.clear_help_line)
         lay.addWidget(self.label)
         lay.addWidget(self.button)
+
+    def apply_theme(self, name):
+        """The colour of the slot (resource foreground) in a theme."""
+        if self.pixel is not None:
+            style = "color: #%06x;" % themes.colour(self.pixel, name, False)
+            self.label.setStyleSheet(style)
+            self.button.setStyleSheet(style)
 
     def set_history(self, tool):
         for e in self.entries:
@@ -191,6 +196,7 @@ class ViewWindow(QtWidgets.QMainWindow):
         bar.setNativeMenuBar(False)
         bar.setObjectName("menu")
         self.menus = menus.Builder(self, bar).build()
+        self._theme_menu(bar)
 
         self.command = QtWidgets.QWidget(main)
         self.command.setObjectName("command")
@@ -214,7 +220,9 @@ class ViewWindow(QtWidgets.QMainWindow):
         self.msg.setTextFormat(QtCore.Qt.PlainText)
         fl.addWidget(self.msg)
 
-        self.canvas = canvas.Canvas(self, self.res, self.res["renderer"])
+        self.canvas = canvas.Canvas(
+            self, themes.draw_res(self.res, self.application.theme),
+            self.res["renderer"])
         if getattr(self, "canvas_size", None):
             self.canvas.setFixedSize(*self.canvas_size)
         lay.addWidget(self.canvas, 1)
@@ -226,6 +234,9 @@ class ViewWindow(QtWidgets.QMainWindow):
         self.menu_on.clicked.connect(self.commands.options_menu_toggle)
         self.menu_on.hide()
         self.resize(*self.application.geometry)
+        if self.application.full_screen:
+            self.setWindowState(self.windowState()
+                                | QtCore.Qt.WindowMaximized)
 
         # realize and show: the drawing area gets its size
         dll.SetPyViewRealized(self.view, 1)
@@ -242,6 +253,25 @@ class ViewWindow(QtWidgets.QMainWindow):
         dll.SetPyViewSize(self.view, size.width(), size.height())
 
         self.canvas.start_update_timer()
+        # wheel zoom and key pan: each step drawn at once (PySetViewStep,
+        # libraries that have it), the movement recorded once when the
+        # steps stop (else the view changed once then)
+        try:
+            dll.PySetViewStep
+            self.view_steps = True
+        except AttributeError:
+            self.view_steps = False
+        self.canvas.preview_timer.setInterval(0 if self.view_steps else 120)
+        self._view_mark = QtCore.QTimer(self)
+        self._view_mark.setSingleShot(True)
+        self._view_mark.setInterval(400)
+        self._view_mark.timeout.connect(self._mark_view)
+        # the keys of the pan held, the steps while they are
+        self._pan_keys = {}
+        self._pan_timer = QtCore.QTimer(self)
+        self._pan_timer.setInterval(self.PAN_TICK)
+        self._pan_timer.timeout.connect(self._pan_tick)
+        self._pan_clock = QtCore.QElapsedTimer()
 
         tools = self.lib.tools
         self.tools = [tools["TlExamine"], tools["TlMark"], tools["TlZoom"]]
@@ -294,8 +324,31 @@ class ViewWindow(QtWidgets.QMainWindow):
         self.lib.set(self.view, "View.updateFlag", value)
 
     def repaint_view(self):
+        # the whole view drawn again without a clear: the fill of the
+        # closed parts of the elements first (light and dark themes)
+        self.canvas.raster.fill_next = True
         self.dll.RepaintView(self.view)
         self.pump()
+
+    def has_elem_segments(self):
+        try:
+            self.dll.PyElemSegments
+            return True
+        except AttributeError:
+            return False
+
+    def elem_segments(self):
+        """The elements of the model as screen segments (PyElemSegments)
+        for the fill of their closed parts, when the view shows elements;
+        None otherwise."""
+        if self.view is None or not self.app:
+            return None
+        if not self.lib.get(self.view, "View.showFlags") & api.SHW_ELEMS:
+            return None
+        n = self.dll.PyElemSegments(self.view, None, 0)
+        out = np.empty((max(n, 1), 4), np.float64)
+        self.dll.PyElemSegments(self.view, out.ctypes.data, n)
+        return out[:n]
 
     def resized(self, width, height):
         """CbResizeView."""
@@ -542,6 +595,146 @@ class ViewWindow(QtWidgets.QMainWindow):
             return
         self.cm_add_var_set.setEnabled(bool(r & 1))
         self.cm_del_var_set.setEnabled(bool(r & 2))
+
+    # Wheel zoom and key pan (the Python interface only) ###################
+
+    PAN_KEYS = {QtCore.Qt.Key_W: (0, -1), QtCore.Qt.Key_Up: (0, -1),
+                QtCore.Qt.Key_S: (0, 1), QtCore.Qt.Key_Down: (0, 1),
+                QtCore.Qt.Key_A: (-1, 0), QtCore.Qt.Key_Left: (-1, 0),
+                QtCore.Qt.Key_D: (1, 0), QtCore.Qt.Key_Right: (1, 0)}
+
+    def _world(self, x, y):
+        """The model point at a position of the drawing area (RealX,
+        RealY at a position between pixels, then the rotation of the view
+        undone)."""
+        get, v = self.lib.get, self.view
+        wx = ctypes.c_double(
+            (x - get(v, "View.width") // 2) / get(v, "View.zoomX")
+            / get(v, "View.xScaleSign") + get(v, "View.centerX"))
+        wy = ctypes.c_double(
+            (y - get(v, "View.height") // 2) / get(v, "View.zoomY")
+            / get(v, "View.yScaleSign") + get(v, "View.centerY"))
+        self.dll.ScreenRotate(v, -1, ctypes.byref(wx), ctypes.byref(wy))
+        return wx.value, wy.value
+
+    def _mark_view(self):
+        """The steps have stopped: the movement as one view change
+        (SetViewFactor, the view before it kept by the App for Undo and
+        Previous view), one undo mark."""
+        if not self.app:
+            return
+        if self.view_steps:
+            get, v = self.lib.get, self.view
+            self.dll.SetActiveView(v)
+            self.dll.SetViewFactor(v, get(v, "View.centerX"),
+                                   get(v, "View.centerY"),
+                                   get(v, "View.zoomX"), get(v, "View.zoomY"))
+            self.pump()
+        self.dll.UndoMark(self.app)
+        self.pump()
+
+    def apply_view_transform(self, t):
+        """The steps of the wheel and of the keys, as one transform of the
+        positions of the drawing area (uniform scale and shift): the view
+        of the core set once (SetViewFactor), drawn again, one undo mark
+        when the steps stop."""
+        if not self.app:
+            return
+        f = t.m11()
+        size = self.canvas.size()
+        # the old position that the transform brings to the centre
+        cx, cy = self._world((size.width() / 2.0 - t.dx()) / f,
+                             (size.height() / 2.0 - t.dy()) / f)
+        get = self.lib.get
+        zx = get(self.view, "View.zoomX") * f
+        zy = get(self.view, "View.zoomY") * f
+        if self.view_steps:
+            self.dll.PySetViewStep(self.view, cx, cy, zx, zy)
+        else:
+            self.dll.SetActiveView(self.view)
+            self.dll.SetViewFactor(self.view, cx, cy, zx, zy)
+        self.pump()
+        self._view_mark.start()
+
+    PAN_SPEED = 0.75    # part of the drawing area per second while held
+    PAN_TICK = 16       # milliseconds between two steps of a held key
+
+    def keyPressEvent(self, event):
+        """W, A, S, D and the arrow keys (no modifier) move the drawing
+        area while held, PAN_SPEED of its size per second, in steps of
+        PAN_TICK milliseconds (a short press: a small move); other keys as
+        before."""
+        step = self.PAN_KEYS.get(event.key())
+        mods = event.modifiers() & ~QtCore.Qt.KeypadModifier
+        if step is None or mods != QtCore.Qt.NoModifier or not self.app:
+            super().keyPressEvent(event)
+            return
+        event.accept()
+        if event.isAutoRepeat():
+            return
+        self._pan_keys[event.key()] = step
+        if not self._pan_timer.isActive():
+            self._pan_clock.start()
+            self._pan_step(self.PAN_TICK / 1000.0)
+            self._pan_timer.start()
+
+    def keyReleaseEvent(self, event):
+        if event.key() in self.PAN_KEYS and not event.isAutoRepeat():
+            self._pan_keys.pop(event.key(), None)
+            if not self._pan_keys:
+                self._pan_timer.stop()
+            event.accept()
+            return
+        super().keyReleaseEvent(event)
+
+    def stop_pan(self):
+        self._pan_keys.clear()
+        self._pan_timer.stop()
+
+    def _pan_tick(self):
+        dt = self._pan_clock.restart() / 1000.0
+        self._pan_step(min(dt, 0.1))
+
+    def _pan_step(self, dt):
+        if not self._pan_keys or not self.app:
+            self.stop_pan()
+            return
+        dx = sum(s[0] for s in self._pan_keys.values())
+        dy = sum(s[1] for s in self._pan_keys.values())
+        size = self.canvas.size()
+        k = self.PAN_SPEED * dt
+        self.canvas.move_preview(QtGui.QTransform(
+            1, 0, 0, 1, -dx * k * size.width(), -dy * k * size.height()))
+
+    # Theme (Window > Theme, the Python interface only) ####################
+
+    def _theme_menu(self, bar):
+        """The submenu Theme at the end of the Window menu: one entry per
+        theme, the theme in use checked."""
+        wm = bar.findChild(QtWidgets.QMenu, "windowMenu")
+        wm.addSeparator().setObjectName("themeSepar")
+        self.theme_menu = wm.addMenu("Theme")
+        self.theme_menu.setObjectName("themeMenu")
+        self.theme_menu.menuAction().setObjectName("theme")
+        group = QtGui.QActionGroup(self.theme_menu)
+        self.theme_actions = {}
+        for name in themes.NAMES:
+            act = self.theme_menu.addAction(themes.LABELS[name])
+            act.setObjectName(name)
+            act.setCheckable(True)
+            act.setChecked(name == self.application.theme)
+            group.addAction(act)
+            act.triggered.connect(
+                lambda checked, n=name: self.application.set_theme(n))
+            self.theme_actions[name] = act
+
+    def apply_theme(self, name):
+        """The colours of a theme in this view: the check of the menu, the
+        tool slots, the drawing area (drawn again)."""
+        self.theme_actions[name].setChecked(True)
+        for om in self.tool_menus:
+            om.apply_theme(name)
+        self.canvas.set_res(themes.draw_res(self.res, name))
 
     # Help line (CbDisplayHelpLine, CbDisplayDataLine, CbClearHelpLine) #####
 

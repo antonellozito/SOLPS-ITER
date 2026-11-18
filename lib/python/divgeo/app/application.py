@@ -11,10 +11,10 @@ import sys
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ...b2plot_gui import scaling, theme
+from ...b2plot_gui import scaling
 from ..core import api, lib as corelib, options, prefs, resources
 from ..dialogs import boxes, version
-from ..view import records
+from ..view import raster, records, themes
 from . import contexthelp, window
 
 USAGE = ("DivGeo version %s\n"
@@ -45,21 +45,43 @@ class Application:
         self.db.merge(cmdline)
         self.argv = rest
         self.pump = records.Pump(library)
+        raster.use_library(library.dll)
         self.windows = []
         self.help_text = None
         self.geometry = self._geometry()
+        # the views fill their screen unless the command line gives a
+        # geometry (-geometry, -xrm)
+        self.full_screen = cmdline.get([self.name, "geometry"],
+                                       ["DivGeo", "Geometry"]) is None
         self.canvas_size = None
         self.wid = 0
         self.help_window = None
-        # the look of the b2plot GUI: its stylesheet (light theme), its
-        # check boxes and radio buttons, its wheel guard
-        theme.install_indicators(self.qt)
+        # the look of the b2plot GUI: its check boxes and radio buttons,
+        # its wheel guard; the style and stylesheet of the theme of the
+        # start
+        start = (self.app_resource("theme", "Theme") or "light").strip()
+        self.theme = start.lower() if start.lower() in themes.NAMES \
+            else "light"
+        themes.current = self.theme
+        themes.install_style(self.qt)
         scaling.guard_wheel(self.qt)
-        self.qt.setStyleSheet(theme.stylesheet())
+        self.qt.setStyleSheet(themes.stylesheet(self.theme, self.db,
+                                                self.name))
         self.help_key = contexthelp.HelpKey()
         self.qt.installEventFilter(self.help_key)
         self._box_proc = api.BOXPROC(self._box)
         library.dll.SetPyBoxProc(self._box_proc)
+
+    def set_theme(self, name):
+        """Window > Theme: every window, drawing area and distribution
+        graph in the theme."""
+        self.theme = name
+        themes.current = name
+        self.qt.setStyleSheet(themes.stylesheet(name, self.db, self.name))
+        for w in self.windows:
+            w.apply_theme(name)
+        for g in list(themes.GRAPHS):
+            g.apply_theme(name)
 
     # Resources of the program (application resources of the Motif shell)
 
@@ -72,7 +94,7 @@ class Application:
         return default if number is None else number
 
     def _geometry(self):
-        value = self.db.get(["DivGeo", "geometry"], ["DivGeo", "Geometry"])
+        value = self.db.get([self.name, "geometry"], ["DivGeo", "Geometry"])
         try:
             w, h = value.lower().split("+")[0].split("-")[0].split("x")
             return int(w), int(h)

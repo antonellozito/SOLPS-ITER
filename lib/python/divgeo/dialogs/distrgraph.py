@@ -7,6 +7,7 @@ an X window: erasing draws in the background colour."""
 from PySide6 import QtCore, QtGui
 
 from ..core import api, resources
+from ..view import themes
 from . import boxes, files
 from . import vacreate as vc
 
@@ -39,6 +40,10 @@ def _pixel(widget, name, cls, default):
     p = resources.to_pixel(value) if value is not None else None
     if p is None:
         p = resources.to_pixel(default)
+    return p
+
+
+def _color(p):
     return QtGui.QColor((p >> 16) & 255, (p >> 8) & 255, p & 255)
 
 
@@ -90,10 +95,13 @@ class DistrGraph:
                                     None)
         draw.resize_callbacks.append(lambda *a: self.resize())
         draw.input_handler = self.action
-        self.bg = _pixel(draw, "background", "Background", "#c4c4c4")
-        self.fg = _pixel(draw, "foreground", "Foreground", "Black")
-        self.px_rect = _pixel(draw, "rectColor", "Foreground", "Black")
-        self.px_grid = _pixel(draw, "gridColor", "Foreground", "Black")
+        # the colours of the resources, shown in the theme of the windows
+        self.pixels = (_pixel(draw, "background", "Background", "#c4c4c4"),
+                       _pixel(draw, "foreground", "Foreground", "Black"),
+                       _pixel(draw, "rectColor", "Foreground", "Black"),
+                       _pixel(draw, "gridColor", "Foreground", "Black"))
+        self._theme_colors(view_window.application.theme)
+        themes.GRAPHS.add(self)
         self.margin = vc.resource_int(draw, "margin", "Margin", 5)
         self.extra_left = vc.resource_int(draw, "extraMargin", "Margin", 10)
         self.grid_len = vc.resource_int(draw, "gridLength", "GridLength", 5)
@@ -307,6 +315,19 @@ class DistrGraph:
     def expose(self):
         """CbDG_Expose."""
         self.draw_graph(True)
+
+    def _theme_colors(self, name):
+        bg, fg, rect, grid = self.pixels
+        self.bg = _color(themes.background(name, bg))
+        self.fg = _color(themes.colour(fg, name, False))
+        self.px_rect = _color(themes.colour(rect, name, False))
+        self.px_grid = _color(themes.colour(grid, name, False))
+
+    def apply_theme(self, name):
+        """Window > Theme: the colours of the theme, the graph drawn
+        again."""
+        self._theme_colors(name)
+        self.resize()
 
     def resize(self):
         """CbDG_Resize: the window cleared, then exposed."""
