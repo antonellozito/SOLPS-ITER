@@ -60,7 +60,11 @@ setenv NETCDF_FORTRAN_HOME `brew --prefix netcdf-fortran`
 if ( $?USE_NCAR ) then
 setenv NCARG_ROOT /opt/local
 endif
+setenv LIBXMU_HOME $XQUARTZ_HOME
+if ( -e /opt/local/lib/libXmu.dylib ) setenv LIBXMU_HOME /opt/local
+if ( $?USE_MOTIF ) then
 setenv MOTIF_HOME /opt/local
+endif
 
 setenv DBX ddt
 setenv DBX idb
