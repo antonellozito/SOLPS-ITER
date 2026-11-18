@@ -169,13 +169,14 @@ def draw_res(res, name):
     return out
 
 
-def stylesheet(name, db, shell="DivGeo"):
+def stylesheet(name, db, shell="DivGeo", cls="DivGeo"):
     """The stylesheet of every window in a theme (db: the resources, for
-    the background colour of the classic bars)."""
+    the background colour of the classic bars; shell, cls: name and class
+    of the program)."""
     b2theme.set_dark(name == "dark")
     sheet = b2theme.stylesheet() + OPTION_BUTTON
     if name == "classic":
-        value = db.get([shell, "background"], ["DivGeo", "Background"])
+        value = db.get([shell, "background"], [cls, "Background"])
         pixel = resources.to_pixel(value) if value else None
         if pixel is not None:
             sheet += ("QMenuBar#menu, QWidget#command, QWidget#msgForm "

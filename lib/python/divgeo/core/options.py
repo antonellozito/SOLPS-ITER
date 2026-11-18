@@ -58,11 +58,11 @@ DG_OPTIONS = (
 )
 
 
-def _table():
-    """The options of the toolkit, replaced by those of DivGeo with the same
-    name."""
+def _table(own):
+    """The options of the toolkit, replaced by those of the program with
+    the same name."""
     table = dict((o[0], o) for o in XT_OPTIONS)
-    for o in DG_OPTIONS:
+    for o in own:
         table[o[0]] = o
     return table
 
@@ -86,11 +86,12 @@ def app_name(argv):
     return os.path.basename(argv[0])
 
 
-def parse(argv):
+def parse(argv, own=DG_OPTIONS):
     """(remaining argv with argv[0], name, resource database of the
-    command line)."""
+    command line); own: the options of the program (those of DivGeo by
+    default)."""
     name = app_name(argv)
-    table = _table()
+    table = _table(own)
     db = resources.Database()
     rest = [argv[0]]
     k = 1

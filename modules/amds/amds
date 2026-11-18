@@ -3,4 +3,15 @@ export AMDSGRAPHCMD=${AMDSDATABASEDIR}/builds/${HOST_NAME}.${COMPILER}/calc_atom
 export AMDSDATABASEFILE=${SOLPSTOP}/modules/amds/amds.rpd
 export AMDSCONFIGFILE=${SOLPSTOP}/modules/amds/amds.rpc
 # export AMDSGRAPHCMD=`pwd`/tt
+# AMDS with the Python interface when the last AMDS build was made without
+# USE_MOTIF (stamp in its build folder), else the Motif amds
+if [ -e "${SOLPSTOP}/modules/amds/builds/${HOST_NAME}.${COMPILER}/.gui_python" ]; then
+  py=${PYTHON:-python3}
+  $py -c "import sys" >/dev/null 2>&1 || {
+    echo "amds: $py not found: AMDS needs the SOLPS-ITER Python, see install_python" >&2
+    exit 2
+  }
+  $py "${SOLPSTOP}/lib/python/amds" $* &
+else
 ${SOLPSTOP}/modules/amds/builds/${HOST_NAME}.${COMPILER}/amds $* &
+fi
