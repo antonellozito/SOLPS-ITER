@@ -147,7 +147,8 @@ class Readout(QtWidgets.QLabel):
         super().changeEvent(event)
         if not self._busy and event.type() in (QtCore.QEvent.FontChange,
                                                QtCore.QEvent.StyleChange):
-            self._font()                # the window font changed
+            # the window font changed: restyled once Qt is done
+            QtCore.QTimer.singleShot(0, self, self._font)
 
     def _font(self):
         """SCALE times the font of the window."""
