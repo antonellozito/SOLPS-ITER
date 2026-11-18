@@ -16,11 +16,18 @@ def _owner(parent):
     return parent, None
 
 
-def _find(owner, name):
+def find_dialog(owner, name):
+    """XtNameToWidget(owner, "*NAME"): a dialog of a view window (not one
+    of its subset windows), or a dialog made on a dialog; None if none."""
     for d in owner.findChildren(XmDialog, name):
-        if not d.destroyed_:
+        if d.destroyed_:
+            continue
+        if isinstance(owner, XmDialog) or d.window_ is owner:
             return d
     return None
+
+
+_find = find_dialog
 
 
 def error_box(parent, text):

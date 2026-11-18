@@ -20,6 +20,12 @@ NOTIFYPROC = ctypes.CFUNCTYPE(None, P, I, P)
 VIEWPROC = ctypes.CFUNCTYPE(None, P)
 EXITPROC = ctypes.CFUNCTYPE(None, I)
 ITEMPROC = ctypes.CFUNCTYPE(None, S)
+# py_graph.c: the calls of a graph view (dialog, op, i, a, b, c, d, text)
+# and the text extents (dialog, text, width, height)
+D = ctypes.c_double
+PD = ctypes.POINTER(ctypes.c_double)
+GRAPHPROC = ctypes.CFUNCTYPE(None, I, I, I, D, D, D, D, S)
+GRAPHTEXTPROC = ctypes.CFUNCTYPE(None, I, S, PD, PD)
 
 PROTOTYPES = {
     # py_api.c
@@ -65,7 +71,32 @@ PROTOTYPES = {
     "PyCbFileQuit": (None, [P]),
     "PyAltReactionName": (S, [P]),
     "PyGotoIndex": (I, [P, P]),
+    # py_graph.c
+    "SetPyGraphProcs": (None, [GRAPHPROC, GRAPHTEXTPROC]),
+    "PyCreateGraph": (P, [P, I]),
+    "PyGraphRealize": (None, [P]),
+    "PyGraphResize": (None, [P, I, I]),
+    "PyGraphExpose": (None, [P]),
+    "PyGraphRepaint": (None, [P]),
+    "PyGraphCalcDone": (None, [P, S]),
+    "PyGraphUpdate": (P, [P, D, D, D, D, PD, P]),
+    "PyGraphFit": (None, [P, ctypes.POINTER(ctypes.c_char),
+                         ctypes.POINTER(ctypes.c_char)]),
+    "PyGraphPsCreate": (P, [P, D, D, D, I]),
+    "PyGraphPsOutput": (I, [P, S, I]),
+    "PyGraphPsFree": (None, [P]),
+    "PyGraphFree": (None, [P]),
     # the core
+    "GetParticleVar": (S, [P, P, P, P]),
+    "SetParticleVar": (None, [P, P, P, P, S]),
+    "GetActiveReactions": (P, [P]),
+    "ValidateReactions": (P, [P, P]),
+    "SetStartupParticle": (None, [P, P, I]),
+    "AddVarDef": (P, [P, S]),
+    "ChangeVarDef": (I, [P, P, I, I]),
+    "SetVarDefStr": (I, [P, P, S, S]),
+    "DelVarDef": (P, [P, P]),
+    "GetVar2": (S, [P, S, S]),
     "CreateDatabase": (P, [S]),
     "CreateDoc": (P, [P]),
     "FreeDoc": (P, [P]),
@@ -91,6 +122,11 @@ def declare(dll):
         f.restype = restype
         f.argtypes = argtypes
 
+
+# Variable definitions (amvars.h)
+VDT_STRING, VDT_INT, VDT_FLOAT = 1, 2, 3
+VDF_REACTIONS, VDF_PARTICLES, VDF_NOEXPORT = 0x0001, 0x0002, 0x0004
+VDFM_APPLY = VDF_REACTIONS | VDF_PARTICLES
 
 # Notifications (amview.h)
 N_ALT, N_NOW, N_SEL, N_SETVAR = 0x0001, 0x0002, 0x0004, 0x0008
