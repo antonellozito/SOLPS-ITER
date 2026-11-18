@@ -6,10 +6,11 @@ closed."""
 
 import os
 
-from ...divgeo.dialogs.base import MessageDialog, find_dialog
+from ...divgeo.dialogs.base import MessageDialog
 from ...divgeo.dialogs.files import FileSelectionDialog, resource_string_ex
 from ..core import lib as corelib
 from . import boxes
+from .boxes import find_dialog
 
 DLG_FILE_OPEN = "dlgFileOpen"
 DLG_FILE_SAVE = "dlgFileSave"

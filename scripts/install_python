@@ -41,7 +41,7 @@ if (! -e "${PY_PREFIX}" ) then   # Check if the local Python installation alread
   echo
   echo Local SOLPS-ITER-specific Python installation not found.
   echo It provides Python ${PYTHON_SERIES} with all the modules needed by the SOLPS-ITER Python tools,
-  echo the graphics of b2plot and of the B2 post-processors and the DivGeo interface included:
+  echo the graphics of b2plot and of the B2 post-processors and the DivGeo and AMDS interfaces included:
   echo "$PYTHON_MODULES:q"
   echo and will take precedence over any other Python installations already existing on this computer.
   echo -n "Do you want to install a local SOLPS-ITER-specific Python installation? It will be downloaded and locally compiled in SOLPSLIB. (y/n) [y] "
@@ -251,7 +251,7 @@ if ( "$PY_OK" == "1" ) then
     echo
     "${PY_BIN}" -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import requirements; sys.exit(requirements.provide_qt_libraries())' "${SOLPSTOP}/lib/python"
     if ( $status != 0 ) then
-      echo Warning: the windows of the b2plot graphics and of DivGeo may not open on this system.
+      echo Warning: the windows of the b2plot graphics, of DivGeo and of AMDS may not open on this system.
     endif
     sleep 1
   endif

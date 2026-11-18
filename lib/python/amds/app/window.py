@@ -304,6 +304,10 @@ class ViewWindow(QtWidgets.QMainWindow):
         self.freed = True
         self.dependents = []
         for child in self.findChildren(QtWidgets.QWidget):
+            if getattr(child, "window_", None) is not self:
+                continue
+            if hasattr(child, "free"):
+                child.free()
             if hasattr(child, "destroyed_"):
                 child.destroyed_ = True
         self.hide()
