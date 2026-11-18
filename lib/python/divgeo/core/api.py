@@ -67,6 +67,8 @@ PROTOTYPES = {
     "ScreenRotate": (None, [P, I, PD, PD]),
     "ScreenX": (I, [P, D]),
     "ScreenY": (I, [P, D]),
+    "RealX": (D, [P, I]),
+    "RealY": (D, [P, I]),
     # Python interface (src/py)
     "CreatePyView": (P, [P, I]),
     "SetPyViewRealized": (None, [P, I]),
@@ -232,9 +234,31 @@ TOOLS = ("TlZoom", "TlMark", "TlExamine", "TlRotate", "TlStretch",
          "TlMirrorNormals", "TlExtChord", "TlAdjustChord")
 
 
+# functions that a library built before them lacks (the Python
+# rasterizer is used then)
+OPTIONAL = {
+    "PyRasterDraw": (ctypes.c_long, [P, I, I, P, ctypes.c_long,
+                                     ctypes.c_long, I, I, I, I, I, I,
+                                     ctypes.c_uint, P, P, P, P, I, P, P, P,
+                                     I, I, I, I]),
+    "PyRasterElemLines": (ctypes.c_long, [P, ctypes.c_long, ctypes.c_long,
+                                          I, I, I, I, P, ctypes.c_long]),
+    "PyRasterAverage": (None, [P, I, I, I, P]),
+    "PySetViewStep": (None, [P, D, D, D, D]),
+    "PyElemSegments": (ctypes.c_long, [P, P, ctypes.c_long]),
+}
+
+
 def declare(dll):
     for name, (restype, argtypes) in PROTOTYPES.items():
         f = getattr(dll, name)
+        f.restype = restype
+        f.argtypes = argtypes
+    for name, (restype, argtypes) in OPTIONAL.items():
+        try:
+            f = getattr(dll, name)
+        except AttributeError:
+            continue
         f.restype = restype
         f.argtypes = argtypes
 

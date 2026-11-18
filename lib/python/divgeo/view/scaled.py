@@ -14,7 +14,7 @@ otherwise; texts are the glyphs of the X font, each pixel a block."""
 import numpy as np
 from PySide6 import QtGui
 
-from . import modes, raster
+from . import raster, themes
 
 
 def frame(x0, y0, x1, y1, width):
@@ -73,6 +73,27 @@ class Scaled(raster.Raster):
     def _pos(self, v):
         return np.asarray(v, np.float64) * self.F - 0.5
 
+    def _fine(self, v):
+        return self._pos(v)
+
+    @property
+    def C_SCALE(self):
+        return (1, self.F, self.dpr, self.ss)
+
+    def _text_pixels(self, k, recs, text):
+        s = recs["s"]
+        F = self.F
+        off, length = int(recs["i"][k]), int(recs["j"][k])
+        t = text[off:off + max(length, 0)].decode("latin-1")
+        if self.res.get("modernText"):
+            return themes.text_pixels(raster._i16(s[k, 0]) * F,
+                                      raster._i16(s[k, 1]) * F, t, F)
+        gx, gy = raster.text_pixels(raster._i16(s[k, 0]),
+                                    raster._i16(s[k, 1]), t)
+        bx, by = np.meshgrid(np.arange(F), np.arange(F))
+        return ((gx[:, None] * F + bx.ravel()[None, :]).ravel(),
+                (gy[:, None] * F + by.ravel()[None, :]).ravel())
+
     def _run(self, idx, recs, text, is_line, function, fg, width):
         s = recs["s"]
         ops = recs["op"]
@@ -83,11 +104,11 @@ class Scaled(raster.Raster):
             e = self._pos(s[lines])
             dev = np.where(width[lines] == 0, 1, width[lines] * self.dpr)
             thin = (width[lines] == 0) & (self.ss == 1)
-            px, py, counts = self._lines(e, dev * self.ss, thin)
-            keys.append(np.repeat(lines, counts))
+            px, py, line_of = self._lines(e, dev * self.ss, thin)
+            keys.append(lines[line_of])
             xs.append(px)
             ys.append(py)
-            colors.append(np.repeat(fg[lines], counts))
+            colors.append(fg[lines][line_of])
         for k in idx[~is_line[idx]]:
             op = chr(ops[k])
             w = (int(width[k]) * self.dpr or 1) * self.ss
@@ -97,11 +118,17 @@ class Scaled(raster.Raster):
             elif op == "T":
                 off, length = int(recs["i"][k]), int(recs["j"][k])
                 t = text[off:off + max(length, 0)].decode("latin-1")
-                gx, gy = raster.text_pixels(raster._i16(s[k, 0]),
-                                            raster._i16(s[k, 1]), t)
-                bx, by = np.meshgrid(np.arange(F), np.arange(F))
-                px = (gx[:, None] * F + bx.ravel()[None, :]).ravel()
-                py = (gy[:, None] * F + by.ravel()[None, :]).ravel()
+                if self.res.get("modernText"):
+                    # drawn at the fine resolution (smooth edges)
+                    px, py = themes.text_pixels(
+                        raster._i16(s[k, 0]) * F, raster._i16(s[k, 1]) * F,
+                        t, F)
+                else:
+                    gx, gy = raster.text_pixels(raster._i16(s[k, 0]),
+                                                raster._i16(s[k, 1]), t)
+                    bx, by = np.meshgrid(np.arange(F), np.arange(F))
+                    px = (gx[:, None] * F + bx.ravel()[None, :]).ravel()
+                    py = (gy[:, None] * F + by.ravel()[None, :]).ravel()
             else:
                 cx, cy = self._pos(s[k, :2])
                 px, py = ring(cx, cy, s[k, 2] * F, s[k, 3] * F, w)
@@ -111,26 +138,14 @@ class Scaled(raster.Raster):
             colors.append(np.full(len(px), fg[k], np.uint32))
         if not keys:
             return
-        key = np.concatenate(keys)
-        order = np.argsort(key, kind="stable")
-        px = np.concatenate(xs)[order]
-        py = np.concatenate(ys)[order]
-        col = np.concatenate(colors).astype(np.uint32)[order]
-        ok = (px >= 0) & (px < self.w) & (py >= 0) & (py < self.h)
-        flat = py[ok] * self.w + px[ok]
-        img = self.img.reshape(-1)
-        if function == modes.XOR:
-            np.bitwise_xor.at(img, flat, col[ok])
-        else:
-            rev = flat[::-1]
-            _, first = np.unique(rev, return_index=True)
-            img[rev[first]] = raster.OPAQUE | col[ok][::-1][first]
+        self._put(np.concatenate(keys), np.concatenate(xs),
+                  np.concatenate(ys), np.concatenate(colors), function)
 
     def _lines(self, e, widths, thin):
         """Lines between fine positions: Bresenham lines for the thin ones
         without supersampling, wide lines (with a dot for a zero length)
-        otherwise."""
-        counts = np.zeros(len(e), np.int64)
+        otherwise. The pixels and the line of each (position in e), in no
+        particular order."""
         parts = []
         if np.any(thin):
             t = np.nonzero(thin)[0]
@@ -151,28 +166,39 @@ class Scaled(raster.Raster):
                 c = np.floor(e[dots, :2] + 0.5).astype(np.int64)
                 parts.append((dots, c[:, 0], c[:, 1],
                               np.ones(len(dots), np.int64)))
-        # back to the order of the lines
         line_of = np.concatenate([np.repeat(p[0], p[3]) for p in parts])
-        out_x = np.concatenate([p[1] for p in parts])
-        out_y = np.concatenate([p[2] for p in parts])
-        order = np.argsort(line_of, kind="stable")
-        np.add.at(counts, line_of, 1)
-        return out_x[order], out_y[order], counts
+        return (np.concatenate([p[1] for p in parts]),
+                np.concatenate([p[2] for p in parts]), line_of)
 
     def image(self):
         """The picture at the resolution of the device (QImage with its
         device pixel ratio)."""
         img = self.img
-        if self.ss > 1:
-            ss = self.ss
+        if self.ss > 1 and raster.CLIB is not None:
             h, w = img.shape
-            b = img.reshape(h // ss, ss, w // ss, ss)
-            r = ((b >> 16) & 255).mean(axis=(1, 3))
-            g = ((b >> 8) & 255).mean(axis=(1, 3))
-            bl = (b & 255).mean(axis=(1, 3))
-            out = (raster.OPAQUE | (np.rint(r).astype(np.uint32) << 16)
-                   | (np.rint(g).astype(np.uint32) << 8)
-                   | np.rint(bl).astype(np.uint32))
+            out = np.empty((h // self.ss, w // self.ss), np.uint32)
+            raster.CLIB.PyRasterAverage(img.ctypes.data, w, h, self.ss,
+                                        out.ctypes.data)
+        elif self.ss > 1:
+            # the mean of each block and channel in integers, rounded half
+            # to even as np.rint (the bytes of 0xFFRRGGBB in little-endian
+            # order: B, G, R, A)
+            ss = self.ss
+            n = ss * ss
+            h, w = img.shape
+            b = img.astype("<u4", copy=False).view(np.uint8).reshape(
+                h, w, 4)[..., :3]
+            total = np.zeros((h // ss, w // ss, 3), np.uint16)
+            for dy in range(ss):
+                for dx in range(ss):
+                    total += b[dy::ss, dx::ss]
+            q, r = np.divmod(total, n)
+            up = (2 * r > n) | ((2 * r == n) & (q % 2 == 1))
+            out = np.empty((h // ss, w // ss), "<u4")
+            o = out.view(np.uint8).reshape(h // ss, w // ss, 4)
+            o[..., :3] = q + up
+            o[..., 3] = 255
+            out = out.astype(np.uint32, copy=False)
         else:
             out = img
         self._shown = np.ascontiguousarray(out)

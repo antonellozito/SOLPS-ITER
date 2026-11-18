@@ -19,7 +19,9 @@ from . import raster, scaled
 
 # Renderers (resource DivGeo*draw.renderer): "x" the pixels of the X
 # server, one pixel per pixel of the window; "hidpi" the same drawing at
-# the resolution of the device; "smooth" also with smoothed edges; "auto"
+# the resolution of the device, "smooth" at the resolution of the window,
+# both with smoothed edges (drawn at twice the resolution and averaged);
+# "auto"
 # (default) hidpi on high-resolution screens (HIDPI_RATIO device pixels per
 # pixel of the window or more), smooth on the others, chosen again when
 # the window moves to another screen
@@ -33,14 +35,27 @@ class Canvas(QtWidgets.QWidget):
     def __init__(self, window, res, renderer="auto"):
         super().__init__(window)
         self.setObjectName("draw")
+        # a click gives it the keys (the keys that move the view)
+        self.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.window_ = window
         self.res = res
         self.renderer = renderer
         self.raster = self._new_raster(1, 1)
         self.image = None
+        self.dirty = True
         self.mouse_inside = False
         self.pressed = 0
         self.manual_refresh = False
+        # wheel zoom and key pan: the picture shown moved at once (a
+        # transform of the image), the view of the core changed and drawn
+        # again at the next turn of the event loop (the steps that arrived
+        # meanwhile together: one picture per frame)
+        self.preview = None
+        self.preview_pending = False
+        self.preview_timer = QtCore.QTimer(self)
+        self.preview_timer.setSingleShot(True)
+        self.preview_timer.setInterval(0)
+        self.preview_timer.timeout.connect(self._commit_preview)
         self._expose_posted = False
         self.expose_timer = QtCore.QTimer(self)
         self.expose_timer.setSingleShot(True)
@@ -63,15 +78,19 @@ class Canvas(QtWidgets.QWidget):
             kind = "hidpi" if dpr >= HIDPI_RATIO else "smooth"
         if kind == "x":
             return ("x", 1, 1)
-        return (kind, max(1, int(round(dpr))), 2 if kind == "smooth" else 1)
+        return (kind, max(1, int(round(dpr))), 2)
 
     def _new_raster(self, width, height):
         self.chosen = self._choice()
         kind, dpr, ss = self.chosen
         squares = bool(self.res["bUseSquares"])
         if kind == "x":
-            return raster.Raster(self.res, width, height, squares)
-        return scaled.Scaled(self.res, width, height, squares, dpr, ss)
+            r = raster.Raster(self.res, width, height, squares)
+        else:
+            r = scaled.Scaled(self.res, width, height, squares, dpr, ss)
+        if self.window_.has_elem_segments():
+            r.fill_source = self.window_.elem_segments
+        return r
 
     def event(self, event):
         """Another screen or another resolution: the renderer of the new
@@ -82,6 +101,7 @@ class Canvas(QtWidgets.QWidget):
                 and self._choice() != self.chosen:
             old = self.raster
             self.raster = self._new_raster(self.width(), self.height())
+            self.dirty = True
             self.raster.function = old.function
             self.raster.fg = old.fg
             self.raster.width = old.width
@@ -90,6 +110,11 @@ class Canvas(QtWidgets.QWidget):
         return super().event(event)
 
     def _image(self):
+        """The picture as a QImage, made again only after the raster
+        changed (a repaint of the widget alone reuses it)."""
+        if self.image is not None and not self.dirty:
+            return self.image
+        self.dirty = False
         if isinstance(self.raster, scaled.Scaled):
             self.image = self.raster.image()
             return self.image
@@ -101,12 +126,48 @@ class Canvas(QtWidgets.QWidget):
     def draw_records(self, recs, text, view_id):
         self.raster.draw(recs, text, view_id, PYF_HLMODE, PYF_HIDDEN,
                          PYF_CLIPPED)
+        self.dirty = True
+        if self.preview_pending:     # the picture of the new view
+            self.preview = None
+            self.preview_pending = False
         self.update()
 
     def paintEvent(self, event):
         p = QtGui.QPainter(self)
+        if self.preview is not None:
+            bg = self.res["pxBackground"]
+            p.fillRect(self.rect(), QtGui.QColor((bg >> 16) & 255,
+                                                 (bg >> 8) & 255, bg & 255))
+            p.setTransform(self.preview)
         p.drawImage(0, 0, self._image())
         p.end()
+
+    def move_preview(self, transform):
+        """A step of the wheel or of a key (transform of the positions of
+        the area): the picture shown moved at once, the view changed and
+        drawn again at the next turn of the event loop."""
+        if not self.window_.app:
+            return
+        self.preview = transform if self.preview is None \
+            else self.preview * transform
+        self.preview_pending = False
+        self.update()
+        if not self.preview_timer.isActive():
+            self.preview_timer.start()
+
+    def _commit_preview(self):
+        if self.preview is not None:
+            self.preview_pending = True
+            self.window_.apply_view_transform(self.preview)
+            # no picture of the new view (view unchanged): back to the
+            # picture as it is
+            QtCore.QTimer.singleShot(1000, self._drop_preview)
+
+    def _drop_preview(self):
+        if self.preview_pending:
+            self.preview = None
+            self.preview_pending = False
+            self.update()
 
     def snapshot(self):
         """The picture as 0xRRGGBB values (numpy array)."""
@@ -120,11 +181,41 @@ class Canvas(QtWidgets.QWidget):
         size = event.size()
         old = event.oldSize()
         self.raster.resize(size.width(), size.height(), keep=True)
+        self.dirty = True
         self.window_.resized(size.width(), size.height())
         if size.width() > old.width() or size.height() > old.height():
             self.post_expose()
 
     def showEvent(self, event):
+        self.post_expose()
+
+    WHEEL_STEP = 1.2    # zoom factor per notch of the mouse wheel
+
+    def focusOutEvent(self, event):
+        """The keys of the pan released with the focus."""
+        self.window_.stop_pan()
+        super().focusOutEvent(event)
+
+    def wheelEvent(self, event):
+        """The mouse wheel zooms around the point under the mouse
+        (forward: in)."""
+        notches = event.angleDelta().y() / 120.0
+        if notches:
+            pos = event.position()
+            f = self.WHEEL_STEP ** notches
+            x, y = pos.x(), pos.y()
+            self.move_preview(QtGui.QTransform(f, 0, 0, f, x - f * x,
+                                               y - f * y))
+        event.accept()
+
+    def set_res(self, res):
+        """Other colours (Window > Theme): the area cleared in its new
+        background and drawn again after an exposure."""
+        self.res = res
+        self.raster.res = res
+        self.raster.clear()
+        self.dirty = True
+        self.update()
         self.post_expose()
 
     def moveEvent(self, event):

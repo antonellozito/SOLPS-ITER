@@ -13,9 +13,12 @@ that the Motif view draws on:
 
 The picture is a numpy array of uint32 (0xFFRRGGBB), shown as a QImage."""
 
-import numpy as np
+import ctypes
 
-from . import fixedfont, modes
+import numpy as np
+from PySide6 import QtCore, QtGui
+
+from . import fixedfont, modes, themes
 
 # Octants with an error bias for zero-width lines (none: the X server of the
 # references draws plain Bresenham lines; flags: 4 x decreasing, 2 y
@@ -27,6 +30,20 @@ _EPS_X = 1e-6
 _EPS_Y = 1e-9
 
 OPAQUE = np.uint32(0xFF000000)
+
+# the rasterizer of the library (src/py/py_raster.c), when it has one
+CLIB = None
+
+
+def use_library(dll):
+    """The rasterizer of the library for every picture, if it has one (a
+    library built before it: the rasterizer of this module)."""
+    global CLIB
+    try:
+        dll.PyRasterDraw
+        CLIB = dll
+    except AttributeError:
+        CLIB = None
 
 
 def _i16(v):
@@ -198,9 +215,40 @@ def ellipse_pixels(x, y, w, h):
     return flat % 70000, flat // 70000
 
 
+def _clip(poly, x0, y0, x1, y1):
+    """A polygon clipped to a rectangle (Sutherland-Hodgman), so that a
+    view zoomed far in never gives the painter coordinates it cannot
+    handle."""
+    pts = [tuple(p) for p in poly]
+    for axis, bound, keep_low in ((0, x0, False), (0, x1, True),
+                                  (1, y0, False), (1, y1, True)):
+        if not pts:
+            break
+        out = []
+        for i, cur in enumerate(pts):
+            prev = pts[i - 1]
+            cin = cur[axis] <= bound if keep_low else cur[axis] >= bound
+            pin = prev[axis] <= bound if keep_low else prev[axis] >= bound
+            if cin != pin:
+                t = (bound - prev[axis]) / (cur[axis] - prev[axis])
+                out.append(tuple(prev[a] + t * (cur[a] - prev[a])
+                                 for a in (0, 1)))
+            if cin:
+                out.append(cur)
+        pts = out
+    return pts
+
+
 class Raster:
     """The picture of one view and the graphics context of its drawing
     area."""
+
+    # light and dark themes: the elements of the model as screen segments
+    # for the fill of their closed parts (set by the canvas when the
+    # library gives them; else the element lines of the records), and a
+    # repaint of the whole view coming without a clear (an exposure)
+    fill_source = None
+    fill_next = False
 
     def __init__(self, res, width, height, use_squares):
         self.res = res
@@ -227,6 +275,10 @@ class Raster:
     def draw(self, recs, text, view, hl_flag, hidden_flag, clipped_flag):
         """Draws the records of this view (structured array of the library
         records, in order) with the graphics context the records set."""
+        if CLIB is not None:
+            self._draw_c(recs, text, view, hl_flag, hidden_flag,
+                         clipped_flag)
+            return
         recs = recs[(recs["view"] == view) & ((recs["flags"] & hidden_flag)
                                               == 0)]
         if not len(recs):
@@ -242,22 +294,33 @@ class Raster:
         width = np.full(n, self.width, np.int64)
         mode_idx = np.nonzero(is_mode)[0]
         if len(mode_idx):
-            known = {}
+            # the context of each different mode once; a mode without one
+            # keeps the context before it (the last mode with one, else
+            # the context carried over)
+            code = (recs["i"][mode_idx].astype(np.int64) * 2
+                    + ((recs["flags"][mode_idx] & hl_flag) != 0))
+            codes, which = np.unique(code, return_inverse=True)
+            table = [modes.gc(self.res, int(c) >> 1, bool(c & 1))
+                     for c in codes]
             state = (self.function, self.fg, self.width)
-            gcs = []
-            for m in mode_idx:
-                key = (int(recs["i"][m]), bool(recs["flags"][m] & hl_flag))
-                if key not in known:
-                    known[key] = modes.gc(self.res, key[0], key[1])
-                if known[key] is not None:
-                    state = known[key]
-                gcs.append(state)
+            known = np.array([g is not None for g in table])
+            src = np.maximum.accumulate(
+                np.where(known[which], np.arange(len(mode_idx)), -1))
+            ctx = [g if g is not None else state for g in table]
+            pick = which[np.maximum(src, 0)]
+            gf = np.where(src >= 0, np.array([g[0] for g in ctx],
+                                             np.int64)[pick], state[0])
+            gcol = np.where(src >= 0, np.array([g[1] for g in ctx],
+                                             np.uint32)[pick], state[1])
+            gw = np.where(src >= 0, np.array([g[2] for g in ctx],
+                                             np.int64)[pick], state[2])
             after = last >= 0
             pos = np.searchsorted(mode_idx, last[after])
-            func[after] = np.array([g[0] for g in gcs], np.int64)[pos]
-            fg[after] = np.array([g[1] for g in gcs], np.uint32)[pos]
-            width[after] = np.array([g[2] for g in gcs], np.int64)[pos]
-            self.function, self.fg, self.width = gcs[-1]
+            func[after] = gf[pos]
+            fg[after] = gcol[pos]
+            width[after] = gw[pos]
+            if src[-1] >= 0:
+                self.function, self.fg, self.width = table[which[src[-1]]]
 
         clipped = (recs["flags"] & clipped_flag) != 0
         is_line = ((ops == ord("L")) | (ops == ord("l"))) & ~clipped
@@ -274,12 +337,184 @@ class Raster:
         cut[1:] = (f[1:] != f[:-1]) | is_clear[prim][1:] | is_clear[prim][:-1]
         starts = np.nonzero(cut)[0]
         ends = np.append(starts[1:], len(prim))
+        fill = self.res.get("pxFill")
+        model = fill is not None and self.fill_source is not None
+        if model and self.fill_next:
+            self._fill_model(fill)
+        self.fill_next = False
+        if fill is not None and not model:
+            # the lines drawing elements (mode VM1_ELEM, not highlighted)
+            at = np.maximum(last, 0)
+            elem_line = ((ops == ord("L")) | (ops == ord("l"))) & \
+                (last >= 0) & (recs["i"][at] == modes.VM1_ELEM) & \
+                ((recs["flags"][at] & hl_flag) == 0)
+            clears = np.append(np.nonzero(is_clear)[0], n)
+            # before the first clear too: a repaint after an exposure
+            # comes without a clear (the area was cleared by the exposure)
+            sel = np.nonzero(elem_line[:clears[0]])[0]
+            if len(sel):
+                self._fill_closed(recs["s"][sel], fill)
         for a, b in zip(starts, ends):
             idx = prim[a:b]
             if is_clear[idx[0]]:
                 self.clear()
+                if model:
+                    self._fill_model(fill)
+                elif fill is not None:
+                    end = clears[np.searchsorted(clears, idx[0], "right")]
+                    sel = idx[0] + np.nonzero(elem_line[idx[0]:end])[0]
+                    self._fill_closed(recs["s"][sel], fill)
             else:
                 self._run(idx, recs, text, is_line, func[idx[0]], fg, width)
+
+    def _gc_table(self, hl_flag):
+        """The graphics context of every mode, without and with highlight
+        (modes.gc), for the rasterizer of the library: valid, function,
+        colour, width, index 2 * mode + highlight."""
+        if getattr(self, "_gc_res", None) is not self.res or \
+                self._gc_hl != hl_flag:
+            n = modes.VMX12_MESHELEMENT + 1
+            valid = np.zeros(2 * n, np.int32)
+            func = np.zeros(2 * n, np.int32)
+            fg = np.zeros(2 * n, np.uint32)
+            wd = np.zeros(2 * n, np.int32)
+            for m in range(n):
+                for hl in (0, 1):
+                    g = modes.gc(self.res, m, bool(hl))
+                    if g is not None:
+                        valid[2 * m + hl] = 1
+                        func[2 * m + hl], fg[2 * m + hl], wd[2 * m + hl] = g
+            self._gc_tab = (n, valid, func, fg, wd)
+            self._gc_res, self._gc_hl = self.res, hl_flag
+        return self._gc_tab
+
+    def _draw_c(self, recs, text, view, hl_flag, hidden_flag, clipped_flag):
+        """draw by the rasterizer of the library: the records walked in C,
+        texts and (light and dark themes) the closed parts of the elements
+        here."""
+        recs = np.ascontiguousarray(recs)
+        n = len(recs)
+        if not n:
+            return
+        nm, valid, func, fg, wd = self._gc_table(hl_flag)
+        st_f = ctypes.c_int(int(self.function))
+        st_c = ctypes.c_uint(int(self.fg))
+        st_w = ctypes.c_int(int(self.width))
+        fill = self.res.get("pxFill")
+        args = (view, hidden_flag, clipped_flag, hl_flag,
+                int(bool(self.use_squares)), int(fill is not None),
+                int(self.res["pxBackground"]), valid.ctypes.data,
+                func.ctypes.data, fg.ctypes.data, wd.ctypes.data, nm,
+                ctypes.byref(st_f), ctypes.byref(st_c),
+                ctypes.byref(st_w)) + tuple(self.C_SCALE)
+        model = fill is not None and self.fill_source is not None
+        if model and self.fill_next:
+            self._fill_model(fill)
+        elif fill is not None and not model:
+            self._fill_from(recs, 0, view, hl_flag, hidden_flag, fill)
+        self.fill_next = False
+        k = 0
+        while True:
+            k = CLIB.PyRasterDraw(self.img.ctypes.data, self.w, self.h,
+                                  recs.ctypes.data, n, k, *args)
+            if k >= n:
+                break
+            if recs["op"][k] == ord("T"):
+                px, py = self._text_pixels(k, recs, text)
+                self._put(np.full(len(px), k), px, py,
+                          np.full(len(px), st_c.value, np.uint32),
+                          st_f.value)
+            else:
+                self.clear()
+                if model:
+                    self._fill_model(fill)
+                else:
+                    self._fill_from(recs, k, view, hl_flag, hidden_flag,
+                                    fill)
+            k += 1
+        self.function, self.fg, self.width = (st_f.value, st_c.value,
+                                              st_w.value)
+
+    def _fill_model(self, colour):
+        """The closed parts of the elements of the model (fill_source:
+        all elements, whatever the view shows of them)."""
+        segs = self.fill_source()
+        if segs is not None and len(segs):
+            self._fill_closed(segs, colour)
+
+    def _fill_from(self, recs, start, view, hl_flag, hidden_flag, colour):
+        n = len(recs)
+        out = np.empty((max(n, 1), 4), np.float64)
+        m = CLIB.PyRasterElemLines(recs.ctypes.data, n, start, view,
+                                   hidden_flag, hl_flag, modes.VM1_ELEM,
+                                   out.ctypes.data, n)
+        if m:
+            self._fill_closed(out[:m], colour)
+
+    def _fine(self, v):
+        """Screen positions as positions of the picture."""
+        return np.asarray(v, np.float64)
+
+    def _fill_closed(self, s, colour):
+        """Light and dark themes: the closed polygons of the element lines
+        s (screen positions x1, y1, x2, y2) drawn after a clear, all but
+        the outermost (largest), filled under everything drawn after."""
+        if len(s) < 3:
+            return
+        ends = np.round(np.asarray(s, np.float64)[:, :4] * 1000).astype(
+            np.int64)
+        adj = {}
+        for e, (x1, y1, x2, y2) in enumerate(ends):
+            if (x1, y1) != (x2, y2):
+                adj.setdefault((x1, y1), []).append((e, (x2, y2)))
+                adj.setdefault((x2, y2), []).append((e, (x1, y1)))
+        used, loops = set(), []
+        for e0, (x1, y1, x2, y2) in enumerate(ends):
+            if e0 in used or (x1, y1) == (x2, y2):
+                continue
+            used.add(e0)
+            start, cur, path = (x1, y1), (x2, y2), [(x1, y1), (x2, y2)]
+            while cur != start:
+                step = [(e, k) for e, k in adj[cur] if e not in used]
+                if not step:
+                    break
+                used.add(step[0][0])
+                cur = step[0][1]
+                path.append(cur)
+            if cur == start and len(path) > 3:
+                loops.append(np.array(path[:-1], np.float64) / 1000.0)
+        if len(loops) < 2:
+            return
+        area = [abs(np.dot(p[:, 0], np.roll(p[:, 1], -1))
+                    - np.dot(p[:, 1], np.roll(p[:, 0], -1))) for p in loops]
+        outer = int(np.argmax(area))
+        mask = QtGui.QImage(self.w, self.h, QtGui.QImage.Format_Grayscale8)
+        mask.fill(0)
+        p = QtGui.QPainter(mask)
+        p.setPen(QtCore.Qt.NoPen)
+        p.setBrush(QtGui.QColor(255, 255, 255))
+        for k, loop in enumerate(loops):
+            if k != outer:
+                f = _clip(self._fine(loop), -4.0, -4.0, self.w + 4.0,
+                          self.h + 4.0)
+                if len(f) > 2:
+                    p.drawPolygon(QtGui.QPolygonF(
+                        [QtCore.QPointF(x, y) for x, y in f]))
+        p.end()
+        m = np.frombuffer(mask.constBits(), np.uint8).reshape(
+            self.h, mask.bytesPerLine())[:, :self.w]
+        self.img[m != 0] = OPAQUE | np.uint32(colour)
+
+    # the picture for the rasterizer of the library: scaled, f, dpr, ss
+    C_SCALE = (0, 1, 1, 1)
+
+    def _text_pixels(self, k, recs, text):
+        s = recs["s"]
+        off, length = int(recs["i"][k]), int(recs["j"][k])
+        t = text[off:off + max(length, 0)].decode("latin-1")
+        if self.res.get("modernText"):
+            return themes.text_pixels(_i16(s[k, 0]), _i16(s[k, 1]), t)
+        return text_pixels(_i16(s[k, 0]), _i16(s[k, 1]), t)
 
     def _run(self, idx, recs, text, is_line, function, fg, width):
         """The pixels of the primitives of one run, in drawing order."""
@@ -320,7 +555,11 @@ class Raster:
             elif op == "T":
                 off, length = int(recs["i"][k]), int(recs["j"][k])
                 t = text[off:off + max(length, 0)].decode("latin-1")
-                px, py = text_pixels(_i16(s[k, 0]), _i16(s[k, 1]), t)
+                if self.res.get("modernText"):
+                    px, py = themes.text_pixels(_i16(s[k, 0]),
+                                                _i16(s[k, 1]), t)
+                else:
+                    px, py = text_pixels(_i16(s[k, 0]), _i16(s[k, 1]), t)
             else:
                 wh, h = int(s[k, 2]), int(s[k, 3])
                 px, py = ellipse_pixels(_i16(int(s[k, 0]) - wh),
@@ -332,18 +571,26 @@ class Raster:
             colors.append(np.full(len(px), fg[k], np.uint32))
         if not keys:
             return
-        key = np.concatenate(keys)
-        order = np.argsort(key, kind="stable")
-        px = np.concatenate(xs)[order]
-        py = np.concatenate(ys)[order]
-        col = np.concatenate(colors).astype(np.uint32)[order]
+        self._put(np.concatenate(keys), np.concatenate(xs),
+                  np.concatenate(ys), np.concatenate(colors), function)
+
+    def _put(self, key, px, py, col, function):
+        """The pixels of a run (key: the record drawing each pixel, the
+        records in drawing order). XOR in any order, as XOR commutes;
+        otherwise the last write of a pixel wins: the record with the
+        highest key, found through an image of keys."""
         ok = (px >= 0) & (px < self.w) & (py >= 0) & (py < self.h)
         flat = py[ok] * self.w + px[ok]
         img = self.img.reshape(-1)
+        col = col[ok].astype(np.uint32)
         if function == modes.XOR:
-            np.bitwise_xor.at(img, flat, col[ok])
-        else:
-            # the last write of a pixel wins
-            rev = flat[::-1]
-            _, first = np.unique(rev, return_index=True)
-            img[rev[first]] = OPAQUE | col[ok][::-1][first]
+            np.bitwise_xor.at(img, flat, col)
+            return
+        key = key[ok].astype(np.int32)
+        keys = getattr(self, "_keys", None)
+        if keys is None or keys.size != img.size:
+            keys = self._keys = np.full(img.size, -1, np.int32)
+        np.maximum.at(keys, flat, key)
+        last = keys[flat] == key
+        img[flat[last]] = OPAQUE | col[last]
+        keys[flat] = -1
