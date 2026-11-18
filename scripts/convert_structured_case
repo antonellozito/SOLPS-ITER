@@ -18,7 +18,10 @@
 # run directories: b2fstate (as b2fstati), the boundary, neutrals and feedback
 #   parameter files, fort.1 (EIRENE input), fort.33-35 and the history files
 #   b2time.nc, b2batch.nc, b2tallies.nc, b2movies.nc and eirenemovies.nc are
-#   converted by b2us; the other files are copied, except the output files of
+#   converted by b2us (with the midplane columns of the structured run,
+#   b2mwti_jxa and b2mwti_jxi, unless b2mn.dat sets b2us_auto_midplane_det,
+#   so that the midplane profiles are kept); the other files are copied,
+#   except the output files of
 #   the structured code (b2fplasma, b2fplasmf, balance.nc, fort.44, fort.46,
 #   EIRENE work files, ...) and the tracing files intshrt.trc, sepdata.trc,
 #   user.trc and user_SPb.trc, whose layout differs in the unstructured code
@@ -30,7 +33,8 @@
 #   set them.
 #   Each run is then run once for one time step with
 #   b2mndt_rxf 0, which does not change the plasma state, and with
-#   b2mndr_stim -1, which keeps the time of b2fstati, so that b2fstate,
+#   b2mndr_stim -1, which keeps the time of b2fstati, and without an end
+#   time (b2mndr_etim 0), so that b2fstate,
 #   b2fplasma, balance.nc, fort.44, fort.46 and the other output files are
 #   written by the unstructured code. The history files, the tracing files and
 #   b2mn.dat are put back as they were before this step, so the histories end
@@ -44,21 +48,31 @@ die() { echo "convert_structured_case: $*" >&2; exit 1; }
 
 mode=""
 np=""
-while getopts "m:t:h" opt; do
-  case $opt in
-    m) mode=mpi; np=$OPTARG ;;
-    t) mode=omp; np=$OPTARG ;;
-    h) sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) die "unknown option (see -h)" ;;
-  esac
+arg=""
+# ..options before or after the case folder
+while [ $# -gt 0 ]; do
+  OPTIND=1
+  while getopts "m:t:h" opt; do
+    case $opt in
+      m) mode=mpi; np=$OPTARG ;;
+      t) mode=omp; np=$OPTARG ;;
+      h) sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      *) die "unknown option (see -h)" ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  if [ $# -gt 0 ]; then
+    [ -z "$arg" ] || die "more than one case folder: $arg $1"
+    arg=$1
+    shift
+  fi
 done
-shift $((OPTIND-1))
 if [ -n "$mode" ]; then
   case $np in ''|*[!0-9]*) die "-m and -t need a number of processes or threads" ;; esac
 fi
 
 [ -n "${SOLPSTOP:-}" ] || die "SOLPSTOP is not set: source setup.csh first"
-src=$(cd "${1:-.}" 2>/dev/null && pwd) || die "no folder ${1:-.}"
+src=$(cd "${arg:-.}" 2>/dev/null && pwd) || die "no folder ${arg:-.}"
 MAKE=${MAKE:-gmake}
 b2obj=$SOLPSTOP/modules/B2.5/builds/couple_SOLPS-ITER.${HOST_NAME}.${COMPILER}
 [ -x "$b2obj/b2us.exe" ] || die "no $b2obj/b2us.exe: build b25eirene first"
@@ -161,10 +175,18 @@ warn_defaults() {   # warn_defaults <b2mn.dat> <run>
       echo "$2: b2mn.dat does not set '$n': default $s in the structured code, $u in the unstructured code"
   done
 }
+# ..b2us takes the midplane columns of the structured run (get_jsep, with
+#   b2mwti_jxa and b2mwti_jxi), so that the midplane profiles of b2time.nc
+#   are kept; only in the copy of b2mn.dat given to b2us
+midplane_of_run() {
+  grep -q "^[[:space:]]*'b2us_auto_midplane_det'" "$1" || \
+    set_switch "$1" b2us_auto_midplane_det 0
+}
 set_switch() {   # set_switch <b2mn.dat> <switch> <value>
   if grep -q "^'$2'" "$1"; then
     sed -i.sav "s/^'$2'\([[:space:]]*\)'[^']*'/'$2'\1'$3'/" "$1" && rm -f "$1.sav"
   else
+    [ -n "$(tail -c 1 "$1")" ] && echo >> "$1"
     echo "'$2' '$3'" >> "$1"
   fi
 }
@@ -173,6 +195,7 @@ set_switch() {   # set_switch <b2mn.dat> <switch> <value>
 echo "baserun: converting with b2us"
 new_convert
 cp "$sb/b2fgmtry" "$sb/b2fpardf" "$src/$first/b2mn.dat" "$c/"
+midplane_of_run "$c/b2mn.dat"
 [ -f "$sb/b2.user.parameters" ] && cp "$sb/b2.user.parameters" "$c/"
 [ -f "$sb/input.dat" ] && cp "$sb/input.dat" "$c/"
 for n in 33 34 35; do [ -f "$sb/fort.$n" ] && cp "$sb/fort.$n" "$c/"; done
@@ -221,6 +244,7 @@ for r in $runs; do
   echo "$r: converting with b2us"
   new_convert
   cp "$sb/b2fgmtry" "$sb/b2fpardf" "$sr/b2mn.dat" "$c/"
+  midplane_of_run "$c/b2mn.dat"
   for f in b2.boundary.parameters b2.neutrals.parameters \
            b2.feedback_control.parameters b2.feedback_save.parameters b2faveri; do
     [ -f "$sr/$f" ] && cp "$sr/$f" "$c/"
@@ -296,6 +320,7 @@ for r in $runs; do
   ls -A "$dr" > "$keep/.before"
   set_switch "$dr/b2mn.dat" b2mndr_ntim 1
   set_switch "$dr/b2mn.dat" b2mndr_stim -1.0
+  set_switch "$dr/b2mn.dat" b2mndr_etim 0.0
   set_switch "$dr/b2mn.dat" b2mndt_rxf 0.0
   (cd "$dr" && b2run $sflag "${popts[@]}" b2mn) > "$work/step.log" 2>&1
   { echo; echo "===== one time step with b2mndt_rxf 0"; cat "$work/step.log"; } >> "$dr/conversion.log"
