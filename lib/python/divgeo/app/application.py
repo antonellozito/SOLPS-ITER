@@ -6,6 +6,7 @@ compiled into the library (x_~fbr.c), then the command line. The logo
 (resources/logo.png) is the icon of the program."""
 
 import ctypes
+import locale
 import os
 import sys
 
@@ -38,6 +39,9 @@ class Application:
         self.dll = library.dll
         self.qt = qt_app or QtWidgets.QApplication.instance() or \
             QtWidgets.QApplication(["DivGeo"])
+        # Qt takes the number format of the environment (a decimal comma in
+        # German); the core reads and writes numbers as in the C locale
+        locale.setlocale(locale.LC_NUMERIC, "C")
         rest, self.name, cmdline = options.parse(list(argv))
         self.db = resources.Database()
         for line in library.resources():
