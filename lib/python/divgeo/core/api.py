@@ -115,7 +115,7 @@ PROTOTYPES = {
     "PyVarFromVarSetDef": (I, [P]),
     "PyVarIsLayerIndex": (I, [P]),
     "PyAutosave": (I, [P]),
-    "PyCbFileOutput": (None, [P, S, S]),
+    "PyCbFileOutput": (None, [P, S, S, S]),
     # Dialogs (src/py/py_dlgs.c)
     "PyRotMoveRotate": (P, [P, I, I]),
     "PyRotMoveMove": (P, [P, D, D, D, I, I]),
@@ -283,7 +283,7 @@ SHW_EQUIL, SHW_SURFACES, SHW_GRIDPOINTS, SHW_MESH = 0x100, 0x200, 0x400, \
 SHW_SOURCES, SHW_CHORDS = 0x4000, 0x8000
 DGLAW_NORMAL, DGLAW_FLIPPED, DGLAW_2ALPHA, DGLAW_SYMMETRIC, DGLAW_DELTA = (
     0, 1, 2, 3, 4)
-OUTPUTMODE_SONNET, OUTPUTMODE_CARRE = 1, 2
+OUTPUTMODE_SONNET, OUTPUTMODE_CARRE, OUTPUTMODE_GOAT = 1, 2, 3
 OF_NC_VARS, OF_NC_STRUCTURE, OF_NC_TARGETS, OF_NC_SURFACES, OF_NC_GPOINTS = (
     0x1, 0x2, 0x4, 0x8, 0x10)
 MSMF_USE_SPLINE, MSMF_USE_SURFACE, MSMF_USE_POINTS = 0x1, 0x2, 0x4
