@@ -3,6 +3,8 @@
 
 # Create additional B2.5 dependencies file to avoid a recurring compiler timing error
 echo '${OBJDIR}/b2npmo.o: ${OBJDIR}/b2urmo.o' > ${SOLPSTOP}/modules/B2.5/config/dependencies.local
+echo '${OBJDIR}/b2tfrn.o: ${OBJDIR}/b2tfvh.o' >> ${SOLPSTOP}/modules/B2.5/config/dependencies.local
+echo '${OBJDIR}/b2trno.o: ${OBJDIR}/b2tqna.o' >> ${SOLPSTOP}/modules/B2.5/config/dependencies.local
 
 # Create additional Eirene dependencies file to avoid a recurring compiler timing error
 echo 'set_source_files_properties(${PROJECT_SOURCE_DIR}/interfaces/couple_SOLPS-ITER/eirmod_wneutrals.F PROPERTIES OBJECT_DEPENDS ${LOCAL_OBJDIR}/interfaces/couple_SOLPS-ITER/couple_specific.F.o)' > ${SOLPSTOP}/modules/Eirene/src.local/CMakeLists.txt
@@ -44,7 +46,7 @@ rm -rf ${SOLPSTOP}/modules/Eirene/builds/*.debug \
        ${SOLPSTOP}/modules/B2.5/builds/*.debug
 
 # Compile the code with debug options activated
-echo "FCOPTS += -diag-enable=error" >> ${SOLPSTOP}/modules/B2.5/config/config.ITER.ifort64.local
+echo "FCOPTS += -diag-enable=error" > ${SOLPSTOP}/modules/B2.5/config/config.ITER.ifort64.local
 export NO_MANUAL="true"
 make prereqs_nox_debug
 make divgeo_nox_debug

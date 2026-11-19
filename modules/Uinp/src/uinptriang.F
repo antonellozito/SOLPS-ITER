@@ -19,6 +19,12 @@ c***  returns .TRUE. if successful and .FALSE. otherwise
       print *
       print *,'==== Starting uinptriang'
       TriMesh=.TRUE.
+      select case (gridgeneratorID)
+      case (1) ! Goat, void polygons are already provided. Skip this step
+        print *, 'uinptriang: following Goat route, not creating ' //
+     .    'void polygons here...'
+      case (0) ! Carre, void polygons still need to be built
+
 c*** makes list of polygon indices present in the input data
       attrib(1)=ilplgdg(1)
       k=1
@@ -49,8 +55,8 @@ c***  and check if they are closed
        k=0
        do 25 j=1,nlim
         if(attrib(i).EQ.ilplgdg(j) ) then
-         k=k+1
-         chain(k)=j
+          k=k+1
+          chain(k)=j
         end if
    25  continue
        nchain=k
@@ -96,8 +102,8 @@ c***   store the sorted chain to construct polygons for void triangulation
      ,   chain_sorted(1:nchain+nchain_seg)
        triplgnss(1:nn,ntriplg)=NSS(1:nn)
        nnlbl = 0
-       do j=1,nn
-         if (index(topo,'SN').gt.0) then
+       if (index(topo,'SN').gt.0) then
+         do j=1,nn
            if (NSS(j).eq.4) then
              nnlbl = nnlbl+1
              triplgfclbl(nnlbl,ntriplg)=-23
@@ -111,7 +117,9 @@ c***   store the sorted chain to construct polygons for void triangulation
              write (*,*) 'Did not expect NSS = ',NSS(j),' in chain'
              stop 'Check DG model'
            endif
-         elseif (index(topo,'DN').gt.0) then
+         end do
+       elseif (index(topo,'DN').gt.0) then
+         do j=1,nn
            if (NSS(j).eq.7) then
              nnlbl = nnlbl+1
              triplgfclbl(nnlbl,ntriplg)=-23
@@ -134,13 +142,14 @@ c***   store the sorted chain to construct polygons for void triangulation
              write (*,*) 'Did not expect NSS = ',NSS(j),' in chain'
              stop 'Check DG model'
            endif
-         else
-           write (*,*) 'uinptriang -- warning: topology ',topo,
-     ,                 'not yet supported for void triangulation'
-         endif
-         nfclbltriplg(ntriplg)=nnlbl
-       enddo
+         end do
+       else
+          write (*,*) 'uinptriang -- warning: topology ',topo,
+     ,                'not yet supported for void triangulation'
+       endif
+       nfclbltriplg(ntriplg)=nnlbl
    20 continue
+      end select
 
 c  Prepare data for TRIA input file (header with refinement zones data)
       k=0

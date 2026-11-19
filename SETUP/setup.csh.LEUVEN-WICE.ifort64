@@ -40,3 +40,4 @@ if ($?PETSC_DIR) then
 endif
 alias set_d 'source $SOLPSTOP/scripts/diff_d'
 alias set_b 'source $SOLPSTOP/scripts/diff_b'
+

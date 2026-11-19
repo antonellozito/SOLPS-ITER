@@ -7,7 +7,7 @@
 % whole page) to absorb any real shortfall like \raggedbottom would, but
 % avoids tripping longtable's \vsplit "Infinite glue shrinkage found in box
 % being split" warning -- and, unlike \flushbottom (no bottom slack at all),
-% doesn't force every page to fill exactly, so it avoids the "Underfull
+% does not force every page to fill exactly, so it avoids the "Underfull
 % \vbox (badness 10000) ... \output is active" warnings \flushbottom caused.
 \def\@textbottom{\vskip \z@ \@plus \textheight\relax}
 \makeatother
@@ -134,7 +134,8 @@ This is the combined work of many authors. Started by D.P.~Coster, it includes c
 \item S.~Voskoboynikov, E.~Kaveeva, and I.~Senichenkov, for the \SOLPSITER model equations (Appendix~\ref{cha:equations}) and output quantities information (Appendix~\ref{cha:b2wdat_iout_4})
 \item S.~Makarov, for the Zhdanov-Grad closure description
 \item S.~Carli, for the Algorithmic Differentiation chapters (Chapter~\ref{cha:ad_optim} and Appendix~\ref{cha:ad_expert})
-\item W.~Van~Uytven, for updates regarding the switch to the unstructured grid format and additional documentation on the advanced fluid neutral models.
+\item W.~Van~Uytven, for updates regarding the switch to the unstructured grid format and additional documentation on the advanced fluid neutral models
+\item A.~Zito for extensions of the netCDF tracing files capabilities (see Appendices~\ref{cha:b2movies} and \ref{cha:b2chords}).
 \end{itemize}
 All errors, omissions {\it etc.} should be e-mailed to {\tt Xavier.Bonnin@iter.org}.
 
@@ -161,6 +162,8 @@ documentation files, \ref{cha:b2physics} describes the physics in {\tt B2.5},
 \ref{cha:equations} gives the full model equations used in {\tt B2.5},
 \ref{cha:Mladen} gives details about some {\tt B2.5} boundary conditions,
 \ref{cha:b2time} information about the quantities stored in {\tt b2time.nc},
+\ref{cha:b2movies} information about the quantities stored in {\tt b2movies.nc} and {\tt eirenemovies.nc},
+\ref{cha:b2chords} information about the quantities stored in {\tt b2chords.nc} and {\tt eirenechords.nc},
 \ref{cha:b2tallies} information about the quantities stored in {\tt b2tallies.nc},
 \ref{cha:b2wdat_iout_4} information about the quantities that can be output using {\tt b2wdat\_iout},
 \ref{cha:regions} gives the region definitions used in the code,
@@ -218,7 +221,7 @@ and an excellent review of \SOLPSfour can be found in:
 Martine_Baelmans_-_Juelich_Report_1994.pdf .
 \end{verbatim}
 
-When referring to \SOLPSITER in scientific papers, please use \cite{WiesenPSI2014,BONNINPET15} and references therein. You will also find these references in the {\tt \$\{SOLPSTOP\}/doc} directory. For work involving {\tt Eirene}, also quote reference \cite{Reiter2005}.
+When referring to the open-source \SOLPSITER distribution in scientific papers, please use \cite{BONNIN2026}. For older code versions, cite \cite{WiesenPSI2014,BONNINPET15} and references therein. You will also find these references in the {\tt \$\{SOLPSTOP\}/doc} directory. For work involving {\tt Eirene}, also quote reference \cite{Reiter2005}.
 
 Several of the {\bf SOLPS4.2} features are detailed in {\tt Kotov\_SOLPS42\_Report.pdf}.
 
@@ -342,11 +345,12 @@ To best use the \SOLPSITER code suite, the user will need, locally installed:
 \item[Motif] user interface library, with {\tt libXp} and {\tt libXpm} (optional, only for the Motif version of {\tt DivGeo} and for {\tt AMDS}, built with {\tt USE\_MOTIF}, see Section~\ref{sec:dgpython})
 \item[GR] plotting library (optional, developed at FZ-J{\"u}lich, available as an open-source package at \href{https://github.com/iterorganization/GR-Software}{https://github.com/iterorganization/GR-Software})
 \item[GKS] graphical kernel library (available from \href{http://ngwww.ucar.edu}{http://ngwww.ucar.edu})
-\item[HDF5] data storage library (available from \href{http://support.hdfgroup.org/HDF5/}{http://support.hdfgroup.org/HDF5/})
+\item[HDF5] data storage library (available from \href{http://support.hdfgroup.org/HDF5/}{http://support.hdfgroup.org/HDF5/}). {\bf Note:} Do not use HDF5 version 1.14.3 as it contains a bug that will conflict with NetCDF file usage.
 \item[JSON] data storage library (Fortran version, available from \href{https://jacobwilliams.github.io/json-fortran/}{https://jacobwilliams.github.io/json-fortran/})
 \item[NetCDF]\index{netcdf} storage/archival library (optional) (available from \href{http://www.unidata.ucar.edu/netcdf/}{http://www.unidata.ucar.edu/netcdf/}) (\SOLPSITER needs at least version 4)
 \item[MSCL] utility library (available as an open-source package at \href{https://github.com/iterorganization/MSCL}{https://github.com/iterorganization/MSCL})
 \item[MKL] Intel Math Kernel Library (optional)
+\item[SuiteSparse] Open-source package for solving sparse matrices, readily available on most clusters. Available from \href{https://github.com/DrTimothyAldenDavis/SuiteSparse/}{https://github.com/DrTimothyAldenDavis/SuiteSparse/} (optional)
 \item[makedepend] to build the dependencies needed by the {\tt Makefiles}
 \item[gnuplot] for many analysis scripts
 \item[nc2text] for obtaining time-dependent data traces (optional)
@@ -870,6 +874,7 @@ SOLPSTOP
 |   +---Matlab_SPb
 |   +---nc2text_simple
 |   +---palettes
+|   +---PythonPostProcessing
 |   +---ITER.ifort64
 +---scripts.local
 +---modules
@@ -1201,7 +1206,8 @@ advanced fluid neutral (AFN) models.
 Because some of these files can be very large, they are not stored on the
 GitHub repository but rather as a public-access Zenodo record, and the
 {\tt Makefile} automatically fetches them at first installation using the
-{\tt retrieve\_fnn\_datasets} script.
+{\tt retrieve\_fnn\_datasets} script. This requires the node on which the
+compilation takes place to have an open Internet connection.
 
 \newpage
 \subsection{modules/Eirene}
@@ -1631,6 +1637,7 @@ rm GNUPLOT_COUNT gnuplot.*data
   If the file {\tt GNUPLOT\_COUNT} exists, then an internal counter {\tt GNUPLOT\_COUNT} is set by reading the number from the file; incremented; and then saved to the file; instead of using {\tt gnuplot.data} for the data, the file {\tt gnuplot.\$\{GNUPLOT\_COUNT\}.data} is used and the commands for plotting are concatenated to {\tt gnuplot.cmd} allowing for multiple pages of plots.
   \item[plot\_cps \#1]\index{plot\_cps} Copies {\tt gnuplot.cmd} to {\tt gnuplot\_cps.cmd}, modifying it so that colour plotting occurs to \#1 or by default {\tt out.ps}; executes {\tt gnuplot} on new file. The location of these files can be modified by use of the {\tt GNUPLOT\_TMP} variable.
   \item[plot\_it]\index{plot\_it} Utility script used to produce complex plots.
+  \item[plot\_fcreg.py]\index{plot\_fcreg.py} Python script to plot the grid faces with non-zero {\tt fcReg} face-based region indices (see Appendix~\ref{cha:regions} for a full definition).
   \item[plot\_mesh \#1 \#2]\index{plot\_mesh} Plots the mesh specified as \#1 accompanied by the {\tt mesh.extra} file specified as \#2 as \#1.ps.
   \item[plot\_png]\index{plot\_png} produces a PNG output file instead
   \item[plot\_ps \#1]\index{plot\_ps} Copies {\tt gnuplot.cmd} to {\tt gnuplot\_ps.cmd}, modifying it so that black-and-white plotting occurs to \#1 or by default {\tt out.ps}; executes {\tt gnuplot} on new file. The location of these files can be modified by use of the {\tt GNUPLOT\_TMP} variable.
@@ -2056,6 +2063,24 @@ Contains various Matlab routines used for postprocessing run results.
 
 Contains a set of Matlab scripts to adjust meshes produced by {\tt Carre2} and stored in {\tt .geo} format. See full documentation in {\tt \$\{SOLPSTOP\}/doc/edit\_geo\_manual.pdf}.
 
+\subsection{scripts/PythonPostProcessing}
+
+The PythonPostProcessing scripts offer a lightweight toolchain to perform basic postprocessing of {\bf SOLPS-ITER} results in Python. 
+The scripts allow to read in basic {\bf SOLPS-ITER} output and subsequently to create 2D colorplots, plot the separatrix, and create 1D plots along boundary surfaces and along segments such as the OMP. 
+An example script {\tt example\_script.py} is provided as a starting point for new users. Functionality includes: 
+
+\begin{itemize} 
+\item Reading of {\tt b2fgmtry}, {\tt b2fstate}, {\tt b2fplasmf} and {\tt structure.dat}.
+\item Writing of {\tt b2fgmtry}.
+\item Plotting of 2D colorplots, the separatrix, and vessel structures.
+\item Computation of boundary flux densities. 
+\item Helper functions to compute cell-segment intersections, find the separatrix flux surfaces, etc.
+\end{itemize}
+
+Note that not all functionality of the MatlabPostProcessing scripts has been translated yet. This can be done by any user when necessary. The goal is to keep the PythonPostProcessing scripts 
+lightweight, easy to use, and allways up-to-date with changes in the input and output files of {\bf SOLPS-ITER}. Note also that more elaborate external postprocessing toolchains exit, but these are not officially
+supported. 
+
 \newpage\section{data}
 \index{data}
 
@@ -2368,6 +2393,20 @@ Those files need to contain fields according to:
   field information that are read in from the mesh file (see Appendix~\ref{lis:b2cdci})
 \end{description}
 
+\index{Carre2}
+When reading a {\tt Carre2} grid with supplied flux-surface records,
+{\tt b2ag} uses these records to set the poloidal flux $\psi$ at the
+mesh vertices. For each surface, it takes the faces listed in
+{\tt fsFc} and assigns the surface value {\tt fsPsi} to both vertices
+of every listed face. Vertices not on a listed surface retain their
+input values at this step. This makes $\psi$ constant along each listed
+flux surface before guard cells are created and the magnetic field is
+calculated from the vertex values.
+
+This assignment is performed automatically during grid preparation
+by {\tt b2ag}. It does not affect an existing {\tt b2fgmtry}
+read by {\tt b2mn}.
+
 \newpage\section{b2ah, setting up the default physics parameters}
 \index{b2fpardf}\label{sec:b2ah}\index{b2ah}\index{b2run}
 
@@ -2608,7 +2647,7 @@ if ADAS datafiles were obtained by means of the {\tt fetch\_adas\_datafiles} scr
 \begin{verbatim}
 '8902' '8902' '8902' '8902' '8902' '8902' '8902' 'w '  'jett'
 \end{verbatim}
-The syntax of the header line understands {\tt SOLPSTOP} to mean the current value of the {\tt \$SOLPSTOP} environment variable. The {\tt SOLPSTOP/modules} part of the path can be skipped and will be added automatically by the code when searching for the ADAS datasets if the path provided was not absolute. Only the file path up to but not including the {\tt adf11/} directory should be included. If a dataset is not found in the provided path, the code will revert to the one stored in the default directory {\tt \$SOLPSTOP/modules/adas} or {\tt \$SOLPSTOP/data.local/adas}. The syntax of the tungsten data line contains seven four-digit numbers, one for each process ({\tt ycd} and {\tt zcd} must point to the same calculation, so only the latter appears in the file), followed by the name of the element and the label of the bundling scheme, all within single quotes. Each of the seven numbers is made up of the first two digits being the ADAS 'year' and the second set of two digits giving the 'partition level' of the bundling scheme being used for that process. A dataset containing all ions, unbundled, has partition level {\tt 01}. A bundle of ions will have partition level {\tt 02}. A bundle of bundles will have partition level {\tt 03}, and so on. The partition level appears in the dataset filename after the element name and before the bundling scheme label.
+The syntax of the header line understands {\tt SOLPSTOP} to mean the current value of the {\tt \$SOLPSTOP} environment variable. The {\tt SOLPSTOP} or {\tt SOLPSTOP/modules} parts of the path can be skipped and will be added automatically by the code when searching for the ADAS datasets if the path provided was not absolute. Only the file path up to but not including the {\tt adf11/} directory should be included. If a dataset is not found in the provided path, the code will revert to the one stored in the default directory {\tt \$SOLPSTOP/modules/adas} or {\tt \$SOLPSTOP/data.local/adas}. The syntax of the tungsten data line contains seven four-digit numbers, one for each process ({\tt ycd} and {\tt zcd} must point to the same calculation, so only the latter appears in the file), followed by the name of the element and the label of the bundling scheme, all within single quotes. Each of the seven numbers is made up of the first two digits being the ADAS 'year' and the second set of two digits giving the 'partition level' of the bundling scheme being used for that process. A dataset containing all ions, unbundled, has partition level {\tt 01}. A bundle of ions will have partition level {\tt 02}. A bundle of bundles will have partition level {\tt 03}, and so on. The partition level appears in the dataset filename after the element name and before the bundling scheme label.
 
 The modified {\tt ratadas.filelist} file should be present in the {\tt baserun} directory from which {\tt b2ar} will be run. If this file is prepared before {\tt Uinp} is run, then the case build-up will assume that the indicated bundling scheme is to be used and create all appropriate input files accordingly. If one is introducing bundling to an existing case, then the recommended procedure is to use the {\tt b2yt} conversion program to modify all input files as needed. See the corresponding section~\ref{sec:b2yt} for the full details.
 
@@ -4926,10 +4965,8 @@ If only the {\tt input.dat} file is present (or is used), {\tt Eirene} will tran
 
 \section{Input files}
 
-Below are given the input files used for the structured {\tt D+C+He} benchmark
-case that can be found on the SVN server. These files can be found in the {\em Examples} folder in the \SOLPSITER SharePoint
-web site
-(\href{https://sharepoint.iter.org/departments/POP/CM/IMAS/SOLPS-ITER}{\allowbreak https://sharepoint.iter.org/departments\allowbreak/POP/CM/IMAS/SOLPS-ITER}), or directly among the examples provided in {\tt \$\{SOLPSTOP\}/runs/examples}, as part of the {\tt AUG\_16151\_D+C+He} case.
+Below are given the input files used for the structured {\tt D+C+He} AUG benchmark
+case that can be found on the among the {\tt SOLPS-ITER 3.0.10a examples} record provided on the Zenodo server at \href{https://www.zenodo.org/communities/solps}{https://www.zenodo.org/communities/solps}. These files can be found as part of the {\tt AUG\_16151\_D+C+He} case.
 
 \subsection{b2ag.dat}
 \index{b2ag.dat, D+C+He example}
@@ -5354,9 +5391,9 @@ several values of $\Delta_t$.
 \section{Dynamic ("Time-dependent") mode}
 \label{sec:dynamic}\index{Dynamic mode}
 
-There is an alternative solution method available, which does not rely on under-relaxation, and is called the dynamic mode, or, by abuse of language, the "time-dependent" mode. This solution mode allows for a more precise estimate of the time derivative terms, particularly for the momentum and energy equations, namely the inclusion of terms like $\displaystyle m_aV_a \frac{{\partial}n_a}{{\partial}t}$ and $\displaystyle \frac{3}{2} T_\alpha \frac{{\partial}n_\alpha}{{\partial}t}$, where $a$ is a species index and $\alpha$ stands for $e$ or $i$. The "time-dependent" mode may be helpful to damp out numerical oscillations. This mode is obtained by setting the switch {\tt b2mndt\_style} to {\tt 2}. The traditional time-dependent solution method is based on a $1^{st}$ order Euler scheme, but a more accurate $2^{nd}$ order Crank-Nicolson scheme is also available. These are chosen using the switch {\tt b2mndt\_ckn}, with values {\tt 1} (default) and {\tt 2} respectively. The Crank-Nicolson scheme can also be used for the "false time-stepping" done in steady-state runs if desired.
+There is an alternative solution method available, which does not rely on under-relaxation, and is called the dynamic mode, or, by abuse of language, the "time-dependent" mode. This solution mode allows for a more precise estimate of the time derivative terms, particularly for the momentum and energy equations, namely the inclusion of terms like $\displaystyle m_aV_a \frac{{\partial}n_a}{{\partial}t}$ and $\displaystyle \frac{3}{2} T_\alpha \frac{{\partial}n_\alpha}{{\partial}t}$, where $a$ is a species index and $\alpha$ stands for $e$ or $i$. The "time-dependent" mode may be helpful to damp out numerical oscillations. This mode is obtained by setting the switch {\tt b2mndt\_style} to {\tt 2}. The traditional time-dependent solution method is based on a $1^{st}$ order Euler scheme, but more accurate $2^{nd}$ order Crank-Nicolson and backward differentiation (BDF2) schemes are also available. These are chosen using the switch {\tt b2mndt\_ckn} or {\tt b2mndt\_bdf}, with values {\tt 1} (default) and {\tt 2}, respectively. The Crank-Nicolson and BDF2 schemes can also be used for the "false time-stepping" done in steady-state runs if desired.
 
-The dynamic mode triggers the use of the \SOLPSfivetwo physics model. It includes the terms mentioned above into the numerical approximation of the full time derivative terms, which is essential for the correct description of the time evolution of momentum and internal energy. To achieve this, the switch {\tt b2mndt\_style}, if set to {\tt 2}, changes the order of solution of the equations to solve first for the density equations, then the parallel momentum equations, followed by the electrical potential, then the electron and ion temperature equations. The total momentum and energy equations may still be solved (if, for example, it is desired to reduce numerical noise caused by momentum exchange or heat exchange terms), however, it breaks the {\tt b2mndt\_style.eq.2} numerical approximation of the full time derivative terms -- so that to get a true dynamic mode solving of these total momentum and energy equations is not recommended. If the user asks to solve these equations with {\tt b2mndt\_style} set to {\tt 2}, a warning message appears.
+The dynamic mode triggers the use of the \SOLPSfivetwo physics model. It includes the terms mentioned above into the numerical approximation of the full time derivative terms, which is essential for the correct description of the time evolution of momentum and internal energy. To achieve this, the switch {\tt b2mndt\_style}, if set to {\tt 2}, changes the order of solution of the equations to solve first for the density equations, then the parallel momentum equations, followed by the electrical potential, then the electron and ion temperature equations. The total momentum and energy equations may still be solved (if, for example, it is desired to reduce numerical noise caused by momentum exchange or heat exchange terms), however, it breaks the {\tt b2mndt\_style.eq.2} numerical approximation of the full time derivative terms -- so that to get a true dynamic mode solving of these total momentum and energy equations is not recommended. To solve these equations with {\tt b2mndt\_style} set to {\tt 2}, the user must set the switch {\tt b2mndt\_tot\_eqs\_override} to {\tt 1}.
 
 When using the traditional solution method, relying on under-relaxation of the equations, the evolution in time of the solution is not a true reflection of the physical evolution of the system, but rather only a numerical approximation, and only the final steady-state solution can be fully trusted. If one is interested in the details of the time evolution of the plasma state, then this new solution method should be considered. Please note that the timestep may need to be decreased compared to a similar traditional case, using under-relaxation, to achieve convergence.
 
@@ -7743,7 +7780,7 @@ A pre-processor to create new databases for new combinations of incident particl
 A detailed description of the theoretical derivation, code implementation details, user instructions for running with AFN BCs, and user instructions for {\tt b2ab} are available under {\tt \$\{SOLPSTOP\}/doc/AFN\_BCs\_documentation.pdf}.
 The \LaTeX~source files for this PDF are available in {\tt \$\{SOLPSTOP\}/doc/AFN\_BCs\_documentation/LaTeX\_source\_code}. An example {\tt b2ab.dat} file is available in the {\tt \$\{SOLPSTOP\}/doc/AFN\_BCs\_documentation/example\_input\_b2ab} directory.
 
-Additionally, there are two PDF presentations on the \SOLPSITER SharePoint website, in the \href{https://sharepoint.iter.org/departments/POP/CM/IMAS/SOLPS-ITER/SOLPS-ITER\%20Extended\%20Grids\%20Workshops}{SOLPS-ITER Extended Grids Workshops} directory, explaining the setup of AFN cases: {\tt workshop\_presentation\_AFN} and {\tt AFN handson session}.
+Additionally, there are two PDF presentations on the \SOLPSITER MS Teams workspace, explaining the setup of AFN cases: a theoretical description at \href{https://iterorganization.sharepoint.com/:b:/r/sites/SOLPS-ITER/Shared%20Documents/General/SOLPS-ITER%20meetings/SOLPS-ITER%20Extended%20Grids%20Workshops/workshop_presentation_AFN.pdf?d=wf176602ec9bb472e8c8bd6a05cd673ab&csf=1&web=1&e=8sgdRE}{workshop\_presentation\_AFN} and a tutorial at \href{https://iterorganization.sharepoint.com/:w:/r/sites/SOLPS-ITER/Shared%20Documents/General/Tutorials/2026_VanUytven_-_How_to_setup_AFN.docx?d=wa48654ae533d46428678b76078544fac&csf=1&web=1&e=dxMrUb}{2026\_VanUytven\_-\_How\_to\_setup\_AFN}.
 \end{sloppypar}
 
 \subsection{Spatially hybrid fluid-kinetic neutrals}
@@ -7754,7 +7791,7 @@ The goal is to keep neutrals kinetic in the regions where they have longer mean-
 but to have a fluid neutral model in the CX-dominated regions where the mean-free paths are short, and where consequently the {\tt Eirene} CPU time per particle trajectory is large.
 
 The spatially hybrid approach is discussed in detail in the references~\cite{blommaert2019spatially,VanUytven_advanced_SpH,horsten2021application,borodin2022fluid,van2023phd}.
-On the \SOLPSITER SharePoint website, in the \href{https://sharepoint.iter.org/departments/POP/CM/IMAS/SOLPS-ITER/SOLPS-ITER\%20Extended\%20Grids\%20Workshops}{SOLPS-ITER Extended Grids Workshops} directory, there are two presentations explaining the setup of spatially hybrid cases: {\tt workshop\_presentation\_hybrid} and {\tt hybrid handson session}.
+On the \SOLPSITER MS Teams workspace, there are two presentations explaining the setup of spatially hybrid cases: a theoretical description at \href{https://iterorganization.sharepoint.com/:b:/r/sites/SOLPS-ITER/Shared%20Documents/General/SOLPS-ITER%20meetings/SOLPS-ITER%20Extended%20Grids%20Workshops/workshop_presentation_hybrid.pdf?d=wb34af90172e44888abfd929cce840c79&csf=1&web=1&e=bwfuV3}{workshop\_presentation\_hybrid} and a tutorial at \href{https://iterorganization.sharepoint.com/:b:/r/sites/SOLPS-ITER/Shared%20Documents/General/Tutorials/2023_Horsten_-_Hands-on_session_hybrid_neutral_model_for_AUG_case.pdf?d=w26183817e9864f08a100fce973345d3e&csf=1&web=1&e=wvE7TN}{2023\_Horsten\_-\_Hands-on\_session\_hybrid\_neutral\_model\_for\_AUG\_case}.
 
 Very good agreement between the hybrid and the fully kinetic methods has been achieved, while strongly reducing the average CPU time per particle. However, more work is needed before the SpH model can truly speed up simulations by orders of magnitude in all conditions:
 
@@ -17236,7 +17273,9 @@ a charge state below the considered ion (inclusive) within their isonuclear sequ
 \chapter{Region definitions}
 \label{cha:regions}\index{regions}\index{vreg}\index{freg}\index{NREG}
 
-Two types of regions are defined in {\tt b2agfs.F}: volume-based and face-based. Face-based regions may include either only flux-aligned faces, only non-aligned faces, or a mixture of both, as indicated. The numbers of volume-based and face-based regions should also be stored in the {\tt NREG} and {\tt FREG} environment variables respectively (or through the presence of an {\tt NREG} ASCII file containing only two numbers of regions, volume- then face-based, separated by a single space and on the same line) as they are used for a variety of analysis scripts. Typical configurations for 1-D, linear, limiter, SN, DN (Connected and Disconnected), periodic stellarator island, and LFS snowflake cases are shown below:
+Two types of regions are defined in {\tt b2agfs.F}: volume-based and face-based. Face-based regions may include either only flux-aligned faces, only non-aligned faces, or a mixture of both, as indicated. The numbers of volume-based and face-based regions should also be stored in the {\tt NREG} and {\tt FREG} environment variables respectively (or through the presence of an {\tt NREG} ASCII file containing only two numbers of regions, volume- then face-based, separated by a single space and on the same line) as they are used for a variety of analysis scripts. The following sections detail the region arrangements for typical configurations: 1-D, linear, limiter, SN, DN (Connected and Disconnected), periodic stellarator island, and LFS snowflake.
+
+The code is meant to understand complex topologies with more than two X-points as extensions of the standard topologies described below. The topology is detected based on the location of the active X-point (the one in contact with the closed flux surfaces region) and the first inactive X-point (the one closest in magnetic coordinates to the active X-point, for a CDN the other active X-point).
 
 \clearpage
 \section{Regions for 1-D and linear cases}
@@ -22690,6 +22729,7 @@ if desired, be declared as part of either the {\tt SOLPS\_CPP} or the
 \item[PERFMON] \index{PERFMON} Enable performance monitoring
 \item[PLPLOT] \index{PLPLOT} Use {\tt PLPLOT} instead of {\tt NCAR} for plotting
 %\item[SCL\_IMP\_RCI] \index{SCL\_IMP\_RCI} Toggles scaling of impurities tallies
+\item[UMFPACK] \index{UMFPACK} Enables the UMFPACK solver from the SuiteSparse module (automatically set by the {\tt Makefile} if the module is loaded)
 \item[USE\_CDF\_B2STIME] \index{USE\_CDF\_B2STIME} Specific for \SOLPSfour {\tt CDF} tallies
 \item[WANT\_PROCESS] \index{WANT\_PROCESS} Enables the code for the \SOLPSfive to \SOLPSfour converter
 \item[WITH\_FTIMINGS] \index{WITH\_FTIMINGS} Enables debugging code for timing OpenMP parallelization implementation
@@ -23127,6 +23167,7 @@ NAGFOR & transport/b2trcv.F \\
 NAGFOR & transport/b2treq.F \\
 NAGFOR & transport/b2trno.F \\
 NAGFOR & transport/b2trql.F \\
+NAGFOR & transport/b2trzh.F \\
 NAGFOR & transport/b2tvskt.F \\
 NAGFOR & transport/b2tvspr.F \\
 NAGFOR & transport/b2tvsq.F \\
@@ -23350,6 +23391,7 @@ SOLPS4\_3 & modules/b2mod\_mwti.F90 \\
 SOLPS4\_3 & modules/b2mod\_neutrals\_namelist.F \\
 SOLPS4\_3 & modules/b2us\_feedback.F \\
 SOLPS4\_3 & sources/eirene\_f30f31.F \\
+UMFPACK & modules/b2mod\_umfpack.F \\
 USE\_CDF\_B2STIME & modules/b2mod\_comtimpl.F \\
 USE\_CDF\_B2STIME & common/COUPLE/COMTIMPL.F \\
 USE\_EXT\_OPENMP & driver/b2mod\_driver.F \\
