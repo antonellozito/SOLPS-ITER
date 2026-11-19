@@ -199,8 +199,12 @@ midplane_of_run "$c/b2mn.dat"
 [ -f "$sb/b2.user.parameters" ] && cp "$sb/b2.user.parameters" "$c/"
 [ -f "$sb/input.dat" ] && cp "$sb/input.dat" "$c/"
 for n in 33 34 35; do [ -f "$sb/fort.$n" ] && cp "$sb/fort.$n" "$c/"; done
-for p in boundary neutrals; do
-  [ -f "$sb/b2.$p.parameters.stencil" ] && cp "$sb/b2.$p.parameters.stencil" "$c/b2.$p.parameters"
+for p in boundary neutrals; do   # without a stencil, those of the first run
+  if [ -f "$sb/b2.$p.parameters.stencil" ]; then
+    cp "$sb/b2.$p.parameters.stencil" "$c/b2.$p.parameters"
+  elif [ -f "$src/$first/b2.$p.parameters" ]; then
+    cp "$src/$first/b2.$p.parameters" "$c/"
+  fi
 done
 sleep 1
 cp "$sb/b2fstati" "$c/b2fstati"
