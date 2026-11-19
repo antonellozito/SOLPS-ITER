@@ -88,6 +88,7 @@ class OutputModeDlg:
             "$+8#:mode", vc.radio_box, {"orientation": "horizontal"}, 0, 1,
             "t?:sonnet", "sonnet",
             "t?:carre", "carre",
+            "t?:goat", "goat",
             "-:",
             "s-#:sep", 0, 2,
             "t#?:vars", 1, 3, "vars",
@@ -113,6 +114,7 @@ class OutputModeDlg:
         r["gpoints"].set_state(not f & api.OF_NC_GPOINTS, False)
         r["sonnet"].set_state(mode == api.OUTPUTMODE_SONNET, False)
         r["carre"].set_state(mode == api.OUTPUTMODE_CARRE, False)
+        r["goat"].set_state(mode == api.OUTPUTMODE_GOAT, False)
 
     def accept(self):
         """AcceptOutputModeDlg."""
@@ -132,9 +134,18 @@ class OutputModeDlg:
         app = w.app
         w.dll.SetOutputFlags(app, flags)
         w.pump()
-        w.dll.SetAppOutputMode(app, api.OUTPUTMODE_CARRE
-                               if r["carre"].isChecked()
-                               else api.OUTPUTMODE_SONNET)
+        mode = api.OUTPUTMODE_SONNET
+        if r["carre"].isChecked():
+            print("output mode is Carre")
+            mode = api.OUTPUTMODE_CARRE
+        elif r["sonnet"].isChecked():
+            print("output mode is Sonnet")
+        elif r["goat"].isChecked():
+            print("output mode is GOAT")
+            mode = api.OUTPUTMODE_GOAT
+        w.dll.SetOutputFlags(app, flags)
+        w.pump()
+        w.dll.SetAppOutputMode(app, mode)
         w.pump()
         w.dll.UndoMark(app)
         w.pump()

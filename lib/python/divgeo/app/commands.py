@@ -88,7 +88,8 @@ class Commands:
         w = self.w
         res = [w.application.db.get(["DivGeo", "main", n],
                                     ["DivGeo", "XmMainWindow", n]) or n
-               for n in ("msgOutputModeCarre", "msgOutputModeSonnet")]
+               for n in ("msgOutputModeCarre", "msgOutputModeSonnet",
+                         "msgOutputModeGoat")]
         self._core("PyCbFileOutput", *(corelib.cstr(r) for r in res))
 
     def cb_file_print(self, entry):
