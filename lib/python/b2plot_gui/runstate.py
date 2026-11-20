@@ -75,6 +75,22 @@ def complete(rundir):
     return lines >= lines0 and size >= size0 and cf >= cf0 and cf > 10
 
 
+def _has_state(path):
+    """b2fstate holds a plasma state: not empty and not only the header b2mn
+    writes at its start (species blocks), i.e. it has the na block."""
+    try:
+        with open(path, errors="replace") as f:
+            for _ in range(10000):
+                line = f.readline()
+                if not line:
+                    return False
+                if line.startswith("*cf:") and line.split()[-1:] == ["na"]:
+                    return True
+    except OSError:
+        pass
+    return False
+
+
 def _start(rundir):
     """When the run in b2mn.exe.dir started (its copy of b2fstati), or
     None."""
@@ -88,8 +104,7 @@ def state(rundir):
     """("finished" | "crashed" | "running" | "stopped", why: empty when
     finished)."""
     path = os.path.join(rundir, "b2fstate")
-    t_state = _mtime(path) if os.path.isfile(path) and \
-        os.path.getsize(path) > 0 else None
+    t_state = _mtime(path) if _has_state(path) else None
     start = _start(rundir)
     plasma = os.path.join(rundir, "b2fplasma")
     begun = _mtime(path) or start   # an empty b2fstate: the run start
@@ -97,7 +112,8 @@ def state(rundir):
             begun is None or _mtime(plasma) >= begun - SLACK):
         return "crashed", (
             "plasma of b2fplasma, written when an error stopped B2.5 (%s): "
-            "that of the start of the failing time step; no b2fstate" %
+            "that of the start of the failing time step; no plasma state "
+            "in b2fstate" %
             time.strftime("%Y-%m-%d %H:%M", time.localtime(
                 _mtime(plasma))))
     if start is not None and (t_state is None or start > t_state + SLACK):
@@ -111,7 +127,8 @@ def state(rundir):
                _age(max(time.time() - last, 0.0))))
     if t_state is None:
         return "stopped", "No b2fstate%s: the latest run stopped before " \
-            "its end" % (" (empty)" if os.path.isfile(path) else "")
+            "its end" % (" with a plasma state" if os.path.isfile(path)
+                         else "")
     if not complete(rundir):
         return "stopped", "b2fstate is shorter than b2fstati (the test of " \
             "scripts/b2fstate_OK): the latest run stopped before its end"
