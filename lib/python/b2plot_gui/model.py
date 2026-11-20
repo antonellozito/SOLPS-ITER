@@ -4,6 +4,7 @@ messages (b2plot.protocol)."""
 
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 
 import numpy as np
 
@@ -34,6 +35,33 @@ class Geometry:
     @property
     def used(self):
         return np.unique(self.triangles)
+
+    @cached_property
+    def finder(self):
+        """Point -> row of triangles (-1 outside), with vertices at the
+        same point merged (a grid can have two, e.g. at the tip of a
+        limiter, which matplotlib rejects as an invalid triangulation)."""
+        import matplotlib.tri as mtri
+        xy, same = np.unique(self.vx, axis=0, return_inverse=True)
+        t = same.reshape(-1)[self.triangles]
+        flat = (t[:, 0] == t[:, 1]) | (t[:, 1] == t[:, 2]) | \
+            (t[:, 2] == t[:, 0])
+        return mtri.Triangulation(xy[:, 0], xy[:, 1], t,
+                                  mask=flat).get_trifinder()
+
+    def trifinder(self, tri):
+        """finder as the TriFinder of tri, a triangulation of the cells
+        (rows of triangles, maybe masked) for the matplotlib interpolators:
+        -1 also in the triangles tri masks."""
+        from matplotlib.tri import TriFinder
+        find, mask = self.finder, tri.mask
+
+        class CellFinder(TriFinder):
+            def __call__(self, x, y):
+                it = np.asarray(find(x, y))
+                return it if mask is None else \
+                    np.where(mask[np.maximum(it, 0)], -1, it)
+        return CellFinder(tri)
 
 
 @dataclass

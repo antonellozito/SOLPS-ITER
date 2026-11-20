@@ -9,7 +9,6 @@ import socket
 from dataclasses import replace
 
 import numpy as np
-import matplotlib.tri as mtri
 from matplotlib.figure import Figure
 
 from . import catalog, presets, runstate, scaling, theme
@@ -250,8 +249,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         """Segments of the midplanes of b2.user.parameters (rzimp, rzomp)
         where they cross the cells of the B2.5 grid."""
         g = run.geometry
-        tri = mtri.Triangulation(g.vx[:, 0], g.vx[:, 1], g.triangles)
-        finder = tri.get_trifinder()
+        finder = g.finder
 
         def inside(p):
             it = finder(p[:, 0], p[:, 1])
@@ -820,7 +818,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             return
         n = self.quantity.streams.nseeds.value()
         pts = shapes.seed_points(self.run, key, n, lambda p: np.asarray(
-            self.plot.tri.get_trifinder()(p[:, 0], p[:, 1])) >= 0)
+            self.run.geometry.finder(p[:, 0], p[:, 1])) >= 0)
         text = dict((k, t) for t, k in shapes.SEEDS)[key]
         self.status.emit("%d seeds along the %s" % (len(pts), text)
                          if len(pts) else "No %s in this run" % text)
