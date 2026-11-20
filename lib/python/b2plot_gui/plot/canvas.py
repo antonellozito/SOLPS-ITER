@@ -171,7 +171,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin,
         self._cell_pc = self._tri_pc = self._cell_key = None
         g = run.geometry
         self.tri = mtri.Triangulation(g.vx[:, 0], g.vx[:, 1], g.triangles)
-        self.finder = self.tri.get_trifinder() if hover else None
+        self.finder = g.finder if hover else None
         self.etri = self.efinder = self.ecentres = None
         if run.trimesh is not None:
             t = run.trimesh

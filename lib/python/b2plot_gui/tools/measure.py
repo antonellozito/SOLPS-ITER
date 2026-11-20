@@ -78,8 +78,10 @@ def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0), col=None):
     s = t * float(np.linalg.norm(q1 - q0))
     l = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(r), np.diff(z)))))
     tri, comps = _grid(plot, data, col)
-    vals = [np.ma.filled(mtri.LinearTriInterpolator(tri, c)(r, z), np.nan)
-            for c in comps]
+    finder = plot.run.geometry.trifinder(tri) if \
+        data.location == "cells" else None
+    vals = [np.ma.filled(mtri.LinearTriInterpolator(
+        tri, c, trifinder=finder)(r, z), np.nan) for c in comps]
     if len(vals) == 1:
         return s, r, z, ph, vals[0], None, l
     dr, dz = np.gradient(r), np.gradient(z)     # along the projection

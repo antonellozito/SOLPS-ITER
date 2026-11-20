@@ -114,8 +114,10 @@ class VectorMixin:
         nx = max(int(STREAM_GRID * (x1 - x0) / max(y1 - y0, 1e-9)), 2)
         xs, ys = np.linspace(x0, x1, nx), np.linspace(y0, y1, ny)
         X, Y = np.meshgrid(xs, ys)
-        U = mtri.LinearTriInterpolator(tri, nu)(X, Y)
-        V = mtri.LinearTriInterpolator(tri, nw)(X, Y)
+        finder = None if tri is self.etri else \
+            self.run.geometry.trifinder(tri)
+        U = mtri.LinearTriInterpolator(tri, nu, trifinder=finder)(X, Y)
+        V = mtri.LinearTriInterpolator(tri, nw, trifinder=finder)(X, Y)
         speed = np.ma.hypot(U, V)
         if speed.count() == 0:
             return
