@@ -33,7 +33,10 @@
 #   Switches of b2mn.dat that the unstructured code
 #   refuses are commented out, with the hint of the code printed for each, and
 #   so is a user transport model (b2tqna_user_transport) that the unstructured
-#   code does not have (the default model is used then). Switches whose
+#   code does not have (the default model is used then), and so are switch
+#   values that would stop the unstructured code during the run (for example
+#   b2tfhe_vis_per not 0: it has no current driven by perpendicular
+#   viscosity; the default value is used then). Switches whose
 #   default differs between the two codes are listed when b2mn.dat does not
 #   set them.
 #   Each run is then run once for one time step with
@@ -43,7 +46,9 @@
 #   b2fplasma, balance.nc, fort.44, fort.46 and the other output files are
 #   written by the unstructured code. The history files, the tracing files and
 #   b2mn.dat are put back as they were before this step, so the histories end
-#   with the last structured run, and the work folder b2mn.exe.dir is removed.
+#   with the last structured run, and the work folder b2mn.exe.dir is removed;
+#   if the step fails, this is still done, and the conversion stops with the
+#   error of the unstructured code.
 # Files at the top of the case folder (NREG, SOLPS_FLUIDS, ...) are copied.
 # The runs are made one after the other, in the terminal (b2run b2mn), each
 # with the processes or threads asked for. A log of the conversion and of each
@@ -61,7 +66,7 @@ while [ $# -gt 0 ]; do
     case $opt in
       m) mode=mpi; np=$OPTARG ;;
       t) mode=omp; np=$OPTARG ;;
-      h) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      h) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
       *) die "unknown option (see -h)" ;;
     esac
   done
@@ -209,6 +214,25 @@ check_transport() {   # check_transport <b2mn.dat> <run>
   sed -i.sav "s/^\([[:space:]]*\)'b2tqna_user_transport'/\1#'b2tqna_user_transport'/" "$1" && rm -f "$1.sav"
   echo "$2: b2mn.dat: transport model 'b2tqna_user_transport' $v does not exist in the unstructured code (models: $ut_models), commented out: the default model 0 is used, the radial transport changes"
 }
+# ..switch values that stop the unstructured code during the run (models it
+#   does not have): name|values that stop it (awk test of v)|its default
+unsupported="b2tfhe_vis_per|v != 0|0.0 (no current driven by perpendicular viscosity)
+b2tfhe_stochastic|v != 0|0.0
+b2nxfx_style|v == 0|1
+b2npht_style|v == 0|1
+b2sicf_style|v == 1|0
+b2sigp_style|v == 0|2
+b2mndt_var_style|(v < 0) + (v > 4)|0
+b2mndr_external_species|v != 0|0"
+check_unsupported() {   # check_unsupported <b2mn.dat> <run>
+  echo "$unsupported" | while IFS='|' read -r n t d; do
+    v=$(awk -v q="'" -v n="$n" '$1 == q n q {gsub(q, "", $2); print $2}' "$1" | tail -1)
+    [ -z "$v" ] && continue
+    awk -v v="$v" "BEGIN { sub(/[dD]/, \"e\", v); v += 0; exit !($t) }" || continue
+    sed -i.sav "s/^\([[:space:]]*\)'$n'/\1#'$n'/" "$1" && rm -f "$1.sav"
+    echo "$2: b2mn.dat: '$n' $v stops the unstructured code (not available there), commented out: its default $d is used"
+  done
+}
 # ..switches whose default differs between the structured code (develop) and
 #   the unstructured code: name|structured default|unstructured default
 default_changes="b2tfhe_vis_par|1.0|0.0
@@ -334,6 +358,7 @@ for r in $runs; do
   [ -z "$copies" ] || echo "$r:$copies not copied (the same as in the baserun, whose files the run uses)"
   comment_prohibited "$dr/b2mn.dat" "$r"
   check_transport "$dr/b2mn.dat" "$r"
+  check_unsupported "$dr/b2mn.dat" "$r"
   warn_defaults "$dr/b2mn.dat" "$r"
   cp "$c/b2fstati_us" "$dr/b2fstati"
   for p in boundary neutrals feedback_control feedback_save; do
@@ -385,9 +410,11 @@ for r in $runs; do
   (cd "$dr" && b2run $sflag "${popts[@]}" b2mn) > "$work/step.log" 2>&1
   { echo; echo "===== one time step with b2mndt_rxf 0"; cat "$work/step.log"; } >> "$dr/conversion.log"
   cp -p "$keep/b2mn.dat" "$dr/b2mn.dat"
+  failed=""
   if grep -q "XERRAB\|Run apparently failed" "$work/step.log" || \
      [ "$(cd "$dr" && b2fstate_OK)" != yes ]; then
-    die "the one-step run in $dr failed, see $dr/conversion.log"
+    failed=$(grep -A1 "XERRAB: program will stop" "$work/step.log" | sed -n '2s/^ *//p')
+    failed=${failed:-b2mn did not finish}
   fi
   for h in $hist $keep_hist; do
     if [ -e "$keep/$h.nc" ]; then cp -p "$keep/$h.nc" "$dr/"; else rm -f "$dr/$h.nc"; fi
@@ -397,6 +424,8 @@ for r in $runs; do
   for f in $(ls -A "$dr"); do
     case $f in *.i) grep -qx "$f" "$keep/.before" || rm -f "$dr/$f" ;; esac
   done
+  [ -z "$failed" ] || \
+    die "the one-step run in $dr failed: $failed (log in $dr/conversion.log); the run is converted and put back as before the step, but balance.nc and the other output of the step are missing or incomplete"
   echo "$r: done"
 done
 
