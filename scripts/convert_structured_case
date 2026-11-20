@@ -25,7 +25,12 @@
 #   the structured code (b2fplasma, b2fplasmf, balance.nc, fort.44, fort.46,
 #   EIRENE work files, ...) and the tracing files intshrt.trc, sepdata.trc,
 #   user.trc and user_SPb.trc, whose layout differs in the unstructured code
-#   (it could not continue them). Switches of b2mn.dat that the unstructured code
+#   (it could not continue them). Copies of the baserun files b2fgmtry,
+#   fort.30, b2fpardf and b2frates in a run directory (left there when make
+#   rebuilt them in the run) are not copied either, so that the run uses those
+#   of the baserun; if one differs from the baserun file by more than
+#   round-off, the conversion stops before it starts.
+#   Switches of b2mn.dat that the unstructured code
 #   refuses are commented out, with the hint of the code printed for each, and
 #   so is a user transport model (b2tqna_user_transport) that the unstructured
 #   code does not have (the default model is used then). Switches whose
@@ -56,7 +61,7 @@ while [ $# -gt 0 ]; do
     case $opt in
       m) mode=mpi; np=$OPTARG ;;
       t) mode=omp; np=$OPTARG ;;
-      h) sed -n '2,45p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      h) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
       *) die "unknown option (see -h)" ;;
     esac
   done
@@ -93,6 +98,54 @@ for d in "$src"/*/; do
 done
 [ -n "$runs" ] || die "no run directories (b2mn.dat and b2fstate) in $src"
 first=$(echo $runs | cut -d" " -f1)
+
+# ..copies of the baserun files in a run directory (left when make rebuilt
+#   them there) must equal those of the baserun, which the conversion uses;
+#   they are left out of the converted run
+base_copies="b2fgmtry fort.30 b2fpardf b2frates"
+same_content() {   # same_content <file> <file>: equal but for the VERSION
+                   # line, the label and round-off (1e-10 of each field)
+  awk '
+    function load(f, v, blk,   n, nb, line, skip, first, m, t, i) {
+      n = 0; nb = 0; skip = 0; first = 1
+      while ((getline line < f) > 0) {
+        if (first) { first = 0; if (line ~ /^VERSION/) continue }
+        if (skip) { skip = 0; continue }
+        if (line ~ /^\*cf:/) { nb++; if (line ~ /[ \t]label[ \t]*$/) skip = 1 }
+        m = split(line, t)
+        for (i = 1; i <= m; i++) { v[++n] = t[i]; blk[n] = nb }
+      }
+      close(f)
+      return n
+    }
+    function isnum(s) { return s ~ /^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eEdD][-+]?[0-9]+)?$/ }
+    function val(s) { sub(/[dD]/, "e", s); s = s + 0; return s < 0 ? -s : s }
+    BEGIN {
+      na = load(ARGV[1], a, ba); nb = load(ARGV[2], b, bb)
+      if (na != nb) exit 1
+      for (i = 1; i <= na; i++) {
+        if (ba[i] != bb[i]) exit 1
+        if (isnum(a[i]) && val(a[i]) > big[ba[i]]) big[ba[i]] = val(a[i])
+      }
+      for (i = 1; i <= na; i++) {
+        if (a[i] == b[i]) continue
+        if (!isnum(a[i]) || !isnum(b[i])) exit 1
+        x = a[i]; y = b[i]; sub(/[dD]/, "e", x); sub(/[dD]/, "e", y)
+        d = x - y; if (d < 0) d = -d
+        if (d > 1e-10 * big[ba[i]]) exit 1
+      }
+      exit 0
+    }' "$1" "$2"
+}
+for r in $runs; do
+  for f in $base_copies; do
+    [ -e "$src/$r/$f" ] || continue
+    [ -e "$sb/$f" ] || \
+      die "$r/$f is not in the baserun, whose files the conversion uses: copy it to the baserun of $src, or remove it if not needed"
+    same_content "$sb/$f" "$src/$r/$f" || \
+      die "$r/$f differs from baserun/$f, but the conversion uses the files of the baserun: remove $r/$f from $src if those are right"
+  done
+done
 
 out=$SOLPSTOP/runs/$(basename "$src")
 [ -e "$out" ] && die "$out exists already"
@@ -237,7 +290,7 @@ excl=( b2fplasma b2fplasmf b2fstate b2fstati b2fparam b2fmovie b2ftrace b2ftrack
        vertex_data.out da1 da2 dsp dsa dsi dsl dsr dstl dstr dsL dsLT dsLP dsR
        dsRT dsRP dsTL dsTLT dsTLP dsTR dsTRT dsTRP '*.i' b2mn.exe.dir
        b2time.nc b2batch.nc b2tallies.nc b2movies.nc eirenemovies.nc
-       b2us.exe.dir conversion.log )
+       b2us.exe.dir conversion.log $base_copies )
 for t in $old_trc; do excl+=( "tracing/$t.trc" ); done
 ropts=()
 for e in "${excl[@]}"; do ropts+=( "--exclude=/$e" ); done
@@ -276,6 +329,9 @@ for r in $runs; do
     [ -f "$sr/tracing/$t.trc" ] && \
       echo "$r: tracing/$t.trc not copied (its layout differs in the unstructured code, which could not continue it)"
   done
+  copies=""
+  for f in $base_copies; do [ -e "$sr/$f" ] && copies="$copies $f"; done
+  [ -z "$copies" ] || echo "$r:$copies not copied (the same as in the baserun, whose files the run uses)"
   comment_prohibited "$dr/b2mn.dat" "$r"
   check_transport "$dr/b2mn.dat" "$r"
   warn_defaults "$dr/b2mn.dat" "$r"
