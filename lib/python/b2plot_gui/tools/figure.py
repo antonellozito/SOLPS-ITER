@@ -11,7 +11,9 @@ import os
 import re
 
 import matplotlib
+import numpy as np
 from matplotlib import colormaps, colors as mcolors
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.ticker import LogFormatterSciNotation
 
@@ -38,11 +40,82 @@ FAMILY = {"frames": "line", "sumframes": "sums"}   # of all the frames
 FRAMES_CMAP = "viridis"             # colours along the frames at first
 OTHER = 0.2                         # width, marker size: frames not shown
 OTHER_ALPHA = 0.6                   # opacity of their lines
+ALL_WIDTH = 0.5                     # profiles of all the frames at first
+NOW_COLOURS = ("#000000", "#000000")    # the profile shown at first (|v|,
+NOW_STYLES = ("-", "--")                # v·n), thick
+NOW_WIDTH = 2.5
 
 
 def main_lines(lines):
     """The lines of the frame shown (all, without the frames)."""
     return [ln for ln in lines if getattr(ln, "frame", (0, True))[1]]
+
+
+class BarColorButton(ColorButton):
+    """The colour of the profile shown, as long and high as the colour bar
+    of the row All above it (bar: its CmapChooser), rounded as it."""
+
+    def __init__(self, color, bar, parent=None):
+        super().__init__(color, parent)
+        self.bar = bar
+        bar.installEventFilter(self)
+        self._swatch()
+
+    def _swatch(self):
+        bar = getattr(self, "bar", None)
+        if bar is None:
+            return super()._swatch()
+        opt = QtWidgets.QStyleOptionComboBox()
+        bar.initStyleOption(opt)
+        rect = bar.style().subControlRect(
+            QtWidgets.QStyle.CC_ComboBox, opt,
+            QtWidgets.QStyle.SC_ComboBoxEditField, bar).adjusted(3, 3, -3, -3)
+        if rect.width() <= 4:
+            return super()._swatch()
+        dpr = self.devicePixelRatioF()
+        pix = QtGui.QPixmap(round(rect.width() * dpr),
+                            round(rect.height() * dpr))
+        pix.setDevicePixelRatio(dpr)
+        pix.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(pix)
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        painter.setPen(QtGui.QPen(bar.palette().color(QtGui.QPalette.Mid),
+                                  1.0))
+        painter.setBrush(QtGui.QColor(mcolors.to_hex(theme.rgb(
+            self.color()))))
+        painter.drawRoundedRect(QtCore.QRectF(
+            0.5, 0.5, rect.width() - 1.0, rect.height() - 1.0), 3.0, 3.0)
+        painter.end()
+        self.setIconSize(rect.size())
+        self.setIcon(QtGui.QIcon(pix))
+
+    def eventFilter(self, obj, event):
+        if obj is getattr(self, "bar", None) and \
+                event.type() == QtCore.QEvent.Resize:
+            self._swatch()
+        return False
+
+
+def frame_lines(ax, x, ys, ts, curve=0):
+    """The profiles ys (against x) of all the frames, at the positions ts
+    along them (0 to 1), as one collection (hundreds drawn and zoomed
+    fast; the row All of the options styles them); curve: the curve of the
+    profile shown they belong to."""
+    x = np.asarray(x, float)
+    ys = [np.asarray(y, float) for y in ys if y is not None and
+          len(y) == len(x)]
+    if not ys:
+        return None
+    lc = LineCollection([np.column_stack((x, y)) for y in ys],
+                        label="_frames")
+    lc.frames, lc.curve = np.asarray(ts, float)[:len(ys)], curve
+    ax.add_collection(lc, autolim=False)
+    pts = np.column_stack((np.tile(x, len(ys)), np.concatenate(ys)))
+    pts = pts[np.isfinite(pts).all(axis=1)]
+    if len(pts):
+        ax.update_datalim(pts)
+        ax.autoscale_view()
+    return lc
 
 
 def _number(edit):
@@ -80,10 +153,12 @@ class FigureOptions(QtWidgets.QGroupBox):
     markers) or the bars of a histogram (colour, bins), then the axes
     (limits, empty: automatic; logarithmic; grid); for values against the
     chord number ("sums") only the colour and symbol of the markers and
-    the y axis; with all the frames of a movie ("frames", "sumframes") a
-    colour map along the frames instead of a colour, the frames not
-    shown a fifth as wide (lines, at 60 percent opacity) or as large
-    (markers); changed() after each choice."""
+    the y axis; with all the frames of a movie ("sumframes") a colour map
+    along the frames instead of a colour, the markers of the frames not
+    shown a fifth as large; with the profiles of all the frames ("frames")
+    per curve a row All (colour map along the frames, line style and
+    width, 60 percent opaque) and a row Current (the profile shown, black
+    and thick at first); changed() after each choice."""
 
     def __init__(self, changed, parent=None):
         super().__init__("Plot options", parent)
@@ -170,7 +245,15 @@ class FigureOptions(QtWidgets.QGroupBox):
         lines = main_lines(lines)
         names = [ln.get_label() if not ln.get_label().startswith("_") else
                  "Profile" for ln in lines] if base == "line" else \
-            ["Markers"] * len(lines[:1]) if base == "sums" else []
+            ([ln.get_label() for ln in lines] if len(lines) > 1 and
+             kind == "sums" else ["Markers"] * len(lines[:1])) \
+            if base == "sums" else []       # markers of each species
+        if kind == "frames":            # all the profiles, the one shown
+            one = len(names) == 1
+            names = [n for name in names for n in (
+                "All profiles" if one else "All " + name,
+                "Current profile" if one else "Current " + name)]
+            lines = [ln for ln in lines for _ in (0, 1)]
         if kind == self.kind and names == [c[0] for c in self.curves]:
             return
         keep = FAMILY.get(self.kind, self.kind) == base and names == [
@@ -186,18 +269,26 @@ class FigureOptions(QtWidgets.QGroupBox):
         self.curves = []
         line = base == "line"           # sums: markers only
         for r, (name, ln) in enumerate(zip(names, lines)):
-            if kind in FAMILY:          # all the frames: a colour map
+            every = kind == "sumframes" or kind == "frames" and r % 2 == 0
+            now = kind == "frames" and r % 2 == 1
+            if every:                   # all the frames: a colour map
                 colour = CmapChooser(FRAMES_CMAP, diverging=False)
                 colour.setToolTip("Colours along the frames")
                 colour.currentIndexChanged.connect(
                     lambda *_: self.changed())
             else:
-                colour = ColorButton(mcolors.to_hex(ln.get_color()))
+                colour = BarColorButton(NOW_COLOURS[min(r // 2, 1)],
+                                        self.curves[-1][1]) if now else \
+                    ColorButton(mcolors.to_hex(ln.get_color()))
                 colour.changed.connect(lambda *_: self.changed())
+            style = NOW_STYLES[min(r // 2, 1)] if now else "-" if \
+                kind == "frames" else ln.get_linestyle()
+            width = NOW_WIDTH if now else ALL_WIDTH if every and \
+                kind == "frames" else ln.get_linewidth()
             row = (name, colour,
-                   LineStyleChooser(ln.get_linestyle(), with_none=True)
-                   if line else None,
-                   WidthChooser(ln.get_linewidth()) if line else None,
+                   LineStyleChooser(style, with_none=True) if line else None,
+                   WidthChooser(width) if line else None,
+                   None if every and kind == "frames" else
                    MarkerChooser(str(ln.get_marker())))
             for w in row[2:]:
                 if w is not None:
@@ -223,7 +314,31 @@ class FigureOptions(QtWidgets.QGroupBox):
     def apply(self, ax):
         """The choices on the axes drawn (the curves in order)."""
         lines = list(ax.lines)
-        if self.kind in FAMILY:         # all the frames
+        if self.kind == "frames":       # rows All and Current per curve
+            for lc in ax.collections:
+                ts = getattr(lc, "frames", None)
+                if ts is None:
+                    continue
+                _, cmap, style, width, _ = self.curves[min(
+                    2 * lc.curve, len(self.curves) - 2)]
+                lc.set_color(colormaps[cmap.name()](ts))
+                lc.set_alpha(OTHER_ALPHA)
+                lc.set_visible(style.currentData() != "None")
+                if style.currentData() != "None":
+                    lc.set_linestyle(style.currentData())
+                lc.set_linewidth(width.value())
+                lc.set_zorder(2.0)
+            for ln in main_lines(lines):
+                _, colour, style, width, marker = self.curves[min(
+                    2 * getattr(ln, "curve", 0) + 1, len(self.curves) - 1)]
+                ln.set_gid(colour.color())
+                ln.set_linestyle(style.currentData())
+                ln.set_linewidth(width.value())
+                ln.set_marker(marker.currentData())
+                ln.set_alpha(None)
+                ln.set_zorder(2.5)
+            lines = []
+        if self.kind == "sumframes":    # all the frames
             size = matplotlib.rcParams["lines.markersize"]
             for ln in lines:
                 t, shown = getattr(ln, "frame", (1.0, True))
@@ -337,6 +452,11 @@ class FigureView(QtWidgets.QWidget):
         self.canvas.resized = self._resized     # the box placed again
         self.ax = self.figure.add_subplot(111)
         self.nav = Navigator(self.canvas, self.ax)
+        self.background = None  # all but the profile shown (blitted over)
+        self.drawn = None       # key of the draw on the axes
+        self.stale = False      # set while hidden: drawn once shown
+        self.logx = False
+        self.canvas.mpl_connect("draw_event", self._drawn)
         self.options = FigureOptions(self.redraw)
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -378,9 +498,27 @@ class FigureView(QtWidgets.QWidget):
                    name="plot"):
         """draw(ax, options) makes the figure (kind "line": curves,
         "hist": a histogram, at first on a logarithmic axis with logx);
-        rows are what Export writes, name the file name offered."""
+        rows are what Export writes, name the file name offered. Not drawn
+        while its section is not painted (a frame of a movie drawn into
+        an image) or hidden (another tab): only kept, drawn when it is
+        shown. A draw with a key (draw.key) equal to the one drawn and
+        draw.current(options) only moves its moving lines (moves True,
+        e.g. the profile shown over all the frames, the time line): their
+        [(x, y)] set, blitted over the rest."""
+        same = kind == getattr(self, "kind", None) and getattr(
+            draw, "key", None) is not None and self.drawn == draw.key and \
+            not self.stale
         self.draw, self.header, self.rows, self.name = draw, list(header), \
             list(rows), name
+        self.kind, self.logx = kind, logx
+        if not self.updatesEnabled():
+            return
+        if not self.isVisible():
+            self.stale = True
+            return
+        self.stale = False
+        if same and self._move(draw.current(self.options)):
+            return
         self.ax.clear()
         draw(self.ax, self.options)
         new = FAMILY.get(kind, kind) != FAMILY.get(self.options.kind,
@@ -392,6 +530,48 @@ class FigureView(QtWidgets.QWidget):
             self.options.logx.blockSignals(False)
         self.redraw()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.stale:                  # once shown (a tab switched off
+            QtCore.QTimer.singleShot(0, self._fresh)    # the updates)
+
+    def _fresh(self):
+        """The figure kept while hidden, drawn now that it is shown."""
+        if self.stale and self.draw is not None and self.isVisible() and \
+                self.updatesEnabled():
+            self.stale = False
+            self.set_figure(self.draw, self.header, self.rows, self.kind,
+                            self.logx, self.name)
+
+    def _move(self, curves):
+        """The moving lines moved to curves ([(x, y)]): only they are
+        drawn again, over the rest kept (False: drawn as a whole)."""
+        lines = [ln for ln in self.ax.lines if getattr(ln, "moves", False)]
+        if not lines or len(lines) != len(curves):
+            return False
+        for ln, (x, y) in zip(lines, curves):
+            ln.set_data(x, y)
+        if self.background is None:
+            self.canvas.draw_idle()
+            return True
+        self.canvas.restore_region(self.background)
+        for ln in lines:
+            self.ax.draw_artist(ln)
+        self.canvas.blit(self.ax.bbox)
+        return True
+
+    def _drawn(self, event):
+        """After each drawing of the canvas: the plot without its moving
+        lines kept, the lines drawn over it."""
+        self.background = None
+        lines = [ln for ln in self.ax.lines if ln.get_animated()]
+        if event.canvas is not self.canvas or not lines or \
+                self.canvas.is_saving():
+            return
+        self.background = self.canvas.copy_from_bbox(self.ax.bbox)
+        for ln in lines:
+            self.ax.draw_artist(ln)
+
     def redraw(self):
         """The figure again with the options, its whole view the home of
         the mouse zoom."""
@@ -399,7 +579,10 @@ class FigureView(QtWidgets.QWidget):
             return
         self.ax.clear()
         self.draw(self.ax, self.options)
+        self.drawn = getattr(self.draw, "key", None)
         self.options.apply(self.ax)
+        for ln in self.ax.lines:        # drawn over the background
+            ln.set_animated(getattr(ln, "moves", False))
         self.ax.set_box_aspect(PLOT_ASPECT)
         self.apply_theme()
         self.nav.set_home()

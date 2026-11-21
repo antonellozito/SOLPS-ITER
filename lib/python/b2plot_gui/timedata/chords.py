@@ -10,21 +10,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..catalog import NEUTRAL_TRIANGLES, OTHER_GROUP, SOLPS_GROUPS, \
+    solps_order
 from ..tools import measure
 from .files import Item, NcFile, summed, unit
 
-# groups of the quantities of b2chords.nc (those of eirenechords.nc: one)
-GROUPS = (("Plasma state", r"na|ne|ua|te|ti|po"),
-          ("Flux densities", r"f(na|he|hi|ch)[xy]"),
-          ("Transport coefficients", r"dna|dpa|hc[ei]|vla[xy]|vsa"),
-          ("Sources", r"r(sa|ra|cx)(na|hi|hisum)|rqahe(sum)?|rqrad(sum)?"),
-          ("Neutrals on the B2.5 grid (EIRENE)", r"[dt][am]b2"),
-          ("Neutral fluxes on the B2.5 grid (EIRENE)",
-           r"(r|p|re|pe)flux[am]"),
-          ("Neutral sources on the B2.5 grid (EIRENE)",
-           r"eirene_\w+|eneutrad(sum)?|emolrad(sum)?"))
-TRIANGLES = "Neutrals on the EIRENE triangles"
-OTHER = "Other"
+# groups of the quantities of b2chords.nc (those of eirenechords.nc: one),
+# as those of the movie files
+GROUPS = SOLPS_GROUPS
+TRIANGLES = NEUTRAL_TRIANGLES
+OTHER = OTHER_GROUP
 SPECIES = ("ns", "natm", "nmol")
 GAP = 1.5                           # steps: the chord left the grid there
 
@@ -106,6 +101,13 @@ class ChordFile(NcFile):
 
     def species_count(self, item):
         return len(self.nc.dimensions[item.dim]) if item.dim else 1
+
+
+def ordered(items):
+    """The quantities of the chord files in the order of their groups (the
+    EIRENE triangles after the B2.5 grid, whatever the file order) and
+    within them as those of the movie files (catalog.solps_order)."""
+    return solps_order(items)
 
 
 def line_sums(chord, values):

@@ -225,11 +225,67 @@ def chord_quantities(layers, eirene):
     return out
 
 
-MOVIE_GROUPS = {(1, 1): "Movie: B2.5 cells", (1, 2): "Movie: B2.5 faces "
-                "(at the cells)", (2, 3): "Movie: EIRENE"}
-MOVIE_VECTORS = {1: "Movie: B2.5 vectors", 2: "Movie: EIRENE vectors"}
-MOVIE_ORDER = [MOVIE_GROUPS[1, 1], MOVIE_GROUPS[1, 2], MOVIE_VECTORS[1],
-               MOVIE_GROUPS[2, 3], MOVIE_VECTORS[2], "Movie"]
+# groups of the B2.5 and EIRENE quantities of the movie files and of the
+# chord files (the same variables), by name in this order; EIRENE ones on
+# its triangles one group; vectors: the plasma and the neutral fluxes
+SOLPS_GROUPS = (("Plasma state", r"na|ne|ua|te|ti|po"),
+                ("Plasma fluxes", r"f(na|he|hi|ch)[xy]"),
+                ("Plasma sources",
+                 r"r(sa|ra|cx)(na|hi|hisum)|rqahe(sum)?|rqrad(sum)?"),
+                ("Transport coefficients", r"dna|dpa|hc[ei]|vla[xy]|vsa"),
+                ("Neutrals state", r"[dt][am]b2"),
+                ("Neutrals fluxes", r"(r|p|re|pe)flux[am][xy]?"),
+                ("Neutrals sources",
+                 r"eirene_\w+|eneutrad(sum)?|emolrad(sum)?"))
+NEUTRAL_TRIANGLES = "Neutrals (triangles)"
+OTHER_GROUP = "Other"
+MOVIE_ORDER = [g for g, _ in SOLPS_GROUPS] + [NEUTRAL_TRIANGLES,
+                                              OTHER_GROUP]
+# order of the quantities within some groups (the others: as in the files)
+WITHIN = {"Plasma state": ("ne", "na", "ua", "te", "ti", "po"),
+          "Transport coefficients": ("dna", "dpa", "vlax", "vlay", "vsa",
+                                     "hce", "hci"),
+          # atom-plasma, molecule-plasma interactions (each with its
+          # radiation), recombinations
+          "Neutrals sources": ("eirene_papl_sna", "eirene_eael_she",
+                               "eirene_eapl_shi", "eneutrad", "eneutradsum",
+                               "eirene_pmpl_sna", "eirene_emel_she",
+                               "eirene_empl_shi", "emolrad", "emolradsum",
+                               "eirene_pppl_sna", "eirene_epel_she",
+                               "eirene_eppl_shi")}
+
+
+def solps_order(items, first=()):
+    """items (with name and group) of the movie or chord files in the order
+    of their groups (MOVIE_ORDER; first: groups before them), within a
+    group as WITHIN says, the poloidal neutral fluxes (pflux*, peflux*)
+    before their radial ones (rflux*, reflux*), else in file order."""
+    order = list(first) + MOVIE_ORDER
+    at = {i.name: k for k, i in reversed(list(enumerate(items)))}
+
+    def rank(k, i):
+        within = WITHIN.get(i.group, ())
+        if i.name in within:
+            return (within.index(i.name), 0)
+        twin = re.sub(r"^p(e?flux)", r"r\1", i.name)
+        if twin != i.name and twin in at:       # poloidal: before radial
+            return (len(within) + at[twin], 0)
+        return (len(within) + k, 1 if re.match(r"re?flux", i.name) else 0)
+    return [i for _, _, i in sorted(
+        ((order.index(i.group) if i.group in order else len(order),
+          rank(k, i), k), k, i) for k, i in enumerate(items))]
+
+
+def solps_group(name, eirene=False, vector=False):
+    """Group of a quantity of the movie or chord files (vector: of a flux
+    vector, plasma or neutral)."""
+    neutral = eirene or re.fullmatch(SOLPS_GROUPS[5][1], name)
+    if vector:
+        return SOLPS_GROUPS[5][0] if neutral else SOLPS_GROUPS[1][0]
+    if eirene:
+        return NEUTRAL_TRIANGLES
+    return next((g for g, p in SOLPS_GROUPS if re.fullmatch(p, name)),
+                OTHER_GROUP)
 
 
 def translator(categories):
@@ -296,20 +352,20 @@ def movie_quantities(movies, derived_quantities=()):
         variables = movies[f].variables
         names = {v.name: v for v in variables}
         for v in variables:
-            out.append(Quantity(v.name, _movie_text(v), MOVIE_GROUPS.get(
-                (f, v.location), "Movie"), "eirene" if f == 2 else
-                "matrix", movie=f))
+            out.append(Quantity(v.name, _movie_text(v),
+                                solps_group(v.name, f == 2),
+                                "eirene" if f == 2 else "matrix", movie=f))
             y = _movie_partner(v, names)
             w = names.get(y)
-            if w is None or (w.location, w.ncol) != (v.location, v.ncol):
-                continue
+            if w is None or (w.location, w.ncol) != (v.location, v.ncol) \
+                    or solps_group(v.name, f == 2) == SOLPS_GROUPS[3][0]:
+                continue            # no vector of transport coefficients
+            #                         (the anomalous pinch velocities)
             desc = re.sub(r"(?i)\b(poloidal|x-directed)\s+", "",
                           _movie_text(v), count=1)
             vectors.append(Quantity(
                 "%s %s" % (v.name, y), desc[:1].upper() + desc[1:],
-                MOVIE_VECTORS[f], "evector" if f == 2 else "vector",
+                solps_group(v.name, f == 2, vector=True),
+                "evector" if f == 2 else "vector",
                 v.name, y, movie=f))
-    out += vectors
-    out.sort(key=lambda q: -1 if q.group == DERIVED else
-             MOVIE_ORDER.index(q.group))                    # stable
-    return out
+    return solps_order(out + vectors, first=(DERIVED,))

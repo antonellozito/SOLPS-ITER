@@ -1,9 +1,10 @@
 """Sections of the quantity column for the chords and the statistics of the
 quantity shown (opened from the Species row): buttons, the summary, the
 figure and its options. The chords have a tab each (numbered as on the
-plot: how it is drawn there, its ends, its profile), and with two or more
-a figure under the tabs of the line integrals or of the line averages
-against the chord number."""
+plot: how it is drawn there, its ends, its profile), and under the tabs
+the line integrals or averages against the chord number (two or more
+chords) and in time (ChordSums; the Chords tab of Run tracing has the same
+tabs and plots)."""
 
 from ..panels.glyphs import LineStyleChooser, WidthChooser
 from ..panels.layers import ColorButton
@@ -37,7 +38,9 @@ def _text():
 class ChordTab(QtWidgets.QWidget):
     """One chord: how it is drawn on the plot, its ends, the sums along
     it with Save plot and Export of its profile at their right, its
-    profile; restyled() after a change of how it is drawn."""
+    profile; under it (second, shown with a plasma and a vector quantity
+    plotted) the same for the vector quantity; restyled() after a change
+    of how it is drawn."""
 
     def __init__(self, settings, restyled, parent=None):
         super().__init__(parent)
@@ -69,12 +72,29 @@ class ChordTab(QtWidgets.QWidget):
         sums.addWidget(self.text, 1)
         sums.addWidget(save)
         sums.addWidget(export)
+        self.text_v = _text()           # the vector quantity, under it
+        self.view_v = FigureView(settings)
+        self.second = QtWidgets.QWidget()
+        rows = QtWidgets.QVBoxLayout(self.second)
+        rows.setContentsMargins(0, 0, 0, 0)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.text_v, 1)
+        row.addWidget(_button("Save plot", "The profile of the vector "
+                              "quantity along this chord as an image or "
+                              "vector file", lambda: self.view_v.save()))
+        row.addWidget(_button("Export…", "The profile of the vector "
+                              "quantity along this chord as a CSV file",
+                              lambda: self.view_v.export()))
+        rows.addLayout(row)
+        rows.addWidget(self.view_v)
+        self.second.hide()
         lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(4, 6, 4, 4)
+        lay.setContentsMargins(4, 6, 4, 0)
         lay.addLayout(look)
         lay.addWidget(self.ends)
         lay.addLayout(sums)
         lay.addWidget(self.view)
+        lay.addWidget(self.second)
 
     def sizeHint(self):                 # hidden: no room taken in the tabs
         s = super().sizeHint()
@@ -105,6 +125,96 @@ class ChordTab(QtWidgets.QWidget):
             w.blockSignals(False)
 
 
+class ChordSums(QtWidgets.QWidget):
+    """Under the chord tabs: the line integrals or averages (one menu for
+    all the plots, in the row of the first one shown) against the chord
+    number (two or more chords) and in time (a curve per chord), each plot
+    with Save plot and Export; with a plasma and a vector quantity both
+    (second: sums_v, trace_v under the plasma ones); changed() after
+    another choice in the menu."""
+
+    def __init__(self, settings, changed, margins=(4, 0, 4, 0),
+                 parent=None):
+        super().__init__(parent)
+        self.which = QtWidgets.QComboBox()
+        for text, key in SUMS:
+            self.which.addItem(text, key)
+        self.which.setToolTip("The line integrals or the line averages, "
+                              "against the chord number and in time")
+        self.which.currentIndexChanged.connect(lambda *_: changed())
+        self.sums, self.sums_box, self.sums_row = self._plot(
+            settings, "The integrals and averages of the chords as a CSV "
+            "file", margins)
+        self.trace, self.trace_box, self.trace_row = self._plot(
+            settings, "The integrals and averages of the chords in time as "
+            "a CSV file", margins)
+        self.sums_v, self.sums_v_box, _ = self._plot(
+            settings, "The integrals and averages of the vector quantity "
+            "along the chords as a CSV file", margins)
+        self.trace_v, self.trace_v_box, _ = self._plot(
+            settings, "The integrals and averages of the vector quantity "
+            "along the chords in time as a CSV file", margins)
+        self.margins = margins
+        self.trace.options.xaxes = False
+        self.trace_v.options.xaxes = False
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(2)
+        for box in (self.sums_box, self.sums_v_box, self.trace_box,
+                    self.trace_v_box):
+            lay.addWidget(box)
+        squeezable(self)
+        self.set_shown(False, False)
+
+    @staticmethod
+    def _plot(settings, tip, margins):
+        view = FigureView(settings)
+        save = _button("Save plot", "This plot as an image or vector file",
+                       lambda: view.save())
+        export = _button("Export…", tip, lambda: view.export())
+        box = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(save)
+        row.addWidget(export)
+        lay = QtWidgets.QVBoxLayout(box)
+        lay.setContentsMargins(*margins)
+        lay.setSpacing(2)
+        lay.addLayout(row)
+        lay.addWidget(view)
+        squeezable(box)
+        return view, box, row
+
+    def key(self):
+        """"integral" or "average"."""
+        return self.which.currentData()
+
+    def set_shown(self, sums, trace, second=False):
+        """The plot against the chord number, the one in time (second: those
+        of the vector quantity too); the menu in the row of the first
+        one."""
+        row = self.sums_row if sums or not trace else self.trace_row
+        if row.indexOf(self.which) != 0:
+            for other in (self.sums_row, self.trace_row):
+                other.removeWidget(self.which)
+            row.insertWidget(0, self.which)
+        left, top, right, bottom = self.margins
+        self.trace_box.layout().setContentsMargins(     # apart from the
+            left, top + (8 if sums else 0), right, bottom)  # options above
+        self.sums_box.setVisible(sums)
+        self.trace_box.setVisible(trace)
+        self.sums_v_box.setVisible(sums and second)
+        self.trace_v_box.setVisible(trace and second)
+        for box in (self.sums_v_box, self.trace_v_box):
+            box.layout().setContentsMargins(left, top + 8, right, bottom)
+        self.setVisible(sums or trace)
+
+    def apply_theme(self):
+        for view in (self.sums, self.trace, self.sums_v, self.trace_v):
+            if view.draw is not None:
+                view.apply_theme()
+
+
 class ChordsSection(QtWidgets.QGroupBox):
     """The chords drawn or typed, or (never mixed) those of the *.chords
     files of the run; Draw chord (two clicks on the plot, one chord each,
@@ -112,9 +222,10 @@ class ChordsSection(QtWidgets.QGroupBox):
     sums of all the frames), with a plasma and a vector quantity plotted
     the one measured, Close;
     tabs: one per chord (x removes a drawn one), "+" adds one to type its
-    ends, Clear all removes them all; under them, with two or more, the
-    line integrals or averages against the chord number. The owner
-    (tools.control.Tools) fills it."""
+    ends, Clear all removes them all; under them (ChordSums) the line
+    integrals or averages against the chord number (two or more) and,
+    with a movie quantity, in time. The owner (tools.control.Tools) fills
+    it."""
 
     def __init__(self, owner, settings, parent=None):
         super().__init__("Chords", parent)
@@ -135,13 +246,14 @@ class ChordsSection(QtWidgets.QGroupBox):
         self.target = QtWidgets.QComboBox()     # with both plotted only
         for text, key in TARGETS:
             self.target.addItem(text, key)
-        self.target.setToolTip("The chords along the plasma quantity or "
-                               "along the vector quantity plotted")
+        self.target.setToolTip("The sums under the tabs of the plasma "
+                               "quantity or of the vector quantity plotted "
+                               "(the tabs show the profiles of both)")
         self.target.currentIndexChanged.connect(owner.set_target)
         self.target.hide()
         self.show_all = QtWidgets.QCheckBox("Show all")
         self.show_all.setToolTip("The profiles and the sums of all the "
-                                 "frames, the frame shown thicker, colours "
+                                 "frames, the frame shown over them, colours "
                                  "along the frames")
         self.show_all.toggled.connect(lambda on: owner.set_show_all(on))
         self.show_all.hide()            # with the movies only
@@ -180,36 +292,20 @@ class ChordsSection(QtWidgets.QGroupBox):
         self.hint = QtWidgets.QLabel("No chord yet: Draw chord, or + to type "
                                      "the ends of one")
         self.hint.setProperty("muted", True)
-        self.which = QtWidgets.QComboBox()      # the sums shown
-        for text, key in SUMS:
-            self.which.addItem(text, key)
-        self.which.setToolTip("The line integrals or the line averages "
-                              "against the chord number")
-        self.which.currentIndexChanged.connect(lambda *_: owner.show_sums())
-        sums_save = _button("Save plot", "This plot as an image or vector "
-                            "file", lambda: self.sums.save())
-        sums_export = _button("Export…", "The integrals and averages of the "
-                              "chords as a CSV file",
-                              lambda: self.sums.export())
-        self.sums = FigureView(settings)
-        self.sums_box = QtWidgets.QWidget()
-        row = QtWidgets.QHBoxLayout()
-        row.addWidget(self.which)
-        row.addStretch(1)
-        row.addWidget(sums_save)
-        row.addWidget(sums_export)
-        sl = QtWidgets.QVBoxLayout(self.sums_box)
-        sl.setContentsMargins(4, 6, 4, 0)      # as wide as a chord tab
-        sl.addLayout(row)
-        sl.addWidget(self.sums)
-        squeezable(self.sums_box)
+        # under the tabs: against the chord number (two or more chords)
+        # and in time (Run movies), one menu for both
+        self.board = ChordSums(settings, owner.show_sums)
+        self.which, self.sums, self.trace = (self.board.which,
+                                             self.board.sums,
+                                             self.board.trace)
+        self.sums_v, self.trace_v = self.board.sums_v, self.board.trace_v
+        self.sums_box = self.board.sums_box
         self.chords = []                # ChordTab
         lay = QtWidgets.QVBoxLayout(self)
         lay.addLayout(top)
         lay.addWidget(self.hint)
         lay.addWidget(self.tabs)
-        lay.addWidget(self.sums_box)
-        self.sums_box.hide()
+        lay.addWidget(self.board)
 
     def set_editable(self, on):
         """Chords drawn or typed (True) or those of the run (False)."""
@@ -252,8 +348,10 @@ class ChordsSection(QtWidgets.QGroupBox):
         if isinstance(w, ChordTab):
             self.owner.remove_chord(self.chords.index(w))
 
-    def set_count(self, n):
-        """n chord tabs (numbered 1 to n); the sums with two or more."""
+    def set_count(self, n, trace=False, second=False):
+        """n chord tabs (numbered 1 to n); the sums with two or more, the
+        sums in time (trace) with one or more (second: those of the vector
+        quantity too)."""
         while len(self.chords) < n:
             k = len(self.chords)
             tab = ChordTab(self.settings, lambda k=k: self.owner.restyle(k))
@@ -270,7 +368,7 @@ class ChordsSection(QtWidgets.QGroupBox):
         self._crosses()
         self.tabs.setVisible(n > 0)
         self.hint.setVisible(n == 0)
-        self.sums_box.setVisible(n >= 2)
+        self.board.set_shown(n >= 2, trace and n >= 1, second)
 
     def moved(self, tab, coords):
         """New ends typed in a chord tab."""

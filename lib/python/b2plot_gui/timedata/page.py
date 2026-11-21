@@ -4,20 +4,20 @@ traces what is shown with them (mean and standard deviation, rolling or
 batch means) and the place chosen on the plot, for the profiles and the
 chords the frames shown (as in Run movies, with Show all); in each tab
 the table of its quantities (a species menu in its title), what is shown,
-its plot; the chords also their set and chord, and the line integrals or
-averages in time."""
+its plot; the chords their set, a tab per chord and the line integrals or
+averages against the chord number and in time."""
 
 import html
 import re
 
 from ...qt import QtCore, QtWidgets, Qt, Signal
-from ..panels.quantity import (SingleClicks, fill_tree, make_tree,
-                               mark_group, tree_height)
+from ..panels.quantity import (MOVIE_ROWS, SingleClicks, fill_tree,
+                               make_tree, mark_group, tree_height)
 from ..panels.species import SpeciesMenu
 from ..panels.timebox import FrameBox
 from ..scaling import squeezable
 from ..tools.figure import FigureView
-from ..tools.sections import SUMS, _button
+from ..tools.sections import ChordSums, ChordTab, _button
 
 TABS = (("Time traces", "trace", "Time traces of b2time.nc: values at the "
          "separatrix at the outer midplane and at the targets, maxima and "
@@ -26,12 +26,19 @@ TABS = (("Time traces", "trace", "Time traces of b2time.nc: values at the "
          "and along the targets"),
         ("Chords", "chord", "Profiles along the chords of the *.chords "
          "files of the run (b2chords.nc, eirenechords.nc), their line "
-         "integrals and averages in time"))
-ROWS = 10                           # rows of a table
+         "integrals and averages in time"),
+        ("Volume tallies", "vtally", "Time traces of b2tallies.nc by "
+         "volume region: averages, sources, atomic processes, energy "
+         "terms, residuals"),
+        ("Surface tallies", "stally", "Time traces of b2tallies.nc by face "
+         "region: the fluxes through its faces"))
+TRACES = ("trace", "vtally", "stally")  # time traces: the Show menu
+ROWS = MOVIE_ROWS                   # rows of a table: as in Run movies
 HINT = "Choose a quantity in the table"
 SHOW = (("Only time trace", "trace"), ("Mean + standard deviation", "mean"),
-        ("Rolling mean", "rolling"), ("Batch mean", "batch"))
-WINDOWED = ("rolling", "batch")
+        ("Rolling mean", "rolling"), ("Batch mean", "batch"),
+        ("Phase mean", "phase"))
+WINDOWED = ("rolling", "batch", "phase")
 RAISED = {"sup": str.maketrans("0123456789+-", "\u2070\u00b9\u00b2\u00b3"
                                "\u2074\u2075\u2076\u2077\u2078\u2079"
                                "\u207a\u207b"),
@@ -100,11 +107,14 @@ class TraceBox(QtWidgets.QWidget):
         self.mode.setToolTip("The time trace alone, with its mean and "
                              "standard deviation over the whole trace, "
                              "with its rolling means (every window of "
-                             "consecutive frames) or its batch means "
-                             "(consecutive blocks of frames)")
+                             "consecutive frames), its batch means "
+                             "(consecutive blocks of frames) or its phase "
+                             "means (the frames one window apart, as many "
+                             "means as the window)")
         self.window = QtWidgets.QSpinBox()
         self.window.setKeyboardTracking(False)
-        self.window.setToolTip("Frames per window or block")
+        self.window.setToolTip("Frames per window or block; phase: the "
+                               "frames between those averaged together")
         self.window_label = QtWidgets.QLabel("Window")
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 4, 0, 0)
@@ -148,7 +158,7 @@ class Part(QtWidgets.QWidget):
         self.where.setTextFormat(Qt.RichText)
         self.where.hide()
         self.tree = make_tree(title, "plot it")
-        self.species = SpeciesMenu(self.tree, title, what)
+        self.species = SpeciesMenu(self.tree, title, what, multi=True)
         self._new_click = SingleClicks()
         self.tree.itemClicked.connect(self._clicked)
         self.tree.itemActivated.connect(self._clicked)
@@ -247,62 +257,92 @@ class Part(QtWidgets.QWidget):
 
 
 class ChordPart(Part):
-    """The Chords tab: the set of chords and the chord shown over the
-    table; under the profile, the line integrals or averages in time."""
+    """The Chords tab: the set of chords over the table; under it, as in
+    the Chords section of the plots, a tab per chord of the set (numbered
+    as on the plot: how it is drawn there, its ends, its line integral and
+    average at the position, its profile) and the line integrals or
+    averages against the chord number (two or more chords) and in time (a
+    curve per chord); restyled() after a change of how a chord is drawn,
+    sums_changed() after the other sums chosen."""
+
+    restyled = Signal()
+    sums_changed = Signal()
 
     def __init__(self, title, what, settings, parent=None):
         super().__init__(title, what, settings, parent)
+        self.settings = settings
         self.set_menu = QtWidgets.QComboBox()
         self.set_menu.setToolTip("The chords of one *.chords file of the "
                                  "run")
-        self.chord_menu = QtWidgets.QComboBox()
-        self.chord_menu.setToolTip("The chord shown (its line in the chord "
-                                   "file), glowing on the plot")
         top = QtWidgets.QHBoxLayout()
-        for w in (QtWidgets.QLabel("Chords of"), self.set_menu,
-                  QtWidgets.QLabel("chord"), self.chord_menu):
+        for w in (QtWidgets.QLabel("Chords of"), self.set_menu):
             top.addWidget(w)
         top.addStretch(1)
         self.lay.insertLayout(0, top)
-        self.which = QtWidgets.QComboBox()
-        for text, key in SUMS:
-            self.which.addItem(text, key)
-        self.which.setToolTip("The line integrals or the line averages "
-                              "along the chord in time")
-        self.sums = FigureView(settings)
-        self.sums.options.xaxes = False
-        self.sums_save = _button("Save plot", "This plot as an image or "
-                                 "vector file", lambda: self.sums.save())
-        self.sums_export = _button("Export…", "The line integrals or "
-                                   "averages in time as a CSV file",
-                                   lambda: self.sums.export())
-        self.sums_box = QtWidgets.QWidget()
-        row = QtWidgets.QHBoxLayout()
-        row.addWidget(self.which)
-        row.addStretch(1)
-        row.addWidget(self.sums_save)
-        row.addWidget(self.sums_export)
-        sl = QtWidgets.QVBoxLayout(self.sums_box)
-        sl.setContentsMargins(0, 6, 0, 0)
-        sl.addLayout(row)
-        sl.addWidget(self.sums)
-        squeezable(self.sums_box)
-        self.lay.addWidget(self.sums_box)
-        self.sums_box.hide()
+        for w in (self.save, self.export, self.view):   # in the chord tabs
+            w.hide()
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setDocumentMode(True)
+        bar = self.tabs.tabBar()
+        bar.setDrawBase(False)          # no dark band beside the tabs
+        bar.setUsesScrollButtons(True)  # never wider with more chords
+        bar.setExpanding(False)
+        self.tabs.currentChanged.connect(self._shown)
+        self.chords = []                # ChordTab
+        self.board = ChordSums(settings, self.sums_changed.emit,
+                               margins=(0, 0, 0, 0))
+        self.which, self.sums, self.trace = (self.board.which,
+                                             self.board.sums,
+                                             self.board.trace)
+        self.lay.addWidget(self.tabs)
+        self.lay.addWidget(self.board)
+        self.tabs.hide()
+
+    def _buttons(self, on):             # the plots: in the chord tabs
+        pass
+
+    def _shown(self, *_):
+        """The tabs as high as the chord shown (not as the highest)."""
+        w = self.tabs.currentWidget()
+        if w is not None:
+            w.updateGeometry()
+        self.tabs.updateGeometry()
+
+    def set_count(self, n):
+        """n chord tabs (numbered 1 to n), their ends not editable."""
+        while len(self.chords) < n:
+            tab = ChordTab(self.settings, self.restyled.emit)
+            tab.ends.set_editable(False)
+            self.chords.append(tab)
+            self.tabs.addTab(tab, str(len(self.chords)))
+            squeezable(tab)
+        while len(self.chords) > n:
+            tab = self.chords.pop()
+            self.tabs.removeTab(self.tabs.indexOf(tab))
+            tab.deleteLater()
 
     def show_plot(self, on, text=HINT):
-        super().show_plot(on, text)
-        self.sums_box.setVisible(on)
+        """The chord tabs and the sums under them (on), else the text."""
+        self.text.setText(text)
+        self.text.setVisible(not on)
+        self.tabs.setVisible(on and bool(self.chords))
+        if not on:
+            self.board.set_shown(False, False)
+        else:
+            self.board.set_shown(len(self.chords) >= 2, bool(self.chords))
 
     def apply_theme(self):
         super().apply_theme()
-        if self.sums.draw is not None:
-            self.sums.apply_theme()
+        for tab in self.chords:
+            if tab.view.draw is not None:
+                tab.view.apply_theme()
+        self.board.apply_theme()
 
 
 class TracingPage(QtWidgets.QWidget):
-    """The page: the tabs, the frames, the tab shown (key: "trace",
-    "profile" or "chord"); changed() after another tab."""
+    """The page: the tabs and the frames (header: never scrolled), the tab
+    shown (key: "trace", "profile" or "chord"); changed() after another
+    tab."""
 
     changed = Signal()
 
@@ -319,20 +359,28 @@ class TracingPage(QtWidgets.QWidget):
         self.trace_box = TraceBox()
         self.show_all = QtWidgets.QCheckBox("Show all")
         self.show_all.setToolTip("The profiles of all the positions of the "
-                                 "slider, the one shown thicker, colours "
+                                 "slider, the one shown over them, colours "
                                  "along them")
         self.frames.play_row.layout().addWidget(self.show_all)
         self.parts = {
             "trace": Part("Time trace", "time trace", settings),
             "profile": Part("Profile", "profile", settings),
             "chord": ChordPart("Chord quantity", "chord quantity",
-                               settings)}
-        self.parts["trace"].view.options.xaxes = False
+                               settings),
+            "vtally": Part("Volume tally", "volume tally", settings),
+            "stally": Part("Surface tally", "surface tally", settings)}
+        for k in TRACES:
+            self.parts[k].view.options.xaxes = False
+        # the tabs and the rows of the frames or of the time traces: over
+        # the scrolled column (placed by the 2D tab), shown with the page
+        self.header = QtWidgets.QWidget()
+        hl = QtWidgets.QVBoxLayout(self.header)
+        hl.setContentsMargins(0, 0, 0, 6)
+        hl.addWidget(self.tabs)
+        hl.addWidget(self.trace_box)
+        hl.addWidget(self.frames)
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.addWidget(self.tabs)
-        lay.addWidget(self.trace_box)
-        lay.addWidget(self.frames)
         for part in self.parts.values():
             lay.addWidget(part)
             squeezable(part)
@@ -364,8 +412,8 @@ class TracingPage(QtWidgets.QWidget):
         key = self.key()
         for k, part in self.parts.items():
             part.setVisible(k == key)
-        self.trace_box.setVisible(key == "trace")
-        self.frames.setVisible(key != "trace")
+        self.trace_box.setVisible(key in TRACES)
+        self.frames.setVisible(key not in TRACES)
         self.frames.play.setChecked(False)
         self.changed.emit()
 

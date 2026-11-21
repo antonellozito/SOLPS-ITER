@@ -11,16 +11,14 @@ profiles and sums of every frame (loaded in the background, two requests
 at a time, only the profiles and sums kept)."""
 
 import numpy as np
-from matplotlib.ticker import FixedLocator, FormatStrFormatter, \
-    MaxNLocator
 
 from ...b2plot import labels
 from ...qt import QtCore, QtWidgets, Qt
-from .. import theme
 from ..model import split_unit
 from ..scaling import squeezable
-from . import inspect, measure
+from . import chordplots, inspect, measure
 from .base import MouseTools
+from .figure import frame_lines
 from .results import ResultsPanel
 from ..catalog import CHORD_POINTS
 from .sections import LOOK, ChordsSection, StatisticsSection
@@ -30,6 +28,16 @@ WHERE = {"shown": "the cells shown in the view", "box": "the box",
          "polygon": "the polygon"}
 XLABELS = {"R": "R (m)", "Z": "Z (m)", "rhop": r"$\rho_p$",
            "dssep": "distance from the separatrix along the line (m)"}
+
+
+class _Frames:
+    """The frames of the slider positions loaded for the chords of one
+    quantity: their results by source, the key they are for, those to ask
+    for and those asked, the quantity."""
+
+    def __init__(self):
+        self.results, self.key, self.queue, self.flight = {}, None, [], set()
+        self.q = None
 
 
 class Tools:
@@ -59,8 +67,12 @@ class Tools:
         self.all_frames = None          # (shown, others) with Show all
         self.stats_last = None          # (mode, points) of the statistics
         self.show_all = False           # movies: the frames all drawn
-        self.frame_results, self.frames_key = {}, None  # source -> chords
-        self.queue, self.flight, self.pumping = [], set(), False
+        self.fs = (_Frames(), _Frames())    # plasma (or vector), vector
+        self.pumping = False
+        self.other, self.other_m, self.other_frames = [], None, None
+        self.full = {}                  # (name, source) -> every species
+        self.full_asked = set()         # asked for, not yet here
+        self.each = None                # [(species, column)]: a curve each
         self._frames_again = QtCore.QTimer(tab)
         self._frames_again.setSingleShot(True)
         self._frames_again.setInterval(400)
@@ -69,6 +81,17 @@ class Tools:
         self._again.setSingleShot(True)
         self._again.setInterval(150)
         self._again.timeout.connect(self._stats_again)
+        self.chords_section.tabs.currentChanged.connect(self._chord_tab)
+
+    # the frames of the quantity measured first (self.fs[0])
+    frame_results = property(lambda self: self.fs[0].results,
+                             lambda self, v: setattr(self.fs[0], "results",
+                                                     v))
+    frames_key = property(lambda self: self.fs[0].key,
+                          lambda self, v: setattr(self.fs[0], "key", v))
+    queue = property(lambda self: self.fs[0].queue,
+                     lambda self, v: setattr(self.fs[0], "queue", v))
+    flight = property(lambda self: self.fs[0].flight)
 
     def _load(self):
         """Ask b2plot for the triangle areas and volumes and the cell
@@ -148,8 +171,9 @@ class Tools:
         wall): the open section and the inspector again for it (the same
         chords, box, polygon, view or cell)."""
         tab = self.tab
-        key = (id(tab.data), tab.plot.style.column)
         q = tab.quantity
+        key = (id(tab.data), tab.plot.style.column,
+               q.plasma_species.text())     # its sum or a curve each
         for data, menu in ((tab.vector_data if tab.vector_wanted else None,
                             q.vector_species),
                            (tab.wall_data if tab.wall_wanted else None,
@@ -168,6 +192,50 @@ class Tools:
             self._statistics(*self.stats_last)
         if self.last is not None and self.panel.isVisible():
             self._done(*self.last)
+
+    # ------------------------------------------------- frames of a movie
+    def _shown_widgets(self):
+        """The figures and texts of the open section."""
+        if self.section == "chords":
+            sec = self.chords_section
+            return ([t.view for t in sec.chords] + [
+                t.view_v for t in sec.chords if t.second.isVisible()] +
+                [sec.sums, sec.trace] + [
+                    v for v in (sec.board.sums_v, sec.board.trace_v)
+                    if v.isVisible()], [t.text for t in sec.chords] + [
+                    t.text_v for t in sec.chords if t.second.isVisible()],
+                sec)
+        if self.section == "stats":
+            sec = self.stats_section
+            return [sec.view], [sec.heading, sec.text], sec
+        return [], [], None
+
+    def snapshot(self):
+        """What the open section shows (for an image of the movie)."""
+        views, texts, _ = self._shown_widgets()
+        return (self.section,
+                [(v, v.draw, v.header, v.rows, getattr(v, "kind",
+                                                       v.options.kind),
+                  v.name) for v in views if v.draw is not None],
+                [(t, t.text()) for t in texts])
+
+    def show_snapshot(self, snap):
+        """The open section as it was for an image of the movie (the
+        figures shown: a chord tab chosen meanwhile at the next image)."""
+        section, views, texts = snap
+        if section != self.section or section is None:
+            return
+        for v, draw, header, rows, kind, name in views:
+            if v.isVisible():
+                v.set_figure(draw, header, rows, kind=kind, name=name)
+        for t, text in texts:
+            t.setText(text)
+
+    def hold(self, on):
+        """The open section not painted (on) while a frame of the movie is
+        drawn into an image, or painted again."""
+        for sec in (self.chords_section, self.stats_section):
+            sec.setUpdatesEnabled(not on)
 
     def view_changed(self):
         """The statistics of the cells shown again for a new view (once
@@ -193,7 +261,8 @@ class Tools:
         self.bar.apply_theme()
         self._chord_artists()
         for view in [t.view for t in self.chords_section.chords] + [
-                self.chords_section.sums, self.stats_section.view]:
+                self.chords_section.sums, self.chords_section.trace,
+                self.stats_section.view]:
             if view.draw is not None:
                 view.apply_theme()
 
@@ -250,15 +319,13 @@ class Tools:
 
     def _measured(self):
         """(data, Quantity, column, b2plot operations, data as sent) the
-        chords measure: the plasma or the vector quantity plotted (with
-        both, the one chosen in their section), or None."""
+        chords measure: the plasma quantity plotted, else the vector one
+        (with both, the vector one is the other one, _other), or None."""
         tab = self.tab
         if tab.run is None:
             return None
         plasma = tab._current()
-        if tab._vector_args() is not None and (
-                not plasma or self.chords_section.target.currentData()
-                == "vector"):
+        if tab._vector_args() is not None and not plasma:
             v, col = tab.summed_vector(tab.vector_data)
             return v, tab.vector_wanted, col, (), tab.vector_data
         if plasma:
@@ -366,19 +433,35 @@ class Tools:
         sec = self.chords_section
         tab = self.tab
         m = self._measured() if self.section == "chords" else None
-        sec.target.setVisible(tab.run is not None and tab._current() and
-                              tab._vector_args() is not None)
-        self.results = [self._chord(c, m) for c in self.chords] if m else []
+        sec.target.hide()               # both measured with both plotted
+        self.each = self._species_curves(m)
+        if self.each is not None:       # every species of the field, then
+            full = self._full(m)        # a curve each (meanwhile their sum)
+            self.each = self.each if full is not None else None
+        self.results = [self._chord(c, m) if self.each is None else
+                        self._chord_species(c, m, full) for c in
+                        self.chords] if m else []
+        mo = self._other(m)             # both plotted: the vector one too
+        other = [self._chord(c, mo) for c in self.chords] if mo else []
         sec.show_all.setVisible(tab.time_box.movie())
-        self.all_frames = self._frames(m) if m and self._every_frame(m) \
-            else None
-        if self.all_frames is None:
-            self.queue = []
-        for k, res in enumerate(self.results):
-            if self.all_frames is not None:
-                now, others = self.all_frames
-                res["frames"] = (now, [(t, p, fr[k]) for t, p, fr in others])
-        sec.set_count(len(self.chords))
+        multi = self._species_curves(m) is not None
+        if multi and self.show_all:     # Show all: one curve per chord only
+            self.show_all = False
+            sec.show_all.blockSignals(True)
+            sec.show_all.setChecked(False)
+            sec.show_all.blockSignals(False)
+        sec.show_all.setEnabled(not multi)
+        frames = bool(m) and self._movie(m)
+        self.all_frames = self._frames(m) if frames else None
+        self.other_frames = self._frames(mo, other, self.fs[1]) if \
+            frames and mo else None
+        for fs, got in zip(self.fs, (self.all_frames, self.other_frames)):
+            if got is None:
+                fs.queue = []
+        self._attach(self.results, self.all_frames, self.fs[0])
+        self._attach(other, self.other_frames, self.fs[1])
+        self.other, self.other_m = other, mo
+        sec.set_count(len(self.chords), trace=frames, second=bool(other))
         run = self.source == "run"
         for k, (t, c, look) in enumerate(zip(sec.chords, self.chords,
                                              self._looks())):
@@ -387,20 +470,49 @@ class Tools:
             sec.tabs.setTabToolTip(sec.tabs.indexOf(t), self.run_labels[k]
                                    if run and k < len(self.run_labels)
                                    else "")
-            if k < len(self.results):
-                res = self.results[k]
-                t.text.setText(res["text"])
-                t.view.options.allow(res["xs"])
-                header, rows = res["header"], res["rows"]
-                if res.get("frames"):   # the values of every frame too
-                    header, rows = self._frame_rows(res)
-                t.view.set_figure(res["draw"], header, rows,
-                                  kind="frames" if res.get("frames") else
-                                  "line",
-                                  name="chord_%d_%s" % (k + 1, res["what"]))
-        if len(self.results) >= 2:
+            t.second.setVisible(bool(other))
+            if k < len(self.results):   # the plasma quantity first
+                self._show_chord(t.view, t.text, self.results[k], k)
+                if other:
+                    self._show_chord(t.view_v, t.text_v, other[k], k)
+        if self.results:
             self.show_sums(m)
         self._chord_artists()
+
+    def _attach(self, results, all_frames, fs):
+        """With Show all, the frames loaded to the results of each chord
+        (its profile figure then only moves the frame shown)."""
+        if all_frames is None or not self.show_all:
+            return
+        now, others = all_frames
+        for k, res in enumerate(results):
+            res["frames"] = (now, [(t, p, fr[k]) for t, p, fr in others])
+            ys = [np.ravel(fr[k][c]) for _, _, fr in others
+                  for c in ("v", "vn") if fr[k][c] is not None]
+            res["draw"].key = (fs.key, k, tuple(p for _, p, _ in others),
+                               hash(np.concatenate(ys).tobytes()) if ys
+                               else 0)
+            res["draw"].current = res["current"]
+
+    def _show_chord(self, view, text, res, k):
+        """The text and the profile of chord k (its result res)."""
+        text.setText(res["text"])
+        view.options.allow(res["xs"])
+        header, rows = res["header"], res["rows"]
+        if res.get("frames"):           # the values of every frame too
+            header, rows = self._frame_rows(res)
+        view.set_figure(res["draw"], header, rows, kind="frames" if
+                        res.get("frames") else "line",
+                        name="chord_%d_%s" % (k + 1, res["what"]))
+
+    def _other(self, m):
+        """With a plasma and a vector quantity plotted, the vector one (as
+        _measured gives it; m: the plasma one), else None."""
+        tab = self.tab
+        if not m or not tab._current() or tab._vector_args() is None:
+            return None
+        v, col = tab.summed_vector(tab.vector_data)
+        return v, tab.vector_wanted, col, (), tab.vector_data
 
     def _chord(self, coords, m):
         """The profile along a chord (R, Z, phi of its two ends) of what
@@ -446,17 +558,16 @@ class Tools:
             x = xs.get(key, s)
             ax.set_title(name, fontsize="medium")
             now, others = out.get("frames") or (None, [])
-            for t, _, fr in others:     # the other frames first, thin
-                for c, y in enumerate((fr["v"], fr["vn"])):
-                    if y is not None:
-                        ln, = ax.plot(x, y, label="_frame")
-                        ln.frame, ln.curve = (t, False), c
+            for c, k in enumerate(("v", "vn") if others else ()):
+                frame_lines(ax, x, [fr[k] for _, _, fr in others],
+                            [t for t, _, _ in others], c)  # all, under it
             for c, (y, label) in enumerate(((v, "|v|" if vn is not None
                                              else None), (vn, "v·n"))):
                 if y is not None:
                     ln, = ax.plot(x, y, label=label)
                     ln.frame, ln.curve = (1.0 if now is None else now,
                                           True), c
+                    ln.moves = bool(others)     # over all frames: moved
             if vn is not None:
                 ax.legend(fontsize="small")
             known = ok & np.isfinite(x)
@@ -468,7 +579,10 @@ class Tools:
             ["normal component (%s)" % plain(unit)] if vn is not None
             else []) + ["phi (deg)"]
         cols = (s, r, z, v) + ((vn,) if vn is not None else ()) + (ph,)
-        out.update(r=r, z=z, xs=xs, draw=draw, header=header,
+        def current(options):
+            x = xs.get(options.xaxis.currentData(), s)
+            return [(x, y) for y in (v, vn) if y is not None]
+        out.update(r=r, z=z, xs=xs, draw=draw, header=header, current=current,
                    rows=[list(row) for row in zip(*cols)],
                    text="<br>".join(lines), integral=total, average=mean,
                    units=(plain(measure.times_m(unit, 1)), plain(unit)),
@@ -480,41 +594,45 @@ class Tools:
         self.show_all = on
         self._chords_all()
 
-    def _every_frame(self, m):
-        """Show all on, with a movie quantity measured (m) in the movie
-        tab."""
-        return self.show_all and self.tab.time_box.movie() and \
-            bool(getattr(m[1], "movie", 0))
+    def _movie(self, m):
+        """A movie quantity measured (m) in the movie tab: every frame
+        loaded (the sums in time; with Show all also drawn)."""
+        return self.tab.time_box.movie() and bool(getattr(m[1], "movie", 0))
 
-    def _frames(self, m):
+    def _frames(self, m, results=None, fs=None):
         """(position of the frame shown along the frames from 0 to 1,
-        [(position, frame, results of the chords)] of the other frames
-        loaded) of what the chords measure (m); asks b2plot for the frames
-        not loaded yet."""
+        [(position, frame, results of the chords)] of the frames loaded)
+        of what the chords measure (m, its results of the frame shown;
+        fs: its frames, default those of the first quantity); asks b2plot
+        for the frames not loaded yet."""
         tb = self.tab.time_box
+        fs = fs or self.fs[0]
+        results = self.results if results is None else results
         data, q, col, ops, _ = m
+        if fs is self.fs[0] and self.each is not None:  # every species:
+            ops, col = (), tuple(c for _, c in self.each)   # unsummed
         key = (q.name, ops, col, tuple(tuple(c) for c in self.chords),
                self.source)
-        if key != self.frames_key:
-            self.frame_results, self.frames_key = {}, key
+        if key != fs.key:
+            fs.results, fs.key = {}, key
+        fs.q = q
         positions = tb.positions()
         sources = [tb.source_of(q, p) for p in positions]
         shown = data.source
-        self.frame_results[shown] = [dict(v=r["v"], vn=r["vn"],
-                                          integral=r["integral"],
-                                          average=r["average"])
-                                     for r in self.results]
-        self.queue = [x for x in sources if x not in self.frame_results and
-                      x not in self.flight]
+        fs.results[shown] = [dict(v=r["v"], vn=r["vn"],
+                                  integral=r["integral"],
+                                  average=r["average"]) for r in results]
+        fs.queue = [x for x in sources if x not in fs.results and
+                    x not in fs.flight]
         self._pump()
         lo, hi = positions[0], positions[-1]
 
         def along(p):
             return (p - lo) / float(hi - lo) if hi > lo else 1.0
-        others = [(along(p), p, self.frame_results[x])
-                  for p, x in zip(positions, sources) if x != shown and
-                  self.frame_results.get(x) is not None]
-        return along(tb.pos.value()), others
+        others = [(along(p), p, fs.results[x])    # with the one shown
+                  for p, x in zip(positions, sources)
+                  if fs.results.get(x) is not None]
+        return along(tb.position()), others
 
     def _pump(self):
         """The next frames asked for, two at a time (the requests of the
@@ -523,15 +641,15 @@ class Tools:
             return
         self.pumping = True
         try:
-            while self.queue and len(self.flight) < 2:
-                x = self.queue.pop(0)
-                if x in self.frame_results:
+            while sum(len(f.flight) for f in self.fs) < 2:
+                fs = next((f for f in self.fs if f.queue), None)
+                if fs is None:
+                    break
+                x = fs.queue.pop(0)
+                if x in fs.results or fs.q is None:
                     continue
-                self.flight.add(x)
-                m = self._measured()
-                if m is not None:
-                    self.tab.request.emit(("frames", m[1],
-                                           self.frames_key[1], x))
+                fs.flight.add(x)
+                self.tab.request.emit(("frames", fs.q, fs.key[1], x))
         finally:
             self.pumping = False
 
@@ -539,24 +657,29 @@ class Tools:
         """A frame of Show all: the profiles and sums of the chords kept
         (None: b2plot failed, not asked again)."""
         _, q, ops, x = want
-        self.flight.discard(x)
-        key = self.frames_key
-        if key is not None and (q.name, tuple(ops)) == key[:2]:
-            self.frame_results[x] = None if data is None else [
-                self._profile(c, data) for c in self.chords]
-            n = len(self.tab.time_box.positions())
-            got = sum(1 for v in self.frame_results.values()
+        fs = next((f for f in self.fs if f.key is not None and x in
+                   f.flight and (q.name, tuple(ops)) == f.key[:2]), None)
+        for f in self.fs if fs is None else (fs,):
+            f.flight.discard(x)
+        if fs is not None:
+            each = fs.key[2] if isinstance(fs.key[2], tuple) else None
+            fs.results[x] = None if data is None else [
+                self._profile(c, data) if each is None else
+                self._profile_species(c, data, each) for c in self.chords]
+            n = len(self.tab.time_box.positions()) * sum(
+                1 for f in self.fs if f.key is not None and f.q is not None)
+            got = sum(1 for f in self.fs for v in f.results.values()
                       if v is not None)
+            busy = any(f.queue or f.flight for f in self.fs)
             self.tab.status.emit("Chords: %d of %d frames" % (min(got, n), n)
-                                 if self.queue or self.flight else
-                                 "Chords: all %d frames" % n)
+                                 if busy else "Chords: all frames loaded")
             if not self._frames_again.isActive():
                 self._frames_again.start()
         self._pump()
 
     def _frames_arrived(self):
         m = self._measured()
-        if self.section == "chords" and m and self._every_frame(m):
+        if self.section == "chords" and m and self._movie(m):
             self._chords_all()
 
     def _profile(self, coords, data):
@@ -572,12 +695,122 @@ class Tools:
         _, total, mean, _ = measure.line_sums(s, r, v, vn, l)
         return dict(v=v, vn=vn, integral=total, average=mean)
 
+    def _profile_species(self, coords, data, cols):
+        """Profiles and sums along a chord of each species column of cols
+        of the field of another frame (lists in the order of cols)."""
+        r0, z0, f0, r1, z1, f1 = coords
+        out = dict(v=[], vn=None, integral=[], average=[])
+        for c in cols:
+            s, r, _, _, v, vn, l = measure.profile(
+                self.tab.plot, data, (r0, z0), (r1, z1), phi=(f0, f1), col=c)
+            _, total, mean, _ = measure.line_sums(s, r, v, vn, l)
+            out["v"].append(v)
+            out["integral"].append(total)
+            out["average"].append(mean)
+        return out
+
+    # ------------------------------------------------ a curve per species
+    def _species_curves(self, m):
+        """[(species, column)] when the plasma quantity measured has a
+        choice of a curve per species (All, X (all)), else None."""
+        tab = self.tab
+        if not m or m[1] is not tab.wanted or m[0] is not tab.data:
+            return None
+        menu = tab.quantity.plasma_species
+        return menu.curves() if menu.is_multi() else None
+
+    def _full(self, m):
+        """The field of every species of what is plotted (b2plot sums them
+        for the plot), or None while b2plot is asked for it."""
+        q, source = m[1], m[4].source
+        key = (q.name, source)
+        if key in self.full:
+            return self.full[key]
+        if key not in self.full_asked:
+            self.full_asked.add(key)
+            self.tab.request.emit(("allspecies", q, (), source))
+        return None
+
+    def species_delivered(self, want, data):
+        """The field of every species: the chords with a curve each."""
+        _, q, _, source = want
+        key = (q.name, source)
+        self.full_asked.discard(key)
+        if data is None:
+            return
+        if len(self.full) > 8:          # the latest only
+            self.full = {}
+        self.full[key] = data
+        if self.section == "chords":
+            self._chords_all()
+
+    def _chord_tab(self, *_):
+        """Another chord tab: with a curve per species, its sums in
+        time."""
+        if self.each is not None and self.results:
+            self.show_sums()
+
+    def _chord_species(self, coords, m, full):
+        """As _chord, a curve per species (self.each) of the field full of
+        every species: the profiles, the line integrals and averages."""
+        tab = self.tab
+        data, q, _, _, sent = m
+        plain = labels.any_to_plain
+        unit = plain(split_unit(sent.label)[1])
+        r0, z0, f0, r1, z1, f1 = coords
+        got = self._profile_species(coords, full, [c for _, c in self.each])
+        s, r, z, ph, _, _, _ = measure.profile(tab.plot, data, (r0, z0),
+                                               (r1, z1), phi=(f0, f1))
+        names = [n for n, _ in self.each]
+        psimap = tab.run.psimap
+        rho = psimap.rhop(r, z) if psimap is not None else None
+        dsep = measure.separatrix_distance(s, rho) if rho is not None \
+            else None
+        first = got["v"][0] if got["v"] else s
+        xs = {"s": s, "R": r, "Z": z}
+        if rho is not None and measure.single_valued(rho, first):
+            xs["rhop"] = rho
+            if dsep is not None and measure.single_valued(dsep, first):
+                xs["dssep"] = dsep
+        title = labels.any_to_mathtext(split_unit(q.description)[0] + (
+            " [%s]" % tab.quantity.plasma_species.text()))
+
+        def draw(ax, options):
+            key = options.xaxis.currentData()
+            x = xs.get(key, s)
+            ax.set_title(title, fontsize="medium")
+            known = np.zeros(len(x), bool)
+            for n, y in zip(names, got["v"]):
+                ax.plot(x, y, label=n)
+                known |= np.isfinite(x) & np.isfinite(y)
+            if known.any() and np.ptp(x[known]) > 0:
+                ax.set_xlim(x[known].min(), x[known].max())
+            ax.legend(fontsize="small")
+            ax.set_xlabel(XLABELS.get(key, "distance along the line (m)"))
+            ax.set_ylabel(measure.math_unit(unit))
+        units = (plain(measure.times_m(unit, 1)), plain(unit))
+        header = ["s (m)", "R (m)", "Z (m)"] + [
+            "%s (%s)" % (n, plain(unit)) for n in names] + ["phi (deg)"]
+        cols = (s, r, z) + tuple(got["v"]) + (ph,)
+        return dict(r=r, z=z, xs=xs, draw=draw, header=header,
+                    rows=[list(row) for row in zip(*cols)],
+                    text=chordplots.two_rows(
+                        list(zip(names, got["integral"])),
+                        list(zip(names, got["average"])), units),
+                    integral=got["integral"], average=got["average"],
+                    units=units, what=q.label, v=got["v"], vn=None,
+                    unit=plain(unit), current=lambda options: [],
+                    species=names, title=title)
+
     def _frame_rows(self, res):
         """Header and rows of a profile with the values of the other
         frames in more columns."""
         prefix = self.tab.time_box.pos.prefix().strip() or "frame"
         header, rows = list(res["header"]), [list(r) for r in res["rows"]]
+        shown = self.tab.time_box.position()
         for _, p, fr in res["frames"][1]:
+            if p == shown:              # its values: the columns before
+                continue
             for name, y in (("value", fr["v"]), ("normal component",
                                                  fr["vn"])):
                 if y is not None:
@@ -588,54 +821,118 @@ class Tools:
         return header, rows
 
     def show_sums(self, m=None):
-        """The line integrals or averages (as chosen) against the chord
-        number of what the chords measure (m); Export writes both."""
+        """Under the chord tabs, the line integrals or averages (as chosen)
+        of what the chords measure (m): against the chord number with two
+        or more chords, in time with a movie quantity (the frames loaded so
+        far, a curve per chord); Export writes both sums."""
         sec = self.chords_section
         m = m or self._measured()
-        if len(self.results) < 2 or m is None:
+        if not self.results or m is None:
             return
-        n = np.arange(1, len(self.results) + 1)
-        name = self._name(m[1], m[4])
-        units = self.results[0]["units"]
-        rows = [[k, res["integral"], res["average"]]
-                for k, res in zip(n, self.results)]
-        header = ["chord", "integral (%s)" % units[0],
-                  "average (%s)" % units[1]]
-        key = sec.which.currentData()
-        unit = units[key == "average"]
-        y = [res[key] for res in self.results]
-        frames = self.all_frames
-        if frames is not None:          # every frame: chord, frame, sums
-            prefix = self.tab.time_box.pos.prefix().strip() or "frame"
-            p_now = self.tab.time_box.pos.value()
-            header = ["chord", prefix] + header[1:]
-            rows = [[k, p_now] + row[1:] for k, row in zip(n, rows)] + [
-                [k, p, fr[k - 1]["integral"], fr[k - 1]["average"]]
-                for _, p, fr in frames[1] for k in n]
-        if key != getattr(sec.sums, "shown", key):  # its own y limits
-            for e in sec.sums.options.limits[2:]:
-                e.clear()
-        sec.sums.shown = key
+        self._sums(m, self.results, self.all_frames, sec.sums, sec.trace)
+        if self.other and self.other_m is not None:     # the vector one
+            self._sums(self.other_m, self.other, self.other_frames,
+                       sec.sums_v, sec.trace_v)
 
-        def draw(ax, options):
-            ax.set_title(name, fontsize="medium")
-            if frames is not None:      # the other frames first, small
-                for t, _, fr in frames[1]:
-                    ln, = ax.plot(n, [f[key] for f in fr], linestyle="None",
-                                  marker="o", label="_frame")
-                    ln.frame = (t, False)
-            ln, = ax.plot(n, y, linestyle="None", marker="o")
-            ln.frame = (1.0 if frames is None else frames[0], True)
-            ax.xaxis.set_major_locator(FixedLocator(n) if len(n) <= 20
-                                       else MaxNLocator(integer=True))
-            ax.xaxis.set_major_formatter(FormatStrFormatter("%d"))
-            ax.set_xlim(0.5, len(n) + 0.5)
-            ax.set_xlabel("chord")
-            ax.set_ylabel("line %s (%s)" % (key, measure.math_unit(unit)))
-        sec.sums.set_figure(draw, header, rows, kind="sums" if frames is
-                            None else "sumframes",
-                            name="chords_%s_%s" % (
-                                key, self.results[0]["what"]))
+    def _sums(self, m, results, all_frames, view, trace):
+        """The sums of the results of the chords of what m measures,
+        against the chord number in view, in time (all_frames) in trace."""
+        sec = self.chords_section
+        name = self._name(m[1], m[4])
+        units = results[0]["units"]
+        key = sec.board.key()
+        unit = units[key == "average"]
+        what = results[0]["what"]
+        frames = all_frames if self.show_all else None
+        names = results[0].get("species")
+        if names:                       # a curve per species
+            name = results[0]["title"]
+            if len(results) >= 2:
+                chordplots.fresh_limits(view, key)
+                view.set_figure(
+                    chordplots.sums_draw(name, [(n, [res[key][i] for res in
+                                                     results])
+                                                for i, n in enumerate(names)],
+                                         key, unit),
+                    ["chord"] + ["%s %s (%s)" % (n, w, u) for n in names
+                                 for w, u in zip(("integral", "average"),
+                                                 units)],
+                    [[k] + [x for i in range(len(names))
+                            for x in (res["integral"][i], res["average"][i])]
+                     for k, res in enumerate(results, 1)],
+                    kind="sums", name="chords_%s_%s" % (key, what))
+            if all_frames is not None:
+                self._show_trace(m, name, key, units, what, names, results,
+                                 all_frames, trace)
+            return
+        if len(results) >= 2:
+            n = np.arange(1, len(results) + 1)
+            rows = [[k, res["integral"], res["average"]]
+                    for k, res in zip(n, results)]
+            header = ["chord", "integral (%s)" % units[0],
+                      "average (%s)" % units[1]]
+            others, now = (), 1.0
+            if frames is not None:      # every frame: chord, frame, sums
+                prefix = self.tab.time_box.pos.prefix().strip() or "frame"
+                p_now = self.tab.time_box.position()
+                header = ["chord", prefix] + header[1:]
+                rows = [[k, p_now] + row[1:] for k, row in zip(n, rows)] + [
+                    [k, p, fr[k - 1]["integral"], fr[k - 1]["average"]]
+                    for _, p, fr in frames[1] for k in n]
+                others = [(t, [f[key] for f in fr]) for t, _, fr in frames[1]]
+                now = frames[0]
+            chordplots.fresh_limits(view, key)
+            view.set_figure(
+                chordplots.sums_draw(name, [res[key] for res in results],
+                                     key, unit, others, now),
+                header, rows, kind="sums" if frames is None else "sumframes",
+                name="chords_%s_%s" % (key, what))
+        if all_frames is not None:
+            self._show_trace(m, name, key, units, what, None, results,
+                             all_frames, trace)
+
+    def _show_trace(self, m, name, key, units, what, names, results,
+                    all_frames, view):
+        """The sums of the chords in time: every frame loaded so far (the
+        frames of the slider positions), a curve per chord (names: a curve
+        per species of the chord of the tab shown)."""
+        tb, sec, q = self.tab.time_box, self.chords_section, m[1]
+        per = {tb.position(): [dict(integral=r["integral"],
+                                     average=r["average"])
+                                for r in results]}
+        for _, p, fr in all_frames[1]:
+            per[p] = fr
+        ps = sorted(per)
+        times = tb.times.get(q.movie, [])
+
+        def t_of(p):
+            return tb.time_at(p, q.movie) if times else float(p)
+        t = [t_of(p) for p in ps]
+        tname = "time (s)" if times else (tb.pos.prefix().strip() or "frame")
+        if names:
+            j = min(max(sec.tabs.currentIndex(), 0), len(results) - 1)
+            ps = [p for p in ps if isinstance(per[p][j]["integral"], list)]
+            t = [t_of(p) for p in ps]
+            sums = [(np.array([per[p][j]["integral"][i] for p in ps], float),
+                     np.array([per[p][j]["average"][i] for p in ps], float))
+                    for i in range(len(names))]
+            curves = [(n, s_[key == "average"]) for n, s_ in zip(names, sums)]
+            name = "%s, chord %d" % (name, j + 1)
+            header, rows = chordplots.traces_rows(t, sums, units, tname,
+                                                  names=names)
+        else:
+            sums = [(np.array([per[p][k]["integral"] for p in ps], float),
+                     np.array([per[p][k]["average"] for p in ps], float))
+                    for k in range(len(results))]
+            curves = [("Chord %d" % (k + 1), s[key == "average"])
+                      for k, s in enumerate(sums)]
+            header, rows = chordplots.traces_rows(t, sums, units, tname)
+        chordplots.fresh_limits(view, key)
+        view.set_figure(
+            chordplots.traces_draw(name, t, curves, t_of(tb.position()),
+                                   key, units[key == "average"], tname),
+            header, rows, kind="line",
+            name="chords_%s_in_time_%s" % (key, what))
 
     def _chord_artists(self):
         """The chords on the plot while their section is open: a dot at the
@@ -649,35 +946,8 @@ class Tools:
             return
         ax = self.tab.plot.ax
         for k, (res, look) in enumerate(zip(self.results, self._looks()), 1):
-            colour, width, style, number = look
-            colour = theme.rgb(colour)
-            r, z = res["r"], res["z"]
-            line, = ax.plot(r, z, color=colour, linestyle=style,
-                            linewidth=width, zorder=6.5)
-            start, = ax.plot(r[:1], z[:1], color=colour, linestyle="None",
-                             marker="o", markersize=3.0 + 1.5 * width,
-                             zorder=6.6)
-            self.artists += [line, start]
-            if len(r) < 2:
-                continue
-            d = np.array([r[-1] - r[-2], z[-1] - z[-2]])
-            if not np.hypot(*d) > 0:
-                continue
-            d = d / np.hypot(*d)
-            self.artists.append(ax.annotate(
-                "", xy=(r[-1], z[-1]), xytext=(r[-1] - 1e-6 * d[0],
-                                               z[-1] - 1e-6 * d[1]),
-                arrowprops=dict(arrowstyle="-|>", color=colour, lw=width,
-                                shrinkA=0, shrinkB=0,
-                                mutation_scale=8.0 + 2.0 * width),
-                zorder=6.6))
-            if number:
-                self.artists.append(ax.annotate(
-                    "%d" % k, xy=(r[-1], z[-1]), xytext=tuple(
-                        (9.0 + width) * d), textcoords="offset points",
-                    color=colour, fontsize=9, fontweight="bold",
-                    ha="center", va="center", zorder=6.6,
-                    annotation_clip=True))
+            self.artists += chordplots.draw_chord(
+                ax, k, [np.column_stack((res["r"], res["z"]))], look)
         self.tab.canvas.draw_idle()
 
     # ---------------------------------------------------------- statistics

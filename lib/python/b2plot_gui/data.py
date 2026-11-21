@@ -17,6 +17,7 @@ from ..b2plot import backend, protocol
 from .model import (MovieFile, MovieVar, PsiMap, TriMesh, make_field,
                     make_geometry, make_vector)
 
+MOVIE_FILES = (1, 2)    # b2movies.nc, eirenemovies.nc (not b2tallies.nc)
 CACHE_BYTES = 512 * 2 ** 20     # fields kept (movie frames add up)
 
 OP = protocol.OPCODES
@@ -96,9 +97,14 @@ class Run:
     @staticmethod
     def _movie(name, source):
         """b2plot tokens pushing a movie variable: the mean (or with "std"
-        in source the standard deviation) of frames first to last of file
-        1 (b2movies.nc), 2 (eirenemovies.nc) or 3 (b2tallies.nc)."""
-        cmd = "mvfrstd" if source[3:4] == ("std",) else "mvframe"
+        in source the standard deviation, with ("step", n) the mean of
+        every n-th frame) of frames first to last of file 1 (b2movies.nc)
+        or 2 (eirenemovies.nc)."""
+        stat = source[3] if len(source) > 3 else "mean"
+        if isinstance(stat, tuple):
+            return "'%s' %d %d %d %d mvfrstep" % ((name,) + tuple(
+                source[:3]) + (stat[1],))
+        cmd = "mvfrstd" if stat == "std" else "mvframe"
         return "'%s' %d %d %d %s" % ((name,) + tuple(source[:3]) + (cmd,))
 
     @classmethod
@@ -240,9 +246,10 @@ class Run:
             self._result = m
         elif op == OP["LEVELS"]:
             self._levels = np.asarray(m.lev, float)
-        elif op == OP["MOVIEINFO"]:
-            self.movies[m.file] = MovieFile(m.file, m.path,
-                                            np.asarray(m.times, float))
+        elif op == OP["MOVIEINFO"]:     # not b2tallies.nc (file 3)
+            if m.file in MOVIE_FILES:
+                self.movies[m.file] = MovieFile(m.file, m.path,
+                                                np.asarray(m.times, float))
         elif op == OP["MOVIEVAR"] and m.file in self.movies:
             self.movies[m.file].variables.append(MovieVar(
                 m.file, m.var, m.long, m.units, m.location, m.ncol, m.dim))

@@ -10,10 +10,12 @@ import numpy as np
 
 from .files import B2TIME, Item, summed, unit
 
-STATE = ("ne", "te", "ti", "po", "kt", "na", "dab", "tab", "dmb", "tmb")
+STATE = ("ne", "na", "te", "ti", "po", "kt")
+NEUTRALS = ("dab", "tab", "dmb", "tmb")     # of EIRENE
 FLUXES = ("fni", "fee", "fei", "fet", "fch")    # integrated
 TOTALS = ("tmne", "tmte", "tmti")
-GROUPS = ("State variables", "Fluxes", "Integrated quantities")
+GROUPS = ("Plasma state", "Plasma fluxes", "Neutrals state",
+          "Integrated quantities")
 # the places always on the plot with their names (anywhere else in the
 # grid: "plasma", no name)
 PLACES = {"omp": "Outer midplane separatrix", "target_w": "{W} target",
@@ -61,15 +63,17 @@ def items(b2t, place):
                      parts)]
     out = []
     if place == "omp":
-        for k in STATE:
-            out += item(((k + "sepm", ""),), GROUPS[0],
-                        "outer midplane separatrix", "omp", True)
+        for group, keys in ((GROUPS[0], STATE), (GROUPS[2], NEUTRALS)):
+            for k in keys:
+                out += item(((k + "sepm", ""),), group,
+                            "outer midplane separatrix", "omp", True)
     elif place in TARGETS:
         sep, top, total = TARGETS[place]
         where = "{%s} target" % place[-1]
-        for k in STATE:
+        for k in STATE + NEUTRALS:
             out += item(((k + sep, "Separatrix"), (k + top, "Maximum")),
-                        GROUPS[0], where, place, True)
+                        GROUPS[2] if k in NEUTRALS else GROUPS[0], where,
+                        place, True)
         for k in FLUXES:
             out += item(((k + total, ""),), GROUPS[1], where, place)
         out += item((("pw" + top, ""),), GROUPS[1], where, place)
@@ -80,7 +84,7 @@ def items(b2t, place):
                             whole=True)
     elif place == "plasma":
         for k in TOTALS:
-            out += item(((k, ""),), GROUPS[2], "", "plasma", whole=True)
+            out += item(((k, ""),), GROUPS[3], "", "plasma", whole=True)
     return out
 
 
@@ -203,6 +207,6 @@ def anchors(shapes):
 def mark(item):
     """The shapes glowing for the item: its place, with the separatrix
     point of a state variable at a target."""
-    if item.place in TARGETS and item.group == GROUPS[0]:
+    if item.place in TARGETS and item.group in (GROUPS[0], GROUPS[2]):
         return (item.place, "sep" + item.place[-2:])
     return (item.place,)

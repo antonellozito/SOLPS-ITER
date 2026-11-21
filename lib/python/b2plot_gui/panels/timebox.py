@@ -1,27 +1,30 @@
 """Tabs at the top of the 2D quantity panel: Final state, Run tracing
 (b2time.nc, b2chords.nc, eirenechords.nc), Run movies (b2movies.nc,
-eirenemovies.nc, b2tallies.nc) or Balances (balance.nc, the final state
+eirenemovies.nc) or Balances (balance.nc, the final state
 shown); with the movies (and in Run tracing), one frame, the means over a
-range, a rolling window or consecutive blocks of frames, the standard
-deviation over a range, each minus a reference."""
+range, a rolling window, consecutive blocks of frames or the frames one
+window apart (phase), the standard deviation over a range, each minus a
+reference."""
 
 from ...qt import QtCore, QtWidgets, Qt, Signal
 
 MODES = [("One frame", "frame"), ("Mean over frames", "range"),
          ("Standard deviation over frames", "std"),
-         ("Rolling mean", "rolling"), ("Batch mean", "batch")]
+         ("Rolling mean", "rolling"), ("Batch mean", "batch"),
+         ("Phase mean", "phase")]
 MINUS = [("nothing", None), ("the first frame", "first"),
          ("the last frame", "last"), ("the mean of all frames", "all"),
          ("the final state", "final")]
 RANGE = ("range", "std")            # modes over the frames first to last
+WINDOWED = ("rolling", "batch", "phase")    # modes with a window
 
 
 TABS = (("Final state", "The final state of the run (b2fstate)"),
         ("Run tracing", "Time traces and profiles of b2time.nc, profiles "
          "along the chords of b2chords.nc and eirenechords.nc, of the "
          "latest run in the run directory"),
-        ("Run movies", "The movie frames of the run: b2movies.nc, "
-         "eirenemovies.nc and b2tallies.nc of the run directory"),
+        ("Run movies", "The movie frames of the run: b2movies.nc and "
+         "eirenemovies.nc of the run directory"),
         ("Balances", "Parallel and radial balances of volumes picked on "
          "the plot, from balance.nc (the final state shown)"))
 TRACING, MOVIES, BALANCES = 1, 2, 3     # indices of the tabs
@@ -47,6 +50,8 @@ class FrameBox(QtWidgets.QWidget):
         self.cancel = None      # shows the image of p; cancel: Pause
         self._cached = False    # playing the images
         self._silent = False    # the plot behind is of another position
+        self.drawing = None     # position drawn into an image (not shown)
+        self.buffering = False  # playing images still drawn: wait for them
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self.movie_part = QtWidgets.QWidget()
@@ -59,7 +64,9 @@ class FrameBox(QtWidgets.QWidget):
             self.mode.addItem(text, key)
         self.mode.setToolTip("Means over the frames (rolling: a window "
                              "moved frame by frame; batch: consecutive "
-                             "blocks of frames)")
+                             "blocks of frames; phase: the frames one "
+                             "window apart, as many positions as the "
+                             "window)")
         self.minus = QtWidgets.QComboBox()
         for text, key in MINUS if final else MINUS[:-1]:
             self.minus.addItem(text, key)
@@ -83,7 +90,8 @@ class FrameBox(QtWidgets.QWidget):
             s.setKeyboardTracking(False)
         self.window = QtWidgets.QSpinBox()
         self.window.setKeyboardTracking(False)
-        self.window.setToolTip("Frames per window or block")
+        self.window.setToolTip("Frames per window or block; phase: the "
+                               "frames between those averaged together")
         self.align = QtWidgets.QComboBox()
         self.align.addItem("trailing", "trailing")
         self.align.addItem("centred", "centred")
@@ -111,7 +119,7 @@ class FrameBox(QtWidgets.QWidget):
         rows.insertWidget(1, self.place)            # place as high for both
         for w in (self.position_row, self.frames_row):
             self.place.addWidget(w)
-        self.window_row = QtWidgets.QWidget()   # rolling, batch: right of
+        self.window_row = QtWidgets.QWidget()   # WINDOWED: right of
         box = QtWidgets.QHBoxLayout(self.window_row)    # Play, no own row
         box.setContentsMargins(0, 0, 0, 0)
         for w in (QtWidgets.QLabel("Window"), self.window, self.align):
@@ -136,6 +144,11 @@ class FrameBox(QtWidgets.QWidget):
         self._settle.setSingleShot(True)    # rests (images shown before)
         self._settle.setInterval(300)
         self._settle.timeout.connect(self._rest)
+        self._wanted = None     # position dragged to, drawn once ready
+        self._chase = QtCore.QTimer(self)
+        self._chase.setSingleShot(True)
+        self._chase.setInterval(20)
+        self._chase.timeout.connect(self._follow)
         for w in (self.first, self.last, self.window):
             w.valueChanged.connect(lambda *_: self._layout())
         self.align.currentIndexChanged.connect(lambda *_: self._layout())
@@ -204,10 +217,13 @@ class FrameBox(QtWidgets.QWidget):
             return 1 + h, nt - (w - 1 - h)
         if key == "batch":
             return 1, max(nt // w, 1)
+        if key == "phase":
+            return 1, max(min(w, nt), 1)
         return 1, max(nt, 1)
 
     def frames_at(self, p, f=None):
-        """(first, last) frame of slider position p for file f."""
+        """(first, last) frame of slider position p for file f (phase:
+        those of the frames one window apart, frame_list)."""
         nt, w = self.nt(f), self.window.value()
         key = self.key()
         if key == "frame":
@@ -217,13 +233,47 @@ class FrameBox(QtWidgets.QWidget):
         elif key == "rolling":
             h = w // 2 if self.align.currentData() == "centred" else w - 1
             k1, k2 = p - h, p - h + w - 1
+        elif key == "phase":
+            k1, k2 = p, p + w * (max(nt - p, 0) // w)
         else:
             k1, k2 = (p - 1) * w + 1, p * w
         k2 = min(k2, max(nt, 1))
         return min(max(k1, 1), k2), k2
 
     def frames(self, f=None):
-        return self.frames_at(self.pos.value(), f)
+        return self.frames_at(self.position(), f)
+
+    def step(self):
+        """Frames from one averaged to the next: the window with phase,
+        else 1."""
+        return self.window.value() if self.key() == "phase" else 1
+
+    def frame_list(self, p=None, f=None):
+        """The frames averaged at slider position p (default the one read
+        and drawn) for file f."""
+        k1, k2 = self.frames(f) if p is None else self.frames_at(p, f)
+        return list(range(k1, k2 + 1, self.step()))
+
+    def time_at(self, p, f=None):
+        """Time of position p: its frame, the middle of the frames averaged
+        (phase: the first of them, the phase within the first window)."""
+        t = self.times.get(self.file if f is None else f, [])
+        if not t:
+            return None
+        k1, k2 = self.frames_at(p, f)
+        return t[k1 - 1] if self.key() == "phase" else \
+            0.5 * (t[k1 - 1] + t[k2 - 1])
+
+    def position(self):
+        """The position whose frames are read and drawn: the one shown, or
+        the one drawn into an image of the movie."""
+        return self.pos.value() if self.drawing is None else self.drawing
+
+    def draw_position(self, p):
+        """The frames of position p read and drawn (into an image of the
+        movie) while the slider stays; None: those shown again."""
+        self.drawing = p
+        self.frames_changed.emit()
 
     def positions(self):
         """Slider positions shown by Play (the chords: Show all)."""
@@ -242,17 +292,16 @@ class FrameBox(QtWidgets.QWidget):
             ", minus " + self.minus.currentText()
         if k1 == k2 and self.key() != "std":
             return "t = %.4g s%s" % (t[k1 - 1], minus)
+        if self.key() == "phase":
+            return "phase mean between t = %.4g – %.4g s%s" % (
+                t[k1 - 1], t[k2 - 1], minus)
         return "%s between t = %.4g – %.4g s%s" % (
             "standard deviation" if self.key() == "std" else "mean",
             t[k1 - 1], t[k2 - 1], minus)
 
     def time_value(self, f=None):
-        """Time of the frame, or the middle of the frames averaged."""
-        t = self.times.get(self.file if f is None else f, [])
-        if not t:
-            return None
-        k1, k2 = self.frames(f)
-        return 0.5 * (t[k1 - 1] + t[k2 - 1])
+        """Time of the position read and drawn (time_at)."""
+        return self.time_at(self.position(), f)
 
     def _tip(self):
         """The frames and times shown, in the tooltips of the position."""
@@ -271,7 +320,7 @@ class FrameBox(QtWidgets.QWidget):
         if active:
             self.place.setCurrentWidget(self.frames_row if key in RANGE
                                         else self.position_row)
-            self.window_row.setVisible(key in ("rolling", "batch"))
+            self.window_row.setVisible(key in WINDOWED)
             self.align.setVisible(key == "rolling")
             self.play.setEnabled(key not in RANGE)
             lo, hi = self._span()
@@ -286,7 +335,8 @@ class FrameBox(QtWidgets.QWidget):
             self.slider.blockSignals(True)
             self.slider.setValue(self.pos.value())
             self.slider.blockSignals(False)
-            self.pos.setPrefix({"batch": "block "}.get(key, "frame "))
+            self.pos.setPrefix({"batch": "block ", "phase": "phase "}.get(
+                key, "frame "))
             self._tip()
         if emit and active:
             self.frames_changed.emit()
@@ -303,8 +353,22 @@ class FrameBox(QtWidgets.QWidget):
         return True
 
     def _dragged(self, p):
-        """The slider dragged: prepared images follow it at once."""
-        self._image(p)
+        """The slider dragged: prepared images follow it at once, else the
+        plot is drawn at each position as soon as the one before is (the
+        positions passed meanwhile skipped)."""
+        if self._image(p):
+            return
+        self._wanted = p
+        self._follow()
+
+    def _follow(self):
+        if self._wanted is None:
+            return
+        if not self.ready():
+            self._chase.start()         # the frame before still loading
+            return
+        p, self._wanted = self._wanted, None
+        self.pos.setValue(p)
 
     def rest(self):
         """The plot of the position shown drawn once the slider rests."""
@@ -383,9 +447,9 @@ class FrameBox(QtWidgets.QWidget):
                 self.play.setChecked(False)
             elif self.show_frame and self.show_frame(p):
                 self.jump(p)
-            else:                       # no image: as the frames come
+            elif not self.buffering:    # no image: as the frames come
                 self._cached = False
-            return
+            return                      # buffering: its image comes
         if not self.ready():
             return                      # the frame is still loading
         if p is None:
@@ -405,7 +469,9 @@ class TimeBox(FrameBox):
         super().__init__(parent=parent)
         self.mode.setToolTip("Means are computed by b2plot over the frames "
                              "(rolling: a window moved frame by frame; "
-                             "batch: consecutive blocks of frames)")
+                             "batch: consecutive blocks of frames; phase: "
+                             "the frames one window apart, as many "
+                             "positions as the window)")
         self.minus.setToolTip("Reference subtracted from what is shown "
                               "(b2plot m-); the final state needs a movie "
                               "variable that is also a b2plot label")
@@ -438,8 +504,7 @@ class TimeBox(FrameBox):
                                   "No final state: " + why)
         self.source.setTabEnabled(MOVIES, bool(times))
         tip = TABS[MOVIES][1] if times else "No movie files (b2movies.nc, " \
-            "eirenemovies.nc, b2tallies.nc) of the latest run in the run " \
-            "directory"
+            "eirenemovies.nc) of the latest run in the run directory"
         self.source.setTabToolTip(MOVIES, "\n".join([tip] + list(stale)))
         self.source.blockSignals(True)
         self.source.setCurrentIndex(MOVIES if not final and times else 0)
@@ -482,13 +547,15 @@ class TimeBox(FrameBox):
     def source_of(self, q, p=None):
         """(file, first, last[, statistic, reference]) of a movie quantity
         at slider position p (default the current one), None for the
-        final state."""
+        final state; the statistic "mean", "std" or ("step", n): the mean
+        of every n-th frame from first to last."""
         if not getattr(q, "movie", 0) or not self.movie():
             return None
         source = (q.movie,) + (self.frames(q.movie) if p is None else
                                self.frames_at(p, q.movie))
         ref = self.reference(q.movie)
-        stat = "std" if self.key() == "std" else "mean"
+        stat = {"std": "std", "phase": ("step", self.step())}.get(
+            self.key(), "mean")
         return source if stat == "mean" and ref is None else \
             source + (stat, ref)
 
