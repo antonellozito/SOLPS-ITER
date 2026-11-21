@@ -1883,6 +1883,7 @@ for the definitions of the regions and surfaces)\index{SOLPS\_FLUIDS}\index{NREG
   \item[b2pt]\index{b2pt} Script to obtain a standard series of \btwoplot graphs.
   \item[carre2]\index{carre2}\index{Carre2} Script used to launch the {\tt Carre2} grid generator in the current working directory
   \item[climb\_and\_look\_for]\index{climb\_and\_look\_for} Script used to find a file in a directory above the current one.
+  \item[convert\_structured\_case]\index{convert\_structured\_case}\index{b2us} Converts a whole case of the structured code (a folder with a {\tt baserun} and the run directories that use it, which can lie anywhere) to the unstructured code, into {\tt \$SOLPSTOP/runs} under the same names. The geometry, the plasma states, the parameter files, the EIRENE input and triangles and the history files are converted by {\tt b2us}. Each run is then run for one time step with {\tt b2mndt\_rxf} 0, which leaves the plasma state unchanged, continuing its time ({\tt b2mndr\_stim} -1), to write {\tt b2fstate}, {\tt b2fplasma}, {\tt balance.nc}, {\tt fort.44}, {\tt fort.46} and the other output files in the unstructured format; the history and tracing files are kept as they were before this step. Options {\tt -m N} and {\tt -t N} run these steps with MPI on {\tt N} processes or with OpenMP on {\tt N} threads.
   \item[copy\_tracing\_files]\index{copy\_tracing\_files} Script to bring tracing files to temporary run directory, if present.
   \item[correct\_baserun\_timestamps]\index{correct\_baserun\_timestamps} Makes sure the timestamps for the start-up files in the {\tt baserun} directory are in the right chronological order.
   \item[correct\_b2yt\_timestamps]\index{correct\_b2yt\_timestamps}\index{b2yt} Makes sure the timestamps for the start-up files in the current directory are in the right chronological order for the {\tt b2yt} converter.
@@ -22316,6 +22317,7 @@ JET & modules/b2mod\_ppout.F \\
 JET & preprocessing/b2agfs.F \\
 JET & preprocessing/b2ardr.F \\
 LEGACYCOMP & convert/b2cdftallies2mds.F \\
+LEGACYCOMP & convert/conv\_history\_cdf.F \\
 LEGACYCOMP & convert/conv\_surface\_models.F \\
 LEGACYCOMP & convert/conv\_triangles.F \\
 LEGACYCOMP & convert/write\_triangles.F \\
@@ -22431,6 +22433,7 @@ NO\_CDF & convert/b2co\_movies\_cdf.F \\
 NO\_CDF & convert/b2co\_tally\_cdf.F \\
 NO\_CDF & convert/b2co\_time\_cdf.F \\
 NO\_CDF & convert/b2co\_wall\_cdf.F \\
+NO\_CDF & convert/conv\_history\_cdf.F \\
 NO\_CDF & convert/process.F \\
 NO\_CDF & driver/b2mod\_driver.F \\
 NO\_CDF & modules/b2mod\_balance.F \\

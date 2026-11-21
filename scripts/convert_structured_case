@@ -1,0 +1,433 @@
+#!/bin/bash
+# convert_structured_case [-m N | -t N] [case folder]
+#
+# Converts a case of the structured code, i.e. a folder holding a baserun and
+# the run directories that use it, to the unstructured code. The case folder is
+# the current directory or the folder given as argument; it can lie anywhere.
+# The converted case is written to $SOLPSTOP/runs/<name of the case folder>,
+# with the same baserun and run directory names; the case folder itself is
+# only read.
+#
+#   -m N   one-step runs with MPI on N processes (b2run -m "mpiexec -np N")
+#   -t N   one-step runs with OpenMP on N threads (b2run -t N)
+#   -h     this help
+#
+# baserun: b2fgmtry, b2fstati, input.dat, fort.33-35 (triangles) and the
+#   boundary and neutrals stencils are converted by b2us; the midplane
+#   segments found by b2us are added to b2.user.parameters.
+# run directories: b2fstate (as b2fstati), the boundary, neutrals and feedback
+#   parameter files, fort.1 (EIRENE input), fort.33-35 and the history files
+#   b2time.nc, b2batch.nc, b2tallies.nc, b2movies.nc and eirenemovies.nc are
+#   converted by b2us (with the midplane columns of the structured run,
+#   b2mwti_jxa and b2mwti_jxi, unless b2mn.dat sets b2us_auto_midplane_det,
+#   so that the midplane profiles are kept); the other files are copied,
+#   except the output files of
+#   the structured code (b2fplasma, b2fplasmf, balance.nc, fort.44, fort.46,
+#   EIRENE work files, ...) and the tracing files intshrt.trc, sepdata.trc,
+#   user.trc and user_SPb.trc, whose layout differs in the unstructured code
+#   (it could not continue them). Copies of the baserun files b2fgmtry,
+#   fort.30, b2fpardf and b2frates in a run directory (left there when make
+#   rebuilt them in the run) are not copied either, so that the run uses those
+#   of the baserun; if one differs from the baserun file by more than
+#   round-off, the conversion stops before it starts.
+#   Switches of b2mn.dat that the unstructured code
+#   refuses are commented out, with the hint of the code printed for each, and
+#   so is a user transport model (b2tqna_user_transport) that the unstructured
+#   code does not have (the default model is used then), and so are switch
+#   values that would stop the unstructured code during the run (for example
+#   b2tfhe_vis_per not 0: it has no current driven by perpendicular
+#   viscosity; the default value is used then). Switches whose
+#   default differs between the two codes are listed when b2mn.dat does not
+#   set them.
+#   Each run is then run once for one time step with
+#   b2mndt_rxf 0, which does not change the plasma state, and with
+#   b2mndr_stim -1, which keeps the time of b2fstati, and without an end
+#   time (b2mndr_etim 0), so that b2fstate,
+#   b2fplasma, balance.nc, fort.44, fort.46 and the other output files are
+#   written by the unstructured code. The history files, the tracing files and
+#   b2mn.dat are put back as they were before this step, so the histories end
+#   with the last structured run, and the work folder b2mn.exe.dir is removed;
+#   if the step fails, this is still done, and the conversion stops with the
+#   error of the unstructured code.
+# Files at the top of the case folder (NREG, SOLPS_FLUIDS, ...) are copied.
+# The runs are made one after the other, in the terminal (b2run b2mn), each
+# with the processes or threads asked for. A log of the conversion and of each
+# one-step run is kept in each run directory (conversion.log).
+
+die() { echo "convert_structured_case: $*" >&2; exit 1; }
+
+mode=""
+np=""
+arg=""
+# ..options before or after the case folder
+while [ $# -gt 0 ]; do
+  OPTIND=1
+  while getopts "m:t:h" opt; do
+    case $opt in
+      m) mode=mpi; np=$OPTARG ;;
+      t) mode=omp; np=$OPTARG ;;
+      h) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      *) die "unknown option (see -h)" ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  if [ $# -gt 0 ]; then
+    [ -z "$arg" ] || die "more than one case folder: $arg $1"
+    arg=$1
+    shift
+  fi
+done
+if [ -n "$mode" ]; then
+  case $np in ''|*[!0-9]*) die "-m and -t need a number of processes or threads" ;; esac
+fi
+
+[ -n "${SOLPSTOP:-}" ] || die "SOLPSTOP is not set: source setup.csh first"
+src=$(cd "${arg:-.}" 2>/dev/null && pwd) || die "no folder ${arg:-.}"
+MAKE=${MAKE:-gmake}
+b2obj=$SOLPSTOP/modules/B2.5/builds/couple_SOLPS-ITER.${HOST_NAME}.${COMPILER}
+[ -x "$b2obj/b2us.exe" ] || die "no $b2obj/b2us.exe: build b25eirene first"
+sb=$src/baserun
+[ -s "$sb/b2fgmtry" ] || die "$src has no baserun with a b2fgmtry"
+version=$(head -1 "$sb/b2fgmtry" | cut -c8-17)
+[[ "$version" < "03.002.000" ]] || die "the geometry of $sb is already unstructured"
+
+runs=""
+for d in "$src"/*/; do
+  d=${d%/}
+  r=$(basename "$d")
+  [ "$r" = baserun ] && continue
+  if [ -f "$d/b2mn.dat" ] && { [ -s "$d/b2fstate" ] || [ -s "$d/b2fstati" ]; }; then
+    case $r in *[[:space:]]*) die "run directory names with blanks are not supported: $r" ;; esac
+    runs="$runs $r"
+  fi
+done
+[ -n "$runs" ] || die "no run directories (b2mn.dat and b2fstate) in $src"
+first=$(echo $runs | cut -d" " -f1)
+
+# ..copies of the baserun files in a run directory (left when make rebuilt
+#   them there) must equal those of the baserun, which the conversion uses;
+#   they are left out of the converted run
+base_copies="b2fgmtry fort.30 b2fpardf b2frates"
+same_content() {   # same_content <file> <file>: equal but for the VERSION
+                   # line, the label and round-off (1e-10 of each field)
+  awk '
+    function load(f, v, blk,   n, nb, line, skip, first, m, t, i) {
+      n = 0; nb = 0; skip = 0; first = 1
+      while ((getline line < f) > 0) {
+        if (first) { first = 0; if (line ~ /^VERSION/) continue }
+        if (skip) { skip = 0; continue }
+        if (line ~ /^\*cf:/) { nb++; if (line ~ /[ \t]label[ \t]*$/) skip = 1 }
+        m = split(line, t)
+        for (i = 1; i <= m; i++) { v[++n] = t[i]; blk[n] = nb }
+      }
+      close(f)
+      return n
+    }
+    function isnum(s) { return s ~ /^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eEdD][-+]?[0-9]+)?$/ }
+    function val(s) { sub(/[dD]/, "e", s); s = s + 0; return s < 0 ? -s : s }
+    BEGIN {
+      na = load(ARGV[1], a, ba); nb = load(ARGV[2], b, bb)
+      if (na != nb) exit 1
+      for (i = 1; i <= na; i++) {
+        if (ba[i] != bb[i]) exit 1
+        if (isnum(a[i]) && val(a[i]) > big[ba[i]]) big[ba[i]] = val(a[i])
+      }
+      for (i = 1; i <= na; i++) {
+        if (a[i] == b[i]) continue
+        if (!isnum(a[i]) || !isnum(b[i])) exit 1
+        x = a[i]; y = b[i]; sub(/[dD]/, "e", x); sub(/[dD]/, "e", y)
+        d = x - y; if (d < 0) d = -d
+        if (d > 1e-10 * big[ba[i]]) exit 1
+      }
+      exit 0
+    }' "$1" "$2"
+}
+for r in $runs; do
+  for f in $base_copies; do
+    [ -e "$src/$r/$f" ] || continue
+    [ -e "$sb/$f" ] || \
+      die "$r/$f is not in the baserun, whose files the conversion uses: copy it to the baserun of $src, or remove it if not needed"
+    same_content "$sb/$f" "$src/$r/$f" || \
+      die "$r/$f differs from baserun/$f, but the conversion uses the files of the baserun: remove $r/$f from $src if those are right"
+  done
+done
+
+out=$SOLPSTOP/runs/$(basename "$src")
+[ -e "$out" ] && die "$out exists already"
+work=$out/.conversion
+mkdir -p "$work" || die "cannot create $out"
+echo "Converting $src"
+echo "  into $out"
+echo "  runs:$runs"
+
+hist="b2time b2batch b2tallies b2movies eirenemovies"
+keep_hist="b2wall b2chords eirenechords"
+old_trc="intshrt sepdata user user_SPb"   # tracing files with another layout
+
+# ..b2us in $work/convert, with the structured baserun as ../baserun
+cp -Rp "$sb" "$work/baserun"
+c=$work/convert
+new_convert() { rm -rf "$c"; mkdir "$c"; }
+run_b2us() {
+  (cd "$c" && $MAKE -n -f "$SOLPSTOP/runs/Makefile" b2us.prt) > "$work/dryrun.log" 2>&1 \
+    || die "b2us dry run failed, see $work/dryrun.log"
+  other=$(grep -o '[A-Za-z0-9_]*\.exe' "$work/dryrun.log" | sort -u | grep -v '^b2us\.exe$')
+  [ -z "$other" ] || die "the conversion would also run $other (check the timestamps), see $work/dryrun.log"
+  (cd "$c" && $MAKE -f "$SOLPSTOP/runs/Makefile" b2us.prt) > "$work/b2us.log" 2>&1
+  grep -q "STOP b2us" "$work/b2us.log" || die "b2us failed, see $work/b2us.log"
+}
+# ..namelist body without the group line and the closing slash
+nml_body() {
+  awk '/^[ \t]*[&$][A-Za-z]/ && !s {s=1; next} s && /^[ \t]*\/[ \t]*$/ {exit} s {print}' "$1"
+}
+merge_user() {   # merge_user <structured file or ""> <b2us file> <result>
+  { echo " &USER"
+    [ -n "$1" ] && [ -f "$1" ] && nml_body "$1"
+    nml_body "$2"
+    echo " /"; } > "$3.new" && mv "$3.new" "$3"
+}
+# ..switches that the unstructured code refuses (b2mod_ipmain.F), with its hint
+prohibited() {
+  awk -v q="'" '
+    index($0, "case (" q) { n = $0; sub(".*case \\(" q, "", n); sub(q ".*", "", n) }
+    index($0, "trim(ipnam(ip))," q) && n != "" {
+      h = $0; sub(".*trim\\(ipnam\\(ip\\)\\)," q, "", h); sub(q ".*", "", h)
+      print n "|" h; n = "" }' "$SOLPSTOP/modules/B2.5/src/utility/b2mod_ipmain.F"
+}
+comment_prohibited() {   # comment_prohibited <b2mn.dat> <run>
+  while IFS='|' read -r n h; do
+    if grep -q "^[[:space:]]*'$n'" "$1"; then
+      sed -i.sav "s/^\([[:space:]]*\)'$n'/\1#'$n'/" "$1" && rm -f "$1.sav"
+      echo "$2: b2mn.dat: '$n' is not allowed in the unstructured code, commented out ($h)"
+    fi
+  done < <(prohibited)
+}
+# ..user transport models of the unstructured code (b2tqna.F); another model
+#   stops the run, so it is commented out and the default model 0 is used
+ut_models=$(awk '/User transport options/ {s = 1} s && /not yet converted/ {exit} s' \
+              "$SOLPSTOP/modules/B2.5/src/transport/b2tqna.F" |
+            grep -o "user_transport\.eq\.[0-9]*" | sed 's/.*\.eq\.//' | sort -un | tr '\n' ' ')
+check_transport() {   # check_transport <b2mn.dat> <run>
+  v=$(awk -v q="'" '$1 == q "b2tqna_user_transport" q {gsub(q, "", $2); print $2}' "$1" | tail -1)
+  [ -z "$v" ] && return
+  case " $ut_models " in *" $v "*) return ;; esac
+  sed -i.sav "s/^\([[:space:]]*\)'b2tqna_user_transport'/\1#'b2tqna_user_transport'/" "$1" && rm -f "$1.sav"
+  echo "$2: b2mn.dat: transport model 'b2tqna_user_transport' $v does not exist in the unstructured code (models: $ut_models), commented out: the default model 0 is used, the radial transport changes"
+}
+# ..switch values that stop the unstructured code during the run (models it
+#   does not have): name|values that stop it (awk test of v)|its default
+unsupported="b2tfhe_vis_per|v != 0|0.0 (no current driven by perpendicular viscosity)
+b2tfhe_stochastic|v != 0|0.0
+b2nxfx_style|v == 0|1
+b2npht_style|v == 0|1
+b2sicf_style|v == 1|0
+b2sigp_style|v == 0|2
+b2mndt_var_style|(v < 0) + (v > 4)|0
+b2mndr_external_species|v != 0|0"
+check_unsupported() {   # check_unsupported <b2mn.dat> <run>
+  echo "$unsupported" | while IFS='|' read -r n t d; do
+    v=$(awk -v q="'" -v n="$n" '$1 == q n q {gsub(q, "", $2); print $2}' "$1" | tail -1)
+    [ -z "$v" ] && continue
+    awk -v v="$v" "BEGIN { sub(/[dD]/, \"e\", v); v += 0; exit !($t) }" || continue
+    sed -i.sav "s/^\([[:space:]]*\)'$n'/\1#'$n'/" "$1" && rm -f "$1.sav"
+    echo "$2: b2mn.dat: '$n' $v stops the unstructured code (not available there), commented out: its default $d is used"
+  done
+}
+# ..switches whose default differs between the structured code (develop) and
+#   the unstructured code: name|structured default|unstructured default
+default_changes="b2tfhe_vis_par|1.0|0.0
+b2tfhe_vis_per|1.0|0.0
+b2tfnb_vis_per|1.0|0.0
+b2tlh0_alpha|1.0|0.0 (1.0 with b2mn_afn)
+b2tlh0_gamma|1.0|2.0
+b2tlc0_alpha|1.0 or 0.0 (two routines)|0.0 (1.0 with b2mn_afn)
+b2tlc0_gamma|1.0|2.0
+b2tqin_csigin_style|1|0
+b2news_iy_nocoreExB|-2|0
+b2mndr_ixfb|see b2input.xml|5*nx/8
+b2tfnb_drift_style|see b2input.xml|1"
+warn_defaults() {   # warn_defaults <b2mn.dat> <run>
+  echo "$default_changes" | while IFS='|' read -r n s u; do
+    grep -q "^[[:space:]]*'$n'" "$1" || \
+      echo "$2: b2mn.dat does not set '$n': default $s in the structured code, $u in the unstructured code"
+  done
+}
+# ..b2us takes the midplane columns of the structured run (get_jsep, with
+#   b2mwti_jxa and b2mwti_jxi), so that the midplane profiles of b2time.nc
+#   are kept; only in the copy of b2mn.dat given to b2us
+midplane_of_run() {
+  grep -q "^[[:space:]]*'b2us_auto_midplane_det'" "$1" || \
+    set_switch "$1" b2us_auto_midplane_det 0
+}
+set_switch() {   # set_switch <b2mn.dat> <switch> <value>
+  if grep -q "^'$2'" "$1"; then
+    sed -i.sav "s/^'$2'\([[:space:]]*\)'[^']*'/'$2'\1'$3'/" "$1" && rm -f "$1.sav"
+  else
+    [ -n "$(tail -c 1 "$1")" ] && echo >> "$1"
+    echo "'$2' '$3'" >> "$1"
+  fi
+}
+
+# ..baserun
+echo "baserun: converting with b2us"
+new_convert
+cp "$sb/b2fgmtry" "$sb/b2fpardf" "$src/$first/b2mn.dat" "$c/"
+midplane_of_run "$c/b2mn.dat"
+[ -f "$sb/b2.user.parameters" ] && cp "$sb/b2.user.parameters" "$c/"
+[ -f "$sb/input.dat" ] && cp "$sb/input.dat" "$c/"
+for n in 33 34 35; do [ -f "$sb/fort.$n" ] && cp "$sb/fort.$n" "$c/"; done
+for p in boundary neutrals; do   # without a stencil, those of the first run
+  if [ -f "$sb/b2.$p.parameters.stencil" ]; then
+    cp "$sb/b2.$p.parameters.stencil" "$c/b2.$p.parameters"
+  elif [ -f "$src/$first/b2.$p.parameters" ]; then
+    cp "$src/$first/b2.$p.parameters" "$c/"
+  fi
+done
+sleep 1
+cp "$sb/b2fstati" "$c/b2fstati"
+run_b2us
+cp -Rp "$sb" "$out/baserun"
+find "$out/baserun" \( -name .DS_Store -o -name '._*' \) -exec rm -f {} +
+cp "$c/b2fgmtry_us" "$out/baserun/b2fgmtry"
+cp "$c/b2fstati_us" "$out/baserun/b2fstati"
+[ -f "$c/input.dat.us" ] && [ -f "$sb/input.dat" ] && cp "$c/input.dat.us" "$out/baserun/input.dat"
+[ -f "$sb/fort.33" ] && [ -f "$c/triangle.coordinates" ] && cp "$c/triangle.coordinates" "$out/baserun/fort.33"
+[ -f "$sb/fort.34" ] && [ -f "$c/triangle.elements" ] && cp "$c/triangle.elements" "$out/baserun/fort.34"
+[ -f "$sb/fort.35" ] && [ -f "$c/triangle.neighbors" ] && cp "$c/triangle.neighbors" "$out/baserun/fort.35"
+for p in boundary neutrals; do
+  [ -f "$sb/b2.$p.parameters.stencil" ] && [ -f "$c/b2us.$p.parameters" ] && \
+    cp "$c/b2us.$p.parameters" "$out/baserun/b2.$p.parameters.stencil"
+done
+if [ -f "$sb/b2.user.parameters" ]; then
+  merge_user "$sb/b2.user.parameters" "$c/b2us.user.parameters" "$out/baserun/b2.user.parameters"
+else
+  merge_user "" "$c/b2us.user.parameters" "$out/baserun/b2.user.parameters"
+fi
+cp "$work/b2us.log" "$out/baserun/conversion.log"
+for f in "$src"/*; do [ -f "$f" ] && cp -p "$f" "$out/"; done
+
+# ..run directories: conversion
+excl=( b2fplasma b2fplasmf b2fstate b2fstati b2fparam b2fmovie b2ftrace b2ftrack
+       b2fdiffe b2ftraced b2ftracedd balance.nc b2neo.nc b2faveri b2favere
+       fort.1 fort.10 fort.11 fort.12 fort.13 fort.14 fort.15 fort.31 fort.33
+       fort.34 fort.35 fort.44 fort.46 'eirene*.json' eirene_input_json.out
+       vertex_data.out da1 da2 dsp dsa dsi dsl dsr dstl dstr dsL dsLT dsLP dsR
+       dsRT dsRP dsTL dsTLT dsTLP dsTR dsTRT dsTRP '*.i' b2mn.exe.dir
+       b2time.nc b2batch.nc b2tallies.nc b2movies.nc eirenemovies.nc
+       b2us.exe.dir conversion.log $base_copies )
+for t in $old_trc; do excl+=( "tracing/$t.trc" ); done
+ropts=()
+for e in "${excl[@]}"; do ropts+=( "--exclude=/$e" ); done
+ropts+=( --exclude=.DS_Store "--exclude=._*" )
+for r in $runs; do
+  sr=$src/$r
+  dr=$out/$r
+  echo "$r: converting with b2us"
+  new_convert
+  cp "$sb/b2fgmtry" "$sb/b2fpardf" "$sr/b2mn.dat" "$c/"
+  midplane_of_run "$c/b2mn.dat"
+  for f in b2.boundary.parameters b2.neutrals.parameters \
+           b2.feedback_control.parameters b2.feedback_save.parameters b2faveri; do
+    [ -f "$sr/$f" ] && cp "$sr/$f" "$c/"
+  done
+  if [ -f "$sr/b2.user.parameters" ]; then
+    cp "$sr/b2.user.parameters" "$c/"
+  elif [ -f "$sb/b2.user.parameters" ]; then
+    cp "$sb/b2.user.parameters" "$c/"
+  fi
+  if [ -f "$sr/fort.1" ]; then
+    cp "$sr/fort.1" "$c/input.dat"
+  elif [ -f "$sb/input.dat" ]; then
+    cp "$sb/input.dat" "$c/"
+  fi
+  for n in 33 34 35; do
+    if [ -f "$sr/fort.$n" ]; then cp "$sr/fort.$n" "$c/"
+    elif [ -f "$sb/fort.$n" ]; then cp "$sb/fort.$n" "$c/"; fi
+  done
+  for h in $hist; do [ -f "$sr/$h.nc" ] && ln -s "$sr/$h.nc" "$c/$h.nc"; done
+  sleep 1
+  if [ -s "$sr/b2fstate" ]; then cp "$sr/b2fstate" "$c/b2fstati"; else cp "$sr/b2fstati" "$c/b2fstati"; fi
+  run_b2us
+  rsync -a "${ropts[@]}" "$sr/" "$dr/" || die "copy of $sr failed"
+  for t in $old_trc; do
+    [ -f "$sr/tracing/$t.trc" ] && \
+      echo "$r: tracing/$t.trc not copied (its layout differs in the unstructured code, which could not continue it)"
+  done
+  copies=""
+  for f in $base_copies; do [ -e "$sr/$f" ] && copies="$copies $f"; done
+  [ -z "$copies" ] || echo "$r:$copies not copied (the same as in the baserun, whose files the run uses)"
+  comment_prohibited "$dr/b2mn.dat" "$r"
+  check_transport "$dr/b2mn.dat" "$r"
+  check_unsupported "$dr/b2mn.dat" "$r"
+  warn_defaults "$dr/b2mn.dat" "$r"
+  cp "$c/b2fstati_us" "$dr/b2fstati"
+  for p in boundary neutrals feedback_control feedback_save; do
+    [ -f "$c/b2us.$p.parameters" ] && cp "$c/b2us.$p.parameters" "$dr/b2.$p.parameters"
+  done
+  [ -f "$sr/fort.1" ] && [ -f "$c/input.dat.us" ] && cp "$c/input.dat.us" "$dr/fort.1"
+  [ -f "$sr/fort.33" ] && [ -f "$c/triangle.coordinates" ] && cp "$c/triangle.coordinates" "$dr/fort.33"
+  [ -f "$sr/fort.34" ] && [ -f "$c/triangle.elements" ] && cp "$c/triangle.elements" "$dr/fort.34"
+  [ -f "$sr/fort.35" ] && [ -f "$c/triangle.neighbors" ] && cp "$c/triangle.neighbors" "$dr/fort.35"
+  [ -f "$c/b2faveri_us" ] && cp "$c/b2faveri_us" "$dr/b2faveri"
+  for h in $hist; do [ -f "$c/${h}_us.nc" ] && mv "$c/${h}_us.nc" "$dr/$h.nc"; done
+  [ -f "$sr/b2.user.parameters" ] && \
+    merge_user "$sr/b2.user.parameters" "$c/b2us.user.parameters" "$dr/b2.user.parameters"
+  cp "$work/b2us.log" "$dr/conversion.log"
+  grep -i "not converted" "$work/b2us.log" | sed "s/^/$r:/"
+  nz=$(grep -c "written as zero" "$work/b2us.log")
+  nd=$(grep -c ": dropped" "$work/b2us.log")
+  [ "$nz$nd" = 00 ] || \
+    echo "$r: history files: $nz quantities written as zero (not in the run), $nd dropped (not in the unstructured code), listed in conversion.log"
+done
+
+# ..timestamps: nothing of the baserun may be rebuilt
+(cd "$out" && correct_baserun_timestamps) > /dev/null 2>&1
+sleep 1
+for r in $runs; do touch "$out/$r/b2fstati"; done
+
+# ..one time step without changing the plasma state
+popts=()
+[ "$mode" = mpi ] && popts=( -m "mpiexec -np $np" )
+[ "$mode" = omp ] && popts=( -t "$np" )
+for r in $runs; do
+  dr=$out/$r
+  keep=$work/keep_$r
+  sflag=""
+  grep -q "^'b2mndr_eirene'[[:space:]]*'0'" "$dr/b2mn.dat" && sflag=-s
+  echo "$r: one time step with b2mndt_rxf 0 (b2run $sflag ${popts[*]} b2mn)"
+  (cd "$dr" && b2run -n $sflag "${popts[@]}" b2mn) > "$work/dryrun.log" 2>&1
+  other=$(grep -o '[A-Za-z0-9_]*\.exe' "$work/dryrun.log" | sort -u | grep -v '^b2mn\.exe$')
+  [ -z "$other" ] || die "the run in $dr would also run $other (check the timestamps)"
+  mkdir -p "$keep"
+  cp -p "$dr/b2mn.dat" "$keep/"
+  for h in $hist $keep_hist; do [ -e "$dr/$h.nc" ] && cp -p "$dr/$h.nc" "$keep/"; done
+  [ -d "$dr/tracing" ] && cp -Rp "$dr/tracing" "$keep/"
+  ls -A "$dr" > "$keep/.before"
+  set_switch "$dr/b2mn.dat" b2mndr_ntim 1
+  set_switch "$dr/b2mn.dat" b2mndr_stim -1.0
+  set_switch "$dr/b2mn.dat" b2mndr_etim 0.0
+  set_switch "$dr/b2mn.dat" b2mndt_rxf 0.0
+  (cd "$dr" && b2run $sflag "${popts[@]}" b2mn) > "$work/step.log" 2>&1
+  { echo; echo "===== one time step with b2mndt_rxf 0"; cat "$work/step.log"; } >> "$dr/conversion.log"
+  cp -p "$keep/b2mn.dat" "$dr/b2mn.dat"
+  failed=""
+  if grep -q "XERRAB\|Run apparently failed" "$work/step.log" || \
+     [ "$(cd "$dr" && b2fstate_OK)" != yes ]; then
+    failed=$(grep -A1 "XERRAB: program will stop" "$work/step.log" | sed -n '2s/^ *//p')
+    failed=${failed:-b2mn did not finish}
+  fi
+  for h in $hist $keep_hist; do
+    if [ -e "$keep/$h.nc" ]; then cp -p "$keep/$h.nc" "$dr/"; else rm -f "$dr/$h.nc"; fi
+  done
+  if [ -d "$keep/tracing" ]; then rm -rf "$dr/tracing"; cp -Rp "$keep/tracing" "$dr/"; fi
+  rm -rf "$dr/b2mn.exe.dir"
+  for f in $(ls -A "$dr"); do
+    case $f in *.i) grep -qx "$f" "$keep/.before" || rm -f "$dr/$f" ;; esac
+  done
+  [ -z "$failed" ] || \
+    die "the one-step run in $dr failed: $failed (log in $dr/conversion.log); the run is converted and put back as before the step, but balance.nc and the other output of the step are missing or incomplete"
+  echo "$r: done"
+done
+
+rm -rf "$work"
+echo "Converted case: $out"
