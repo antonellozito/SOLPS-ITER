@@ -12,16 +12,16 @@ from .options import LabelsBox, LevelsBox, RegionsMenu
 from .overlays import OverlayOptions, OverlaySection
 from .plotopts import (ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox,
                        WallBox)
-from .species import SUM, SpeciesMenu
+from .species import ALL, SUM, SpeciesMenu
 from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
 TREE_ROWS = 11                      # rows of the plasma quantity tree
-MOVIE_ROWS = 6                      # in the Run movies tab
+MOVIE_ROWS = 7.5                    # Run movies: its 8 groups, closed
 LEVELS = {"contourf": 100, "contour": 20}   # contour levels at first
-VECTOR_ROWS = 6                     # rows of the vector quantity tree
+VECTOR_ROWS = 5                     # rows of the vector quantity tree
 WALL_ROWS = 6                       # rows of the wall quantity tree
 EXTRA = ("vector", "wall", "overlay")   # the trees apart from the plasma one
 ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
@@ -91,7 +91,7 @@ def tree_height(tree, rows):
     """The tree rows high (in its font, under its header)."""
     fm = QtGui.QFontMetrics(tree.font())
     head = tree.header()
-    tree.setFixedHeight(rows * (fm.height() + 4) + max(
+    tree.setFixedHeight(int(round(rows * (fm.height() + 4))) + max(
         head.sizeHint().height(), head.minimumHeight()) +
         2 * tree.frameWidth())
 
@@ -169,7 +169,7 @@ class QuantityPanel(QtWidgets.QWidget):
         lay.addWidget(self.vector_tree)
         lay.addWidget(self.wall_tree)
         self.plasma_species = SpeciesMenu(self.tree, "Plasma quantity",
-                                          "plasma")
+                                          "plasma", multi=True)  # chords
         self.vector_species = SpeciesMenu(self.vector_tree,
                                           "Vector quantity", "vector")
         self.wall_species = SpeciesMenu(self.wall_tree, "Wall quantity",
@@ -286,6 +286,8 @@ class QuantityPanel(QtWidgets.QWidget):
             w = self.page_slot.itemAt(i).widget()
             if w is not None:
                 w.setVisible(w is page)
+                if getattr(w, "header", None) is not None:   # not scrolled
+                    w.header.setVisible(w is page)
 
     def _make_tree(self, title, what):
         tree = make_tree(title, what)
@@ -478,9 +480,11 @@ class QuantityPanel(QtWidgets.QWidget):
     # -------------------------------------------------------------- style
     def summed(self, menu=None):
         """True for the sum over all species or over one element (in the
-        species menu, default the plasma one)."""
+        species menu, default the plasma one); the plot of a choice of
+        several curves (All, X (all): the chords) is their sum."""
         menu = menu or self.plasma_species
-        return menu.text() == SUM or bool(menu.partial.get(menu.text()))
+        return menu.text() in (SUM, ALL) or bool(menu.partial.get(
+            menu.text()))
 
     def _sum_op(self, eirene, menu=None):
         menu = menu or self.plasma_species
@@ -520,8 +524,8 @@ class QuantityPanel(QtWidgets.QWidget):
         if self.summed(menu):
             ops.append(self._sum_op(eirene, menu))
         elif prop is not None:
-            col = max(menu.combo.currentIndex(), 0)
-            ops.append("%d %s" % (col, "ezsel" if eirene else "zsel"))
+            ops.append("%d %s" % (menu.column(),
+                                  "ezsel" if eirene else "zsel"))
         if prop is not None:
             npos, nneg = prop
             if eirene:
@@ -538,7 +542,7 @@ class QuantityPanel(QtWidgets.QWidget):
         if self.summed():
             ops.append(self._sum_op(eirene))
         elif not all_species and self.species.count() > 1:
-            ops.append("%d %s" % (max(self.species.currentIndex(), 0),
+            ops.append("%d %s" % (self.plasma_species.column(),
                                   "ezsel" if eirene else "zsel"))
         return tuple(ops)
 
@@ -637,7 +641,7 @@ class QuantityPanel(QtWidgets.QWidget):
         if self.is_mask():
             fields.update(self.mask_box.style_fields())
         return PlotStyle(kind=self.kind(), column=0 if self.reduced()
-                         else max(self.species.currentIndex(), 0), **fields)
+                         else self.plasma_species.column(), **fields)
 
     def vector_style(self, column):
         """The PlotStyle of the vector plot (species column column)."""
@@ -658,8 +662,7 @@ class QuantityPanel(QtWidgets.QWidget):
             fields.update(box.style_fields())
         fields["fill_lines"] = False
         return PlotStyle(kind="contour", column=0 if self.overlay_reduced()
-                         else max(self.overlay_species.combo.currentIndex(),
-                                  0), **fields)
+                         else self.overlay_species.column(), **fields)
 
     def set_overlay_range(self, lo, hi):
         self.overlay.colour.set_range(lo, hi)

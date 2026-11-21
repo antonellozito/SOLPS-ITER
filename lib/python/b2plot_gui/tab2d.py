@@ -23,7 +23,7 @@ from .panels.plotarea import (READOUT, Columns, PlotCommands, Readout,
                               ScaledCanvas)
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel
-from .panels.species import chosen_columns, column_names
+from .panels.species import ALL, SUM, chosen_columns, column_names
 from .panels.timebox import BALANCES, PAGES, TRACING
 from .output.actions import TabOutput
 from .output.movie import MovieFrames
@@ -148,8 +148,19 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         ll.setContentsMargins(6, 6, 6, 0)
         ll.setSpacing(6)                # the panel scrolls apart from them
         ll.addWidget(self.time_box.source)
+        fixed = QtWidgets.QWidget()     # over the scrolling too: the rows of
+        fl = QtWidgets.QVBoxLayout(fixed)   # the movies, the tabs and rows
+        fl.setContentsMargins(0, 0, 6, 0)   # of the Run tracing page
+        fl.setSpacing(0)
+        self.quantity.layout().removeWidget(self.time_box)
+        fl.addWidget(self.time_box)
+        fl.addWidget(self.tracing.page.header)
+        ll.addWidget(fixed)
         self.left_column = left         # the balance extensions start right
         self.quantity_area = _scrolled(self.quantity)   # of it
+        self.quantity_area.setVerticalScrollBarPolicy(  # its width never
+            Qt.ScrollBarAlwaysOn)   # changes: no scroll bar coming and
+        #                             going as the plots follow the width
         ll.addWidget(self.quantity_area, 1)
         self.quantity.page_slot.addWidget(self.tracing.page)
         self.quantity.page_slot.addWidget(self.balance.page)
@@ -697,6 +708,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if role == "frames":            # all the frames of the chords
             self.tools.frame_delivered(want, data)
             return
+        if role == "allspecies":        # the chords, a curve per species
+            self.tools.species_delivered(want, data)
+            return
         if role == "balance":
             self.balance.deliver_rc(data)
             return
@@ -837,7 +851,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                 len(data.columns) > 1 or data is self.data and q.reduced()
                 or overlay and q.overlay_reduced()):
             return ""
-        return menu.text()
+        text = menu.text()      # several curves (the chords): their sum
+        return SUM if text == ALL else text.replace(" (all)", " (sum)")
 
     def _title(self):
         """The automatic title: the name of the quantity plotted when it is

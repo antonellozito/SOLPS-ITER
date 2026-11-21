@@ -19556,20 +19556,28 @@ The {\bf quantity panel} (left):
   plotted in it, the Run tracing tab its places, the Balances tab its
   volume, and opening these two closes the {\tt Chords} and
   {\tt Statistics} sections; the movie frames of the latest run are read by \btwoplot with
-  {\bf mvframe} and
-  {\bf mvframev}
+  {\bf mvframe},
+  {\bf mvframev} and
+  {\bf mvfrstep}
   (\ref{sec:mvframe}): one frame, the mean over a range of frames, a
   rolling mean (a window of $W$ frames ending at the frame or centred on
-  it, moved frame by frame) or a batch mean (consecutive blocks of $W$
-  frames), each position being one request of the frames $k_1$ to $k_2$;
+  it, moved frame by frame), a batch mean (consecutive blocks of $W$
+  frames) or a phase mean ($W$ positions, position $p$ the mean of the
+  frames $p$, $p+W$, $p+2W$, \ldots\ up to the last one), each position
+  being one request of the frames $k_1$ to $k_2$;
   a slider over the whole row selects the position (its frame or block
-  number at its right), {\tt Play} first draws every position once
-  ({\tt Preparing\ldots}, the status bar counts them, nothing is shown
-  meanwhile) and keeps it as an image, then shows the images at the frame
-  rate; they are kept until something changes the plot (quantity, option,
-  view, layers, window size): Pause and Play go on at once, and the
+  number at its right), {\tt Play} first draws the next 30 positions
+  ({\tt Preparing\ldots}, the status bar counts them, the slider stays)
+  and keeps each as an image with what the {\tt Chords} and
+  {\tt Statistics} sections show for it, then shows the images at the
+  frame rate, with those sections, while the other positions are drawn
+  (the movie waits where one is not drawn yet); they are kept until
+  something changes the plot (quantity, option, view, layers, window
+  size): Pause and Play go on at once, and the
   slider moved by hand shows them too (the plot is drawn again once it
-  rests); Pause or the end of the movie draws the plot of the position
+  rests); without images the plot follows the slider while it is dragged,
+  each position drawn as soon as the one before is (in {\tt Run tracing}
+  at once); Pause or the end of the movie draws the plot of the position
   shown; {\tt Save movie} (right of {\tt loop}) writes the images of all
   positions, drawn first where missing, as a movie file at the frame rate
   set: MP4, QuickTime or AVI (MPEG-4) and WebM with {\tt ffmpeg} where it
@@ -19577,10 +19585,13 @@ The {\bf quantity panel} (left):
   slider draws again only what
   changes (the fields, vectors, title, colour bars) over a kept image of
   the rest (layers, axes); the images take at
-  most half of the memory available when {\tt Play} is pressed, else the
-  movie is played as the frames are read (the status bar says so); the title of the plot gives the time, as
+  most half of the memory available when {\tt Play} is pressed: when not
+  all of them fit, as many as fit are kept ahead of the position shown,
+  those played dropped (a movie of any length; below 10 images, or for
+  {\tt Save movie}, the movie is played as the frames are read, or not
+  saved, and the status bar says so); the title of the plot gives the time, as
   {\tt t = $t$ s} or {\tt mean between t = $t_1$ -- $t_2$ s}; the window of
-  the rolling and batch means right of {\tt Play}; {\tt Save plot} saves the plot of the
+  the rolling, batch and phase means right of {\tt Play}; {\tt Save plot} saves the plot of the
   position shown; all options of the tab apply to movie data. A run started with {\tt b2run b2mn} deletes
   {\tt b2fstate}, {\tt b2fplasma}, {\tt b2fparam}, {\tt b2ftrack} and
   {\tt balance.nc} and runs in {\tt b2mn.exe.dir} until its end, when they
@@ -19602,26 +19613,47 @@ The {\bf quantity panel} (left):
   run directory, or in {\tt b2mn.exe.dir} when older ones were there);
   {\tt Live update} then reloads the run when they change;
 \item {\tt Run tracing} reads the files of the latest run (chosen as the
-  movie files) that \btwoplot does not read: {\tt b2time.nc} and the
+  movie files) that \btwoplot does not read: {\tt b2time.nc}, the
   chord files {\tt b2chords.nc} and {\tt eirenechords.nc}
-  (chapter~\ref{cha:b2chords}); its page replaces the column, each of its
-  tabs only with its files: {\tt Time traces}, {\tt Profiles} (at the
+  (chapter~\ref{cha:b2chords}) and {\tt b2tallies.nc}
+  (chapter~\ref{cha:b2tallies}); its page replaces the column, each of
+  its tabs only with its files: {\tt Time traces}, {\tt Profiles} (at the
   midplanes and along the targets, against the distance from the
   separatrix, $R$, $Z$ or $\rho_p$; temperatures written in J shown in
-  eV) and {\tt Chords} (along a chord of a set, against the distance
-  along it, $R$, $Z$, $\rho_p$ or the distance from the separatrix, with
-  its line integrals or averages in time over its parts inside the grid);
+  eV) and {\tt Chords} (the chords of a set, as the {\tt Chords} section
+  of the plots below: a tab per chord, numbered as on the plot, with how
+  it is drawn there, its ends, its line integral and average at the
+  position and its profile, against the distance along it, $R$, $Z$,
+  $\rho_p$ or the distance from the separatrix; under the tabs its line
+  integrals or (one menu for both plots) averages, over its parts inside
+  the grid, against the chord number and in time, a curve per chord;
+  its quantities in the groups {\tt Plasma state}, {\tt Plasma fluxes},
+  {\tt Plasma sources}, {\tt Transport coefficients}, {\tt Neutrals
+  state}, {\tt Neutrals fluxes}, {\tt Neutrals sources} and
+  {\tt Neutrals (triangles)}, as the quantities of the movie files);
   each tab has its table of quantities with a species menu in its title,
   its plots with their options, {\tt Save plot} and {\tt Export}; the
   profiles and chords the frames as in {\tt Run movies} (computed by the
   GUI; {\tt Show all}: the profiles of all positions); the place of the
-  quantity glows on the plot (the line of a profile, the chords of the
-  set, the one shown thicker). The time traces are those of a place
+  quantity glows on the plot (the chords of the
+  set are drawn as their tabs say). The profiles are those of a place
+  clicked on the plot, as the time traces: the lines of their cells at
+  the outer and inner midplanes and along the two targets always drawn
+  with their names (none chosen at first: the table grey until a click),
+  in a table always with the groups {\tt Plasma state}, {\tt Plasma fluxes} (at the targets),
+  {\tt Transport coefficients} (at the midplanes) and {\tt Neutrals
+  state} (the atoms and molecules of {\tt Eirene}), greyed out where
+  the place has none; the atom and molecule densities of {\tt B2.5}
+  ({\tt an3d*}, {\tt mn3d*}, those of {\tt Eirene} being shown) and the
+  radial neutral flux limiters ({\tt lh3d*}, {\tt ln3d*}) are left out.
+  The time traces are those of a place
   clicked on the plot (on it or on its name), where the places are always
   drawn with their names
-  (brighter under the mouse, the name of the one clicked in bold; the
-  outer midplane separatrix at first), in a table always with the groups
-  {\tt State variables}, {\tt Fluxes} and {\tt Integrated quantities}
+  (brighter under the mouse, the name of the one clicked in bold; none
+  at first: the table grey until a click), in a table always with the
+  groups
+  {\tt Plasma state}, {\tt Plasma fluxes}, {\tt Neutrals state} (the
+  atoms and molecules of {\tt Eirene}) and {\tt Integrated quantities}
   (greyed out where the place has none): the separatrix at the outer
   midplane (its state variables), a target (inner and outer by the major
   radius of their cells: the state variables at the separatrix with their
@@ -19632,13 +19664,44 @@ The {\bf quantity panel} (left):
   grid (no name; the total number of particles and the total electron and
   ion energies); the trace alone, or with its mean and standard deviation
   over the whole trace, its rolling or its batch means over a window of
-  frames;
+  $W$ frames, or its phase means alone (the mean of the frames $p$,
+  $p+W$, $p+2W$, \ldots\ at the time of the frame $p$, for $p = 1$ to
+  $W$). The tabs {\tt Volume tallies} and {\tt Surface tallies} show the
+  time traces of {\tt b2tallies.nc} of a region clicked on the plot, as
+  the time traces (none at first: the table grey until a click; the
+  regions drawn without names, the one clicked named over the table):
+  the volume regions ({\tt cvReg}: their outlines always drawn, the
+  cells of the one clicked filled; named as the manual appendix Region
+  definitions in a standard topology, else by number; the link
+  {\tt the whole plasma} over the table: the sums and averages over all
+  of them) with the groups {\tt Plasma state} ({\tt nereg}, {\tt nareg},
+  {\tt tereg}, {\tt tireg}, {\tt poreg}), {\tt Plasma sources} (the
+  recycling and boundary sources of particles, parallel momentum,
+  electron and ion energy and charge, the atomic processes, the heating
+  terms) and {\tt Residuals}; the face regions ({\tt fcReg}, their
+  faces) with {\tt Plasma fluxes}; described as in
+  appendix~\ref{cha:b2tallies}; left out: {\tt ne2reg}, {\tt nireg},
+  the electron particle, additional and external sources, {\tt b2radreg},
+  {\tt b2bremreg}, {\tt rdneureg}, {\tt b2she}, {\tt b2shi}, {\tt b2she0},
+  {\tt b2shi0}, {\tt b2str}, {\tt b2wrong1} to
+  {\tt b2wrong3}, {\tt volreg}, {\tt qconvereg}, {\tt qconvireg};
+  other quantities under {\tt Other}; the same {\tt Show} menu. In
+  {\tt Chords} the table stays grey until a chord is clicked on the plot
+  (its tab then shown); the chord clicked, then that of the tab shown,
+  glows in its colour, the one under the mouse lighter; in
+  {\tt Volume tallies} the cells of the region under the mouse are
+  shown lightly before a click.
 \item the {\tt Plasma quantity} tree (description and \btwoplot name),
   with a search field (for the three trees); a click opens or closes a
   group, plots a quantity, a second click clears the plot; the
   {\tt Name} column of the three trees has one fixed width (longer names
-  in the tooltips; the vertical scroll bar always shown); in the {\tt Run movies} tab the tree is as high as
-  the vector one; the group
+  in the tooltips; the vertical scroll bar always shown); in the {\tt Run movies} tab the tree is high enough
+  for its groups closed (as the tables of {\tt Run tracing}), the
+  quantities of the movie files in the groups
+  {\tt Plasma state}, {\tt Plasma fluxes}, {\tt Plasma sources},
+  {\tt Transport coefficients}, {\tt Neutrals state}, {\tt Neutrals
+  fluxes}, {\tt Neutrals sources} and {\tt Neutrals (triangles)} (those of
+  {\tt eirenemovies.nc}); the group
   {\tt Magnetic equilibrium
   (derived)} holds maps the GUI computes from {\tt b2fgmtry}, the derived
   quantities of {\tt Inspect cell} on every cell (vertex values with
@@ -19646,7 +19709,9 @@ The {\bf quantity panel} (left):
 \item the {\tt Vector quantity} tree under it: the poloidal and radial
   components (B2.5) or the Cartesian components (EIRENE) of a vector
   quantity paired, drawn as arrows, streamlines or both, over the plasma
-  quantity or alone; a click plots one, a second click clears it;
+  quantity or alone (in the {\tt Run movies} tab in the groups
+  {\tt Plasma fluxes} and {\tt Neutrals fluxes}); a click plots one, a
+  second click clears it;
 \item the {\tt Wall quantity} tree under that (only in {\tt Final
   state}: the movie files have no wall quantities): the quantities of the wall
   elements (the wall labels of \btwoplot) in groups (fluxes and loads,
@@ -19659,12 +19724,21 @@ The {\bf quantity panel} (left):
   {\tt Plasma quantity (species: \ldots)}: a menu of its own for the
   plasma, the vector and the wall quantity plotted, grey without a
   quantity or with one not resolved in species; the plasma species, or
-  the EIRENE atoms, molecules or test ions, with the sum over the species
-  (\btwoplot {\tt sumz}, {\tt esumz} for the plasma quantity; the
-  columns summed for the vector and the wall quantity) and the sum of
-  each element with several; at first the highest charge state of the
-  first species, then the species last chosen in that menu, where a
-  quantity has it;
+  the EIRENE atoms, molecules or test ions, element by element, each
+  element with several followed by its sum ({\tt D (sum)}), the sum of
+  all at the end ({\tt Sum}; \btwoplot {\tt sumz}, {\tt esumz} for the
+  plasma quantity; the columns summed for the vector and the wall
+  quantity); the plasma menu and those of {\tt Run tracing} also offer
+  every species of an element ({\tt D (all)}) and all of them
+  ({\tt All}), as in {\tt D0, D+1, D (all), D (sum), N0, \ldots, N+7,
+  N (all), N (sum), All, Sum}: a curve per species, each with its own
+  options (the time traces, the profiles, the profiles along the chords,
+  their line integrals and averages against the chord number as markers
+  of each species, and in time those of the chord of the tab shown;
+  {\tt Show all} then off and grey); the 2D plot shows their sum, the
+  chords ask \btwoplot for every species; at first the highest charge
+  state of the first species, then the species last chosen in that menu,
+  where a quantity has it;
 \item {\tt Mask}, shown for the masks of the group {\tt Cell masks and
   indices}: the labels with an integer argument ({\bf ixeq}, {\bf nreg},
   {\bf freg}, {\bf tlbl}, \ldots), with the argument $i$ (sent as
@@ -19788,8 +19862,12 @@ of \btwoplotns), in a small window that can be exported as CSV.
 (in both tabs: with the movie frames they follow the frame shown, also
 while playing), open their section in the quantity column, under that
 row; one at a time, a second click closes it. With a plasma and a vector
-quantity plotted, a menu left of {\tt Close} chooses the one the chords
-measure ({\tt Plasma} at first, or {\tt Vector}). A menu
+quantity plotted, the chords measure both: each chord tab shows the
+profiles of both (the plasma quantity first, the vector quantity under
+it, each with its text, {\tt Save plot} and {\tt Export}), and under the
+tabs the line integrals or averages of each against the chord number
+and in time (the plasma quantity first, the frames of both loaded with
+the movie frames). A menu
 left of {\tt Draw chord} chooses the chords: {\tt Drawn}, drawn on the
 plot ({\tt Draw chord}, two clicks each as long as it is on) or typed
 ({\tt +}), or those of the {\tt *.chords} files of the run
@@ -19806,14 +19884,23 @@ $\int 2\pi R\,\mathbf{v}\cdot\mathbf{n}\,dl$ through the surface the
 chord sweeps around the axis ($\mathbf{n}$ to the right of the chord);
 its profile (linear in the vertex values, as the contours). With two
 chords or more, a plot under the tabs shows the line integrals or (menu)
-the line averages against the chord number. With the movie frames,
+the line averages against the chord number; with a movie quantity, a
+plot under it shows them in time over every frame (loaded in the
+background), a curve per chord with its own options; one menu chooses
+the sums of both plots. With the movie frames,
 {\tt Show all} (left of the menu of the quantity and of {\tt Close}) draws the profiles and the sums of
-all the frames (loaded in the background): the frames other than the one
-shown with lines a fifth as wide (60\,\% opaque) and markers a fifth as
-large, the colours
-of a colour map (not a diverging one, chosen in the plot options in
-place of the colour) along the frames; {\tt Export} then writes the
-values of every frame. A tab closes with its cross,
+all the frames (loaded in the background): the sums of the frames other
+than the one shown with markers a fifth as large, in the colours of a
+colour map along the frames (not a diverging one, chosen in the plot
+options in place of the colour); the profiles of all the frames as one
+collection with its row {\tt All profiles} in the plot options (colour
+map along the frames, line style and width, 60\,\% opaque) and the
+profile shown over them with its row {\tt Current profile} (colour,
+line style, width and markers; black and thick at first). Moving the
+slider then only draws the current profile again, over the rest kept,
+as in the {\tt Profiles} and {\tt Chords} tabs of {\tt Run tracing}
+with their {\tt Show all}; {\tt Export} writes the values of every
+frame. A tab closes with its cross,
 {\tt Clear all} removes every chord; the chords stay when the section
 closes and are drawn on the plot while it is open. The statistics of the
 cells shown in the view ({\tt Whole domain}, again after each zoom or
@@ -22034,6 +22121,10 @@ all its species columns:
 \end{itemize}
 {\bf mvfrstd}\index{b2plot, mvfrstd}, with the same arguments, pushes the
 standard deviation over the frames instead of the mean.
+{\bf mvfrstep}\index{b2plot, mvfrstep}, with a step $n$ after the last
+frame ({\tt 'name' file k1 k2 n mvfrstep}), pushes the mean of the frames
+$k_1$, $k_1+n$, $k_1+2n$, \ldots\ up to $k_2$, read one by one (no
+running sum); the label adds {\tt every $n$}.
 The label is the {\tt long\_name} with the frames and the {\tt units}.
 The mean is a running sum per variable: when the frames change, only the
 frames that enter or leave the range are read, so rolling and block

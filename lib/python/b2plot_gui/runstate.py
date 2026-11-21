@@ -23,7 +23,7 @@ import time
 from .session import SLACK, _age, of_state
 
 EXE = "b2mn.exe.dir"
-MOVIES = ("b2movies.nc", "eirenemovies.nc", "b2tallies.nc")
+MOVIES = ("b2movies.nc", "eirenemovies.nc")
 _COUNTS = {}                        # (path, size, date) -> counts
 
 

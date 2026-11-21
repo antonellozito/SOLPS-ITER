@@ -11,7 +11,8 @@ from .. import runstate
 
 B2TIME = "b2time.nc"
 CHORDS = ("b2chords.nc", "eirenechords.nc")
-NAMES = (B2TIME,) + CHORDS
+TALLIES = "b2tallies.nc"
+NAMES = (B2TIME,) + CHORDS + (TALLIES,)
 E_CHARGE = 1.602176634e-19          # J per eV
 CACHE = 16                          # arrays kept per file
 
@@ -47,8 +48,8 @@ class Item:
     description: str            # what it is (without where)
     group: str
     unit: str
-    file: str                   # B2TIME or one of CHORDS
-    kind: str                   # "trace", "profile" or "chord"
+    file: str                   # B2TIME, one of CHORDS or TALLIES
+    kind: str                   # "trace", "profile", "chord" or "tally"
     dim: str = ""               # dimension of its species: ns, natm, nmol
     index: int = 0              # divertor of a trace (dimension nc)
     where: str = ""             # where it is, for the titles

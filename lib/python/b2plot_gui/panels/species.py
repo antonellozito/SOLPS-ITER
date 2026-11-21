@@ -1,16 +1,20 @@
 """Species menus of the quantity trees: one in the title of each tree,
 "Plasma quantity (species: menu)", with the species of the quantity
 plotted from that tree (the run species where b2plot sends no name, the
-EIRENE names for atoms, molecules and test ions), their sum and the sum of
-each element with several; grey without a quantity or with one that is
-not resolved in species."""
+EIRENE names for atoms, molecules and test ions) element by element, each
+element with several followed by its sum ("D (sum)"), all at the end
+("Sum"); a menu with several curves per plot (multi) also offers all the
+species of an element ("D (all)") and all of them ("All"), each its own
+curve; grey without a quantity or with one that is not resolved in
+species."""
 
 import re
 
 from ...b2plot import labels
 from ...qt import QtCore, QtWidgets, Signal
 
-SUM = "Sum over species"
+SUM = "Sum"                         # of all the species
+ALL = "All"                         # all the species, a curve each
 NAME_CHARS = 13         # the Name column of every tree: this many letters
 CHARGE = re.compile(r"([A-Za-z]*)\s*\+?(\d*)")     # D0, D+, N+7, N7+
 
@@ -28,6 +32,34 @@ def default_species(names):
     return -max(same)[1] if same else 0
 
 
+def element(name):
+    """The element of a species name (D of D+1)."""
+    return re.match(r"[A-Za-z]*", name).group(0)
+
+
+def entries(names, multi=False):
+    """[(text, columns)] of a species menu: element by element its species,
+    with several (and other elements) its curves "X (all)" (multi) and its
+    sum "X (sum)"; then "All" (multi) and "Sum"."""
+    if len(names) <= 1:
+        return [(names[0] if names else "", (0,))]
+    elements = [element(n) for n in names]
+    out = []
+    for e in dict.fromkeys(elements):
+        cols = tuple(i for i, x in enumerate(elements) if x == e)
+        out += [(names[i], (i,)) for i in cols]
+        if e and 1 < len(cols) < len(names):
+            out += ([("%s (all)" % e, cols)] if multi else []) + [
+                ("%s (sum)" % e, cols)]
+    whole = tuple(range(len(names)))
+    return out + ([(ALL, whole)] if multi else []) + [(SUM, whole)]
+
+
+def is_multi(text):
+    """A choice of several curves (All, X (all))."""
+    return text == ALL or text.endswith(" (all)")
+
+
 def column_names(columns, species=None):
     """Species names of the field columns (the run species where b2plot
     sends no name)."""
@@ -38,18 +70,12 @@ def column_names(columns, species=None):
 
 
 def chosen_columns(names, chosen):
-    """Columns summed for the choice of a species menu (names: the
-    species of the columns): the species chosen, all of them (sum of the
-    species), those of the element (sum of an element), else the first."""
+    """Columns summed (or each a curve: All, X (all)) for the choice of a
+    species menu (names: the species of the columns): the species chosen,
+    all of them, those of an element, else the first."""
     if len(names) <= 1:
         return (0,)
-    if chosen in names:
-        return (names.index(chosen),)
-    if chosen == SUM:
-        return tuple(range(len(names)))
-    element = re.sub(r"^Sum ", "", chosen)
-    return tuple(i for i, n in enumerate(names) if re.match(
-        r"[A-Za-z]*", n).group(0) == element) or (0,)
+    return dict(entries(names, True)).get(chosen, (0,))
 
 
 class SpeciesMenu(QtWidgets.QWidget):
@@ -61,9 +87,10 @@ class SpeciesMenu(QtWidgets.QWidget):
 
     changed = Signal()
 
-    def __init__(self, tree, title, what):
+    def __init__(self, tree, title, what, multi=False):
         super().__init__(tree.header().viewport())
-        self.tree, self.title = tree, title
+        self.tree, self.title, self.multi = tree, title, multi
+        self.names = []                 # the species of the columns
         tree.headerItem().setText(0, "")
         self.label = QtWidgets.QLabel(title)
         self.part = QtWidgets.QWidget()     # grey without a species
@@ -73,8 +100,11 @@ class SpeciesMenu(QtWidgets.QWidget):
         self.combo = QtWidgets.QComboBox()
         self.combo.setSizeAdjustPolicy(
             QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.combo.setToolTip("Species of the %s quantity plotted: one, "
-                              "their sum or the sum of an element" % what)
+        self.combo.setToolTip(
+            "Species of the %s quantity plotted: one, the sum of an "
+            "element or of all%s" % (what, "; X (all), All: each species "
+                                     "of the element or every species a "
+                                     "curve of its own" if multi else ""))
         part = QtWidgets.QHBoxLayout(self.part)
         part.setContentsMargins(0, 0, 0, 0)
         part.setSpacing(2)
@@ -89,7 +119,7 @@ class SpeciesMenu(QtWidgets.QWidget):
         lay.addStretch(1)
         for w in self.findChildren(QtWidgets.QLabel):
             w.setProperty("bold", True)     # as the titles of the header
-        self.partial = {}               # "Sum D": (first, last column)
+        self.partial = {}               # "D (sum)": (first, last column)
         self.wanted = None              # species name to choose next
         self.chosen = None              # the species last chosen by hand
         self.combo.currentIndexChanged.connect(self._chosen)
@@ -137,27 +167,26 @@ class SpeciesMenu(QtWidgets.QWidget):
         names = column_names(columns, species)
         if len(columns) == 1 and not columns[0].strip():
             names = ["—"]
-        self.partial = {}
-        if len(names) > 1:
-            names.append(SUM)
-            elements = [re.match(r"[A-Za-z]*", n).group(0) for n in names]
-            for e in dict.fromkeys(elements[:-1]):
-                cols = [i for i, x in enumerate(elements[:-1]) if x == e]
-                if e and 1 < len(cols) < len(names) - 1:
-                    names.append("Sum %s" % e)
-                    self.partial[names[-1]] = (cols[0], cols[-1])
+        self.names = names
+        menu = entries(names, self.multi)
+        self.partial = {text: (cols[0], cols[-1]) for text, cols in menu
+                        if 1 < len(cols) < len(names)}
+        texts = [text for text, _ in menu]
         old = self.wanted or self.chosen
         self.wanted = None
         self.combo.blockSignals(True)
         self.combo.clear()
-        self.combo.addItems(names)
-        self.combo.setCurrentIndex(names.index(old) if old in names else
-                                   default_species(names[:len(columns)]))
+        for text, cols in menu:
+            self.combo.addItem(text, cols)
+        first = (default_species(names),)
+        self.combo.setCurrentIndex(texts.index(old) if old in texts else
+                                   next((i for i, (_, c) in enumerate(menu)
+                                         if c == first), 0))
         self.part.setEnabled(len(names) > 1)
         self.combo.blockSignals(False)
         view = self.combo.view()        # the list: every species whole
         fm = view.fontMetrics()
-        view.setMinimumWidth(max(fm.horizontalAdvance(n) for n in names) +
+        view.setMinimumWidth(max(fm.horizontalAdvance(n) for n in texts) +
                              3 * fm.height())
         self._fit_text()
 
@@ -168,6 +197,24 @@ class SpeciesMenu(QtWidgets.QWidget):
 
     def text(self):
         return self.combo.currentText()
+
+    def columns(self):
+        """The columns of the choice (summed, or each a curve)."""
+        return tuple(self.combo.currentData() or (0,))
+
+    def column(self):
+        """The column of the species chosen (one species), else 0."""
+        cols = self.columns()
+        return cols[0] if len(cols) == 1 else 0
+
+    def is_multi(self):
+        """Every species of the choice a curve of its own."""
+        return is_multi(self.text())
+
+    def curves(self):
+        """[(species name, column)] of a choice of several curves."""
+        return [(self.names[c] if c < len(self.names) else "column %d" %
+                 (c + 1), c) for c in self.columns()]
 
     def _chosen(self, *_):
         """A species chosen (set_columns changes it silently): the one

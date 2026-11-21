@@ -3,15 +3,15 @@ else: the places of the time traces (all of them always there with their
 names, placed where they cover least; the one under the mouse brighter,
 the one chosen glowing, the name of the one clicked bold; points, faces,
 the cells of the plasma) and which one a click is on, the line of a
-profile (a dot where each value is), the chords of a set (the one shown
-glowing, with a dot at its start, an arrow at its end and its number; the
-others thin)."""
+profile (a dot where each value is), the chords of a set (each as its tab
+says, as in the Chords section of the plots)."""
 
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
 
 from .. import theme
 from ..balances.style import glow
+from ..tools.chordplots import draw_chord
 
 COLOUR = "#ff2a6d"                  # the places
 WIDTH = 3.0                         # of a line (points)
@@ -98,9 +98,12 @@ class Marks:
         artist.set_visible(self.shown)
         self.artists.append(artist)
 
-    def show(self, place=None, label="", chords=(), current=None):
+    def show(self, place=None, label="", chords=(), chosen=None,
+             hover=None):
         """place: ("point", (1, 2)) or ("line", (n, 2)) with its label, or
-        chords: [(number, [(n, 2) parts])] with the number shown."""
+        chords: [(number, [(n, 2) parts], look)], each drawn as its tab
+        says (chordplots.draw_chord), the one numbered chosen glowing in
+        its colour, the one hover lighter."""
         self.clear()
         ax = self.tab.plot.ax
         colour = theme.rgb(COLOUR)
@@ -132,8 +135,23 @@ class Marks:
                 at = xy[0]
             if label:
                 self._label(ax, label, at, colour)
-        for number, parts in chords:
-            self._chord(ax, number, parts, number == current, colour)
+        for number, parts, look in chords:
+            lit = number == chosen or number == hover
+            for xy in parts if lit else ():     # the glow under it, solid
+                halo, = ax.plot(xy[:, 0], xy[:, 1], color=theme.rgb(
+                    look[0]), linestyle="-", linewidth=look[1],
+                    solid_capstyle="round", zorder=ZORDER + 0.4)
+                halo.set_path_effects(glow(look[1], look[0], strong=number
+                                           == chosen, on_map=True)[:-1])
+                self._add(halo)         # (its strokes only: the chord over
+            drawn = draw_chord(ax, number, parts, look,     # it as it is)
+                               zorder=ZORDER + (0.5 if lit else 0.0))
+            if lit:                     # its first dot
+                drawn[len(parts)].set_path_effects(glow(
+                    look[1], look[0], strong=number == chosen,
+                    on_map=True))
+            for a in drawn:
+                self._add(a)
         return self._done()
 
     def _label(self, ax, label, at, colour, bold=True):
@@ -157,14 +175,16 @@ class Marks:
         or ("area", [polygons])}; those of shown faint, hover brighter,
         those of chosen glowing; names: [(key, text, point, away, bold)] of
         the places, away from the centre of the grid or toward it where
-        they cover least (bold: the place clicked)."""
+        they cover least (bold: the place clicked); hover a key or a tuple
+        of keys (a region: its outline and its cells)."""
         self.clear()
         ax = self.tab.plot.ax
         colour = theme.rgb(COLOUR)
+        hovers = [k for k in (hover if isinstance(hover, tuple) else
+                              (hover,)) if k is not None and k not in chosen]
         looks = [(k, "faint") for k in shown if k not in chosen and
-                 k != hover] + [(k, "on") for k in chosen]
-        if hover is not None and hover not in chosen:
-            looks.insert(len(looks) - len(chosen), (hover, "hover"))
+                 k not in hovers] + [(k, "hover") for k in hovers] + [
+            (k, "on") for k in chosen]
         for k, how in looks:
             if k in shapes:
                 self._shape(ax, shapes[k], how, colour)
@@ -290,41 +310,6 @@ class Marks:
         else:
             return
         self._add(a)
-
-    def _chord(self, ax, number, parts, on, colour):
-        """A chord: glowing with its start, its end and its number when it
-        is the one shown, else thin."""
-        width = WIDTH if on else 1.0
-        for xy in parts:
-            line, = ax.plot(xy[:, 0], xy[:, 1], color=colour,
-                            linewidth=width, alpha=1.0 if on else 0.55,
-                            solid_capstyle="round",
-                            zorder=ZORDER if on else ZORDER - 0.5)
-            if on:
-                line.set_path_effects(glow(WIDTH, COLOUR, on_map=True))
-            self._add(line)
-        first, last = parts[0], parts[-1]
-        if on:
-            start, = ax.plot(first[:1, 0], first[:1, 1], linestyle="none",
-                             marker="o", markersize=6, color=colour,
-                             markeredgecolor="white", zorder=ZORDER + 0.1)
-            self._add(start)
-        d = last[-1] - last[-2] if len(last) > 1 else np.zeros(2)
-        n = np.hypot(*d)
-        if not n > 0:
-            return
-        d = d / n
-        if on:
-            self._add(ax.annotate(
-                "", xy=last[-1], xytext=last[-1] - 1e-6 * d,
-                arrowprops=dict(arrowstyle="-|>", color=colour, lw=WIDTH,
-                                shrinkA=0, shrinkB=0, mutation_scale=14),
-                zorder=ZORDER + 0.1))
-        self._add(ax.annotate(
-            "%d" % number, xy=last[-1], xytext=tuple(11.0 * d),
-            textcoords="offset points", color=colour, fontsize=9,
-            fontweight="bold" if on else "normal", ha="center",
-            va="center", zorder=ZORDER + 0.2, annotation_clip=True))
 
     def _done(self):
         self.tab.canvas.draw_idle()

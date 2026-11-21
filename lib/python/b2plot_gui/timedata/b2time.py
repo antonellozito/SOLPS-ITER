@@ -1,8 +1,9 @@
 """b2time.nc of a run: the time traces B2.5 writes at each time step (by
 place: traces.py) and the profiles (at the midplanes, along the targets),
-with the cells of the profiles on the plot. B2.5 names the targets by the
-edges of the grid (Western, Eastern): the inner one is the one at the
-smaller major radius."""
+by place of the plot (the lines of their cells, clicked as the places of
+the time traces) and in categories. B2.5 names the targets by the edges
+of the grid (Western, Eastern): the inner one is the one at the smaller
+major radius."""
 
 import numpy as np
 
@@ -17,6 +18,19 @@ PROFILES = {"a": ("Outer midplane", "mid_a", "dsa", "cvlista"),
 SPECIES = ("ns", "natm", "nmol")
 PLACES = {"mid_a": "the outer midplane", "mid_i": "the inner midplane",
           "target_w": "the {w} target", "target_e": "the {e} target"}
+NAMES = {"mid_a": "Outer midplane", "mid_i": "Inner midplane",
+         "target_w": "{W} target", "target_e": "{E} target"}
+SHOWN = tuple(NAMES)                # the places on the plot, named
+# the categories of the profiles by the name before 3d, in order; left
+# out: the atom and molecule densities of B2.5 (an, mn: those of EIRENE
+# are dab, dmb) and the radial neutral flux limiters (lh, ln)
+GROUPS = ("Plasma state", "Plasma fluxes", "Transport coefficients",
+          "Neutrals state")
+CATEGORIES = (("ne", "na", "te", "ti", "po"),
+              ("fn", "fl", "fo", "fe", "fi", "ft", "fc"),
+              ("dn", "dp", "vx", "vy", "vs", "ke", "ki"),
+              ("dab", "tab", "dmb", "tmb"))
+LEFT_OUT = ("an", "mn", "lh", "ln")
 
 
 class B2Time(NcFile):
@@ -57,23 +71,65 @@ class B2Time(NcFile):
                 "Western", w).replace("Eastern", e)
         return text
 
-    def _item(self, name, group, place):
+    def _item(self, name, group, where, place):
         var = self.nc[name]
         long = str(getattr(var, "long_name", name)).strip()
         what = long.rsplit(", ", 1)[0] if ", " in long else long
         dim = next((d for d in var.dimensions if d in SPECIES), "")
-        return Item(name, what[:1].upper() + what[1:], self.side_text(group),
-                    unit(var), B2TIME, "profile", dim, 0,
-                    self.side_text(group.lower()), place,
+        return Item(name, what[:1].upper() + what[1:], group, unit(var),
+                    B2TIME, "profile", dim, 0,
+                    self.side_text(where.lower()), place,
                     self.side_text(long))
 
-    def items(self):
-        """The profiles, in their groups in order."""
-        variables = [v for v in self.nc.variables.values()
-                     if v.dimensions[:1] == ("time",) and "3d" in v.name]
-        return [self._item(v.name, group, place)
-                for letter, (group, place, _, _) in PROFILES.items()
-                for v in variables if v.name.split("3d")[-1] == letter]
+    def items(self, place):
+        """The profiles of a place (NAMES) in their categories, in order
+        (a profile of no category with the plasma state)."""
+        letter = next((k for k, p in PROFILES.items() if p[1] == place),
+                      None)
+        if letter is None:
+            return []
+        where = PROFILES[letter][0]
+        names = [v.name for v in self.nc.variables.values()
+                 if v.dimensions[:1] == ("time",) and "3d" in v.name and
+                 v.name.split("3d")[-1] == letter and
+                 v.name.split("3d")[0] not in LEFT_OUT]
+        known = [b + "3d" + letter for c in CATEGORIES for b in c]
+        out = []
+        for group, bases in zip(GROUPS, CATEGORIES):
+            out += [self._item(b + "3d" + letter, group, where, place)
+                    for b in bases if b + "3d" + letter in names]
+            if group == GROUPS[0]:
+                out += [self._item(n, group, where, place) for n in names
+                        if n not in known]
+        return out
+
+    def shapes(self):
+        """{place: ("lines", (n, 2, 2) segments)}: the lines of the cell
+        centres of the profiles (Marks.places)."""
+        out = {}
+        for place, line in self.lines.items():
+            ok = np.isfinite(line).all(axis=1)
+            seg = np.stack((line[:-1], line[1:]), axis=1)[ok[:-1] & ok[1:]]
+            if len(seg):
+                out[place] = ("lines", seg)
+        return out
+
+    @staticmethod
+    def anchors(shapes, centre=None):
+        """{place: (point, away)}: where the names go, away from the
+        centre of the grid: the outer end of a midplane, the middle of a
+        target."""
+        if centre is None and shapes:
+            centre = np.concatenate([s.reshape(-1, 2) for _, s in
+                                     shapes.values()]).mean(axis=0)
+        out = {}
+        for k, (_, seg) in shapes.items():
+            if k.startswith("mid"):
+                v = seg.reshape(-1, 2)
+                out[k] = (v[np.argmax(np.hypot(*(v - centre).T))], True)
+            else:
+                out[k] = (seg[len(seg) // 2].mean(axis=0), True)
+        return out
 
     def series(self, item, cols=(0,)):
         """The profiles (nt, n) of the item, its species columns cols
