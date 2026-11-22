@@ -59,7 +59,10 @@ class Item:
 
     @property
     def text(self):
-        return self.description
+        """What the lists show: the description with its unit (none for a
+        pure number)."""
+        return "%s (%s)" % (self.description, self.unit) if self.unit \
+            else self.description
 
     @property
     def label(self):

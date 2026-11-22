@@ -17900,7 +17900,7 @@ coordinate index.
     bx, bpol & \index{b2plot, bx} Poloidal magnetic field $(T)$ \index{b2plot, bpol} \\
     by, brad & \index{b2plot, by} Radial magnetic field $(T)$ \index{b2plot, brad} \\
     bz, btor & \index{b2plot, bz} Toroidal magnetic field $(T)$ \index{b2plot, btor} \\
-    cd       & \index{b2plot, cd} Poloidal component of diamagnetic current $(m.s^{-1})$ \\
+    cd       & \index{b2plot, cd} Poloidal component of diamagnetic current $(A)$ \\
     ceqp     & \index{b2plot, ceqp} Equipartition term multiplier \\
     chhichii & \index{b2plot, chhichii} Chang-Hinton $\chi_i$ $(m^2.s^{-1})$ \\
     chineo   & \index{b2plot, chineo} Neoclassical heat conductivity $\chi$ $(m^2.s^{-1})$ \\
@@ -17928,7 +17928,7 @@ coordinate index.
     czt      & \index{b2plot, czt} $\exb$ turbulent enstrophy correction $(s^{-2}?)$ \\
     d        & \index{b2plot, d} Particle density diffusion coefficient $(m^2.s^{-1})$ \\
     dab2     & \index{b2plot, dab2} Atomic density $(m^{-3})$ \\
-    dd       & \index{b2plot, dd} Radial component of diamagnetic current $(m.s^{-1})$ \\
+    dd       & \index{b2plot, dd} Radial component of diamagnetic current $(A)$ \\
     deltab   & \index{b2plot, deltab} Ratio of collision frequency to gyro-frequency \\
     deltal   & \index{b2plot, deltal} Ratio of Larmor radius to minimum gradient length \\
     deltapar & \index{b2plot, deltapar} Ratio of radial to parallel dynamics \\
@@ -17978,6 +17978,8 @@ coordinate index.
     fchx     & \index{b2plot, fchx} Poloidal current $(A)$ \\
     fchx32   & \index{b2plot, fchx32} Convective poloidal current $(A)$ (Does not include drift contributions) \\
     fchx52   & \index{b2plot, fchx52} Conductive poloidal current $(A)$ (Does not include drift contributions) \\
+    fchxanml & \index{b2plot, fchxanml} Poloidal anomalous current $(A)$ \\
+    fchxdia  & \index{b2plot, fchxdia} Poloidal diamagnetic current $(A)$ \\
     fchxn    & \index{b2plot, fchxn} Poloidal component of inertial current {\em fchin} $(A)$ \\
     fchxvspa & \index{b2plot, fchxvspa} Poloidal component of parallel viscosity current {\em fchvispar} $(A)$ \\
     fchxvspe & \index{b2plot, fchxvspe} Poloidal component of perpendicular viscosity current {\em fchvisper} $(A)$ \\
@@ -17985,6 +17987,8 @@ coordinate index.
     fchy     & \index{b2plot, fchy} Radial current $(A)$ \\
     fchy32   & \index{b2plot, fchy32} Convective radial current $(A)$ (Does not include drift contributions) \\
     fchy52   & \index{b2plot, fchy52} Conductive radial current $(A)$ (Does not include drift contributions) \\
+    fchyanml & \index{b2plot, fchyanml} Radial anomalous current $(A)$ \\
+    fchydia  & \index{b2plot, fchydia} Radial diamagnetic current $(A)$ \\
     fchyn    & \index{b2plot, fchyn} Radial component of inertial current {\em fchin} $(A)$ \\
     fchyvspa & \index{b2plot, fchyvspa} Radial component of parallel viscosity current {\em fchvispar} $(A)$ \\
     fchyvspe & \index{b2plot, fchyvspe} Radial component of perpendicular viscosity current {\em fchvisper} $(A)$ \\
@@ -18106,6 +18110,8 @@ coordinate index.
     fnny     & \index{b2plot, fnny} Radial fluid neutral particle flux $(s^{-1})$ \\
     fnny32   & \index{b2plot, fnny32} Convective fluid neutral radial particle flux $(s^{-1})$ \\
     fnny52   & \index{b2plot, fnny52} Conductive fluid neutral radial particle flux $(s^{-1})$ \\
+    fntx     & \index{b2plot, fntx} Poloidal pressure work energy flux $T\,\Gamma$ $(W)$ \\
+    fnty     & \index{b2plot, fnty} Radial pressure work energy flux $T\,\Gamma$ $(W)$ \\
     fraa     & \index{b2plot, fraa} Friction heating term {\em b2sihs\_fraa} $(W)$ \\
     freg     & \index{b2plot, freg} Face region number \\
     fteq     & \index{b2plot, fteq} Flux tube index {\em iFt} is equal to \\
@@ -18396,7 +18402,9 @@ will contain 1.0, otherwise they will contain zero.
 
 Please note that the sign convention for the parallel ion ({\bf ua}) and electron ({\bf ue}) velocities depends on the sign of the poloidal magnetic field. The poloidal field is positive if it points if the direction of increasing poloidal index $ix$. The parallel velocities are positive if they point in the {\em same direction as the poloidal magnetic field}. Note further that this sign convention {\em does not apply} to the parallel current {\bf fchp}, for which the standard sign convention applies, i.e. it is positive if pointing in the direction of increasing poloidal index $ix$.\index{b2plot, ua}\index{b2plot, ue}
 
-A note about total energy fluxes. These are provided in two slightly different forms, denoted {\bf fet[xy]} and {\bf fht[xy]}. Both formulations contain the {\bf fhe}, {\bf fhi}, {\bf fhm}, and {\bf fhp} terms. If the code was solving internal energy equations (i.e. {\tt b2news\_BoRiS} set to $0.0$ [default]), we add viscous correction terms and an extra factor of particle flux times temperature. For the {\bf fht} formulation, we also add the electrostatic energy flux term {\bf fhj}. This term is not included in {\bf fet}, but, instead, {\bf fet} will include any contributions from species provided by an additional external code (for example, {\tt IMPGYRO}). These external species do not include the ones followed by {\tt Eirene}, however.\index{b2plot, fetx}\index{b2plot, fety}\index{b2plot, fhtx}\index{b2plot, fhty}\label{fetx}
+A note about total energy fluxes. These are provided in two slightly different forms, denoted {\bf fet[xy]} and {\bf fht[xy]}. Both formulations contain the {\bf fhe}, {\bf fhi}, {\bf fhm}, and {\bf fhp} terms. If the code was solving internal energy equations (i.e. {\tt b2news\_BoRiS} set to $0.0$ [default]), we add viscous correction terms and an extra factor of particle flux times temperature. For the {\bf fht} formulation, we also add the electrostatic energy flux term {\bf fhj}. This term is not included in {\bf fet}, but, instead, {\bf fet} will include any contributions from species provided by an additional external code (for example, {\tt IMPGYRO}). These external species do not include the ones followed by {\tt Eirene}, however. \btwoplot shows {\bf fht} as written in {\tt b2fplasma}, and the pressure work energy flux $T\,\Gamma$ as {\bf fnt[xy]}, so that {\bf fht} $=$ {\bf fhe} $+$ {\bf fhi} $+$ {\bf fhn} $+$ {\bf fhj} $+ \sum$ {\bf fhp} $+ (1-${\tt b2news\_BoRiS}$)\,(\sum$ {\bf fhm} $+$ {\bf fnt}$)$, summed over the species where shown. All these energy fluxes, the electron and ion heat flux parts included, are interpolated to the cell centres with the same weight $n_e T_e + n_i T_i$, so that the cell values add up as the face values do.\index{b2plot, fetx}\index{b2plot, fety}\index{b2plot, fhtx}\index{b2plot, fhty}\label{fetx}
+
+The current {\bf fch[xy]} is the sum of the parallel current {\bf fchp} (poloidal only) and of {\bf fch[xy]n}, {\bf fch[xy]dia}, {\bf fch[xy]vspa}, {\bf fch[xy]vspe}, {\bf fch[xy]visq}, {\bf fch[xy]inrt}, {\bf fch[xy]anml} and {\bf fc[xy]viskt}. All these currents are interpolated to the cell centres with the weight $n_e$, so that the cell values add up as the face values do.\index{b2plot, fchx}\index{b2plot, fchy}
 
 The commands acting on the matrix stack are given in table
 \ref{tab:available-commands}. These involve some manipulation or use of
@@ -18853,16 +18861,31 @@ quantities are only available for coupled \SOLPSITER runs.
     edena \index{b2plot, edena} & Atoms energy density $(eV.m^{-3})$ \\
     edeni \index{b2plot, edeni} & Test ions energy density $(eV.m^{-3})$ \\
     edenm \index{b2plot, edenm} & Molecules energy density $(eV.m^{-3})$ \\
+    fxdena \index{b2plot, fxdena} & Atoms $x$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fxdeni \index{b2plot, fxdeni} & Test ions $x$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fxdenm \index{b2plot, fxdenm} & Molecules $x$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fydena \index{b2plot, fydena} & Atoms $y$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fydeni \index{b2plot, fydeni} & Test ions $y$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fydenm \index{b2plot, fydenm} & Molecules $y$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fzdena \index{b2plot, fzdena} & Atoms $z$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fzdeni \index{b2plot, fzdeni} & Test ions $z$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
+    fzdenm \index{b2plot, fzdenm} & Molecules $z$-directed (Cartesian) particle flux density, momentum density over mass $(m^{-2}.s^{-1})$ \\
     massa \index{b2plot, massa} & Atom mass $(kg)$ \\
     massi \index{b2plot, massi} & Molecular ion mass $(kg)$ \\
     massm \index{b2plot, massm} & Molecule mass $(kg)$ \\
     pdena \index{b2plot, pdena} & Atoms particle density $(m^{-3})$ \\
     pdeni \index{b2plot, pdeni} & Test ions particle density $(m^{-3})$ \\
     pdenm \index{b2plot, pdenm} & Molecules particle density $(m^{-3})$ \\
+    presa \index{b2plot, presa} & Atoms pressure, $2/3$ of the energy density $(Pa)$ \\
+    presi \index{b2plot, presi} & Test ions pressure, $2/3$ of the energy density $(Pa)$ \\
+    presm \index{b2plot, presm} & Molecules pressure, $2/3$ of the energy density $(Pa)$ \\
     pux \index{b2plot, pux} & $x$-component of poloidal unit vector at triangle center \\
     puy \index{b2plot, puy} & $y$-component of poloidal unit vector at triangle center \\
     pvx \index{b2plot, pvx} & $x$-component of radial unit vector at triangle center \\
     pvy \index{b2plot, pvy} & $y$-component of radial unit vector at triangle center \\
+    tempa \index{b2plot, tempa} & Atoms temperature, $2/3$ of the energy density over the particle density $(eV)$ \\
+    tempi \index{b2plot, tempi} & Test ions temperature, $2/3$ of the energy density over the particle density $(eV)$ \\
+    tempm \index{b2plot, tempm} & Molecules temperature, $2/3$ of the energy density over the particle density $(eV)$ \\
     tindex \index{b2plot, tindex} & Triangle index \\
     tr \index{b2plot,tr} & Triangle centroid $R$ coordinate $(m)$ \\
     triarea \index{b2plot, triarea} & Triangle area $(m^{2})$ \\

@@ -21,8 +21,7 @@ KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
 TREE_ROWS = 11                      # rows of the plasma quantity tree
 MOVIE_ROWS = 7.5                    # Run movies: its 8 groups, closed
 LEVELS = {"contourf": 100, "contour": 20}   # contour levels at first
-VECTOR_ROWS = 5                     # rows of the vector quantity tree
-WALL_ROWS = 6                       # rows of the wall quantity tree
+VECTOR_ROWS = WALL_ROWS = 6         # rows of the vector and wall trees
 EXTRA = ("vector", "wall", "overlay")   # the trees apart from the plasma one
 ARGUMENT = re.compile(r"(-?\d+) (\S+)")     # "1 ixeq": a mask and its argument
 

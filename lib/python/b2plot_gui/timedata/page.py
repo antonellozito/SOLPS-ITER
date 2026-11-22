@@ -11,6 +11,7 @@ import html
 import re
 
 from ...qt import QtCore, QtWidgets, Qt, Signal
+from .. import catalog
 from ..panels.quantity import (MOVIE_ROWS, SingleClicks, fill_tree,
                                make_tree, mark_group, tree_height)
 from ..panels.species import SpeciesMenu
@@ -195,6 +196,7 @@ class Part(QtWidgets.QWidget):
         tops = [self.tree.topLevelItem(i)
                 for i in range(self.tree.topLevelItemCount())]
         was = {t.text(0) for t in tops if t.isExpanded()} if keep else ()
+        items = catalog.components(list(items))
         fill_tree(self.tree, items, always)
         for i in range(self.tree.topLevelItemCount()):
             top = self.tree.topLevelItem(i)

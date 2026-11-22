@@ -446,8 +446,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         """The vector data of the quantity and frames chosen are here (or
         no vector quantity is chosen)."""
         q, v = self.vector_wanted, self.vector_data
+        # the data is named by its two components (b2plot tokens)
         return q is None or v is not None and (v.name, v.source) == (
-            q.name, self._source(q))
+            q.poloidal + " " + q.radial, self._source(q))
 
     def _fetch_vector(self):
         """Ask for the vector quantity if it is not loaded (all species:
