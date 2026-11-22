@@ -84,8 +84,11 @@ VECTOR_GROUPS = ("Plasma velocities", "Particle fluxes", "Momentum fluxes",
                  "Ion heat fluxes", "Current fluxes", "Neutrals fluxes")
 # vectors of a quantity without radial component (the radial one zero):
 # their poloidal component in b2plot tokens; the parallel velocities (positive
-# along the poloidal field) projected on the poloidal direction with bx/|B|
-ZERO_RADIAL = {"ue": "ue bx m* bb m/", "ua": "ua bx m* bb m/", "fchp": "fchp"}
+# along the poloidal field) projected on the poloidal direction with the pitch
+ZERO_RADIAL = {"ue": "ue pit m*", "ua": "ua pit m*", "fchp": "fchp"}
+# neutral fluxes of fort.44 left out of the vector table: the same arrows
+# as the flux densities of the triangles, shown there
+NO_VECTOR = ("pfla", "pefa", "pflm", "pefm")
 DERIVED = "Derived quantities"
 CHORDS = "Chord contributions (*.chords files)"
 EQUILIBRIUM = "Magnetic equilibrium (derived)"
@@ -168,6 +171,9 @@ class Quantity:
     radial: str = ""
     movie: int = 0              # 1 b2movies.nc, 2 eirenemovies.nc
     expr: str = ""              # derived: the expression (name: tokens)
+
+    def __post_init__(self):
+        self.description = describe.wording(self.description)
 
     @property
     def text(self):
@@ -263,6 +269,8 @@ def _vectors(scalars):
         group = [q for q in scalars if q.group == g]
         names = {q.name for q in group}
         for q in group:
+            if q.name in NO_VECTOR:
+                continue
             p, r, name = q.name, _radial(q.name, names), None
             d = re.sub(r",? \(?poloidal component\)?", "", q.description)
             if q.name in ZERO_RADIAL:
@@ -274,6 +282,23 @@ def _vectors(scalars):
                 out.append(Quantity(name or p + " " + r, d, g, "vector", p,
                                     r))
     return out
+
+
+# EIRENE species letter of a label: atoms, molecules, test ions,
+# recombination (snapapl ... snapppl, vxa ... vxi, fxdena ... vxdeni)
+_SPECIES = re.compile(r"(sna|smo|she|shi)(p|m|e)([amip])(pl|el)|"
+                      r"([fv][xyz](?:den)?)([ami])\b")
+
+
+def _species_order(name):
+    """The name for sorting, the EIRENE species letter in the order atoms,
+    molecules, test ions, recombination."""
+    def key(m):
+        if m.group(3):
+            return "%s%s%d%s" % (m.group(1), m.group(2),
+                                 "amip".index(m.group(3)), m.group(4))
+        return "%s%d" % (m.group(5), "ami".index(m.group(6)))
+    return _SPECIES.sub(key, name)
 
 
 def quantities(categories, maps=()):
@@ -304,7 +329,8 @@ def quantities(categories, maps=()):
     def within(q):
         w = FINAL_WITHIN.get(q.group, ())
         return w.index(q.name) if q.name in w else len(w)
-    out.sort(key=lambda q: (ORDER.index(q.group), within(q), q.name.lower()))
+    out.sort(key=lambda q: (ORDER.index(q.group), within(q),
+                            _species_order(q.name.lower())))
     out += _vectors([q for q in out if q.source == "matrix"])
     out += [Quantity(n, d, EQUILIBRIUM, "equilibrium") for n, d in maps]
     out.sort(key=lambda q: ORDER.index(q.group))       # maps in their order
@@ -365,28 +391,53 @@ def chord_quantities(layers, eirene):
 SOLPS_GROUPS = (("Plasma state", r"na|ne|ua|te|ti|po"),
                 ("Plasma fluxes", r"f(na|he|hi|ch)[xy]"),
                 ("Plasma sources",
-                 r"r(sa|ra|cx)(na|hi|hisum)|rqahe(sum)?|rqrad(sum)?"),
+                 r"r(sa|ra|cx)(na|hi|hisum)|rqahe(sum)?|rqrad(sum)?|"
+                 r"eirene_\w+|eneutrad(sum)?|emolrad(sum)?"),
                 ("Transport coefficients", r"dna|dpa|hc[ei]|vla[xy]|vsa"),
                 ("Neutrals state", r"[dt][am]b2"),
-                ("Neutrals fluxes", r"(r|p|re|pe)flux[am][xy]?"),
-                ("Neutrals sources",
-                 r"eirene_\w+|eneutrad(sum)?|emolrad(sum)?"))
+                ("Neutrals fluxes", r"(r|p|re|pe)flux[am][xy]?"))
 NEUTRAL_TRIANGLES = NEUTRALS
 OTHER_GROUP = "Other"
 MOVIE_ORDER = [g for g, _ in SOLPS_GROUPS] + [NEUTRAL_TRIANGLES,
                                               OTHER_GROUP]
+MOVIE_ORDER.insert(MOVIE_ORDER.index("Neutrals fluxes"), NEUTRAL_VELOCITIES)
+# vectors of the movie frames computed as those of the vector table of the
+# final state without radial component (ZERO_RADIAL, the pitch not a frame)
+PLASMA_MOVIE_VELOCITIES = "Plasma velocities"
+MOVIE_ORDER.insert(MOVIE_ORDER.index("Plasma fluxes"), PLASMA_MOVIE_VELOCITIES)
+PLASMA_MOVIE_VECTORS = [("ua*pit", "ua-ua", "Poloidal projection of the "
+                         "parallel ion velocity (m s^{-1})")]
+# quantities of the EIRENE movie frames computed as the b2plot labels of
+# the final state (tempa, presa, vxa, fxdena; the masses are constant, the
+# b2plot labels massa and massm, not frames): (expression, description) of
+# the atoms and the molecules, and the vectors of their x and y components
+NEUTRAL_MOVIE = [(e % ((k,) * e.count("%")), d % w) for k, w in (
+    ("a", "Atom"), ("m", "Molecule")) for e, d in (
+    ("2/3*eden%s/pden%s", "%s temperature (eV)"),
+    ("2/3*eden%s*qe", "%s pressure (Pa)")) + tuple(
+    ("v%sden%%s/(pden%%s*mass%%s)" % c,
+     "%%s %s-directed velocity (m s^{-1})" % c) for c in "xyz") + tuple(
+    ("v%sden%%s/mass%%s" % c,
+     "%%s %s-directed particle flux density (m^{-2} s^{-1})" % c)
+    for c in "xyz")]
+NEUTRAL_MOVIE_VECTORS = [
+    ("v%sden%s/(pden%s*mass%s)", NEUTRAL_VELOCITIES, "%s velocity (m s^{-1})"),
+    ("v%sden%s/mass%s", "Neutrals fluxes",
+     "%s particle flux density (m^{-2} s^{-1})")]
 # order of the quantities within some groups (the others: as in the files)
 WITHIN = {"Plasma state": ("ne", "na", "ua", "te", "ti", "po"),
           "Transport coefficients": ("dna", "dpa", "vlax", "vlay", "vsa",
                                      "hce", "hci"),
-          # atom-plasma, molecule-plasma interactions (each with its
-          # radiation), recombinations
-          "Neutrals sources": ("eirene_papl_sna", "eirene_eael_she",
-                               "eirene_eapl_shi", "eneutrad", "eneutradsum",
-                               "eirene_pmpl_sna", "eirene_emel_she",
-                               "eirene_empl_shi", "emolrad", "emolradsum",
-                               "eirene_pppl_sna", "eirene_epel_she",
-                               "eirene_eppl_shi")}
+          # by kind: particles, electron energy (with the radiation of
+          # B2.5), ion energy, neutral radiation;
+          # the B2.5 ones (ionisation, recombination, charge exchange)
+          # before the EIRENE ones (atoms, molecules, recombination)
+          "Plasma sources": ("rsana", "rrana", "rcxna", "eirene_papl_sna",
+                             "eirene_pmpl_sna", "eirene_pppl_sna", "rqahe",
+                             "rqrad", "eirene_eael_she", "eirene_emel_she",
+                             "eirene_epel_she", "rsahi", "rrahi", "rcxhi",
+                             "eirene_eapl_shi", "eirene_empl_shi",
+                             "eirene_eppl_shi", "eneutrad", "emolrad")}
 
 
 def solps_order(items, first=()):
@@ -470,10 +521,65 @@ def _movie_partner(v, names):
     return None
 
 
-def movie_quantities(movies, derived_quantities=()):
+def _neutral_movie(movies, translate):
+    """Quantities and vectors of NEUTRAL_MOVIE from the EIRENE movie file
+    (file 2) with the translator of the run, those of its variables only."""
+    if translate is None or 2 not in movies:
+        return [], []
+    have = {v.name for v in movies[2].variables}
+
+    def tokens(expr):
+        t = translate(expr)[0]
+        return re.sub(r"\{(mass[am])\}", r"\1", t)      # not movie frames
+    out, vectors = [], []
+    for expr, desc in NEUTRAL_MOVIE:
+        try:
+            t = tokens(expr)
+        except ExpressionError:
+            continue
+        if names_of(t) <= have:
+            out.append(Quantity(t, desc, NEUTRAL_TRIANGLES, "eirene",
+                                movie=2, expr=expr))
+    for k, w in (("a", "Atom"), ("m", "Molecule")):
+        for e, group, desc in NEUTRAL_MOVIE_VECTORS:
+            x, y = (e % ((c,) + (k,) * (e.count("%") - 1)) for c in "xy")
+            try:
+                tx, ty = tokens(x), tokens(y)
+            except ExpressionError:
+                continue
+            if names_of(tx + " " + ty) <= have:
+                vectors.append(Quantity(tx + " " + ty, desc % w, group,
+                                        "evector", tx, ty, movie=2))
+    return out, vectors
+
+
+def _plasma_movie(movies, translate):
+    """Vectors of PLASMA_MOVIE_VECTORS from the B2.5 movie file with the
+    variables of their expressions, with the translator of the run."""
+    out = []
+    if translate is None:
+        return out
+    for x, y, desc in PLASMA_MOVIE_VECTORS:
+        try:
+            tx, ty = (re.sub(r"\{(pit)\}", r"\1", translate(e)[0])
+                      for e in (x, y))          # not movie frames
+        except ExpressionError:
+            continue
+        for f in sorted(movies):
+            if f != 2 and names_of(tx + " " + ty) <= {
+                    v.name for v in movies[f].variables}:
+                out.append(Quantity(tx + " " + ty, desc,
+                                    PLASMA_MOVIE_VELOCITIES, "vector", tx,
+                                    ty, movie=f))
+                break
+    return out
+
+
+def movie_quantities(movies, derived_quantities=(), translate=None):
     """Quantities of the movie files (data.MovieFile per file): every
-    variable, x/y component pairs as vectors, and the derived quantities
-    whose operands are all variables of one file."""
+    variable, x/y component pairs as vectors, the derived quantities
+    whose operands are all variables of one file, and the neutral ones of
+    NEUTRAL_MOVIE (with translate, the translator of the run)."""
     out, vectors = [], []
     for q in derived_quantities:
         names = names_of(q.name)
@@ -486,6 +592,8 @@ def movie_quantities(movies, derived_quantities=()):
         variables = movies[f].variables
         names = {v.name: v for v in variables}
         for v in variables:
+            if v.name.endswith("sum"):
+                continue                # sums over the species: hidden
             out.append(Quantity(v.name, _movie_text(v),
                                 solps_group(v.name, f == 2),
                                 "eirene" if f == 2 else "matrix", movie=f))
@@ -503,4 +611,33 @@ def movie_quantities(movies, derived_quantities=()):
                 "evector" if f == 2 else "vector",
                 v.name, y, movie=f))
     components([q for q in out if q.source != "vector" and q.group != DERIVED])
-    return solps_order(out + vectors, first=(DERIVED,))
+    extra, extra_vectors = _neutral_movie(movies, translate)
+    extra_vectors += _plasma_movie(movies, translate)
+    res = solps_order(out + extra + vectors + extra_vectors, first=(DERIVED,))
+    # the neutral triangle quantities by species, as in the plasma table
+    at = [i for i, q in enumerate(res)
+          if q.group == NEUTRAL_TRIANGLES and q.source == "eirene"]
+    for i, q in zip(at, sorted((res[i] for i in at), key=_neutral_rank)):
+        res[i] = q
+    # their vectors: particle flux densities before momentum densities
+    at = [i for i, q in enumerate(res)
+          if q.source == "evector" and q.group == "Neutrals fluxes"]
+    for i, q in zip(at, sorted((res[i] for i in at),
+                               key=lambda q: "{" not in q.name)):
+        res[i] = q
+    return res
+
+
+def _neutral_rank(q):
+    """(species, kind) of a neutral triangle quantity of the movies:
+    density, temperature, pressure, energy density, velocity, particle flux
+    density, momentum density."""
+    s = q.expr or q.name
+    m = re.search(r"(?:pden|eden|v[xyz]den)([ami])", s)
+    kinds = (r"^pden", r"^2/3\*eden.*/pden", r"\*qe$", r"^eden",
+             r"^vxden.*/\(", r"^vyden.*/\(", r"^vzden.*/\(",
+             r"^vxden.*/mass", r"^vyden.*/mass", r"^vzden.*/mass", r"^vxden",
+             r"^vyden", r"^vzden")
+    kind = next((n for n, k in enumerate(kinds) if re.search(k, s)),
+                len(kinds))
+    return ("ami".find(m.group(1)) if m else 3, kind)

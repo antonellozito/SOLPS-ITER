@@ -14,7 +14,7 @@ from ..tools import chordplots, inspect, measure
 from ..tools.sections import LOOK
 from . import b2time, plots, traces
 from .b2time import B2Time
-from .chords import GROUPS as CHORD_GROUPS, TRIANGLES, ChordFile, \
+from .chords import AMU, GROUPS as CHORD_GROUPS, TRIANGLES, ChordFile, \
     line_sums, ordered
 from .files import B2TIME, TALLIES, latest, netcdf4
 from .marks import Marks, hit
@@ -118,6 +118,7 @@ class RunTracing:
                     self.tallies.set_geometry(run, inspect.files(run)[0])
                     continue
                 f = ChordFile(path)
+                f.masses = self._eirene_masses
                 if f.sets:
                     self.chords[name] = f
                 else:
@@ -236,6 +237,15 @@ class RunTracing:
         if key != self.marked or key is None:
             self.marked = key
             (self.marks.places if places else self.marks.show)(**what)
+
+    def _eirene_masses(self):
+        """{a, m: [mass (kg) of each EIRENE atom, molecule]} from the species
+        of the run (b2plot massa, massm), for the chord quantities."""
+        out = {}
+        for n in getattr(self.tab.species, "neutrals", []):
+            out.setdefault(n.stack, {})[n.column] = n.mass * AMU
+        return {k: [v.get(i, np.nan) for i in range(max(v) + 1)]
+                for k, v in out.items()}
 
     def _species(self, part, item, n):
         """(columns summed, species text, [(species, (column,))] of a choice
