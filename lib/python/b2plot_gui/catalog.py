@@ -54,16 +54,16 @@ FAMILIES = [
     ("Ion heat fluxes", r"fhixconv|fhiyconv|fhixcond|fhiycond|fhixdia|fhiydia|fhixstr|fhiystr|fhixinrt|fhiyinrt|fhixvspa|fhiyvspa|fhixvspe|fhiyvspe|fhixvisq|fhiyvisq|fhixanml|fhiyanml|fhixvskt|fhiyvskt|fhixvzh|fhiyvzh|fhixmdf|fhiymdf|fhixps|fhiyps"),
     ("Current fluxes", r"fchx|fchy|fchp|fchxn|fchyn|fchxdia|fchydia|fchxanml|fchyanml|fchxinrt|fchyinrt|fchxvspa|fchyvspa|fchxvspe|fchyvspe|fchxvisq|fchyvisq|fcxviskt|fcyviskt|fchx32|fchy32|fchx52|fchy52"),
     ("Neutrals fluxes", r"pfla|rfla|pefa|refa|pflm|rflm|pefm|refm|fnnx|fnny|fnnx32|fnny32|fnnx52|fnny52"),
+    # the sources by equation, each with the terms of its sum
+    ("Particle sources", r"sna|bcna|brna|snap[ampi]pl|snapppl|snacore|bmna|exna|rsan|rran|rcxn"),
+    ("Momentum sources", r"rsam|rram|rcxm|smo|bcmo|brmo|smom[ampi]pl|smomppl|bmmo|exmo|smq|smaf|smfr|smpt|smpr|smag|smav|smcf"),
+    ("Electron energy sources", r"she|bche|brhe|shee[ampi]el|bmhe|exhe|rqae|b2ra|b2br|b2iz|b2rc|dvue|exbe|joul"),
+    ("Ion energy sources", r"shi|bchi|brhi|shie[ampi]pl|bmhi|exhi|rsai|rrai|rcxi|dvua|exba|visa|fraa|shei|brhn|brkt"),
+    ("Charge sources", r"sch|bcch|bmch|exch"),
     ("Convergence (residuals, corrections)",
      r"r(co|mo|mt|ee|ei|po|en|kt|zt)|c(pa|ua|ut|te|ti|po|kt|zt|tn)"),
-    ("Previous time step", r"(na|ne|ni|te|ti|ua|po|tn|kt|zt)0"),
-    ("Balances", r"ebld|ebls|ebal|pbal"),
-    ("Sources by origin",
-     r"(br|bc|bm|ex)(na|ne|mo|he|hi|ch|hn|kt|zt)|s(na|ne|he|hi|ch|hn|kt|zt)"),
-    ("Atomic physics and radiation", r"rqae|rsa[inm]|rra[nim]|rcx[nim]|"
-     r"b2br|b2ra|[am]hal|neutrad|molrad|ionrad|srcml|edissml"),
-    ("Momentum terms", r"sm(pr|pt|fr|p|o|q|af|ag|av|th|cf)"),
-    ("Heating terms", r"dvue|dvua|exbe|exba|visa|joul|fraa|str"),
+    ("Atomic physics and radiation",
+     r"neutrad|molrad|ionrad|srcml|edissml"),
     ("Transport coefficients",
      r"d|dp|ky[ei]|kyi0|kyn0|vla[xy]|visc|sig|alf|dkt|dzt"),
     ("Flux limiters", r"fle|fli|nflf..x?y?|flvisc|fluc.|flk.|flalc?"),
@@ -98,11 +98,12 @@ ORDER = [DERIVED, "Plasma densities", "Plasma velocities",
          "Plasma state", "Particle fluxes", "Momentum fluxes",
          "Total energy fluxes", "Electron heat fluxes",
          "Ion heat fluxes", "Current fluxes", "Plasma fluxes",
-         "Sources and sinks", "Sources by origin", "Atomic physics and "
-         "radiation", "Momentum terms", "Heating terms", "Transport "
+         "Particle sources", "Momentum sources", "Electron energy sources",
+         "Ion energy sources", "Charge sources",
+         "Sources and sinks", "Atomic physics and radiation", "Transport "
          "coefficients", "Neoclassical, collisionality, plasma frequencies",
-         "Flux limiters", "Balances", "Convergence (residuals, corrections)",
-         "Previous time step", "Neutrals state", NEUTRAL_VELOCITIES,
+         "Flux limiters", "Convergence (residuals, corrections)",
+         "Neutrals state", NEUTRAL_VELOCITIES,
          "Neutrals fluxes", NEUTRALS,
          "Geometry and "
          "magnetic field", EQUILIBRIUM, FAMILIES[-1][0], OTHER, CHORDS]
@@ -122,6 +123,14 @@ FINAL_WITHIN = {"Plasma densities": ("ne", "ni", "na", "zeff"),
                 "Ion heat fluxes": ("fhix", "fhiy", "fhixconv", "fhiyconv", "fhixcond", "fhiycond", "fhixdia", "fhiydia", "fhixps", "fhiyps", "fhixstr", "fhiystr", "fhixinrt", "fhiyinrt", "fhixvspa", "fhiyvspa", "fhixvspe", "fhiyvspe", "fhixvisq", "fhiyvisq", "fhixvzh", "fhiyvzh", "fhixanml", "fhiyanml", "fhixvskt", "fhiyvskt"),
                 "Current fluxes": ("fchx", "fchy", "fchp", "fchxn", "fchyn", "fchxdia", "fchydia", "fchxvspa", "fchyvspa", "fchxvspe", "fchyvspe", "fchxvisq", "fchyvisq", "fchxinrt", "fchyinrt", "fchxanml", "fchyanml", "fcxviskt", "fcyviskt"),
                 "Neutrals fluxes": ("pfla", "rfla", "pefa", "refa", "pflm", "rflm", "pefm", "refm", "fnnx", "fnny", "fnnx32", "fnny32", "fnnx52", "fnny52"),
+                # the atomic terms of B2.5, the neutral total and its EIRENE
+                # parts, boundary, additional and external sources, with the
+                # further terms of the equation before the boundary ones
+                "Particle sources": ("rsan", "rran", "rcxn", "brna", "snapapl", "snapmpl", "snapipl", "snapppl", "snacore", "bcna", "bmna", "exna"),
+                "Momentum sources": ("rsam", "rram", "rcxm", "brmo", "smomapl", "smommpl", "smomipl", "smomppl", "smfr", "smpt", "smpr", "smag", "smav", "smcf", "bcmo", "bmmo", "exmo"),
+                "Electron energy sources": ("b2ra", "b2br", "b2iz", "b2rc", "brhe", "sheeael", "sheemel", "sheeiel", "sheepel", "dvue", "exbe", "joul", "-shei", "bche", "bmhe", "exhe"),
+                "Ion energy sources": ("rsai", "rrai", "rcxi", "brhi", "shieapl", "shiempl", "shieipl", "shieppl", "dvua", "exba", "visa", "fraa", "shei", "bchi", "bmhi", "exhi", "brhn", "brkt"),
+                "Charge sources": ("bcch", "bmch", "exch"),
                 "Neutrals state": ("dab2", "tab2", "dmb2", "tmb2", "dib2",
                                    "tib2"),
                 # by species as in the movie files: density, temperature,
@@ -154,10 +163,34 @@ HIDDEN = {"alph", "na_ext", "ne_ext", "nh", "pot*", "pot", "poti", "ro",
           # energy flux without the electrostatic part, electron and ion
           # energy fluxes never computed (zero), turbulent enstrophy flux
           "fetx", "fety", "fhetx", "fhety", "fhitx", "fhity", "fztx",
-          "fzty"}
+          "fzty",
+          # electron particle source: in no equation solved
+          "sne", "bcne", "brne", "bmne", "exne",
+          # never filled (always zero): neutral charge source, strange term
+          "brch", "str",
+          # turbulent enstrophy sources (as its flux)
+          "szt", "bczt", "brzt",
+          # totals of the source groups (not always the total of their
+          # equation): only the terms are listed, the momentum friction and
+          # thermal forces and the atomic momentum source by their parts
+          "sna", "smo", "she", "shi", "sch", "shn", "skt", "smq", "smaf",
+          # the electron cooling by its parts
+          "rqae",
+          # sums or parts of the other momentum terms
+          "smth", "smp",
+          # boundary sources of the fluid neutral and turbulent energy
+          "bchn", "bckt",
+          # Halpha emissivities of atoms and molecules
+          "ahal", "mhal",
+          # balances and the previous time step
+          "ebal", "ebld", "ebls", "pbal", "na0", "ne0", "ni0", "te0", "ti0",
+          "ua0", "po0", "tn0", "kt0", "zt0"}
 # labels also listed first in these groups, as their totals
 TOTALS = {"fhex": "Electron heat fluxes", "fhey": "Electron heat fluxes",
           "fhix": "Ion heat fluxes", "fhiy": "Ion heat fluxes"}
+# labels also in a second group with the opposite sign: the equipartition,
+# a source of the ions and a sink of the electrons
+NEGATED = {"shei": "Electron energy sources"}
 
 
 @dataclass
@@ -316,6 +349,9 @@ def quantities(categories, maps=()):
     out += [replace(q, group=TOTALS[q.name], description=re.sub(
         r"(?i)^(poloidal|radial) ", r"\1 total ", q.description))
             for q in out if q.name in TOTALS]
+    out += [Quantity("{%s} chs" % q.name, q.description, NEGATED[q.name],
+                     q.source, expr="-" + q.name)
+            for q in out if q.name in NEGATED]
     components([q for q in out if q.source == "matrix"])
     eirene = [(n, describe.EIRENE.get(n.strip()) or d, u)
               for n, d, u in eirene if n.strip() not in EIRENE_HIDDEN]
@@ -328,7 +364,7 @@ def quantities(categories, maps=()):
             for x, y, d in _epairs(eirene)]
     def within(q):
         w = FINAL_WITHIN.get(q.group, ())
-        return w.index(q.name) if q.name in w else len(w)
+        return w.index(q.label) if q.label in w else len(w)
     out.sort(key=lambda q: (ORDER.index(q.group), within(q),
                             _species_order(q.name.lower())))
     out += _vectors([q for q in out if q.source == "matrix"])

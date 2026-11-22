@@ -103,7 +103,7 @@ EQ = {
         r"$\mathrm{H}^0 + A^{z+} \rightarrow \mathrm{H}^+ + A^{(z-1)+}$",
     ('particles', 'source', 'b2stbm_sna_bal', None):
         r"$S_a^{\mathrm{bm}} = S_{a,0} + S_{a,1}\,n_a$" "\n"
-        r"application-specific source from an external code",
+        r"additional source from an external code",
     ('particles', 'source', 'ext_sna_bal', None):
         r"$S_a^{\mathrm{ext}} = f_a(r)\,g_a(s_\parallel)$" "\n"
         r"prescribed source: radial and parallel profiles from the source"
@@ -220,7 +220,7 @@ EQ = {
     ('potential', 'source', 'b2stbm_sch_bal', None):
         r"$S^{\mathrm{bm}}_{\mathrm{ch}} = S_{\mathrm{ch},0} +"
         r" S_{\mathrm{ch},1}\,\Phi$" "\n"
-        r"application-specific charge source from an external code",
+        r"additional charge source from an external code",
     ('potential', 'source', 'ext_sch_bal', None):
         r"$S^{\mathrm{ext}}_{\mathrm{ch}} = f(r)\,g(s_\parallel)$" "\n"
         r"prescribed charge source: radial and parallel profiles from the"
@@ -368,7 +368,7 @@ EQ = {
         r" field (potential gradient)" "\n"
         r"with $p_e = n_e T_e$",
     ('momentum', 'source', 'b2stbm_smo_bal', None):
-        r"$S_{bm}$: application-specific parallel momentum source" "\n"
+        r"$S_{bm}$: additional parallel momentum source" "\n"
         r"(from an external code)",
     ('momentum', 'source', 'ext_smo_bal', None):
         r"$S_{ext}$: external parallel momentum source" "\n"
@@ -537,7 +537,7 @@ EQ = {
         r" parallel" "\n"
         r"momentum per parallel area ($\Delta s_\parallel = V/A_\parallel$)",
     ('totpress', 'source', 'b2stbm_smo_bal', None):
-        r"$\Delta s_\parallel\sum_a S_{bm,a}$: application-specific"
+        r"$\Delta s_\parallel\sum_a S_{bm,a}$: additional"
         r" momentum source (external code)," "\n"
         r"per parallel area",
     ('totpress', 'source', 'ext_smo_bal', None):
@@ -864,10 +864,10 @@ EQ = {
         r"$R_a$: friction and thermal forces on the ions $a$ (electrons,"
         r" ions)",
     ('heat', 'source', 'b2stbm_she_bal', None):
-        r"$Q^{\mathrm{app}}_e$: application-specific electron heat source"
+        r"$Q^{\mathrm{bm}}_e$: additional electron heat source"
         r" (external code)",
     ('heat', 'source', 'b2stbm_shi_bal', None):
-        r"$Q^{\mathrm{app}}_i$: application-specific ion heat source"
+        r"$Q^{\mathrm{bm}}_i$: additional ion heat source"
         r" (external code)",
     ('heat', 'source', 'ext_she_bal', None):
         r"$Q^{\mathrm{ext}}_e$: external electron heat source prescribed"
