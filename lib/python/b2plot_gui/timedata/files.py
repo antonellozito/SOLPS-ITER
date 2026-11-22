@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .. import runstate
+from ..describe import wording
 
 B2TIME = "b2time.nc"
 CHORDS = ("b2chords.nc", "eirenechords.nc")
@@ -56,6 +57,9 @@ class Item:
     place: str = ""             # its place on the plot
     long: str = ""              # long name in the file
     parts: tuple = ()           # time traces: (variable, curve label)
+
+    def __post_init__(self):
+        self.description = wording(self.description)
 
     @property
     def text(self):

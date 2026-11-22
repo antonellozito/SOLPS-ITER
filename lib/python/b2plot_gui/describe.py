@@ -3,6 +3,8 @@ b2plot appendix of the manual, and for the labels it does not list
 the meaning of the b2plot code written out (units in parentheses,
 super- and subscripts as in the b2plot catalogue)."""
 
+import re
+
 MATRIX = {
     'pit': 'Magnetic field pitch, poloidal over total field |b_{x}|/b',
     'bx': 'Poloidal magnetic field b_{x} (T)',
@@ -67,9 +69,9 @@ MATRIX = {
     'ehx': 'Ehx (V)',
     'ehy': 'Ehy (V)',
     'dab2': 'Atom density (m^{-3})',
-    'dmb2': 'Molecular density (m^{-3})',
+    'dmb2': 'Molecule density (m^{-3})',
     'ahal': 'Atomic H_α emissivity (photons.m^{-3}.s^{-1})',
-    'mhal': 'Molecular H_α emissivity (photons.m^{-3}.s^{-1})',
+    'mhal': 'Molecule H_α emissivity (photons.m^{-3}.s^{-1})',
     'rqae': 'Electron cooling rate (W)',
     'rsai': 'Ionisation ion energy losses (W)',
     'rsan': 'Ionisation ion particle losses (s^{-1})',
@@ -86,13 +88,13 @@ MATRIX = {
     'tab2': 'Atom temperature (eV)',
     'tmb2': 'Molecule temperature (eV)',
     'rfla': 'Atomic radial flux density (m^{-2} s^{-1})',
-    'rflm': 'Molecular radial flux density (m^{-2} s^{-1})',
+    'rflm': 'Molecule radial flux density (m^{-2} s^{-1})',
     'refa': 'Atomic radial energy flux density (W m^{-2})',
-    'refm': 'Molecular radial energy flux density (W m^{-2})',
+    'refm': 'Molecule radial energy flux density (W m^{-2})',
     'pfla': 'Atomic poloidal flux density (m^{-2} s^{-1})',
-    'pflm': 'Molecular poloidal flux density (m^{-2} s^{-1})',
+    'pflm': 'Molecule poloidal flux density (m^{-2} s^{-1})',
     'pefa': 'Atomic poloidal energy flux density (W m^{-2})',
-    'pefm': 'Molecular poloidal energy flux density (W m^{-2})',
+    'pefm': 'Molecule poloidal energy flux density (W m^{-2})',
     'mch2': 'Normalized parallel velocity',
     'mi': 'Ion mass (kg)',
     'zi': 'Ion charge (e)',
@@ -360,7 +362,7 @@ MATRIX = {
     'ffbz': 'Toroidal magnetic flux function (Wb/m)',
     'pz': 'Static pressure (Pa)',
     'molrad': 'Power loss due to molecule radiation (W)',
-    'ionrad': 'Power loss due to molecular ion radiation (W)',
+    'ionrad': 'Power loss due to molecule ion radiation (W)',
     'tn': 'Fluid neutral temperature (eV)',
     'kt': 'E×B turbulent kinetic energy (eV)',
     'zt': 'E×B turbulent enstrophy (s^{-2}?)',
@@ -527,19 +529,19 @@ EIRENE = {
     'vxdena': 'Atom x-directed momentum density (kg.m^{-2}.s^{-1})',
     'vydena': 'Atom y-directed momentum density (kg.m^{-2}.s^{-1})',
     'vzdena': 'Atom z-directed momentum density (kg.m^{-2}.s^{-1})',
-    'pdenm': 'Molecular particle density (m^{-3})',
-    'edenm': 'Molecular energy density (eV.m^{-3})',
-    'tempm': 'Molecular temperature (eV)',
-    'presm': 'Molecular pressure (Pa)',
-    'fxdenm': 'Molecular x-directed particle flux density (m^{-2}.s^{-1})',
-    'fydenm': 'Molecular y-directed particle flux density (m^{-2}.s^{-1})',
-    'fzdenm': 'Molecular z-directed particle flux density (m^{-2}.s^{-1})',
-    'vxm': 'Molecular x-directed velocity (m.s^{-1})',
-    'vym': 'Molecular y-directed velocity (m.s^{-1})',
-    'vzm': 'Molecular z-directed velocity (m.s^{-1})',
-    'vxdenm': 'Molecular x-directed momentum density (kg.m^{-2}.s^{-1})',
-    'vydenm': 'Molecular y-directed momentum density (kg.m^{-2}.s^{-1})',
-    'vzdenm': 'Molecular z-directed momentum density (kg.m^{-2}.s^{-1})',
+    'pdenm': 'Molecule particle density (m^{-3})',
+    'edenm': 'Molecule energy density (eV.m^{-3})',
+    'tempm': 'Molecule temperature (eV)',
+    'presm': 'Molecule pressure (Pa)',
+    'fxdenm': 'Molecule x-directed particle flux density (m^{-2}.s^{-1})',
+    'fydenm': 'Molecule y-directed particle flux density (m^{-2}.s^{-1})',
+    'fzdenm': 'Molecule z-directed particle flux density (m^{-2}.s^{-1})',
+    'vxm': 'Molecule x-directed velocity (m.s^{-1})',
+    'vym': 'Molecule y-directed velocity (m.s^{-1})',
+    'vzm': 'Molecule z-directed velocity (m.s^{-1})',
+    'vxdenm': 'Molecule x-directed momentum density (kg.m^{-2}.s^{-1})',
+    'vydenm': 'Molecule y-directed momentum density (kg.m^{-2}.s^{-1})',
+    'vzdenm': 'Molecule z-directed momentum density (kg.m^{-2}.s^{-1})',
     'pdeni': 'Test ion particle density (m^{-3})',
     'edeni': 'Test ion energy density (eV.m^{-3})',
     'tempi': 'Test ion temperature (eV)',
@@ -666,3 +668,9 @@ WALL = {
     'ldepth': 'Layer depth (m)',
     'sputfrac': 'Layer fraction',
 }
+
+
+def wording(text):
+    """A description in the words of the GUI, also those of b2plot and of
+    the files: molecule for molecular."""
+    return re.sub(r"\b([Mm])olecular\b", r"\1olecule", text)

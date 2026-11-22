@@ -164,7 +164,8 @@ class FrameBox(QtWidgets.QWidget):
 
     def set_times(self, times, file=None):
         """Frame times of each file (file -> times), the file shown (the
-        first by default); the whole range, a window of 5."""
+        first by default); the whole range, a window of 5, the position on
+        the last frame."""
         self.times = {f: list(t) for f, t in times.items() if len(t)}
         self.file = file if file in self.times else min(self.times) if \
             self.times else 1
@@ -175,6 +176,7 @@ class FrameBox(QtWidgets.QWidget):
         self.window.setValue(min(5, max(nt, 1)))
         self.window.blockSignals(False)
         self.play.setChecked(False)
+        self._to_last = True                # the next layout shown
         self._layout(emit=False)
 
     def _ranges(self):
@@ -330,7 +332,9 @@ class FrameBox(QtWidgets.QWidget):
                 w.setRange(lo, hi)
                 w.blockSignals(False)
             self.pos.blockSignals(True)
-            self.pos.setValue(min(max(self.pos.value(), lo), hi))
+            self.pos.setValue(hi if getattr(self, "_to_last", False) else
+                              min(max(self.pos.value(), lo), hi))
+            self._to_last = False           # new frames: on the last one
             self.pos.blockSignals(False)
             self.slider.blockSignals(True)
             self.slider.setValue(self.pos.value())

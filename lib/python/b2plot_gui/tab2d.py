@@ -325,8 +325,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.final_quantities = derived + catalog.quantities(
             self.run.catalog, maps) + catalog.chord_quantities(
             self.run.layers, self.run.trimesh is not None)
-        self.movie_quantities = catalog.movie_quantities(self.run.movies,
-                                                         derived)
+        self.movie_quantities = catalog.movie_quantities(
+            self.run.movies, derived, self.translate)
         quantities = self.movie_quantities if self.time_box.movie() else \
             self.final_quantities if self.time_box.final() else []
         vectors = [q for q in quantities if q.source in ("vector", "evector")]
