@@ -76,7 +76,7 @@ SOURCE_NAMES = {
     "b2stbc": ("Boundary conditions", BOUNDARY),
     "b2stbr_phys": ("Recycling model", BOUNDARY),
     "b2stbr_first_flight": ("Recycling model, first flight", BOUNDARY),
-    "b2stbm": ("Application-specific sources", EXTERNAL),
+    "b2stbm": ("Additional sources", EXTERNAL),
     "ext": ("External source (source input)", EXTERNAL),
     "b2srdt": ("Implicit time discretisation", NUMERICS),
     "b2srsm": ("Source smoothing", NUMERICS),
@@ -696,7 +696,7 @@ def _potential(bf, grid, sp):
     fx, fy = _faces(bf, POT_FLUX)
     cols = [(Term(k, n, g), bf.cell(k)) for k, n, g in (
         ("b2stbc_sch_bal", "Boundary conditions", BOUNDARY),
-        ("b2stbm_sch_bal", "Application-specific sources", EXTERNAL),
+        ("b2stbm_sch_bal", "Additional sources", EXTERNAL),
         ("ext_sch_bal", "External source (source input)", EXTERNAL),
         ("b2srdt_sch_bal", "Implicit time discretisation", NUMERICS),
         ("b2srst_sch_bal", "Numerical stabilisation", NUMERICS))]
