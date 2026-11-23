@@ -323,8 +323,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             catalog.Quantity(*equilibrium.WALL, "Geometry", "eqwall")]
             if geometry else [])
         self.final_quantities = derived + catalog.quantities(
-            self.run.catalog, maps) + catalog.chord_quantities(
-            self.run.layers, self.run.trimesh is not None)
+            self.run.catalog, maps)
         self.movie_quantities = catalog.movie_quantities(
             self.run.movies, derived, self.translate)
         quantities = self.movie_quantities if self.time_box.movie() else \

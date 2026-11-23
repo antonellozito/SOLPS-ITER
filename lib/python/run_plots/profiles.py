@@ -5,9 +5,9 @@ The numbers follow the old pipelines (nc2text, ave.awk, paste, awk), so
 the .last10 files are the same text and the pages the same values: means
 with 6 significant digits, the ds coordinate of b2time.nc rounded so and
 written as % .16E, temperatures te and ti divided by e, fluxes divided by
-the target area (dsXT) and, when the run folder has the contact areas
-(dsXP), by those. Which files the old scripts test (dsl, dsL, dsLP,
-fort.1, ...) decides as before.
+the target area (dsXT; also by the contact areas dsXP in the P .last10
+files, when the run folder has them). Which files the old scripts test
+(dsl, dsL, dsLP, fort.1, ...) decides as before.
 """
 
 import math
@@ -256,12 +256,10 @@ def dds_curve(prof, areas, name, num, end):
                     "%s1, ...)" % (name, name, name) if index is None
                     else "%s: no species index for %s" % (name, base))
         return None
+    # fluxes per target area (the flux density on the target surface);
+    # those per poloidal contact area only in the .last10 files (P)
     lines = profile_lines(prof, areas, base, index, prefix, pr2fix, suffix,
                           num, end)
-    contact = prefix == "f" and run_file("ds%sP" % suffix.upper())
-    if contact:
-        lines = profile_lines(prof, areas, base, index, prefix, pr2fix,
-                              suffix, num, end, contact=True)
     rows = [l.split() for l in lines]
     rows = [r for r in rows if len(r) == 2]
     x = np.array([awk_num(r[0]) for r in rows])

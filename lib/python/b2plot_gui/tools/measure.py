@@ -13,20 +13,24 @@ from ...b2plot import labels
 from ..plot.scalar import node_values
 
 PER_M = re.compile(r"(?<![A-Za-z])m\^-(\d)")      # in plain units
+M_POWER = re.compile(r"(?<![A-Za-z])m(?:\^(-?\d+))?(?![A-Za-z])")
 
 
 def times_m(unit, power):
-    """Plain unit (m^-3 ...) of a value times m^power: the power of m
-    raised by power (m^-3 times m^3 cancels), else m^power appended."""
-    m = PER_M.search(unit or "")
-    k = power - int(m.group(1)) if m else power
+    """Plain unit (m^-3, m.s^-1 ...) of a value times m^power: the power
+    of m raised by power (m^-3 times m^3 cancels, m.s^-1 times m gives
+    m^2.s^-1), else m^power appended."""
+    m = M_POWER.search(unit or "")
+    k = power + (int(m.group(1)) if m and m.group(1) else 1 if m else 0)
     new = "" if k == 0 else "m" if k == 1 else "m^%d" % k
     if m:
-        return (unit[:m.start()] + new + unit[m.end():]).strip(" .") or "1"
+        out = unit[:m.start()] + new + unit[m.end():]
+        return re.sub(r"\.{2,}", ".", out).strip(" .") or "1"
     return ("%s %s" % (unit or "", new)).strip()
 
 
-_POWER = re.compile(r"([\^_])(-?[\w.]+)")
+# a power: a number (m^2.s^-1: 2, not 2.s) or a name, not one in braces
+_POWER = re.compile(r"([\^_])(-?\d+(?:\.\d+)?|-?[A-Za-z]\w*)")
 
 
 def math_unit(unit):
