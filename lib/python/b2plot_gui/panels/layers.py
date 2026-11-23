@@ -238,15 +238,28 @@ class LayersPanel(QtWidgets.QGroupBox):
 
     def set_available(self, available):
         """Disable the layers the run does not have (e.g. no EIRENE)."""
+        self._available = set(available)
+        self._enable()
+
+    def set_blocked(self, keys, why=""):
+        """Disable the layers keys too (not drawn: why), until set again
+        without them; their settings are kept."""
+        self._blocked, self._why = set(keys), why
+        self._enable()
+
+    def _enable(self):
+        available = getattr(self, "_available", set(self.rows))
+        blocked = getattr(self, "_blocked", set())
         for key, row in self.rows.items():
-            on = key in available
+            on = key in available and key not in blocked
             for w in ("check", "color", "width", "style", "alpha",
                       "fill_style", "fill"):
                 if row[w] is not None:
                     row[w].setEnabled(on and not (key in NO_STYLE and
                                                   w == "style"))
-            row["check"].setToolTip("" if on else MISSING.get(
-                key, "Not available in this run"))
+            row["check"].setToolTip(
+                "" if on else self._why if key in blocked else
+                MISSING.get(key, "Not available in this run"))
 
     def _emit(self, key):
         self.changed.emit(key, self.style(key))

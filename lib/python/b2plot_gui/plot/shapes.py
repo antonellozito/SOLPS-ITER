@@ -1,13 +1,10 @@
-"""Shapes from the run geometry for the layers and the streamline seeds:
-polylines chained from the layer segments, the closed parts of the
-structure, points spaced along polylines."""
+"""Shapes from the run geometry for the layers: polylines chained from
+the layer segments, the closed parts of the structure, the flux surfaces
+on the B2.5 grid."""
 
 import numpy as np
 from matplotlib.path import Path
 
-SEEDS = (("drawn line", "line"), ("separatrix", "separatrices"),
-         ("divertor entrance (X-points)", "xpoints"),
-         ("divertor targets", "targets"), ("grid boundary", "boundary"))
 
 
 def polylines(seg):
@@ -45,39 +42,62 @@ def area(p):
                   - np.dot(p[:, 1], np.roll(p[:, 0], -1)))
 
 
-def along(polys, n):
-    """n points evenly spaced along the polylines (by length)."""
-    pieces = [(p[:-1], p[1:]) for p in polys if len(p) > 1]
-    if not pieces or n < 1:
-        return np.zeros((0, 2))
-    a = np.vstack([s for s, _ in pieces])
-    b = np.vstack([e for _, e in pieces])
-    length = np.hypot(*(b - a).T)
-    cum = np.concatenate(([0.0], np.cumsum(length)))
-    s = (np.arange(n) + 0.5) * cum[-1] / n
-    k = np.clip(np.searchsorted(cum, s, side="right") - 1, 0, len(a) - 1)
-    f = ((s - cum[k]) / np.maximum(length[k], 1e-300))[:, None]
-    return a[k] + f * (b[k] - a[k])
+def _edge(a, b, inside, steps=14):
+    """The point between a (inside) and b (outside) where the line leaves
+    the region, by bisection."""
+    for _ in range(steps):
+        m = 0.5 * (a + b)
+        if inside(m[None])[0]:
+            a = m
+        else:
+            b = m
+    return a
 
 
-def targets(layers):
-    """Polylines of the divertor targets, by target name."""
-    return {k.split(": ", 1)[1]: polylines(v) for k, v in layers.items()
-            if k.startswith("target: ")}
+def clipped(lines, inside):
+    """The parts of the polylines where inside (points (n, 2) -> bool)
+    holds, cut where they leave the region."""
+    out = []
+    for ln in lines:
+        ok = inside(ln)
+        if ok.all():
+            out.append(ln)
+            continue
+        edges = np.flatnonzero(np.diff(np.concatenate(([0], ok.astype(
+            np.int8), [0]))))
+        for a, b in zip(edges[::2], edges[1::2]):     # ln[a:b] inside
+            piece = [ln[a:b]]
+            if a > 0:
+                piece.insert(0, _edge(ln[a], ln[a - 1], inside)[None])
+            if b < len(ln):
+                piece.append(_edge(ln[b - 1], ln[b], inside)[None])
+            piece = np.vstack(piece)
+            if len(piece) > 1:
+                out.append(piece)
+    return out
 
 
-def seed_points(run, key, n, inside):
-    """Streamline seeds of a preset (SEEDS); inside(points) tells which
-    points lie in the B2.5 grid."""
-    if key == "targets":
-        return along([p for ps in targets(run.layers).values()
-                      for p in ps], n)
-    if key == "xpoints":
-        x0, x1 = run.geometry.bbox[:2]
-        lines = [np.array([[x0, z], [x1, z]])
-                 for _, z in run.geometry.xpoints]
-        dense = along(lines, 40 * n)
-        dense = dense[inside(dense)]
-        return dense[np.linspace(0, len(dense) - 1, min(n, len(dense)))
-                     .astype(int)] if len(dense) else dense
-    return along(polylines(run.layers.get(key, [])), n)
+def flux_lines(run, st):
+    """[(level, polyline)] of the flux surfaces of rzpsi.dat at the levels
+    of the layer style st (psiN, or rho with st.rho), only on the B2.5
+    grid."""
+    try:
+        lev = sorted(float(v) for v in st.levels.replace(",", " ").split())
+    except ValueError:
+        return []
+    m = run.psimap
+    if not lev or m is None:
+        return []
+    import contourpy
+    z = np.sqrt(np.clip(m.psin, 0.0, None)) if st.rho else m.psin
+    r, zz = np.asarray(m.r, float), np.asarray(m.z, float)
+    if r.ndim == 1:
+        r, zz = np.meshgrid(r, zz)
+    gen = contourpy.contour_generator(r, zz, np.asarray(z, float))
+    find = run.geometry.finder
+
+    def inside(p):
+        return np.asarray(find(p[:, 0], p[:, 1])) >= 0
+    return [(lv, ln) for lv in lev for ln in clipped(
+        [np.asarray(x, float) for x in gen.lines(lv) if len(x) > 1],
+        inside)]

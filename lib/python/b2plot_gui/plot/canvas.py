@@ -225,9 +225,9 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin,
         self.clear_wall()
         if data is None or self.run is None:
             return
-        strip = self._wall_strip(data, style, label)
-        if strip is not None:
-            self.wall_artists, self.wall_mappable = [strip], strip
+        arts = self._wall_strip(data, style, label)    # strip, joints
+        if arts is not None:
+            self.wall_artists, self.wall_mappable = arts, arts[0]
             self.wall_data = data
 
     def clear_vectors(self):

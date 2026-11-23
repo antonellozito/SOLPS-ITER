@@ -20,7 +20,6 @@ cp $SOLPSTOP/modules/B2.5/src/b2plot/b2pwlprp.F .
 cp $SOLPSTOP/modules/B2.5/src/b2plot/b2pwrdld.F .
 cp $SOLPSTOP/modules/B2.5/src/b2plot/wallon.F .
 cp $SOLPSTOP/modules/B2.5/src/b2plot/b2pwsort.F .
-cp $SOLPSTOP/modules/B2.5/src/b2plot/rlshdw.F .
 cp $SOLPSTOP/modules/B2.5/src/b2plot/ank_interface.F .
 cp $SOLPSTOP/modules/B2.5/src/b2plot/species.F .
 cp $SOLPSTOP/modules/B2.5/src/catalyst/fortranAdaptor.F90 .

@@ -11,13 +11,15 @@ from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
 from .options import LabelsBox, LevelsBox, RegionsMenu
 from .overlays import OverlayOptions, OverlaySection
 from .plotopts import (ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox,
-                       WallBox)
+                       TextureBox, WallBox)
 from .species import ALL, SUM, SpeciesMenu
 from .timebox import TimeBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
-             "stream": "Streamlines", "quiverstream": "Quiver + streamlines"}
+             "stream": "Streamlines", "quiverstream": "Quiver + streamlines",
+             "texture": "Flow texture",
+             "quivertexture": "Quiver + flow texture"}
 TREE_ROWS = 11                      # rows of the plasma quantity tree
 MOVIE_ROWS = 7.5                    # Run movies: its 8 groups, closed
 LEVELS = {"contourf": 100, "contour": 20}   # contour levels at first
@@ -218,29 +220,37 @@ class QuantityPanel(QtWidgets.QWidget):
         self._fill_kinds(False)
         self.kind_combo.currentIndexChanged.connect(self._kind_chosen)
         self.vector_kind = QtWidgets.QComboBox()
-        self.vector_kind.setToolTip("Arrows, streamlines or both")
+        self.vector_kind.setToolTip("Arrows, streamlines, flow texture, "
+                                    "or arrows over streamlines or the "
+                                    "flow texture")
         for k in KINDS_VECTOR:
             self.vector_kind.addItem(KIND_TEXT[k], k)
         self.vector_kind.currentIndexChanged.connect(self._kind_chosen)
 
         self.colour = ColourBox("Plasma plot options")  # with the plot type
         kinds = QtWidgets.QHBoxLayout()
-        kinds.addWidget(QtWidgets.QLabel("Plot type"))
+        label = QtWidgets.QLabel("Plot type")
+        kinds.addWidget(label)
         kinds.addWidget(self.kind_combo, 1)
         self.colour.layout().insertLayout(0, kinds)
+        self.only_2d = [label, self.kind_combo]    # hidden in the 3D view
         self.plasma_regions = RegionsMenu("plasma")     # at the end
         self.colour.layout().addWidget(self.plasma_regions)
         self.vector_box = ColourBox("Vector plot options", "magma",
                                     ("linear", "log"))  # of the magnitude
         kinds = QtWidgets.QHBoxLayout()
-        kinds.addWidget(QtWidgets.QLabel("Plot type"))
+        label = QtWidgets.QLabel("Plot type")
+        kinds.addWidget(label)
         kinds.addWidget(self.vector_kind, 1)
         self.vector_box.layout().insertLayout(0, kinds)
+        self.only_2d += [label, self.vector_kind]
         self.vector_regions = RegionsMenu("vector")
         self.vector_box.layout().addWidget(self.vector_regions)
         self.vector_box.changed.connect(self._changed)
         self.wall_box = WallBox()
         self.wall_box.changed.connect(self._changed)
+        self.only_2d += self.wall_box.line_row
+        self.in3d = False               # the 3D view shown
         self.levels_box = LevelsBox()   # one Contours section
         self.lines = LinesBox()
         self.contour_box = QtWidgets.QGroupBox("Contours")
@@ -250,8 +260,10 @@ class QuantityPanel(QtWidgets.QWidget):
         self.arrows = ArrowsBox()
         self.streams = StreamBox()
         self.streams.seed_line.connect(self.seed_line)
+        self.texture = TextureBox()
         for box in (self.colour, self.levels_box, self.lines, self.arrows,
-                    self.streams, self.plasma_regions, self.vector_regions):
+                    self.streams, self.texture, self.plasma_regions,
+                    self.vector_regions):
             box.changed.connect(self._changed)
         self.overlay = OverlayOptions()
         for box in self.overlay.parts():
@@ -261,7 +273,8 @@ class QuantityPanel(QtWidgets.QWidget):
         column.addStretch(1)            # the room left under the boxes
         # the graphic options, placed in the right column by the 2D tab
         self.style_boxes = (self.colour, self.contour_box, self.vector_box,
-                            self.arrows, self.streams, self.wall_box) + \
+                            self.arrows, self.streams, self.texture,
+                            self.wall_box) + \
             self.overlay.boxes()        # above the layers
         self.lower_boxes = (self.labels_box,)
         self._levels_of = dict(LEVELS)  # the number of each plot type
@@ -606,9 +619,12 @@ class QuantityPanel(QtWidgets.QWidget):
         self.lines.mono.setVisible(kind == "contour")   # filled: no use
         self.vector_box.setVisible(vector)
         self.arrows.setVisible(vector and vkind in ("quiver",
-                                                    "quiverstream"))
+                                                    "quiverstream",
+                                                    "quivertexture"))
         self.streams.setVisible(vector and vkind in ("stream",
                                                      "quiverstream"))
+        self.texture.setVisible(vector and vkind in ("texture",
+                                                     "quivertexture"))
         self.wall_box.setVisible(wall)
         self.plasma_regions.setVisible(source in ("matrix", "equilibrium"))
         self.vector_regions.setVisible(vsource == "vector")  # B2.5 cells
@@ -619,8 +635,22 @@ class QuantityPanel(QtWidgets.QWidget):
         self.colour.setVisible(on and not mask)
         self.contour_box.setVisible(on and kind in ("contourf", "contour")
                                     and not mask)
+        if self.in3d:                   # the boxes of the 2D plot alone
+            for box in (self.arrows, self.streams, self.texture,
+                        self.contour_box, self.labels_box) + \
+                    self.overlay.boxes():
+                box.setVisible(False)
+        self.labels_box.setVisible(not self.in3d)
+        for w in self.only_2d:
+            w.setVisible(not self.in3d)
         if emit:
             self._changed()
+
+    def set_3d(self, on):
+        """The options of the 3D view: those of the 2D plot alone
+        hidden."""
+        self.in3d = bool(on)
+        self._kind_changed(emit=False)
 
     def set_range(self, lo, hi):
         self.colour.set_range(lo, hi)
@@ -646,7 +676,7 @@ class QuantityPanel(QtWidgets.QWidget):
         """The PlotStyle of the vector plot (species column column)."""
         fields = {}
         for box in (self.vector_box, self.arrows, self.streams,
-                    self.vector_regions):
+                    self.texture, self.vector_regions):
             fields.update(box.style_fields())
         return PlotStyle(kind=self.vector_kind_name(), column=column,
                          **fields)

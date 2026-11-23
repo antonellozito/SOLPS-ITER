@@ -268,11 +268,8 @@ class Tools:
 
     def _done(self, mode, pts):
         tab = self.tab
-        if mode == "seeds":
-            (x0, y0), (x1, y1) = pts
-            t = np.linspace(0.0, 1.0, tab.quantity.streams.nseeds.value())
-            tab.quantity.set_seeds(list(zip(x0 + t * (x1 - x0),
-                                            y0 + t * (y1 - y0))))
+        if mode == "seeds":             # the ends of the seed line
+            tab.quantity.set_seeds([tuple(p) for p in pts])
             tab.status.emit("Seed line set")
             return
         if tab.run is None or mode == "line" and self._measured() is None \
@@ -941,6 +938,7 @@ class Tools:
             if a.axes is not None:
                 a.remove()
         self.artists = []
+        self.tab.mode3d.follow()        # the chords in 3D too
         if self.section != "chords":
             self.tab.canvas.draw_idle()
             return
