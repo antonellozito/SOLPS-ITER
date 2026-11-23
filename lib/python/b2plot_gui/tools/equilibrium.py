@@ -110,7 +110,9 @@ def derived_rows(run, geo, i, ncv, nfc):
                      ch["lpar"], "m"]]
         out += _expansion(run, geo, ch, i, bb)
         if ch["closed"]:
-            out.append(["Safety factor", ch["q"], ""])
+            out += [["Safety factor", ch["q"], ""],
+                    ["Magnetic shear", maps(run, geo)["shear"][i],
+                     "m^-1"]]
     return [[text, "", value, unit] for text, value, unit in out]
 
 
@@ -169,20 +171,19 @@ MAPS = (("pitch", "Magnetic pitch"),
         ("dspar", "Parallel distance from the west target (m)"),
         ("dspole", "Poloidal distance to the east target (m)"),
         ("dspare", "Parallel distance to the east target (m)"),
-        ("lpol", "Poloidal length of the flux tube, wall to wall or one "
-         "turn (m)"),
-        ("lpar", "Parallel length of the flux tube, wall to wall or one "
-         "turn (m)"),
+        ("lpol", "Poloidal length of the flux tube, wall to wall (m)"),
+        ("lpar", "Parallel length of the flux tube, wall to wall (m)"),
         ("fexp", "Poloidal flux expansion relative to the nearest midplane"),
-        ("qsafety", "Safety factor"))
+        ("qsafety", "Safety factor"),
+        ("shear", "Magnetic shear (m^{-1})"))
 WALL = ("graze", "Grazing angle on the wall (deg)")     # a wall strip
 MIDPLANES = ("iimp", "iomp")    # b2plot masks of the midplane cells
 
 
 def maps(run, geo):
     """{name: values (nCv)} of every map, NaN where a quantity has no
-    meaning (distances on closed tubes, the safety factor on open ones,
-    the expansion without a midplane); computed once per run."""
+    meaning (distances on closed tubes, the safety factor and the shear on
+    open ones, the expansion without a midplane); computed once per run."""
     if getattr(run, "equilibrium_maps", None) is not None:
         return run.equilibrium_maps
     ncv, nfc = len(geo.get("cvX")), len(geo.get("fcS"))
@@ -196,6 +197,7 @@ def maps(run, geo):
     rb = geo.get("cvX") * bpol
     masks = [run.cache.get(("field", n, (), None)) for n in MIDPLANES]
     ftc = geo.get("ftCvP")
+    closed = []
     for first in (ftc.reshape(2, -1)[0] if ftc is not None else []):
         ch = chain(geo, int(geo.get("ftCv")[first - 1]) - 1, ncv, nfc)
         if ch is None:
@@ -205,6 +207,7 @@ def maps(run, geo):
         out["lpol"][c], out["lpar"][c] = ch["lpol"], ch["lpar"]
         if ch["closed"]:
             out["qsafety"][c] = ch["q"]
+            closed.append((c, ch["q"]))
         else:
             out["dspol"][c], out["dspar"][c] = pol, par
             out["dspole"][c] = ch["lpol"] - pol
@@ -217,9 +220,32 @@ def maps(run, geo):
                 d = np.minimum(d, ch["lpol"] - d)
             near = np.array(mids)[np.argmin(d, axis=1)]
             out["fexp"][c] = rb[c[near]] / rb[c]
+    _shear(out["shear"], closed, geo, hx)
     if all(m is not None for m in masks):
         run.equilibrium_maps = out
     return out
+
+
+def _shear(shear, tubes, geo, hx):
+    """Magnetic shear dq/dr of the closed flux tubes [(cells, q)] in shear,
+    as b2plot computes it (label s): r the mean distance (weights hx) of
+    the cells of a tube from the centre of the first closed tube, central
+    differences between the tubes next in r, one-sided at the ends."""
+    if len(tubes) < 2:
+        return
+    x, y = geo.get("cvX"), geo.get("cvY")
+    c0 = tubes[0][0]
+    r0, z0 = (np.sum(hx[c0] * a[c0]) / hx[c0].sum() for a in (x, y))
+    r = np.array([np.sum(hx[c] * np.hypot(x[c] - r0, y[c] - z0)) /
+                  hx[c].sum() for c, _ in tubes])
+    o = np.argsort(r)
+    r, q = r[o], np.array([tubes[i][1] for i in o])
+    lo = np.concatenate([[0], np.arange(len(q) - 1)])
+    hi = np.concatenate([np.arange(1, len(q)), [len(q) - 1]])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        s = (q[hi] - q[lo]) / (r[hi] - r[lo])
+    for k, i in enumerate(o):
+        shear[tubes[i][0]] = s[k]
 
 
 def vertex_values(geo, values):

@@ -320,14 +320,22 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.run is None or not self.run.alive():
             self._status("b2plot is not running: Reload run starts it")
             return
+        # sources and fluxes shown as densities (catalog: per), with the
+        # unit of the density in the label; the balances and the geometry
+        # asked for the tools keep the values per cell
+        per = q.per if role not in ("balance", "species", "eqdata",
+                                    "tools") else ()
+        label = " '%s' glbl" % q.description.replace("'", "")
         if q.source in ("vector", "evector"):
             res = self.run.vector(q.poloidal, q.radial,
                                   eirene=q.source == "evector", ops=ops,
-                                  source=source)
+                                  source=source,
+                                  per=tuple(t + label for t in per))
         else:
             res = self.run.field(q.name, eirene=q.source == "eirene",
                                  ops=ops, source=source,
-                                 wall=q.source == "wall")
+                                 wall=q.source == "wall",
+                                 per=(per[0] + label,) if per else ())
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
             if role not in ("prefetch", "species", "tools", "eqdata",

@@ -173,12 +173,25 @@ class Part(QtWidgets.QWidget):
                             "file", lambda: self.view.save())
         self.export = _button("Export…", "The values of this plot as "
                               "a CSV file", lambda: self.view.export())
+        # the fluxes along the targets: per target area (the flux density
+        # on the target surface, as flush probes measure it) or per
+        # poloidal contact area (the poloidal flux density)
+        self.area = QtWidgets.QComboBox()
+        self.area.addItem("Per target area", "target")
+        self.area.addItem("Per poloidal contact area", "contact")
+        self.area.setToolTip("Flux along the target divided by the target "
+                             "area (the flux density on the target "
+                             "surface, as flush probes measure it) or by "
+                             "the poloidal contact area (the poloidal flux "
+                             "density)")
+        self.area.hide()
         self.lay = QtWidgets.QVBoxLayout(self)
         self.lay.setContentsMargins(0, 0, 0, 0)
         self.lay.addWidget(self.where)
         self.lay.addWidget(self.tree)
         row = QtWidgets.QHBoxLayout()
         row.addWidget(self.text, 1)
+        row.addWidget(self.area)
         row.addWidget(self.save)
         row.addWidget(self.export)
         self.lay.addLayout(row)

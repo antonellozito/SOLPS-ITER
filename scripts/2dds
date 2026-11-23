@@ -157,9 +157,6 @@ if ($is_first) then
     else
       nc2text -n 9999999 $source "$i(:,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - >! ${tmpdir}gnuplot.data.tmp
     endif
-    if ($prefix == "f" && -s $dsFILEP) then
-      nc2text -n 9999999 $source "$i(:,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - ${tmpdir}ds${SUFFIXP} | awk '{print $1,$2/$3}' >! ${tmpdir}gnuplot.data.tmp
-    endif
 
   else
 
@@ -217,9 +214,6 @@ if ($is_first) then
     else
         nc2text -n 9999999 $source "$name(:,$is_plus_1,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - >! ${tmpdir}gnuplot.data.tmp
     endif
-    if ($prefix == "f" && -s $dsFILEP) then
-        nc2text -n 9999999 $source "$name(:,$is_plus_1,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - ${tmpdir}ds${SUFFIXP} | awk '{print $1,$2/$3}' >! ${tmpdir}gnuplot.data.tmp
-    endif
 
   endif
 
@@ -271,9 +265,6 @@ else
       nc2text -n 9999999 $source "$i(:,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - | awk '{print $2}' >! ${tmpdir}gnuplot.data.tmp.tmp
     else
       nc2text -n 9999999 $source "$i(:,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - | awk '{print $2}' >! ${tmpdir}gnuplot.data.tmp.tmp
-    endif
-    if ($prefix == "f" && -s $dsFILEP) then
-      nc2text -n 9999999 $source "$i(:,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - ${tmpdir}ds${SUFFIXP} | awk '{print $2/$3}' >! ${tmpdir}gnuplot.data.tmp.tmp
     endif
 
   else
@@ -331,9 +322,6 @@ else
         nc2text -n 9999999 $source "$name(:,$is_plus_1,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - ${tmpdir}ds${SUFFIX}T | awk '{print $2/$3}' >! ${tmpdir}gnuplot.data.tmp.tmp
     else
         nc2text -n 9999999 $source "$name(:,$is_plus_1,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - | awk '{print $2}' >! ${tmpdir}gnuplot.data.tmp.tmp
-    endif
-    if ($prefix == "f" && -s $dsFILEP) then
-        nc2text -n 9999999 $source "$name(:,$is_plus_1,${NUM}:${END})" | ave.awk | tr ' ' '\n' | awk 'NF>0{print $1}' | paste ${tmpdir}ds${suffix} - ${tmpdir}ds${SUFFIXP} | awk '{print $2/$3}' >! ${tmpdir}gnuplot.data.tmp.tmp
     endif
 
   endif

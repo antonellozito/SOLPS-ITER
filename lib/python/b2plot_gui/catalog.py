@@ -13,9 +13,10 @@ from dataclasses import dataclass, replace
 from ..b2plot import labels
 from . import describe
 from .expression import ExpressionError, Translator, names_of
+from .model import split_unit
 
 GROUPS = [
-    ("Geometry and magnetic field",
+    ("Magnetic equilibrium",
      ("flux function", "volume", "area", "length", "coordinate", "metric",
       "magnetic", "angle", "pitch", "b_{", "connection")),
     ("Plasma fluxes", ("flux", "current")),
@@ -60,21 +61,24 @@ FAMILIES = [
     ("Electron energy sources", r"she|bche|brhe|shee[ampi]el|bmhe|exhe|rqae|b2ra|b2br|b2iz|b2rc|dvue|exbe|joul"),
     ("Ion energy sources", r"shi|bchi|brhi|shie[ampi]pl|bmhi|exhi|rsai|rrai|rcxi|dvua|exba|visa|fraa|shei|brhn|brkt"),
     ("Charge sources", r"sch|bcch|bmch|exch"),
-    ("Convergence (residuals, corrections)",
-     r"r(co|mo|mt|ee|ei|po|en|kt|zt)|c(pa|ua|ut|te|ti|po|kt|zt|tn)"),
-    ("Atomic physics and radiation",
-     r"neutrad|molrad|ionrad|srcml|edissml"),
-    ("Transport coefficients",
-     r"d|dp|ky[ei]|kyi0|kyn0|vla[xy]|visc|sig|alf|dkt|dzt"),
+    ("Residuals", r"rco|rmo|ree|rei|rpo"),
+    ("Neutrals radiation", r"neutrad|molrad|ionrad|recrad"),
+    ("Plasma coefficients",
+     r"ldebye|wpe|wpi|wce|wci|omega|rhol|betae|beta|lnlam|taue|taui|taueq|"
+     r"nustarc|deltabc|wb|"
+     r"deltparc|vthe|vthi|colle|colli"),
+    ("Collisional parallel transport coefficients",
+     r"kpe|kpi|vispar|sigpar|alfpar"),
+    ("Anomalous transport coefficients",
+     r"d|dp|ky[ei]|vla[xy]|visc|sig|alf|dkt"),
     ("Flux limiters", r"fle|fli|nflf..x?y?|flvisc|fluc.|flk.|flalc?"),
-    ("Neoclassical, collisionality, plasma frequencies",
-     r"dnneo|chineo|vnneo|vwneo|lnn|ltt|nuab|nua|nustar|vth|rhol|deltal|wb|"
-     r"deltaw[nt]?|omega|deltab|deltapar|chhichii|colle|colli|lnlam|wpe|wce|"
-     r"wci|vthe|vthi|valfven"),
+    ("Collisional radial transport coefficients",
+     r"dnneo|vnneo|chineo|vwneo"),
+    ("Magnetic equilibrium", r"bx|by|bz|bb|psi|conn|pit|ffbz"),
     ("Cell masks and indices", INTEGER.pattern
      + r"|rlcl|gdcl|bdcl|npcl|iimp|iomp|ix|iy|iix|iiy|ic|ift|xymap|bc|rc"),
 ]
-OTHER = "Other matrix quantities"
+OTHER = "Other geometric quantities"
 NEUTRALS = "Neutrals (triangles)"           # as in the Run movies tab
 NEUTRAL_VELOCITIES = "Neutrals velocities"
 # groups of the plasma table shown again in the vector table: each
@@ -90,8 +94,7 @@ ZERO_RADIAL = {"ue": "ue pit m*", "ua": "ua pit m*", "fchp": "fchp"}
 # as the flux densities of the triangles, shown there
 NO_VECTOR = ("pfla", "pefa", "pflm", "pefm")
 DERIVED = "Derived quantities"
-CHORDS = "Chord contributions (*.chords files)"
-EQUILIBRIUM = "Magnetic equilibrium (derived)"
+EQUILIBRIUM = "Magnetic equilibrium"   # b2plot labels and derived maps
 CHORD_POINTS = 33               # points of each chord sent by guigeom
 ORDER = [DERIVED, "Plasma densities", "Plasma velocities",
          "Plasma temperatures", "Plasma pressures", "Plasma potential",
@@ -100,16 +103,74 @@ ORDER = [DERIVED, "Plasma densities", "Plasma velocities",
          "Ion heat fluxes", "Current fluxes", "Plasma fluxes",
          "Particle sources", "Momentum sources", "Electron energy sources",
          "Ion energy sources", "Charge sources",
-         "Sources and sinks", "Atomic physics and radiation", "Transport "
-         "coefficients", "Neoclassical, collisionality, plasma frequencies",
-         "Flux limiters", "Convergence (residuals, corrections)",
-         "Neutrals state", NEUTRAL_VELOCITIES,
-         "Neutrals fluxes", NEUTRALS,
-         "Geometry and "
-         "magnetic field", EQUILIBRIUM, FAMILIES[-1][0], OTHER, CHORDS]
+         "Sources and sinks", "Neutrals state", NEUTRAL_VELOCITIES,
+         "Neutrals fluxes", "Neutrals radiation", NEUTRALS, EQUILIBRIUM,
+         "Plasma coefficients",
+         "Collisional parallel transport coefficients",
+         "Collisional radial transport coefficients",
+         "Anomalous transport coefficients", "Transport coefficients",
+         "Flux limiters", "Residuals", FAMILIES[-1][0], OTHER]
+# quantities computed from labels, by group: the expression shown, its
+# b2plot tokens and the description. Plasma coefficients: the divisions
+# zero where the time is zero, as for the neutral species. Collisional
+# radial transport coefficients: each NEOART coefficient by contribution,
+# the contribution set before the label (b2plot neo_ic: 0 classical,
+# 2 Pfirsch-Schlueter, 1 banana-plateau, 4 all)
+NEO_PARTS = (("cl", 0, "classical"), ("ps", 2, "Pfirsch-Schlüter"),
+             ("bp", 1, "banana-plateau"), ("", 4, "total"))
+NEO = (("dnneo", "Radial particle diffusivity", "m^{2}.s^{-1}"),
+       ("vnneo", "Radial pinch velocity", "m.s^{-1}"),
+       ("chineo", "Radial heat diffusivity", "m^{2}.s^{-1}"),
+       ("vwneo", "Radial heat pinch velocity", "m.s^{-1}"))
+COMPUTED = {
+    "Plasma coefficients": (
+        ("1/taue", "{taue} {taue} m/ {taue} m/",
+         "Electron collision frequency (electron-ion) (s^{-1})"),
+        ("1/taui", "{taui} {taui} m/ {taui} m/",
+         "Ion collision frequency (ion-ion) (s^{-1})"),
+        ("vthe*taue", "{vthe} {taue} m*", "Electron mean free path (m)"),
+        ("vthi*taui", "{vthi} {taui} m*", "Ion mean free path (m)")),
+    "Collisional radial transport coefficients": tuple(
+        (("%s %s" % (n, k)).strip(), "%d neo_ic {%s}" % (ic, n),
+         "%s, %s (%s)" % (d, part, u))
+        for n, d, u in NEO for k, ic, part in NEO_PARTS)}
 # order within the groups (the main plasma state as in the movie files,
 # velocities after it), the others by name; labels left out of the list
 FINAL_WITHIN = {"Plasma densities": ("ne", "ni", "na", "zeff"),
+                # as the equations: continuity, momentum, electron and ion
+                # energy, potential
+                "Residuals": ("rco", "rmo", "ree", "rei", "rpo"),
+                # divergences of the main fluxes first, as the residuals
+                OTHER: ("dfna", "dfmo", "dfhe", "dfhi", "dfch"),
+                # the field components and strength, the poloidal flux,
+                # the pitch, then lengths along the field lines
+                EQUILIBRIUM: ("bx", "by", "bz", "bb", "psi", "pitch",
+                              "pitchangle", "conn", "dspol", "dspar",
+                              "dspole", "dspare", "lpol", "lpar", "fexp",
+                              "qsafety", "shear"),
+                # Debye length, plasma and gyro-frequencies, Larmor
+                # radius, plasma beta, Coulomb logarithm, collision times
+                # and frequencies, thermal velocities, mean free paths,
+                # collisionalities with the banana width, the equilibration
+                # time last
+                "Plasma coefficients": (
+                    "ldebye", "wpe", "wpi", "wce", "wci", "omega", "rhol",
+                    "betae", "beta", "lnlam", "taue",
+                    "taui", "1/taue", "1/taui", "vthe", "vthi", "vthe*taue",
+                    "vthi*taui", "nustarc", "deltabc", "wb", "deltparc",
+                    "colle", "colli", "taueq"),
+                # particles, then heat, each diffusivity and pinch
+                "Collisional radial transport coefficients": tuple(
+                    e for e, _, _ in COMPUTED[
+                        "Collisional radial transport coefficients"]),
+                # in the order of their anomalous counterparts
+                "Collisional parallel transport coefficients": (
+                    "kpi", "kpe", "vispar", "sigpar", "alfpar"),
+                # as in b2.transport.inputfile (kind_coeff 1 to 9), the
+                # E×B turbulent energy diffusivity last
+                "Anomalous transport coefficients": (
+                    "d", "dp", "kyi", "kye", "vlax", "vlay", "visc", "sig",
+                    "alf", "dkt"),
                 "Plasma velocities": ("ue", "ua", "vexb.x", "vexb.y",
                                       "wadia.x", "wadia.y", "veexb.x",
                                       "veexb.y", "wedia.x", "wedia.y", "ww",
@@ -131,6 +192,8 @@ FINAL_WITHIN = {"Plasma densities": ("ne", "ni", "na", "zeff"),
                 "Electron energy sources": ("b2ra", "b2br", "b2iz", "b2rc", "brhe", "sheeael", "sheemel", "sheeiel", "sheepel", "dvue", "exbe", "joul", "-shei", "bche", "bmhe", "exhe"),
                 "Ion energy sources": ("rsai", "rrai", "rcxi", "brhi", "shieapl", "shiempl", "shieipl", "shieppl", "dvua", "exba", "visa", "fraa", "shei", "bchi", "bmhi", "exhi", "brhn", "brkt"),
                 "Charge sources": ("bcch", "bmch", "exch"),
+                "Neutrals radiation": ("neutrad", "molrad", "ionrad",
+                                       "recrad"),
                 "Neutrals state": ("dab2", "tab2", "dmb2", "tmb2", "dib2",
                                    "tib2"),
                 # by species as in the movie files: density, temperature,
@@ -182,6 +245,46 @@ HIDDEN = {"alph", "na_ext", "ne_ext", "nh", "pot*", "pot", "poti", "ro",
           "bchn", "bckt",
           # Halpha emissivities of atoms and molecules
           "ahal", "mhal",
+          # molecule dissociation rate and its potential energy
+          "srcml", "edissml",
+          # total ion and fluid neutral heat diffusivities, E×B turbulent
+          # enstrophy diffusivity
+          "kyi0", "kyn0", "dzt",
+          # collision frequencies and collisionality of the neoclassical
+          # module (its own Coulomb logarithms and prefactor) and its ratios
+          # built on them: as times, frequencies, collisionality and ratios
+          # from the classical transport
+          "nua", "nuab", "nustar", "deltab", "deltapar",
+          # gradient lengths and their ratio to the Larmor radius, the
+          # thermal velocities again (as vthe, vthi)
+          "lnn", "ltt", "deltal", "vth",
+          # Alfvén velocity per species (not that of the plasma), banana
+          # width ratios to the gradient lengths
+          "valfven", "deltaw", "deltawn", "deltawt",
+          # Chang-Hinton ion heat diffusivity (analytic, not from NEOART),
+          # the NEOART coefficients by their contributions instead
+          "chhichii", "dnneo", "vnneo", "chineo", "vwneo",
+          # corrections of the last iteration, residuals of the total
+          # momentum, fluid neutral and E×B turbulence equations
+          "cpa", "cua", "cut", "cte", "cti", "cpo", "ckt", "czt", "ctn",
+          "rmt", "ren", "rkt", "rzt",
+          # toroidal flux function, parallel length of the cell (map)
+          "ffbz", "lparcell",
+          # field components together, EIRENE species of the atoms and
+          # ions, energy equipartition coefficient, cell centre and its
+          # unit vectors, drift and viscosity factors, radial width, ion
+          # masses, Z^2-weighted density, b2plot safety factor, turbulent
+          # enstrophy
+          "b", "b2eatcr", "b2espcr", "ceqp", "cr", "cz", "ehx", "ehy",
+          "fac_ExB", "fac_vis", "facdrift", "hy1", "mi", "mi_ext", "ne2",
+          "q", "zt",
+          # magnetic shear of b2plot (zero outside the closed surfaces): the
+          # derived map instead
+          "s",
+          # divergences other than those of the main fluxes
+          "dhet", "dhit", "dfhj", "dfhm", "dfhp", "dfhn", "dfkt", "dfzt",
+          # classical viscosity face coefficients (conductances)
+          "cvsx", "cvsy",
           # balances and the previous time step
           "ebal", "ebld", "ebls", "pbal", "na0", "ne0", "ni0", "te0", "ti0",
           "ua0", "po0", "tn0", "kt0", "zt0"}
@@ -204,6 +307,9 @@ class Quantity:
     radial: str = ""
     movie: int = 0              # 1 b2movies.nc, 2 eirenemovies.nc
     expr: str = ""              # derived: the expression (name: tokens)
+    per: tuple = ()             # b2plot tokens of the density: dividing by
+    #                             the cell volume or face area (vectors:
+    #                             poloidal and radial component)
 
     def __post_init__(self):
         self.description = describe.wording(self.description)
@@ -259,6 +365,10 @@ def _side(name, names):
     return None
 
 
+# labels keeping their "Poloidal ..." and "Radial ..." descriptions
+KEEP_SIDE = {"vlax", "vlay", "bx", "by"}
+
+
 def components(items):
     """Descriptions of the quantities with a poloidal and a radial
     component written "What (poloidal component) (unit)" (items with name
@@ -268,7 +378,8 @@ def components(items):
     for i in items:
         d = i.description
         which = _side(i.name, names)
-        if not which or "component)" in d or re.search(
+        if i.name in KEEP_SIDE or not which or "component)" in d or \
+                re.search(
                 r"(?i)index|coordinate|\bcells?\b", d):
             continue
         m = _UNIT.search(d)
@@ -292,6 +403,46 @@ def _radial(name, names):
     if name[:1] == "p" and "r" + name[1:] in names:
         return "r" + name[1:]
     return None
+
+
+# groups whose quantities b2plot gives per cell (sources) or through the
+# projected cell faces (fluxes: velocity times density times cvHy cvHz,
+# poloidal, or cvHx cvHz, radial, as in intflux), shown as densities: per
+# volume (vol) or per area (sxperp, sy); those already per m^3 or m^2 stay
+SOURCE_GROUPS = ("Particle sources", "Momentum sources",
+                 "Electron energy sources", "Ion energy sources",
+                 "Charge sources", "Neutrals radiation")
+FLUX_GROUPS = ("Particle fluxes", "Momentum fluxes", "Total energy fluxes",
+               "Electron heat fluxes", "Ion heat fluxes", "Current fluxes")
+
+
+def density_unit(unit, power, sep="."):
+    """Unit of the density: 's^{-1}' -> 'm^{-3}.s^{-1}', 'W' -> 'W.m^{-3}'
+    (power 3; 2 for the areas; sep " " as in the movie files)."""
+    m = "m^{-%d}" % power
+    if "s^{-1}" in unit:
+        return unit.replace("s^{-1}", m + sep + "s^{-1}", 1)
+    return unit + sep + m
+
+
+def _density(q):
+    """q as a density, when it is a source or a flux given per cell."""
+    flux = q.group in FLUX_GROUPS
+    if not (flux or q.group in SOURCE_GROUPS) or \
+            q.source not in ("matrix", "vector"):
+        return q
+    text, unit = split_unit(q.description)
+    if not unit or "m^{-" in unit:
+        return q
+    if not flux:
+        per = ("vol m/",)
+    elif q.source == "vector":
+        per = ("sxperp m/", "sy m/")
+    else:
+        per = ("sy m/",) if re.search(r"(?i)\brad(ial)?\b", text) \
+            else ("sxperp m/",)
+    return replace(q, description="%s (%s)" % (
+        text, density_unit(unit, 3 if not flux else 2)), per=per)
 
 
 def _vectors(scalars):
@@ -352,6 +503,10 @@ def quantities(categories, maps=()):
     out += [Quantity("{%s} chs" % q.name, q.description, NEGATED[q.name],
                      q.source, expr="-" + q.name)
             for q in out if q.name in NEGATED]
+    names = {n.strip() for n, _, _ in matrix}      # hidden ones too
+    out += [Quantity(tokens, d, group, "matrix", expr=e)
+            for group, entries in COMPUTED.items() for e, tokens, d in entries
+            if set(re.findall(r"\{(\w+)\}", tokens)) <= names]
     components([q for q in out if q.source == "matrix"])
     eirene = [(n, describe.EIRENE.get(n.strip()) or d, u)
               for n, d, u in eirene if n.strip() not in EIRENE_HIDDEN]
@@ -367,9 +522,13 @@ def quantities(categories, maps=()):
         return w.index(q.label) if q.label in w else len(w)
     out.sort(key=lambda q: (ORDER.index(q.group), within(q),
                             _species_order(q.name.lower())))
-    out += _vectors([q for q in out if q.source == "matrix"])
-    out += [Quantity(n, d, EQUILIBRIUM, "equilibrium") for n, d in maps]
-    out.sort(key=lambda q: ORDER.index(q.group))       # maps in their order
+    vectors = _vectors([q for q in out if q.source == "matrix"])
+    out = [_density(q) for q in out + vectors]
+    names = {n for n, _ in maps}
+    out = [q for q in out if not (q.name == "pit" and "pitch" in names)]
+    out += [Quantity(n, d, EQUILIBRIUM, "equilibrium") for n, d in maps
+            if n not in HIDDEN]
+    out.sort(key=lambda q: (ORDER.index(q.group), within(q)))  # maps too
     return out
 
 
@@ -404,23 +563,6 @@ def wall_quantities(categories):
     return sorted(out, key=lambda q: order.index(q.group))
 
 
-def chord_quantities(layers, eirene):
-    """Contribution maps of every chord of the chord sets of the run (b2plot
-    chmf on the cells, echmf on the EIRENE triangles)."""
-    out = []
-    sets = [k.split(": ", 1)[1] for k in layers if k.startswith("chords: ")]
-    for i, label in enumerate(sets, 1):
-        n = len(layers["chords: " + label]) // (CHORD_POINTS - 1)
-        for j in range(1, n + 1):
-            for fn, where in (("chmf", "cells"), ("echmf", "triangles"))[
-                    :1 + bool(eirene)]:
-                out.append(Quantity(
-                    "%d %d %s" % (i, j, fn), "Contribution of chord %d of %s "
-                    "to the %s" % (j, label, where), CHORDS, "matrix" if fn ==
-                    "chmf" else "eirene", expr="%s(%d, %d)" % (fn, i, j)))
-    return out
-
-
 # groups of the B2.5 and EIRENE quantities of the movie files and of the
 # chord files (the same variables), by name in this order; EIRENE ones on
 # its triangles one group; vectors: the plasma and the neutral fluxes
@@ -429,7 +571,8 @@ SOLPS_GROUPS = (("Plasma state", r"na|ne|ua|te|ti|po"),
                 ("Plasma sources",
                  r"r(sa|ra|cx)(na|hi|hisum)|rqahe(sum)?|rqrad(sum)?|"
                  r"eirene_\w+|eneutrad(sum)?|emolrad(sum)?"),
-                ("Transport coefficients", r"dna|dpa|hc[ei]|vla[xy]|vsa"),
+                ("Anomalous transport coefficients",
+                 r"dna|dpa|hc[ei]|vla[xy]|vsa"),
                 ("Neutrals state", r"[dt][am]b2"),
                 ("Neutrals fluxes", r"(r|p|re|pe)flux[am][xy]?"))
 NEUTRAL_TRIANGLES = NEUTRALS
@@ -462,8 +605,9 @@ NEUTRAL_MOVIE_VECTORS = [
      "%s particle flux density (m^{-2} s^{-1})")]
 # order of the quantities within some groups (the others: as in the files)
 WITHIN = {"Plasma state": ("ne", "na", "ua", "te", "ti", "po"),
-          "Transport coefficients": ("dna", "dpa", "vlax", "vlay", "vsa",
-                                     "hce", "hci"),
+          # as in b2.transport.inputfile (kind_coeff 1 to 7)
+          "Anomalous transport coefficients": ("dna", "dpa", "hci", "hce",
+                                               "vlax", "vlay", "vsa"),
           # by kind: particles, electron energy (with the radiation of
           # B2.5), ion energy, neutral radiation;
           # the B2.5 ones (ionisation, recombination, charge exchange)
@@ -543,9 +687,40 @@ def units_tex(units):
     return re.sub(r"\^(-?\d+)", r"^{\1}", units)
 
 
+# descriptions of the anomalous transport coefficients of b2movies.nc as
+# in the final state, with their units (all in m^2 s^-1 but the pinch
+# velocities; older files give m^-2 s^-1 and m kg^-1 s^-1)
+MOVIE_TEXT = {"dna": "Density-driven particle diffusivity (m^{2} s^{-1})",
+              "dpa": "Pressure-driven particle diffusivity (m^{2} s^{-1})",
+              "hci": "Ion heat diffusivity (m^{2} s^{-1})",
+              "hce": "Electron heat diffusivity (m^{2} s^{-1})",
+              "vlax": "Poloidal pinch velocity (m s^{-1})",
+              "vlay": "Radial pinch velocity (m s^{-1})",
+              "vsa": "Viscosity (m^{2} s^{-1})"}
+
+
 def _movie_text(v):
+    if v.file == 1 and v.name in MOVIE_TEXT:
+        return MOVIE_TEXT[v.name]
     text = v.long or v.name
     return "%s (%s)" % (text, units_tex(v.units)) if v.units else text
+
+
+def _movie_density(q):
+    """A plasma flux of b2movies.nc as a density: the face fluxes, put on
+    the cells by b2plot (mvframe, x or y by the last letter of the name),
+    divided by the projected cell area; the sources of the file are
+    already per m^3 (cdfmovie divides them by the cell volume)."""
+    if q.group != SOLPS_GROUPS[1][0] or q.source not in ("matrix", "vector") \
+            or q.movie != 1:
+        return q
+    text, unit = split_unit(q.description)
+    if not unit or "m^{-" in unit:
+        return q
+    per = ("sxperp m/", "sy m/") if q.source == "vector" else (
+        ("sy m/",) if q.name.endswith("y") else ("sxperp m/",))
+    return replace(q, description="%s (%s)" % (
+        text, density_unit(unit, 2, " ")), per=per)
 
 
 def _movie_partner(v, names):
@@ -650,6 +825,7 @@ def movie_quantities(movies, derived_quantities=(), translate=None):
     extra, extra_vectors = _neutral_movie(movies, translate)
     extra_vectors += _plasma_movie(movies, translate)
     res = solps_order(out + extra + vectors + extra_vectors, first=(DERIVED,))
+    res = [_movie_density(q) for q in res]
     # the neutral triangle quantities by species, as in the plasma table
     at = [i for i, q in enumerate(res)
           if q.group == NEUTRAL_TRIANGLES and q.source == "eirene"]

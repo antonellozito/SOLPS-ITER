@@ -13,7 +13,7 @@ from ..panels.species import chosen_columns, column_names
 from ..tools import chordplots, inspect, measure
 from ..tools.sections import LOOK
 from . import b2time, plots, traces
-from .b2time import B2Time
+from .b2time import AREA_TEXT, B2Time
 from .chords import AMU, GROUPS as CHORD_GROUPS, TRIANGLES, ChordFile, \
     line_sums, ordered
 from .files import B2TIME, TALLIES, latest, netcdf4
@@ -66,6 +66,7 @@ class RunTracing:
         for part in page.parts.values():
             part.chosen.connect(self._chosen)
             part.species.changed.connect(self.redraw)
+            part.area.currentIndexChanged.connect(lambda *_: self.redraw())
         chord = page.parts["chord"]
         chord.set_menu.currentIndexChanged.connect(self._set_chosen)
         chord.sums_changed.connect(lambda: self.redraw())
@@ -311,13 +312,8 @@ class RunTracing:
 
     @staticmethod
     def _x_axes(view, xs):
-        """The x axes of a profile offered (the first one if the one chosen
-        is not)."""
-        axis = view.options.xaxis
-        if axis.currentData() not in xs:
-            axis.blockSignals(True)
-            axis.setCurrentIndex(max(axis.findData(next(iter(xs))), 0))
-            axis.blockSignals(False)
+        """The x axes of a profile offered (rho_p shown first, else the
+        distance from the separatrix: FigureView.allow)."""
         view.options.allow(set(xs))
 
     # -------------------------------------------------------- time traces
@@ -561,8 +557,15 @@ class RunTracing:
                              self.b2time.side_text(b2time.NAMES[place]))
 
     def _profile_shapes(self):
+        """The places of the profiles on the plot: the lines of their cell
+        centres, the targets on their faces (as the time traces)."""
         if self.profile_shapes is None:
-            self.profile_shapes = self.b2time.shapes()
+            shapes = self.b2time.shapes()
+            faces = self._shapes()
+            for k in ("target_w", "target_e"):
+                if k in shapes and k in faces:
+                    shapes[k] = faces[k]
+            self.profile_shapes = shapes
         return self.profile_shapes
 
     def redraw_marks(self):
@@ -627,6 +630,7 @@ class RunTracing:
                            "profiles")
         part.where.show()
         if item is None:
+            part.area.hide()
             part.clear()
             return
         self._profile(part, item)
@@ -636,7 +640,10 @@ class RunTracing:
         cols, species, each = self._species(part, item,
                                             b.species_count(item))
         self._show_all(each is None)
-        a = b.series(item, cols if each is None else each[0][1])
+        areas = b.areas(item)
+        part.area.setVisible(len(areas) > 1)
+        area = part.area.currentData() if len(areas) > 1 else "target"
+        a = b.series(item, cols if each is None else each[0][1], area)
         xs = {"dssep": b.distance(item)}
         line = b.lines.get(item.place)
         if line is not None:
@@ -646,10 +653,10 @@ class RunTracing:
               len(v) == a.shape[1]}
         self._x_axes(part.view, xs)
         draw, header, rows, kind = plots.profile(
-            xs, a if each is None else [(name, b.series(item, c))
+            xs, a if each is None else [(name, b.series(item, c, area))
                                         for name, c in each],
-            box, self.page.show_all.isChecked(), item.title(species),
-            item.unit)
+            box, self.page.show_all.isChecked(), item.title(species) + (
+                ", " + AREA_TEXT[area] if areas else ""), item.unit)
         part.view.set_figure(draw, header, rows, kind=kind, name=item.label)
         part.show_plot(True, box.time_text())
 

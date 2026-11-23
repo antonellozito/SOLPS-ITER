@@ -217,22 +217,27 @@ class FigureOptions(QtWidgets.QGroupBox):
         axes.addWidget(self.xaxis, 2, 1, 1, 3)
         self.kind = None
         self.xaxes = True               # the x axis menu with the lines
+        self.picked = None              # the x axis chosen in the menu
 
     def allow(self, keys):
-        """The x axes offered for this line (the others greyed out; one
-        chosen and no longer offered: the first offered, the distance
-        along the line for a chord)."""
+        """The x axes offered for this line (the others greyed out) and
+        the one shown: the one chosen in the menu if offered, else rho_p
+        (offered with rzpsi.dat, where the line is a function of it),
+        else the distance from the separatrix, else the first offered."""
         model = self.xaxis.model()
         for i, (_, key) in enumerate(XAXES):
             model.item(i).setEnabled(key in keys)
-        if self.xaxis.currentData() not in keys:
+        order = [self.picked, "rhop", "dssep"] + [k for _, k in XAXES]
+        want = next((k for k in order if k in keys), XAXES[0][1])
+        if self.xaxis.currentData() != want:
             self.xaxis.blockSignals(True)
-            self.xaxis.setCurrentIndex(next((i for i, (_, k) in enumerate(
-                XAXES) if k in keys), 0))
+            self.xaxis.setCurrentIndex(self.xaxis.findData(want))
             self.xaxis.blockSignals(False)
 
     def _xaxis(self, *_):
-        """Another x axis: its limits automatic again."""
+        """Another x axis (chosen in the menu): its limits automatic
+        again."""
+        self.picked = self.xaxis.currentData()
         for e in self.limits[:2]:
             e.clear()
         self.changed()

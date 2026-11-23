@@ -5,6 +5,8 @@ the time traces) and in categories. B2.5 names the targets by the edges
 of the grid (Western, Eastern): the inner one is the one at the smaller
 major radius."""
 
+import re
+
 import numpy as np
 
 from .files import B2TIME, Item, NcFile, summed, unit
@@ -31,6 +33,20 @@ CATEGORIES = (("ne", "na", "te", "ti", "po"),
               ("dn", "dp", "vx", "vy", "vs", "ke", "ki"),
               ("dab", "tab", "dmb", "tmb"))
 LEFT_OUT = ("an", "mn", "lh", "ln")
+# the fluxes along the targets shown as densities: divided by the target
+# areas of b2time.nc (fcS of the target faces: the flux density on the
+# target surface, as flush probes measure it) or by the poloidal contact
+# areas (fcS |fcQalf|: the poloidal flux density)
+TARGET_AREAS = {"l": {"target": "dsLT", "contact": "dsLP"},
+                "r": {"target": "dsRT", "contact": "dsRP"}}
+AREA_TEXT = {"target": "per target area",
+             "contact": "per poloidal contact area"}
+
+
+def flux_density_unit(u):
+    """'s^-1' -> 'm^-2 s^-1', 'W' -> 'W m^-2' (the plain units)."""
+    return u.replace("s^-1", "m^-2 s^-1", 1) if "s^-1" in u else \
+        (u + " m^-2").strip()
 
 
 class B2Time(NcFile):
@@ -71,12 +87,40 @@ class B2Time(NcFile):
                 "Western", w).replace("Eastern", e)
         return text
 
+    def areas(self, item):
+        """The areas ("target", "contact") the flux profile item can be
+        divided by (none: not a flux along a target)."""
+        base, letter = item.name.split("3d")[0], item.name.split("3d")[-1]
+        if base not in CATEGORIES[1]:
+            return ()
+        return tuple(k for k, v in TARGET_AREAS.get(letter, {}).items()
+                     if v in self.nc.variables)
+
+    def _area(self, name, kind="target"):
+        """The areas (n,) of kind dividing the flux profile name, or None
+        (not a flux along a target)."""
+        base, letter = name.split("3d")[0], name.split("3d")[-1]
+        area = TARGET_AREAS.get(letter, {}).get(kind)
+        if base not in CATEGORIES[1] or area not in self.nc.variables:
+            return None
+        a = self.array(self.nc[area]).ravel()
+        return np.where(a > 0, a, np.nan)
+
     def _item(self, name, group, where, place):
         var = self.nc[name]
         long = str(getattr(var, "long_name", name)).strip()
         what = long.rsplit(", ", 1)[0] if ", " in long else long
         dim = next((d for d in var.dimensions if d in SPECIES), "")
-        return Item(name, what[:1].upper() + what[1:], group, unit(var),
+        if name.split("3d")[0] in CATEGORIES[1]:
+            # the plasma fluxes along the targets without "poloidal", the
+            # electron and ion energy fluxes as heat fluxes
+            what = re.sub(r"(?i)^poloidal\s+", "", what)
+            if name.split("3d")[0] in ("fe", "fi"):
+                what = what.replace("energy flux", "heat flux")
+        u = unit(var)
+        if self._area(name) is not None:
+            u = flux_density_unit(u)
+        return Item(name, what[:1].upper() + what[1:], group, u,
                     B2TIME, "profile", dim, 0,
                     self.side_text(where.lower()), place,
                     self.side_text(long))
@@ -131,11 +175,13 @@ class B2Time(NcFile):
                 out[k] = (seg[len(seg) // 2].mean(axis=0), True)
         return out
 
-    def series(self, item, cols=(0,)):
+    def series(self, item, cols=(0,), area="target"):
         """The profiles (nt, n) of the item, its species columns cols
-        summed."""
+        summed; a flux along a target per area (target or contact)."""
         a = self.array(self.nc[item.name])
-        return summed(a, 1, cols) if a.ndim == 3 else a
+        a = summed(a, 1, cols) if a.ndim == 3 else a
+        div = self._area(item.name, area)
+        return a if div is None else a / div
 
     def species_count(self, item):
         return len(self.nc.dimensions[item.dim]) if item.dim else 1

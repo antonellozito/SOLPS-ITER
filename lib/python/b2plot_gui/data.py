@@ -37,6 +37,13 @@ class Request:
     console: list = field(default_factory=list)
     paths: list = field(default_factory=list)   # files of an export
     source: tuple = None        # movie (file, first, last frame)
+    per: tuple = ()             # tokens after the label(s), not in the
+    #                             name and ops of the result (densities)
+
+    @property
+    def key(self):
+        return (self.kind, self.name, self.ops, self.source) + (
+            (self.per,) if self.per else ())
 
 
 class Run:
@@ -77,20 +84,22 @@ class Run:
     def alive(self):
         return not self.bye and "exit" not in self.ended
 
-    def _request(self, kind, name, text, ops=(), source=None):
+    def _request(self, kind, name, text, ops=(), source=None, per=()):
         self.next_id += 1
-        req = Request(self.next_id, kind, name, tuple(ops), source=source)
+        req = Request(self.next_id, kind, name, tuple(ops), source=source,
+                      per=tuple(per))
         self.pending.append(req)
         self.backend.send(text + "%d sync\n" % req.ident)
         return req
 
-    def _lookup(self, kind, name, ops, source=None):
-        key = (kind, name, tuple(ops), source)
+    def _lookup(self, kind, name, ops, source=None, per=()):
+        key = (kind, name, tuple(ops), source) + ((tuple(per),) if per
+                                                  else ())
         if key in self.cache:
             self.cache[key] = self.cache.pop(key)       # most recent
             return self.cache[key]
         for req in self.pending:
-            if (req.kind, req.name, req.ops, req.source) == key:
+            if req.key == key:
                 return req
         return None
 
@@ -128,34 +137,46 @@ class Run:
         return re.sub(r"\{([^}]+)\}", lambda m: cls._movie(
             m.group(1), source) if source else m.group(1), name)
 
-    def field(self, name, eirene=False, ops=(), source=None, wall=False):
+    def field(self, name, eirene=False, ops=(), source=None, wall=False,
+              per=()):
         """Cached Field, or a Request whose result arrives later.
 
         ops are b2plot operations applied after the label, e.g.
         ("0 -1 sumz",) for the sum over the species; source (file,
         first, last) takes the mean of movie frames instead of the
         final state; wall: a field of the wall stack (at the wall
-        elements).
+        elements); per: operations before ops, kept out of the name and
+        ops of the result (the density of a source or a flux).
         """
         source = tuple(source) if source else None
         kind = "wfield" if wall else "efield" if eirene else "field"
-        found = self._lookup(kind, name, ops, source)
+        found = self._lookup(kind, name, ops, source, per)
         if found is not None:
             return found
         cmd = "guiwfld" if wall else "guiefld" if eirene else "guifield"
-        text = " ".join(self._push(name, source, ops, eirene) + [cmd])
-        return self._request(kind, name, text + "\n", ops, source)
+        text = " ".join(self._push(name, source, tuple(per) + tuple(ops),
+                                   eirene) + [cmd])
+        return self._request(kind, name, text + "\n", ops, source, per)
 
-    def vector(self, first, second, eirene=False, ops=(), source=None):
+    def vector(self, first, second, eirene=False, ops=(), source=None,
+               per=()):
         """Vector from two quantities (poloidal and radial for B2.5,
-        Cartesian R and Z for EIRENE); ops apply to both."""
+        Cartesian R and Z for EIRENE); ops apply to both; per: the
+        operations of each component before ops (densities), kept out
+        of the name and ops of the result."""
         source = tuple(source) if source else None
         kind = "evector" if eirene else "vector"
         name = first + " " + second
-        found = self._lookup(kind, name, ops, source)
+        found = self._lookup(kind, name, ops, source, per)
         if found is not None:
             return found
         cmd = "guievect" if eirene else "guivect"
+        if per:
+            words = self._push(first, source, (per[0],) + tuple(ops),
+                               eirene) + self._push(
+                second, source, (per[1],) + tuple(ops), eirene) + [cmd]
+            return self._request(kind, name, " ".join(words) + "\n", ops,
+                                 source, per)
         if source and len(source) == 3 and "{" not in first + second:
             swap = "eswap" if eirene else "swap"
             words = ("'%s' '%s' %d %d %d mvframev" % ((first, second)
@@ -277,7 +298,6 @@ class Run:
         elif req.kind == "init":
             req.result = self.geometry
         if req.result is not None and req.kind != "init":
-            self.cache[(req.kind, req.name, req.ops, req.source)] = \
-                req.result
+            self.cache[req.key] = req.result
             self._trim_cache()
         return req

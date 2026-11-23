@@ -5205,6 +5205,7 @@ The data blocks are:
   \item[edena\_int\_b2] Integral energy carried by atoms over the {\tt B2.5} computational grid ($J$), dimension ({\tt NATM}, {\tt 0:NSTRA})
   \item[edenm\_int\_b2] Integral energy carried by molecules over the {\tt B2.5} computational grid ($J$), dimension ({\tt NMOL}, {\tt 0:NSTRA})
   \item[edeni\_int\_b2] Integral energy carried by test ions over the {\tt B2.5} computational grid ($J$), dimension ({\tt NION}, {\tt 0:NSTRA})
+  \item[erecrad] Radiation rate due to volume recombination of plasma ions ($W$), dimension ({\tt NCV},{\tt NPLS}), from version 20261122 on
 \end{description}
 \end{sloppypar}
 
@@ -16126,13 +16127,13 @@ The number of arrays outputted to {\tt b2movies.nc} is controlled by a series of
   \hline
   \multicolumn{3}{|c|}{If {\tt cdfmovie\_b25\_transport} $\ge$ 1} \\
   \hline
-    dna \index{dna}\index{b2movies.nc, dna} & Particle density-driven diffusivity (for each fluid species) & $m^{-2} s^{-1}$ \\
-    dpa \index{dna}\index{b2movies.nc, dpa} & Particle pressure-driven diffusivity (for each fluid species) & $m^{-2} s^{-1}$ \\
-    hci \index{hci}\index{b2movies.nc, hci} & Ion thermal anomalous diffusivity & $m^{-2} s^{-1}$ \\
-    hce \index{hce}\index{b2movies.nc, hce} & Electron thermal anomalous diffusivity & $m^{-2} s^{-1}$ \\
+    dna \index{dna}\index{b2movies.nc, dna} & Particle density-driven diffusivity (for each fluid species) & $m^2 s^{-1}$ \\
+    dpa \index{dna}\index{b2movies.nc, dpa} & Particle pressure-driven diffusivity (for each fluid species) & $m^2 s^{-1}$ \\
+    hci \index{hci}\index{b2movies.nc, hci} & Ion thermal anomalous diffusivity & $m^2 s^{-1}$ \\
+    hce \index{hce}\index{b2movies.nc, hce} & Electron thermal anomalous diffusivity & $m^2 s^{-1}$ \\
     vlax \index{vlax}\index{b2movies.nc, vlax} & Poloidal anomalous pinch velocity (for each fluid species) & $m s^{-1}$ \\
     vlay \index{vlay}\index{b2movies.nc, vlay} & Radial anomalous pinch velocity (for each fluid species) & $m s^{-1}$ \\
-    vsa \index{vsa}\index{b2movies.nc, vsa} & Anomalous viscosity (for each fluid species) & $m kg^{-1} s^{-1}$ \\
+    vsa \index{vsa}\index{b2movies.nc, vsa} & Anomalous viscosity (for each fluid species) & $m^2 s^{-1}$ \\
   \hline
   \multicolumn{3}{|c|}{If {\tt cdfmovie\_eirene\_state\_variables} $\ge$ 1 (if {\tt Eirene} is used)} \\
   \hline
@@ -16369,13 +16370,13 @@ The number of arrays outputted to {\tt b2chords.nc} is controlled by a series of
   \hline
   \multicolumn{3}{|c|}{If {\tt cdfchord\_b25\_transport} $\ge$ 1} \\
   \hline
-    dna \index{b2chords.nc, dna} & Particle density-driven diffusivity (for each fluid species) & $m^{-2} s^{-1}$ \\
-    dpa \index{b2chords.nc, dpa} & Particle pressure-driven diffusivity (for each fluid species) & $m^{-2} s^{-1}$ \\
-    hci \index{b2chords.nc, hci} & Ion thermal anomalous diffusivity & $m^{-2} s^{-1}$ \\
-    hce \index{b2chords.nc, hce} & Electron thermal anomalous diffusivity & $m^{-2} s^{-1}$ \\
+    dna \index{b2chords.nc, dna} & Particle density-driven diffusivity (for each fluid species) & $m^2 s^{-1}$ \\
+    dpa \index{b2chords.nc, dpa} & Particle pressure-driven diffusivity (for each fluid species) & $m^2 s^{-1}$ \\
+    hci \index{b2chords.nc, hci} & Ion thermal anomalous diffusivity & $m^2 s^{-1}$ \\
+    hce \index{b2chords.nc, hce} & Electron thermal anomalous diffusivity & $m^2 s^{-1}$ \\
     vlax \index{b2chords.nc, vlax} & Poloidal anomalous pinch velocity (for each fluid species) & $m s^{-1}$ \\
     vlay \index{b2chords.nc, vlay} & Radial anomalous pinch velocity (for each fluid species) & $m s^{-1}$ \\
-    vsa \index{b2chords.nc, vsa} & Anomalous viscosity (for each fluid species) & $m kg^{-1} s^{-1}$ \\
+    vsa \index{b2chords.nc, vsa} & Anomalous viscosity (for each fluid species) & $m^2 s^{-1}$ \\
   \hline
   \multicolumn{3}{|c|}{If {\tt cdfchord\_eirene\_state\_variables} $\ge$ 1 (if {\tt Eirene} is used)} \\
   \hline
@@ -17857,6 +17858,7 @@ coordinate index.
   \endlastfoot
     ahal     & \index{b2plot, ahal} Atomic $H_\alpha$ emissivity $(photons.m^{-3}.s^{-1})$ \\
     alf      & \index{b2plot, alf} Thermo-electric coefficient $(\Omega^{-1}.m^{-1})$ \\
+    alfpar   & \index{b2plot, alfpar} Parallel classical thermo-electric coefficient (no flux limiters) $(A.m^{-1}.eV^{-1})$ \\
     alph     & \index{b2plot, alph} Ratio of pressure gradient to critical ballooning value \\
     b        & \index{b2plot, b} Magnetic field component magnitudes $(T)$ \\
     b2br     & \index{b2plot, b2br} Bremsstrahlung losses $(W)$ \\
@@ -17883,6 +17885,8 @@ coordinate index.
     bcna     & \index{b2plot, bcna} Boundary particle source {\em b2stbc\_sna} $(particles.s^{-1})$ \\
     bczt     & \index{b2plot, bczt} Boundary $\exb$ turbulent enstrophy source {\em b2stbc\_szt} $(s^{-3}?)$ \\
     bdcl     & \index{b2plot, bdcl} Boundary cells \\
+    beta     & \index{b2plot, beta} Plasma beta $2 \mu_0 p / B^2$, $p$ the pressure of electrons and charged ions (and external species) \\
+    betae    & \index{b2plot, betae} Electron plasma beta $2 \mu_0 n_e T_e / B^2$ \\
     bix      & \index{b2plot, bix} Bottom neighbour {\em ix} coordinate \\
     biy      & \index{b2plot, biy} Bottom neighbour {\em iy} coordinate  \\
     brch     & \index{b2plot, brch} Recycling charge source {\em b2stbr\_sch} $(A)$ \\
@@ -17932,8 +17936,10 @@ coordinate index.
     dab2     & \index{b2plot, dab2} Atomic density $(m^{-3})$ \\
     dd       & \index{b2plot, dd} Radial component of diamagnetic current $(A)$ \\
     deltab   & \index{b2plot, deltab} Ratio of collision frequency to gyro-frequency \\
+    deltabc  & \index{b2plot, deltabc} Ratio of collision frequency to gyro-frequency $1/(\omega_c \tau)$ with the collision times of {\em taue} and {\em taui} \\
     deltal   & \index{b2plot, deltal} Ratio of Larmor radius to minimum gradient length \\
     deltapar & \index{b2plot, deltapar} Ratio of radial to parallel dynamics \\
+    deltparc & \index{b2plot, deltparc} Ratio of radial to parallel dynamics as {\em deltapar}, with {\em nustarc} and the collision times of {\em taue} and {\em taui} \\
     deltaw   & \index{b2plot, deltaw} Ratio of banana width to minimum gradient length \\
     deltawn  & \index{b2plot, deltawn} Ratio of banana width to density gradient length \\
     deltawt  & \index{b2plot, deltawt} Ratio of banana width to temperature gradient length \\
@@ -18160,12 +18166,15 @@ coordinate index.
     iyne     & \index{b2plot, iyne} Radial cell index {\em iy} is not equal to \\
     joul     & \index{b2plot, joul} Joule heating term {\em b2sihs\_joule} $(W)$ \\
     ke       & \index{b2plot, ke} Parallel kinetic energy $(J)$ \\
+    kpe      & \index{b2plot, kpe} Parallel classical electron heat diffusivity (no flux limiters) $(m^2.s^{-1})$ \\
+    kpi      & \index{b2plot, kpi} Parallel classical ion heat diffusivity (no flux limiters) $(m^2.s^{-1})$ \\
     kt       & \index{b2plot, kt} $\exb$ turbulent kinetic energy $(eV)$ \\
     kt0      & \index{b2plot, kt0} $\exb$ turbulent kinetic energy {\em kt} at previous time step $(eV)$ \\
     kye      & \index{b2plot, kye} Electron heat diffusivity $\chi_e$ $(m^2.s^{-1})$ \\
     kyi      & \index{b2plot, kyi} Ion heat diffusivity $\chi_i$ $(m^2.s^{-1})$ \\
     kyi0     & \index{b2plot, kyi0} Total ion heat diffusivity $(m^2.s^{-1})$ \\
     kyn0     & \index{b2plot, kyn0} Fluid neutral heat diffusivity $(m^2.s^{-1})$ \\
+    ldebye   & \index{b2plot, ldebye} Debye length $\sqrt{\varepsilon_0 T_e / (n_e e^2)}$ $(m)$ \\
     lix      & \index{b2plot, lix} Left neighbour poloidal index {\em leftix} \\
     liy      & \index{b2plot, liy} Left neighbour radial index {\em leftiy} \\
     lnlam    & \index{b2plot, lnlam} Coulomb logarithm \\
@@ -18199,6 +18208,7 @@ coordinate index.
     nua      & \index{b2plot, nua} Total collision frequency $(s^{-1})$ \\
     nuab     & \index{b2plot, nuab} Two species collision frequency $(s^{-1})$ \\
     nustar   & \index{b2plot, nustar} Normalized collisionality \\
+    nustarc  & \index{b2plot, nustarc} Normalized collisionality $q R / ((1-f_c)^3 \lambda)$ with the mean free paths $\lambda = v_{th} \tau$ of {\em taue} and {\em taui} (closed flux surfaces only) \\
     omega    & \index{b2plot, omega} Gyro-frequency $(rad.s^{-1})$ \\
     p*       & \index{b2plot, p*} Dynamic pressure $(Pa)$ \\
     pbal     & \index{b2plot, pbal} Particle balance \\
@@ -18227,6 +18237,7 @@ coordinate index.
     rcxn     & \index{b2plot, rcxn} Particle neutral losses ({\em rcxna}) $(s^{-1})$ \\
     rdi      & \index{b2plot, rdi} {\em RESDI} (\SOLPSfour runs) \\
     rdi1     & \index{b2plot, rdi1} {\em RESDI1} (\SOLPSfour runs) \\
+    recrad   & \index{b2plot, recrad} Power loss due to recombination radiation ({\tt fort.44} {\em erecrad}, on the species of the recombining ion) $(W)$ \\
     ree      & \index{b2plot, ree} Electron energy equation residuals $(W)$ \\
     refa     & \index{b2plot, refa} Radial atomic energy flux $(W.m^{-2})$ \\
     refm     & \index{b2plot, refm} Radial molecular energy flux $(W.m^{-2})$ \\
@@ -18269,6 +18280,7 @@ coordinate index.
     shieppl  & \index{b2plot, shieppl} Eirene ion energy source, recombination {\em shi0\_eir\_eppl} $(W)$ \\
     shn      & \index{b2plot, shn} Fluid neutral energy sources $(W)$ \\
     sig      & \index{b2plot, sig} Anomalous conductivity $(\Omega^{-1}.m^{-1})$ \\
+    sigpar   & \index{b2plot, sigpar} Parallel classical electrical conductivity (no flux limiters) $(\Omega^{-1}.m^{-1})$ \\
     skt      & \index{b2plot, skt} $\exb$ turbulent energy sources $(W)$ \\
     smaf     & \index{b2plot, smaf} Parallel momentum source from friction {\em b2npmo\_smaf} $(N)$ \\
     smag     & \index{b2plot, smag} Parallel momentum source from pressure gradient {\em b2npmo\_smag} $(N)$ \\
@@ -18300,6 +18312,9 @@ coordinate index.
     szt      & \index{b2plot, szt} $\exb$ turbulent enstrophy sources $(s^{-3}?)$ \\
     tab2     & \index{b2plot, tab2} Neutral atom temperature $(eV)$ \\
     ta\_ext  & \index{b2plot, ta\_ext} External species temperature $(eV)$ \\
+    taue     & \index{b2plot, taue} Electron collision time (electrons on all ions) of the classical electron transport {\em b2tqce} $(s)$ \\
+    taueq    & \index{b2plot, taueq} Electron-ion temperature equilibration time, $1.5\,n_e (T_e - T_i)$ over the energy exchange rate density of {\em b2treq} $(s)$ \\
+    taui     & \index{b2plot, taui} Ion collision time (each ion species on all ions) of the classical ion transport {\em b2ttia} $(s)$ \\
     te       & \index{b2plot, te} Electron temperature $(eV)$ \\
     te0      & \index{b2plot, te0} Electron temperature {\em te} at previous time step $(eV)$ \\
     ti       & \index{b2plot, ti} Ion temperature $(eV)$ \\
@@ -18332,6 +18347,7 @@ coordinate index.
     vexb.y   & \index{b2plot, vexb.y} Radial component of ion $\exb$ drift velocity $(m.s^{-1})$ \\
     visa     & \index{b2plot, visa} Viscous heating term {\em b2sihs\_visa} $(W)$ \\
     visc     & \index{b2plot, visc} Viscosity $(m.kg^{-1}.s^{-1})$ \\
+    vispar   & \index{b2plot, vispar} Parallel classical viscosity (no flux limiters) $(m^2.s^{-1})$ \\
     vlax     & \index{b2plot, vlax} Poloidal pinch velocity $(m.s^{-1})$ \\
     vlay     & \index{b2plot, vlay} Radial pinch velocity $(m.s^{-1})$ \\
     vol      & \index{b2plot, vol} Cell volume $(m^3)$ \\
@@ -18347,7 +18363,8 @@ coordinate index.
     wb       & \index{b2plot, wb} Width of the banana orbit $(m)$ \\
     wce      & \index{b2plot, wce} Electron cyclotron frequency $\omega_{ce}$ $(rad.s^{-1})$ \\
     wci      & \index{b2plot, wci} Ion cyclotron frequency $\omega_{ci}$ $(rad.s^{-1})$ \\
-    wpe      & \index{b2plot, wpe} Plasma frequency $\omega_{pe}$ $(rad.s^{-1})$ \\
+    wpe      & \index{b2plot, wpe} Electron plasma frequency $\omega_{pe}$ $(rad.s^{-1})$ \\
+    wpi      & \index{b2plot, wpi} Ion plasma frequency $\omega_{pi}$ of each ion species $(rad.s^{-1})$ \\
     ww       & \index{b2plot, ww} Toroidal velocity ({\em ww}) $(m.s{-1})$ \\
     xymap    & \index{b2plot, xymap} Index of wall segment {\em xymap} \\
     za\_ext  & \index{b2plot, za\_ext} External species charge $(amu)$ \\
