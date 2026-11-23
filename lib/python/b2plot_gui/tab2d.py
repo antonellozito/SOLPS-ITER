@@ -12,7 +12,6 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from . import catalog, presets, runstate, scaling, theme
-from .plot import shapes
 from .plot.canvas import Plot2D
 from .plot.styles import LAYERS
 from .model import split_unit
@@ -23,12 +22,14 @@ from .panels.plotarea import (READOUT, Columns, PlotCommands, Readout,
                               ScaledCanvas)
 from .panels.calculator import CalculatorDialog
 from .panels.quantity import QuantityPanel
+from .plot3d.mode import Mode3D
 from .panels.species import ALL, SUM, chosen_columns, column_names
 from .panels.timebox import BALANCES, PAGES, TRACING
 from .output.actions import TabOutput
 from .output.movie import MovieFrames
 from .tools import cellfiles, equilibrium, inspect, regions
 from .tools.control import Tools
+from .tools.wallprofile import WallProfile
 from .balances.picker import BalanceTool
 from .timedata.tracing import RunTracing
 
@@ -93,7 +94,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.style_changed.connect(self._options_changed)
         self.quantity.seed_line.connect(
             lambda on: self.tools.bar.set_mode("seeds" if on else None))
-        self.quantity.streams.seed_preset.connect(self._seed_preset)
         self.quantity.calculator.connect(self.open_calculator)
         self.time_box = self.quantity.time_box
         self.time_box.source_changed.connect(self._source_changed)
@@ -117,6 +117,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.tools.bar.mode == "seeds"))
         self.quantity.sections.addWidget(self.tools.chords_section)
         self.quantity.sections.addWidget(self.tools.stats_section)
+        self.wall_profile = WallProfile(self.settings)  # under all
+        self.wall_profile.hide()
+        self.quantity.main_part.layout().addWidget(self.wall_profile)
         self.quantity.chords_button.toggled.connect(
             lambda on: self.tools.open_section("chords" if on else None))
         self.quantity.stats_button.toggled.connect(
@@ -133,6 +136,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         cl = QtWidgets.QVBoxLayout(centre)
         cl.setContentsMargins(4, 0, 6, 0)
         cl.addWidget(self.canvas, 1)
+        self.centre_layout = cl         # the 3D view there too
         self.masks = MasksPanel()
         self.mask_keys = []             # the masks drawn
         self.masks.changed.connect(self._masks_changed)
@@ -165,8 +169,25 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.page_slot.addWidget(self.tracing.page)
         self.quantity.page_slot.addWidget(self.balance.page)
         self.quantity.show_page(None)
-        self.columns = Columns((left, centre, self.commands,
-                                _scrolled(right)), COLUMNS, SPACE)
+        options = QtWidgets.QWidget()   # the View menu (2D, 3D) over them
+        ol = QtWidgets.QVBoxLayout(options)
+        ol.setContentsMargins(0, 6, 0, 0)
+        ol.setSpacing(6)
+        self.columns = Columns((left, centre, self.commands, options),
+                               COLUMNS, SPACE)
+        self.mode3d = Mode3D(self)
+        rl.insertWidget(0, self.mode3d.options)
+        options_area = _scrolled(right)     # never scrolled sideways, its
+        options_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        options_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self._plot_top = QtWidgets.QHBoxLayout()   # width fixed; the
+        self._plot_top.setContentsMargins(0, 0, 0, 0)   # Plot group as wide
+        self._plot_top.addWidget(self.mode3d.box)       # as the boxes under
+        ol.addLayout(self._plot_top)                    # it (_align_plot)
+        ol.addWidget(options_area, 1)
+        self._options_layout = ol
+        self._options_area = options_area
+        options_area.viewport().installEventFilter(self)
         for column in (self.quantity, right):  # never scrolled sideways
             scaling.squeezable(column)
         lay = QtWidgets.QHBoxLayout(self)
@@ -204,12 +225,14 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _layer_changed(self, key, style):
         self.plot.set_layer(key, style)
+        self.mode3d.follow()
         self.settings.setValue("layers2d", json.dumps(
             {k: dict(s.__dict__) for k, s in self.layers.styles().items()}))
         self.canvas.draw_idle()
 
     # ---------------------------------------------------------------- run
     def set_run(self, run):
+        self.mode3d.reset()             # its data belong to the run before
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.vector_wanted = self.vector_data = None
         self.wall_wanted = self.wall_data = self.overlay_wanted = None
@@ -367,6 +390,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                                  BALANCES: self.balance.page}.get(page))
         self.balance.set_shown(page == BALANCES)
         self.tracing.set_shown(page == TRACING)
+        self.mode3d.set_allowed(page is None)   # Final state, Run movies
 
     def _source_changed(self):
         """Another tab: what the tab left plotted goes, the plot of the
@@ -397,8 +421,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _chosen(self, q):
         """A plasma quantity chosen in the tree, None: no plasma plot (the
-        vector and wall plots stay)."""
+        vector and wall plots stay, not in the 3D view)."""
         self.wanted = q
+        if q is not None:
+            self.mode3d.chosen("plasma")
         self._set_plotted()
         if q is None:
             self.data, self.odata = None, {}
@@ -430,8 +456,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _vector_chosen(self, q):
         """A vector quantity chosen in its tree, None: no vector plot (the
-        plasma and wall plots stay)."""
+        plasma and wall plots stay, not in the 3D view)."""
         self.vector_wanted = q
+        if q is not None:
+            self.mode3d.chosen("vector")
         if q is None or not self._vector_loaded():
             self.vector_data = None
         if q is not None and q.movie and self.wanted is None:
@@ -493,14 +521,17 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         m = self.plot.vector_mappable
         if m is not None:
             self.quantity.set_vector_range(m.norm.vmin, m.norm.vmax)
+        self.mode3d.follow()
         self.tools.data_changed()       # the chords and the inspector
         self.canvas.draw_idle()
         return args is not None
 
     def _wall_chosen(self, q):
         """A wall quantity chosen in its tree, None: no wall plot (the
-        plasma and vector plots stay)."""
+        plasma and vector plots stay, not in the 3D view)."""
         self.wall_wanted = q
+        if q is not None:
+            self.mode3d.chosen("wall")
         if self.wall_data is not None and (q is None or
                                            self.wall_data.name != q.name):
             self.wall_data = None
@@ -577,7 +608,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             m = self.plot.wall_mappable
             if m is not None:
                 self.quantity.set_wall_range(m.norm.vmin, m.norm.vmax)
+        self.mode3d.follow()
         self.tools.data_changed()       # the inspector
+        self.wall_profile.follow(self)
         self.canvas.draw_idle()
 
     def _source(self, q):
@@ -704,6 +737,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         tail = " ".join(lines[-3:])
         if role == "tools":
             self.tools.deliver(data)
+            self.wall_profile.follow(self)  # the wall areas
+            return
+        if role == "view3d":
+            self.mode3d.data.deliver(q, data)
             return
         if role == "frames":            # all the frames of the chords
             self.tools.frame_delivered(want, data)
@@ -826,18 +863,6 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         unit = split_unit(q.description)[1] or data.unit
         return self._name_of(q, data) + (" (%s)" % unit if unit else "")
 
-    def _seed_preset(self, key):
-        """Streamline seeds along a curve of the run (plot.shapes.SEEDS)."""
-        if self.run is None:
-            return
-        n = self.quantity.streams.nseeds.value()
-        pts = shapes.seed_points(self.run, key, n, lambda p: np.asarray(
-            self.run.geometry.finder(p[:, 0], p[:, 1])) >= 0)
-        text = dict((k, t) for t, k in shapes.SEEDS)[key]
-        self.status.emit("%d seeds along the %s" % (len(pts), text)
-                         if len(pts) else "No %s in this run" % text)
-        self.quantity.set_seeds([tuple(p) for p in pts])
-
     def species_text(self, data):
         """The species chosen, for the name of the plasma, vector or wall
         data: '' unless data has several species (or b2plot reduced the
@@ -937,6 +962,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             norm = self.plot.overlay_mappable.norm
             self.quantity.set_overlay_range(norm.vmin, norm.vmax)
         self._measures()
+        self.mode3d.follow()
         self.canvas.draw_idle()
 
     def _labels_and_prefetch(self):
@@ -952,20 +978,22 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
     def _measures(self):
         """Chords with a plasma or a vector quantity plotted, Statistics
         with a plasma quantity, Overlay with a plasma quantity that is not
-        contour lines (Inspect cell also on the grid alone); a section
-        open closes without its quantity."""
+        contour lines (Inspect cell also on the grid alone), neither of
+        them in the 3D view; a section open closes without its
+        quantity."""
         plasma = self.run is not None and self.data is not None and \
             self.wanted is not None
         chords = plasma or self.run is not None and \
             self._vector_args() is not None
-        overlay = plasma and self._overlay_allowed()
+        overlay = plasma and self._overlay_allowed() and not self.mode3d.on()
+        stats = plasma and not self.mode3d.on()
         self.quantity.chords_button.setEnabled(chords)
-        self.quantity.stats_button.setEnabled(plasma)
+        self.quantity.stats_button.setEnabled(stats)
         self.quantity.overlay_button.setEnabled(overlay)
         self._set_plotted()             # the overlay options or not
         section = self.tools.section
         if section == "chords" and not chords or \
-                section == "stats" and not plasma or \
+                section == "stats" and not stats or \
                 section == "overlay" and not overlay:
             self.tools.open_section(None)
 
@@ -1058,9 +1086,11 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         else:
             self.redraw()
         self.tools.apply_theme()
+        self.wall_profile.view.apply_theme()
         self.quantity.mark_groups()
         self.balance.apply_theme()
         self.tracing.apply_theme()
+        self.mode3d.follow()
         self.canvas.draw_idle()
 
     def _show_empty(self):
@@ -1072,6 +1102,34 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                              self._mask_title(""), self.label_values())
         self._measures()
         self.canvas.draw_idle()
+
+    def eventFilter(self, obj, event):
+        if obj is self._options_area.viewport() and \
+                event.type() == QtCore.QEvent.Resize:
+            self._align_plot()
+        return False
+
+    def _align_plot(self):
+        """The Plot group ends where the boxes under it end, left of the
+        scroll bar of the right column, as far above the first of them as
+        they are apart (the style puts margins around the frames)."""
+        vp = self._options_area.viewport()
+        top = self.mode3d.box.parentWidget()
+        edge = vp.mapTo(top, QtCore.QPoint(vp.width(), 0)).x()
+        self._plot_top.setContentsMargins(0, 0, max(top.width() - edge, 0),
+                                          0)
+        rl = self._options_area.widget().layout()
+        shown = [w for w in (rl.itemAt(i).widget() for i in range(
+            rl.count())) if w is not None and w.isVisibleTo(self)]
+        apart = [b.y() - a.y() - a.height() for a, b in zip(shown, shown[1:])
+                 if isinstance(a, QtWidgets.QGroupBox) and
+                 isinstance(b, QtWidgets.QGroupBox)]
+        if apart and shown:
+            first = shown[0].mapTo(top, QtCore.QPoint(0, 0)).y()
+            box = self.mode3d.box
+            gap = first - box.mapTo(top, QtCore.QPoint(0, box.height())).y()
+            ol = self._options_layout
+            ol.setSpacing(max(ol.spacing() + apart[0] - gap, 0))
 
     def _align_commands(self, *_):
         """The first command at the height of the top of the plot box, the

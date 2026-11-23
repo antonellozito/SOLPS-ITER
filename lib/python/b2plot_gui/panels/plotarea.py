@@ -183,8 +183,16 @@ class Columns(QtWidgets.QWidget):
         for w in self.widgets:
             w.setParent(self)
 
+    def set_fractions(self, fractions):
+        """Other fractions of the width (0: a column without room)."""
+        self.fractions = list(fractions)
+        self._place()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._place()
+
+    def _place(self):
         x, width, height = 0, self.width(), self.height()
         for i, (w, f, b) in enumerate(zip(self.widgets, self.fractions,
                                           self.before)):

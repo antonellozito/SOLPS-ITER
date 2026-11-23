@@ -532,19 +532,56 @@ def quantities(categories, maps=()):
     return out
 
 
+# wall fluxes of the plasma, on the boundary faces per face area, in the
+# order of the plasma flux groups
+WALL_FLUXES = ("wallflux", "wallfne", "wallfmo", "wallhflx", "wallfhe",
+               "wallfhi", "wallfhn", "wallfhj", "wallfhp", "wallfhm",
+               "wallfnt", "wallfkt", "wallfch")
+# fluxes of the neutrals of EIRENE on its wall (the B2.5 wall elements,
+# the core boundary and the additional surfaces), per element area, in
+# this order
+WALL_NEUTRALS = ("wldna", "wldnm", "wldra", "wldrm", "ewlda", "ewldm",
+                 "ewldea", "ewldem", "ewldt", "wldpa", "wldpm", "ewldrp",
+                 "wldspta", "wldsptm", "wlpump")
+# the net deposited energy flux and its terms in this order, with their
+# texts in this group (the terms of other groups are listed there too)
+DEPOSITED = "Deposited energy fluxes"
+WALL_DEPOSITED = (("walldep", "Net deposited energy flux (W.m^{-2})"),
+                  ("wallhflx", "Plasma energy load (W.m^{-2})"),
+                  ("wallrad", "Radiation heat load (W.m^{-2})"),
+                  ("ewldt", "Neutrals energy load (W.m^{-2})"),
+                  ("ewldrp", "Energy released by recycled ions (W.m^{-2})"))
+# first of their group, in this order: the surface temperature and the
+# incident energy the yields use
+SURFACE = "Surface coefficients"
+WALL_FIRST = ("walltemp", "ei")
 WALL_GROUPS = [       # groups of the wall labels of b2plot, in this order
-    ("Fluxes and loads", r"ei|wallflux|wallhflx|thermev|qevap|qrad"),
-    ("Temperatures", r"walltemp|cooltemp|vaprtemp|vapprs|time"),
-    ("Sputtering and reflection",
-     r"sput\w*|backsca\w*|erosion|deposit|ero_ml|depo_ml|erel|stckcoef"),
+    ("Plasma fluxes", "|".join(WALL_FLUXES)),
+    ("Neutrals fluxes", "|".join(WALL_NEUTRALS)),
+    (DEPOSITED, r"walldep|wallrad"),
+    (SURFACE,
+     r"walltemp|ei|sput\w*|backsca\w*|impdepth|erosion|deposit|ero_ml|"
+     r"depo_ml|erel|stckcoef"),
     ("Geometry", r"wallarea|[rz][12]|walldist|wallngth|nseg|north|south|"
-     r"west|east|ibnd|imap[xy]|plathick"),
-    ("Bulk material", r"kappa\w*|tgdns|cp_b\d|bbdyemis|vapprs_[ab]|"
-     r"sublheat"),
-    ("Coating", r"ckapp\w*|ctgdns|c_cp_b\d|coathick"),
-    ("Layers", r"l(kappa|rho|cp|emis|thick|depth)"),
-    ("Indices", r"i(s)?w\w*")]
+     r"west|east|ibnd|imap[xy]")]
+# order within the groups (the others as listed by b2plot)
+WALL_ORDER = {"Plasma fluxes": WALL_FLUXES, "Neutrals fluxes": WALL_NEUTRALS,
+              DEPOSITED: tuple(n for n, _ in WALL_DEPOSITED),
+              SURFACE: WALL_FIRST}
 WALL_OTHER = "Other wall quantities"
+# material data and state of the plate model (bulk material, coating,
+# deposited layers, temperatures and evaporation), the index masks of
+# the wall elements and layers (iwlt, iswlt, ...), the radiation
+# enhanced sublimation, the monolayer erosion and deposition, the
+# chemical sputtering factor, the sticking coefficient and the layer
+# fractions
+WALL_HIDDEN_RE = re.compile(
+    r"kappa\w*|tgdns|cp_b\d|bbdyemis|vapprs\w*|sublheat|ckapp\w*|ctgdns|"
+    r"c_cp_b\d|coathick|plathick|l(kappa|rho|cp|emis|thick|depth)|"
+    r"cooltemp|"
+    r"vaprtemp|time|qevap|qrad|thermev|i(s)?w\w*")
+WALL_HIDDEN = {"sputres", "ero_ml", "depo_ml", "erel", "stckcoef",
+               "sputfrac"}
 
 
 def _wall_group(name):
@@ -559,8 +596,17 @@ def wall_quantities(categories):
     out = [Quantity(n.strip(), describe.WALL.get(n.strip()) or d.strip()
                     or n.strip(), _wall_group(n.strip()), "wall")
            for n, d, _ in dict(categories).get("Wall quantities", [])
-           if n.strip()]
-    return sorted(out, key=lambda q: order.index(q.group))
+           if n.strip() and n.strip() not in WALL_HIDDEN and
+           not WALL_HIDDEN_RE.fullmatch(n.strip())]
+    names = {q.name for q in out}
+    out += [Quantity(n, text, DEPOSITED, "wall") for n, text in WALL_DEPOSITED
+            if n in names and _wall_group(n) != DEPOSITED]
+
+    def key(q):
+        within = WALL_ORDER.get(q.group, ())
+        return (order.index(q.group), within.index(q.name)
+                if q.name in within else len(within))
+    return sorted(out, key=key)
 
 
 # groups of the B2.5 and EIRENE quantities of the movie files and of the

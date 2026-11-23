@@ -3,10 +3,10 @@ vector plot, with their plot types), contour lines, arrows and
 streamlines, each giving its part of the PlotStyle (style_fields); the
 options of the wall plot (WallStyle)."""
 
-from ..plot.shapes import SEEDS
 from ..plot.styles import WallStyle
 from ..plot.vector import NUM_ARROWS
 from ..scaling import Number
+from ..tools import births
 from ...qt import QtWidgets, Signal
 from .glyphs import CmapChooser, LineStyleChooser, WidthChooser
 from .layers import ColorButton, left_form, spin, style_combo
@@ -119,10 +119,12 @@ class WallBox(ColourBox):
         self.strip_style = LineStyleChooser("-")
         self.strip_style.setToolTip("Line style of the strip")
         row = QtWidgets.QHBoxLayout()
-        row.addWidget(QtWidgets.QLabel("Line"))
+        label = QtWidgets.QLabel("Line")
+        row.addWidget(label)
         row.addWidget(self.strip_width, 1)
         row.addWidget(self.strip_style, 1)
         self.layout().insertLayout(0, row)
+        self.line_row = [label, self.strip_width, self.strip_style]
         self._watch((self.strip_width, self.strip_style))
 
     def wall_style(self, columns):
@@ -226,11 +228,11 @@ class ArrowsBox(_Box):
 
 
 class StreamBox(_Box):
-    """Streamline density, line, arrows and seed points (a line drawn on
-    the plot or a preset of the run geometry)."""
+    """Streamline density, line, arrows and where they start (tools.births:
+    in proportion to the magnitude, at random, at random along a line of
+    the run or the line drawn on the plot), how many."""
 
     seed_line = Signal(bool)        # wait for the clicks of the line, or not
-    seed_preset = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__("Streamlines", parent)
@@ -261,15 +263,17 @@ class StreamBox(_Box):
         sf.addRow("Line", row)
         row = QtWidgets.QHBoxLayout()
         self.seed_kind = QtWidgets.QComboBox()
-        for text, key in SEEDS:
+        for text, key in births.KINDS:
             self.seed_kind.addItem(text, key)
         self.seed_kind.setToolTip("Where the streamlines start")
         self.seed_kind.activated.connect(lambda *_: self._seed_kind())
         self.nseeds = QtWidgets.QSpinBox()
         self.nseeds.setRange(2, 500)
-        self.nseeds.setValue(30)
-        self.nseeds.setToolTip("Seeds along the line")
-        self.nseeds.valueChanged.connect(lambda *_: self._seed_kind(False))
+        self.nseeds.setValue(40)
+        self.nseeds.setKeyboardTracking(False)
+        self.nseeds.setToolTip("Streamlines started along the line (over "
+                               "the view the density sets them)")
+        self.nseeds.setEnabled(False)
         row.addWidget(self.seed_kind, 1)
         row.addWidget(self.nseeds)
         row.addWidget(self.markers)
@@ -277,7 +281,10 @@ class StreamBox(_Box):
         row = QtWidgets.QHBoxLayout()
         self.seed_button = QtWidgets.QPushButton("Draw seed line")
         self.seed_button.setToolTip("Then click the two ends of the line on "
-                                    "the plot (click again to cancel)")
+                                    "the plot (click again to cancel); "
+                                    "also where the tracers of the 3D view "
+                                    "can be born")
+        self.seed_button.setEnabled(False)
         self.seed_button.setCheckable(True)
         self.seed_button.clicked.connect(
             lambda on: self.seed_line.emit(bool(on)))
@@ -289,18 +296,18 @@ class StreamBox(_Box):
         sf.addRow(row)
         self.seeds = []
         self._watch((self.stream_style,), (self.markers,),
-                    (self.density, self.stream_width, self.num_arrows),
-                    (self.stream_color,))
+                    (self.density, self.stream_width, self.num_arrows,
+                     self.nseeds), (self.stream_color,))
 
-    def _seed_kind(self, line=True):
-        """A preset gives its seeds at once (and with each new number);
-        the drawn line waits for the clicks of Draw seed line."""
+    def _seed_kind(self):
+        """Streamlines from the new places; the drawn line, if none is
+        drawn yet, waits for the clicks of Draw seed line."""
         key = self.seed_kind.currentData()
         self.seed_button.setEnabled(key == "line")
-        if key != "line":
-            self.seed_preset.emit(key)
-        elif line:
+        self.nseeds.setEnabled(key in births.LINES)
+        if key == "line" and len(self.seeds) < 2:
             self.seed_line.emit(True)
+        self._emit()
 
     def waiting(self, on):
         """Draw seed line shows whether the plot waits for its clicks."""
@@ -318,7 +325,70 @@ class StreamBox(_Box):
                     stream_color=self.stream_color.color(),
                     stream_style=self.stream_style.currentData(),
                     seeds=self.seeds, num_arrows=self.num_arrows.value(),
-                    seed_markers=self.markers.isChecked())
+                    seed_markers=self.markers.isChecked(),
+                    seed_kind=self.seed_kind.currentData(),
+                    seed_count=self.nseeds.value())
+
+
+class TextureBox(_Box):
+    """Flow texture: the noise smeared along the flow lines (line
+    integral convolution), its detail, streaks, contrast, opacity and
+    colours."""
+
+    def __init__(self, parent=None):
+        super().__init__("Texture", parent)
+        sf = left_form(self)
+
+        def ispin(lo, hi, step, value, tip):
+            w = QtWidgets.QSpinBox()
+            w.setRange(lo, hi)
+            w.setSingleStep(step)
+            w.setValue(value)
+            w.setKeyboardTracking(False)
+            w.setToolTip(tip)
+            return w
+        self.detail = ispin(100, 2000, 50, 500, "Pixels of the texture "
+                            "along the longer side of the view")
+        self.length = ispin(2, 200, 2, 20, "Length of the streaks, in "
+                            "pixels each way along the flow")
+        self.grain = ispin(1, 8, 1, 1, "Size of the grains of the noise, "
+                           "in pixels (coarser streaks)")
+        self.contrast = spin(0.2, 5.0, 0.1, 1.0, tip="Contrast of the "
+                             "streaks")
+        self.alpha = spin(0.05, 1.0, 0.05, 1.0, tip="Opacity over the "
+                          "plasma plot")
+        self.magnitude = QtWidgets.QCheckBox("colour by magnitude")
+        self.magnitude.setChecked(True)
+        self.magnitude.setToolTip("Coloured by the magnitude of the vector "
+                                  "(its colour scale), else grey")
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.detail)
+        row.addWidget(QtWidgets.QLabel("Grain"))
+        row.addWidget(self.grain)
+        row.addStretch(1)
+        sf.addRow("Detail", row)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.length)
+        row.addWidget(QtWidgets.QLabel("Contrast"))
+        row.addWidget(self.contrast)
+        row.addStretch(1)
+        sf.addRow("Streaks", row)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.alpha)
+        row.addWidget(self.magnitude)
+        row.addStretch(1)
+        sf.addRow("Opacity", row)
+        self._watch((), (self.magnitude,),
+                    (self.detail, self.length, self.grain, self.contrast,
+                     self.alpha), ())
+
+    def style_fields(self):
+        return dict(tex_detail=self.detail.value(),
+                    tex_length=self.length.value(),
+                    tex_grain=self.grain.value(),
+                    tex_contrast=self.contrast.value(),
+                    tex_alpha=self.alpha.value(),
+                    tex_magnitude=self.magnitude.isChecked())
 
 
 class MaskBox(_Box):

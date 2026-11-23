@@ -10,7 +10,8 @@ from matplotlib.colors import ListedColormap, LogNorm, Normalize, SymLogNorm
 from .. import theme
 
 KINDS_FLAT = ("patch", "contourf", "contour")   # on the R, Z axes
-KINDS_VECTOR = ("quiver", "stream", "quiverstream")
+KINDS_VECTOR = ("quiver", "stream", "quiverstream", "texture",
+                "quivertexture")
 
 
 @dataclass
@@ -36,9 +37,9 @@ LAYERS = {
     "opoints": ("O-points", LayerStyle(False, "#d62728", 8.0)),
     "xpoints": ("X-points", LayerStyle(False, "#d62728", 8.0)),
     "flux": ("Flux surfaces",
-             LayerStyle(False, "#2ca02c", 0.6, ":", 1.0,
+             LayerStyle(False, "#6196f1", 0.6, ":", 1.0,
                         "0.90 0.95 1.00 1.02 1.04 1.06", rho=True)),
-    "midplanes": ("Midplanes", LayerStyle(False, "#1f77b4", 1.5, "--")),
+    "midplanes": ("Midplanes", LayerStyle(False, "#2ca02c", 1.5, "--")),
     "targets": ("Targets", LayerStyle(False, "#ff7f0e", 2.0)),
 }
 LAYER_KEYS = tuple(LAYERS)
@@ -84,7 +85,15 @@ class PlotStyle:
     stream_width: float = 0.8
     stream_color: str = "#1f77b4"
     stream_style: str = "-"
-    seeds: list = field(default_factory=list)
+    seeds: list = field(default_factory=list)   # ends of the line drawn
+    seed_kind: str = "quantity"  # where streamlines start (tools.births)
+    seed_count: int = 40        # how many
+    tex_detail: int = 500       # flow texture: pixels along the view
+    tex_length: int = 20        # streak length (pixels each way)
+    tex_grain: int = 1          # noise grain (pixels)
+    tex_contrast: float = 1.0
+    tex_alpha: float = 1.0      # opacity over the plasma plot
+    tex_magnitude: bool = True  # coloured by the magnitude, else grey
     level_mode: str = "number"  # number, step, list, proportion (b2plot)
     level_step: float = 0.0
     level_list: str = ""

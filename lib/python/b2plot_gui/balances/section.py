@@ -92,6 +92,7 @@ class BalanceSection(Output, QtWidgets.QWidget):
         self.species = SpeciesBox()
         self.areatype = combo(kind.area_types, "Area the fluxes and sources "
                               "are divided by")
+        self.areatype.setCurrentIndex(self.areatype.findData("contact"))
         self.areaend = combo(kind.area_ends, kind.area_tip)
         self.coord = combo(plots.COORDINATES, "Radial coordinate of the "
                            "radial balance and of the plots opened from it")

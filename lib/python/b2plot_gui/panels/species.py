@@ -21,14 +21,19 @@ CHARGE = re.compile(r"([A-Za-z]*)\s*\+?(\d*)")     # D0, D+, N+7, N7+
 
 def default_species(names):
     """Index of the highest charge state of the first species in names
-    (D+ of D0, D+, N0, ...)."""
+    (D+ of D0, D+, N0, ...), among those of its element that follow it
+    directly: not the EIRENE atoms, molecules and test ions after the run
+    species (D2 is no charge state of D)."""
     def parse(n):
         m = CHARGE.match(n)
         charge = int(m.group(2)) if m.group(2) else 1 if "+" in n else 0
         return m.group(1), charge
     first = parse(names[0])[0] if names else ""
-    same = [(parse(n)[1], -i) for i, n in enumerate(names)
-            if parse(n)[0] == first]
+    same = []
+    for i, n in enumerate(names):
+        if parse(n)[0] != first:
+            break
+        same.append((parse(n)[1], -i))
     return -max(same)[1] if same else 0
 
 

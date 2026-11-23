@@ -6,7 +6,10 @@ from dataclasses import replace
 
 import numpy as np
 from matplotlib.cm import ScalarMappable
-from matplotlib.collections import LineCollection, PolyCollection
+from matplotlib.collections import LineCollection, PathCollection, \
+    PolyCollection
+from matplotlib.markers import MarkerStyle
+from matplotlib.transforms import IdentityTransform
 
 from .. import theme
 from . import shapes
@@ -22,6 +25,51 @@ def structure(run):
         if seg is not None and len(seg):
             return seg
     return np.zeros((0, 4))
+
+
+def wall_segments(run, data):
+    """Segments of a wall field: its own, else the wall elements."""
+    seg = getattr(data, "segments", None)
+    return seg if seg is not None else run.layers.get("wall",
+                                                      np.zeros((0, 4)))
+
+
+def wall_values(data, columns):
+    """The values of a wall field drawn: the sum of its columns chosen
+    (default the first)."""
+    last = len(data.columns) - 1
+    return sum(np.asarray(data.values[min(max(c, 0), last)], float)
+               for c in columns or (0,))
+
+
+def _wall_joints(ax, seg, v, norm, cmap, width):
+    """Round dots under a solid wall strip where an element starts at the
+    end of the one before it, as wide as the strip, in the colour of the
+    mean of their values: the square ends of the elements cover them but
+    for the notch at a bend (no element drawn over its neighbours)."""
+    seg = np.asarray(seg, float)
+    if len(seg) < 2:
+        return None
+    length = np.hypot(seg[:, 2] - seg[:, 0], seg[:, 3] - seg[:, 1])
+    gap = np.hypot(seg[1:, 0] - seg[:-1, 2], seg[1:, 1] - seg[:-1, 3])
+    joined = gap <= 1e-4 * max(float(length.max()), 1e-12)
+    a, b = np.ma.masked_invalid(v[:-1]), np.ma.masked_invalid(v[1:])
+    with np.errstate(invalid="ignore"):
+        na, nb = np.ma.filled(norm(a), np.nan), np.ma.filled(norm(b), np.nan)
+    mean = np.where(np.isfinite(na) & np.isfinite(nb), 0.5 * (na + nb),
+                    np.where(np.isfinite(na), na, nb))
+    keep = joined & np.isfinite(mean)
+    if not keep.any():
+        return None
+    dot = MarkerStyle("o")
+    joints = PathCollection(
+        [dot.get_path().transformed(dot.get_transform())],
+        sizes=[float(width) ** 2], offsets=seg[:-1, 2:4][keep],
+        offset_transform=ax.transData, cmap=cmap, norm=norm,
+        linewidths=0.0, zorder=5.19)
+    joints.set_transform(IdentityTransform())     # sizes in points
+    joints.set_array(np.asarray(norm.inverse(mean[keep]), float))
+    return joints
 
 
 class LayerMixin:
@@ -77,11 +125,8 @@ class LayerMixin:
         """A wall field (one value per wall element, WallStyle o) along the
         wall elements, with its own colour scale and colour bar (label,
         default the label of data)."""
-        seg = data.segments if getattr(data, "segments", None) is not None \
-            else self.run.layers.get("wall", np.zeros((0, 4)))
-        last = len(data.columns) - 1
-        v = sum(np.asarray(data.values[min(max(c, 0), last)], float)
-                for c in o.columns or (0,))[:len(seg)]
+        seg = wall_segments(self.run, data)
+        v = wall_values(data, o.columns)[:len(seg)]
         if o.scale == "log":
             v = np.where(v > 0, v, np.nan)
         if not len(v) or not np.isfinite(v).any():
@@ -89,27 +134,29 @@ class LayerMixin:
         st = replace(PlotStyle(), cmap=o.cmap, reverse=o.reverse,
                      scale=o.scale, auto=o.auto, vmin=o.vmin, vmax=o.vmax)
         norm = norm_for(v, st)
-        strip = LineCollection(seg[:len(v)].reshape(-1, 2, 2),
-                               cmap=cmap_for(st, norm), norm=norm,
-                               linewidths=o.width, linestyles=o.style,
-                               capstyle="butt", zorder=5.2)
+        cmap = cmap_for(st, norm)
+        strip = LineCollection(seg[:len(v)].reshape(-1, 2, 2), cmap=cmap,
+                               norm=norm, linewidths=o.width,
+                               linestyles=o.style, capstyle="butt",
+                               zorder=5.2)
         strip.set_array(np.ma.masked_invalid(v))
         self.ax.add_collection(strip, autolim=False)
+        out = [strip]
+        if o.style == "-":
+            joints = _wall_joints(self.ax, seg[:len(v)], v, norm, cmap,
+                                  o.width)
+            if joints is not None:
+                self.ax.add_collection(joints, autolim=False)
+                out.append(joints)
         if o.colorbar:
             self.wall_colorbar(strip, data.label if label is None else
                                label)
-        return strip
+        return out
 
     def _flux_surfaces(self, st):
-        try:
-            lev = sorted(float(v) for v in st.levels.replace(",", " ").split())
-        except ValueError:
-            lev = []
-        if not lev:
-            return None
-        m = self.run.psimap
-        z = np.sqrt(np.clip(m.psin, 0.0, None)) if st.rho else m.psin
-        return self.ax.contour(m.r, m.z, z, levels=lev)
+        """The flux surfaces at the levels of st, on the B2.5 grid only."""
+        lines = shapes.flux_lines(self.run, st)
+        return LineCollection([ln for _, ln in lines]) if lines else None
 
     def _restyle(self, key):
         art, st = self.layer_artists.get(key), self.layer_styles[key]
