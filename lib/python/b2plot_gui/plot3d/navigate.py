@@ -6,7 +6,7 @@ view around the visible point under the cursor (the vertical and
 horizontal angles follow, 180 degrees across the view), the arrow keys or
 W, A, S, D pan (0.3 heights of the view a second, twice as fast with
 shift, a quarter with control). While points are picked, a left click
-gives the point under the cursor instead of panning."""
+(not a drag, which still pans) gives the point under the cursor."""
 
 import numpy as np
 
@@ -18,6 +18,7 @@ SPRINT, PRECISION = 2.0, 0.25   # with shift, with control
 WHEEL = (1.03, 0.90, 1.10)      # zoom a wheel step, at least, at most
 ORBIT_MODIFIERS = (Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier
                    | Qt.MetaModifier)
+CLICK = 4                       # pixels a click may move (else a drag)
 KEYS = {Qt.Key_W: "up", Qt.Key_Up: "up", Qt.Key_S: "down",
         Qt.Key_Down: "down", Qt.Key_A: "left", Qt.Key_Left: "left",
         Qt.Key_D: "right", Qt.Key_Right: "right", Qt.Key_Shift: "sprint",
@@ -38,6 +39,9 @@ class Navigator(QtCore.QObject):
         self.view, self.w = view, widget
         self.pan_last = self.orbit_last = None
         self.pick = None                # picking: called with each point
+        self.pick_faces = False         # picking on the cut faces only
+        self.press = None               # where the left button went down
+        #                                 (a click without a drag: a pick)
         self.keys = set()
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(16)
@@ -72,11 +76,7 @@ class Navigator(QtCore.QObject):
         if t == E.MouseButtonPress:
             self.w.setFocus(Qt.MouseFocusReason)
             b = event.button()
-            if self.pick is not None and b == Qt.LeftButton and not \
-                    event.modifiers() & ORBIT_MODIFIERS:
-                self.pick(self.world_at(event.position()))
-                event.accept()
-                return True
+            self.press = event.position() if b == Qt.LeftButton else None
             if b in (Qt.LeftButton, Qt.RightButton) and \
                     event.modifiers() & ORBIT_MODIFIERS:
                 self.orbit_last = event.position()
@@ -101,6 +101,13 @@ class Navigator(QtCore.QObject):
             event.accept()
             return True
         if t == E.MouseButtonRelease:
+            p, self.press = self.press, None
+            if self.pick is not None and p is not None and \
+                    self.orbit_last is None and \
+                    event.button() == Qt.LeftButton and \
+                    (event.position() - p).manhattanLength() <= CLICK:
+                self.pick((self.face_at if self.pick_faces else
+                           self.world_at)(p))
             self.pan_last = self.orbit_last = None
             self.w.setCursor(Qt.CrossCursor if self.pick else
                              Qt.OpenHandCursor)
@@ -181,13 +188,20 @@ class Navigator(QtCore.QObject):
             self._shift(before - after)
         self._done()
 
-    def start_pick(self, done):
-        """The next left clicks call done with the point under the cursor
-        (world_at) instead of panning; None: panning again."""
-        self.pick = done
+    def start_pick(self, done, faces=False):
+        """The next left clicks (not drags, which still pan) call done
+        with the point under the cursor (world_at; faces: only on a cut
+        face, face_at); None: no more."""
+        self.pick, self.pick_faces = done, faces
         self.w.setCursor(Qt.CrossCursor if done else Qt.OpenHandCursor)
 
-    def world_at(self, p):
+    def face_at(self, p):
+        """The point (x, y, z) under the cursor on a cut face of the
+        sector, within the extent (R, Z) of the run, the nearest one the
+        view ray meets (whatever is in front of it); None if none."""
+        return self.world_at(p, faces=True)
+
+    def world_at(self, p, faces=False):
         """The point (x, y, z) under the cursor: on a cut face of the
         sector, within the extent (R, Z) of the run, if the view ray meets
         it before anything else there; else on the visible surface (the
@@ -206,7 +220,8 @@ class Navigator(QtCore.QObject):
         picker = vtkCellPicker()
         picker.SetTolerance(0.0005)
         hit = None
-        if picker.Pick(x, y, 0.0, r) and picker.GetCellId() >= 0:
+        if not faces and picker.Pick(x, y, 0.0, r) and \
+                picker.GetCellId() >= 0:
             hit = np.asarray(picker.GetPickPosition(), float)
         best, scene = None, self.view.scene
         r0, r1, z0, z1 = scene.snap.box

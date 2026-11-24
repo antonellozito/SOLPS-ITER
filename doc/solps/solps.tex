@@ -18365,7 +18365,7 @@ coordinate index.
     wci      & \index{b2plot, wci} Ion cyclotron frequency $\omega_{ci}$ $(rad.s^{-1})$ \\
     wpe      & \index{b2plot, wpe} Electron plasma frequency $\omega_{pe}$ $(rad.s^{-1})$ \\
     wpi      & \index{b2plot, wpi} Ion plasma frequency $\omega_{pi}$ of each ion species $(rad.s^{-1})$ \\
-    ww       & \index{b2plot, ww} Toroidal velocity ({\em ww}): parallel velocity and $\exb$ and diamagnetic drifts projected on the toroidal direction, positive along the toroidal axis $(m.s^{-1})$ \\
+    ww       & \index{b2plot, ww} Toroidal velocity ({\em ww}): parallel velocity and $\exb$ and diamagnetic drifts projected on the toroidal direction, positive along the Cartesian $Z$ axis (the toroidal axis of the EIRENE vectors), as the ion toroidal velocity given to EIRENE $(m.s^{-1})$ \\
     xymap    & \index{b2plot, xymap} Index of wall segment {\em xymap} \\
     za\_ext  & \index{b2plot, za\_ext} External species charge $(amu)$ \\
     za2\_ext & \index{b2plot, za2\_ext} External species squared charge $(amu)$ \\
@@ -19149,7 +19149,32 @@ at the edge of the computational domain.
     wallngth \index{b2plot, wallngth}  & Wall element length $(m)$ \\
     wallrad  \index{b2plot, wallrad}  & Wall radiation load: power of the radiation of the B2.5 cells (line radiation and bremsstrahlung, radiation of the EIRENE atoms, molecules and test ions, recombination radiation as for {\bf wlld}) and of the additional sources of the DG model (param.dg) reaching each wall element, in toroidal geometry with the lines of sight shadowed by the wall elements, per element area $(W.m^{-2})$ \\
     walltemp \index{b2plot, walltemp}  & Wall surface temperature (without the wall model, that of the EIRENE surface, see below) $(K)$ \\
+    wchanml \index{b2plot, wchanml} & Wall anomalous current {\em fchanml}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchdia \index{b2plot, wchdia} & Wall diamagnetic current {\em fchdia}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchinrt \index{b2plot, wchinrt} & Wall current of inertia and gyroviscosity {\em fchinert}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchn \index{b2plot, wchn} & Wall current of the neutrals {\em fchin}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchp \index{b2plot, wchp} & Wall parallel current {\em fch\_p}, its poloidal part (as {\bf fchp}), positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchvisq \index{b2plot, wchvisq} & Wall current of the heat flux viscosity {\em fchvisq}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchvskt \index{b2plot, wchvskt} & Wall current of the Reynolds stress of the kt model {\em fchviskt}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchvspa \index{b2plot, wchvspa} & Wall current of the parallel viscosity {\em fchvispar}, positive out of the plasma, per face area $(A.m^{-2})$ \\
+    wchvspe \index{b2plot, wchvspe} & Wall current of the perpendicular viscosity {\em fchvisper}, positive out of the plasma, per face area $(A.m^{-2})$ \\
     west \index{b2plot, west}      & Wall elements corresponding to the West boundary \\
+    whecond \index{b2plot, whecond} & Wall conductive electron heat flux {\em fhe\_cond}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    wheconv \index{b2plot, wheconv} & Wall convective electron heat flux {\em fhe\_conv}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whedia \index{b2plot, whedia} & Wall diamagnetic electron heat flux {\em fhe\_dia}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whestr \index{b2plot, whestr} & Wall anomalous convective electron heat flux {\em fhe\_strange}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whethj \index{b2plot, whethj} & Wall thermoelectric electron heat flux {\em fhe\_thermj}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whianml \index{b2plot, whianml} & Wall ion heat flux of the anomalous current {\em fhi\_anml}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whicond \index{b2plot, whicond} & Wall conductive ion heat flux {\em fhi\_cond}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whiconv \index{b2plot, whiconv} & Wall convective ion heat flux {\em fhi\_conv}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whidia \index{b2plot, whidia} & Wall diamagnetic ion heat flux {\em fhi\_dia}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whiinrt \index{b2plot, whiinrt} & Wall ion heat flux of the inertia current {\em fhi\_inert}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whistr \index{b2plot, whistr} & Wall anomalous convective ion heat flux {\em fhi\_strange}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whivisq \index{b2plot, whivisq} & Wall ion heat flux of the q viscosity current {\em fhi\_visq}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whivskt \index{b2plot, whivskt} & Wall ion heat flux of the kt-model current {\em fhi\_viskt}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whivspa \index{b2plot, whivspa} & Wall ion heat flux of the parallel viscosity current {\em fhi\_vispar}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whivspe \index{b2plot, whivspe} & Wall ion heat flux of the perpendicular viscosity current {\em fhi\_visper}, positive out of the plasma, per face area $(W.m^{-2})$ \\
+    whivzh \index{b2plot, whivzh} & Wall Zhdanov viscous ion heat flux {\em fhi\_vzh}, positive out of the plasma, per face area $(W.m^{-2})$ \\
     wldna \index{b2plot, wldna}     & Incident flux of each EIRENE atom species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wldnm \index{b2plot, wldnm}     & Incident flux of each EIRENE molecule species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wldpa \index{b2plot, wldpa}     & Atoms of each species released by backscattered and thermally re-emitted ions on the EIRENE wall, one value per EIRENE surface (see below) $(m^{-2}.s^{-1})$ \\
@@ -19159,6 +19184,16 @@ at the edge of the computational domain.
     wldspta \index{b2plot, wldspta} & Sputtered atoms of each species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wldsptm \index{b2plot, wldsptm} & Sputtered molecules of each species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wlpump \index{b2plot, wlpump}   & Pumped flux of each EIRENE atom, molecule and test ion species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
+    wmocvsa \index{b2plot, wmocvsa} & Wall viscous momentum flux {\em fmo\_cvsa} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
+    wmoflua \index{b2plot, wmoflua} & Wall convected momentum flux {\em fmo\_flua} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
+    wmohybr \index{b2plot, wmohybr} & Wall hybrid correction of the momentum flux {\em fmo\_hybr} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
+    wnach \index{b2plot, wnach} & Wall particle flux carried by the currents {\em fna\_ch} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
+    wnadia \index{b2plot, wnadia} & Wall grad-B drift particle flux {\em fna\_dia} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
+    wnaecrb \index{b2plot, wnaecrb} & Wall $\exb$ drift particle flux {\em fna\_ecrb} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
+    wnananm \index{b2plot, wnananm} & Wall density diffusion particle flux {\em fna\_nanom} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
+    wnapanm \index{b2plot, wnapanm} & Wall pressure diffusion particle flux {\em fna\_panom} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
+    wnapll \index{b2plot, wnapll} & Wall parallel particle flux {\em fna\_pll} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
+    wnapnch \index{b2plot, wnapnch} & Wall pinch particle flux {\em fna\_pinch} of each species, positive out of the plasma, per face area $(m^{-2}.s^{-1})$ \\
     z1 \index{b2plot, z1}        & Start $Z$ position of wall element $(m)$ \\
     z2 \index{b2plot, z2}        & End $Z$ position of wall element $(m)$ \\
   \hline
@@ -19798,17 +19833,76 @@ The {\bf quantity panel} (left):
   the last three also in their own groups; {\tt Surface coefficients};
   {\tt Geometry}. A wall quantity is drawn as a strip along the wall
   (an EIRENE wall quantity along the elements of the EIRENE wall), with a
-  plasma quantity or alone; the grazing angle ({\tt graze}, along the
-  wall and target faces of the B2.5 grid) is among the geometry; a click
+  plasma quantity or alone. The {\tt Geometry} group starts with three
+  quantities along the wall and target faces of the B2.5 grid: the
+  field lines grazing angle ({\tt graze}), and the parallel and the
+  poloidal wall to wall connection lengths (the lengths of the flux tube
+  of the cell of each face, as {\tt Inspect cell} gives them); a click
   plots one, a second click clears it. With one plotted, the section
   {\tt Wall profile}, at the bottom of the quantity column (under the
   sections of {\tt Chords}, {\tt Overlay} and {\tt Statistics}), shows it
   against the distance along the wall (as {\bf walldist}; pieces of the
-  wall apart are not joined) on the B2.5 wall elements (an EIRENE wall
+  wall apart are not joined; with {\tt Show midplanes and strikepoints}
+  (off at first) dotted vertical lines with their names (a
+  row of the plot options each, its name in its colour) at
+  the inner and outer midplane, where the lines {\tt RZIMP} and
+  {\tt RZOMP} of {\tt b2.user.parameters} meet the wall, and at the two
+  strike points of each X-point, where the separatrix meets the wall
+  nearest to it away from the O-point: {\tt IMP}, {\tt OMP}, {\tt ISP},
+  {\tt OSP}, with {\tt lower} and {\tt upper} with two divertors, and
+  with several X-points in a divertor a number, 1 for the X-point of the
+  lowest $\rho_p$ there, 2 for the next and so on; at most two per
+  X-point: of the
+  branches of its separatrix leaving it towards the divertor (within 120
+  degrees of the direction away from the O-point, reaching the wall
+  within half the size of the machine), the two outermost; with a wall
+  quantity plotted and {\tt Show midplanes and strikepoints} ticked they
+  are also
+  marked on the wall as diamonds, on the
+  2D plot just outside the wall strip and in the 3D view on the cut
+  faces, each in the colour of its vertical line, first that of the
+  separatrices and then the one chosen in its row of the plot options;
+  the elements on each divertor target shaded grey behind the curves,
+  with the name of the target at the bottom: {\tt IL}, {\tt OL},
+  {\tt IU}, {\tt OU} (inner or outer: smaller or larger $R$ than the
+  X-point nearest to the target, lower or upper: below or above the
+  O-point; a number after the name if it repeats), the names of the
+  targets everywhere in the GUI (ends of a field line, time traces,
+  regions of a single or double null); for the wall fluxes
+  {\bf wallflux}, {\bf wallfmo}, {\bf wallfhe}, {\bf wallfhi},
+  {\bf wallfch}, {\bf wallhflx} and {\bf walldep}, {\tt Components}
+  draws the flux as its parts stacked along the wall, the positive
+  values of the parts upwards from zero and the negative ones
+  downwards (the parts with negative values first, nearest to zero), each a band (a row of the plot options, its name on two
+  lines when long, its colour that of the band; parts zero everywhere
+  left out) under the total, with a legend: the parts of the arrows
+  split into physical components, on the wall elements (the wall labels
+  {\bf wna*}, {\bf wmo*}, {\bf whe*}, {\bf whi*}, {\bf wch*}), for
+  {\bf wallhflx} {\bf wallfhe}, {\bf wallfhi}, {\bf wallfhn},
+  {\bf wallfhp}, {\bf wallfhm}, {\bf wallfnt} and {\bf wallfkt}, for
+  {\bf walldep} {\bf wallhflx}, {\bf wallrad}, {\bf ewldt} and
+  $-${\bf ewldrp}; a rest (total minus the parts) as one more band when
+  it is not negligible (the particle flux with drifts); Export writes
+  the parts as well)
+  on the
+  B2.5 wall elements (an EIRENE wall
   quantity on those of its elements), with its integral and average over
-  their area ({\bf wallarea}; for {\tt graze} the area of its faces
+  their area ({\bf wallarea}; for those three the area of their faces
   turned around the axis) above it, {\tt Save plot}, {\tt Export} and
-  the plot options of a profile;
+  the plot options of a profile (the $x$ limits typed kept for every
+  wall quantity, the $y$ limits automatic again for another quantity
+  or species);
+\item the profiles along a line (chords, field line, wall profile, the
+  profiles and chords of Run tracing) have, at the end of the options of
+  each curve, {\tt Smooth} (off at first): the curve drawn through a
+  moderate smoothing spline (second differences penalised, cut-off
+  period a fortieth of the points of each run of values, in the
+  logarithm for positive values over more than two decades, drawn
+  through a monotone cubic), which keeps peaks and holes in place and
+  most of their height; the values exported are those computed. The
+  {\tt Smooth} of the wall profile also smooths the wall strip, on the
+  2D plot and in the 3D view: its colours from the profile along the
+  wall smoothed so, each element drawn in four pieces;
 \item the species, in the title of each tree, as
   {\tt Plasma quantity (species: \ldots)}: a menu of its own for the
   plasma, the vector and the wall quantity plotted, grey without a
@@ -19866,7 +19960,24 @@ How the plot looks is set in the right column, from the top:
   {\tt cont}; in one colour with contour lines);
 \item with a vector quantity, the {\tt Vector plot options}: the plot
   type, a menu: quiver (at first), streamlines, quiver and streamlines,
-  flow texture, or quiver and flow texture; the colour scale of the
+  flow texture, quiver and flow texture, or tracers; with quiver, the
+  vector drawn as its components, one split at a time (the plot type,
+  the colour scale and the colour and same-length options of the arrows
+  then greyed out): {\tt Split into poloidal/radial components} (the
+  poloidal one along the poloidal field of each cell, the radial one the
+  rest; {\tt horizontal/vertical} for the EIRENE vectors), or, for the
+  total fluxes {\tt fnax fnay}, {\tt fmox fmoy}, {\tt fhtx fhty},
+  {\tt fhex fhey}, {\tt fhix fhiy} and {\tt fchx fchy},
+  {\tt Split into physical components}, the parts \btwoplot gives (for
+  example the parallel, anomalous, $E\times B$, diamagnetic and current
+  parts of the particle flux; the electron, ion, electrostatic,
+  potential, kinetic and pressure-work parts of the total energy flux),
+  each shown or not (a check box each, zero ones greyed out); where they
+  do not add up to the total (the particle flux with drifts, whose parts
+  B2.5 adds up to {\tt fna\_mdf} + {\tt fnaPSch}), the rest, total
+  minus the parts, in black with its size in percent. The components
+  are arrows of their own colours at the places and on the length scale
+  of the arrows of the vector, with a legend; the colour scale of the
   magnitude: colour map, reversed or not, linear or logarithmic scale,
   fixed or automatic range; the volume regions shown (B2.5 vectors: a
   menu of their own, all at first); then the arrows, the streamlines and
@@ -19887,7 +19998,15 @@ How the plot looks is set in the right column, from the top:
   opacity over the plasma plot, and the colours: lighter and darker
   shades of the colour of the magnitude (with its colour bar), or grey.
   Over the flow texture, the arrows are edged in black and take the colour
-  scale of the texture;
+  scale of the texture. The tracers are those of the 3D view, with the
+  same options ({\tt Tracers}: number, tail, size, speed, where they are
+  born, with {\tt Draw line} on the plot, fade, log speeds, pause) and
+  defaults (but 1000 tracers at first instead of 5000; with a fixed
+  colour range, in 2D and 3D, none where the magnitude is below its
+  minimum: none born there, and one entering there dies at once), moving with the poloidal flow ($R$ and $Z$ components) over
+  the whole extent of the data, the fastest across a quarter of the view
+  in a second; they are kept on zoom and pan, and saved images show them
+  where they are;
 \item with a wall quantity, the {\tt Wall plot options}: width and line
   style of the strip, colour map, reversed or not, linear or logarithmic
   scale, fixed or automatic range;
@@ -19958,7 +20077,7 @@ O-points; the separatrices and the flux surfaces as transparent shells
 at $\rho_p = 1.105$; none for the outermost flux surface, nor for a
 separatrix on a flux surface shown), painted with the plasma quantity
 along them (without one, in the colour of the flux surfaces), with
-their lines on the cut faces,
+their lines on the cut faces (as wide as set in their layers),
 each in the colour of the median of the plasma quantity along it (else in
 the colour of its layer); the midplanes on the cut faces (the B2.5 and
 EIRENE grids are not drawn: their layers are greyed out in the 3D
@@ -19983,7 +20102,11 @@ component; that of a B2.5 vector is reconstructed from its poloidal
 component, along the field line ($\times B_\phi/B_\theta$) or, for drifts
 and anomalous or turbulent transport, perpendicular to the field in the
 flux surface ($\times(-B_\theta/B_\phi)$), chosen by the name of the
-quantity; fluid neutral fluxes have none. While the {\tt Chords} section
+quantity, with $B_\theta = |B_\theta|$ (the poloidal component of a B2.5
+vector is along the poloidal field) and $B_\phi$ signed as the EIRENE $z$
+component; fluid neutral fluxes have none. The toroidal angle of the
+view grows anticlockwise seen from above, the opposite of that of B2.5
+and EIRENE. While the {\tt Chords} section
 is open, its chords are straight lines between their ends ($R$, $Z$,
 toroidal angle), with a ball at the start, a cone at the end and their
 number. The camera, in parallel projection, faces at first the cut face at the
@@ -20008,7 +20131,8 @@ horizontal 0 faces the cut face at the start of the sector),
 that face, fitted as at first) and {\tt Save image} (PNG at twice the
 resolution of the screen);
 {\tt Opacity}, of each group of the view shown (vessel, structure, flux
-surfaces, plasma, wall quantity, tracers, chords), 2 to 100\,\% of its
+surfaces, plasma, wall quantity, tracers, chords, magnetic field), 2 to
+100\,\% of its
 own, and, with a plasma quantity and {\tt rzpsi.dat}, {\tt min} and
 {\tt max} $\rho_p$: the innermost and outermost flux surfaces of the
 plasma quantity, which is cut along them (at first the range of
@@ -20024,8 +20148,8 @@ surface, the first one marked by a red ball; or with {\tt In 2D} on the
 2D plot, shown in place of the 3D view until the two ends are clicked;
 choosing the drawn line without one starts {\tt Draw line}), whether they fade
 away sooner where the magnitude is smaller ({\tt fade}, on at first: ageing faster by the square root of its 98th percentile over
-it, at most 20 times), the speeds true or log-compressed (and the
-colours with them), paused or not; the tracers are shown from the start
+it, at most 20 times), the speeds true or log-compressed (the colours
+follow the scale of the {\tt Vector plot options}), paused or not; the tracers are shown from the start
 as they move later on (run through their longest lifetime first); {\tt Rendering}, the quality of the anti-aliasing (no,
 low: FXAA, medium: MSAA, high: SSAA, at first; MSAA while the vessel or
 the structure is made transparent), smooth shading ({\tt smooth}),
@@ -20125,7 +20249,8 @@ $\rho_{pol}$ and the distance along the chord from the separatrix (with
 logarithmic axes, grid; against the chord number only the colour and
 symbol of the markers and the $y$ axis). The mouse wheel zooms them when
 it starts over them (while it scrolls the column, it goes on scrolling
-over them), dragging moves them. The wheel never changes a menu or a
+over them), dragging moves them, dragging with the right button draws
+a zoom box. The wheel never changes a menu or a
 number box of the window. The seed line of the streamlines (and of the
 tracers of the 3D view) is drawn with {\tt Draw seed line} of the
 streamline options.
@@ -20183,7 +20308,9 @@ while the run is open; the colours of the total balances are shared by
 both plots and the volume on the 2D plot (flux in: its surface, flux out:
 its surface and the walls, sources: the fill and the sides), and the flux
 across the volume, coloured from the one to the other, has both. The mouse wheel zooms a plot
-(never out of the whole plot) and dragging with the left button moves it;
+(never out of the whole plot), dragging with the left button moves it
+and dragging with the right button draws a zoom box (a right click on
+a line opens its style);
 the other plots of the same balance follow in $x$. In the plots of the
 parts and of the terms the equation of the term under the mouse (line or
 legend entry) is shown next to it, simplified from the model equations of B2.5
@@ -20217,15 +20344,31 @@ closed parts empty, filled or hatched in a colour of their own; from
 {\tt structure.dat}, else from {\tt mesh.extra}), the B2.5 grid, the
 EIRENE grid, the separatrices (the structure, the B2.5 grid and the
 separatrices are shown at first), the O-point (of {\tt rzpsi.dat}), the
-X-points, flux surfaces (from {\tt rzpsi.dat}, at
+X-points (the width of their rings around the axis of the 3D view set
+in the last menu of their line, active in the 3D view), flux surfaces
+(from {\tt rzpsi.dat}, at
 levels of $\rho_p$ or of the normalised
 $\psi_N = (\psi-\psi_O)/(\psi_S-\psi_O)$, with the O-point and the
 primary X-point found from the $\psi$ map; drawn only on the B2.5 grid),
 the midplanes (the segments
 {\tt RZIMP} and {\tt RZOMP} of {\tt b2.user.parameters}, where they cross
 the B2.5 grid), the targets (the faces of the target face
-regions, as B2.5 collects them). The chords of the run are drawn from
-the {\tt Chords} section. The trajectories of {\bf traj}
+regions, as B2.5 collects them) and the directions of the field and of
+the plasma current ({\tt Field directions}): in the hole of the grid
+around the O-point, a dot (out of the plot) or a cross (into it) for
+$B_\phi$ and $I_p$ (positive clockwise seen from above, out of the 2D
+plot, section ``Sign conventions''), an arc arrow for $B_\theta$; in
+the 3D view rings at the O-point with cones along $I_p$ and, above it,
+along $B_\phi$, and cones of $B_\theta$ on a circle around it in front
+of the first cut face; the stagnation surface ({\tt Stagnation surf.},
+2D only) of one species (chosen on the line under it, an ion at first),
+where its parallel velocity {\tt ua} is zero, interpolated between the
+grid vertices, over the plot of Final state or of the frame of Run
+movies. The options of a layer (colour, width, style and those on the
+line under it: the fill of the structure, the levels of the flux
+surfaces, the species of the stagnation surface) are greyed out while
+it is not shown. The chords of
+the run are drawn from the {\tt Chords} section. The trajectories of {\bf traj}
 (section~\ref{sec:traj}) are not drawn by the GUI.
 
 The {\bf masks panel}, under the layers, draws regions and labels of
@@ -20245,6 +20388,39 @@ names of the standard topologies of Appendix~\ref{cha:regions}, labels
 and strata by their numbers only. The title names the masks: a cell mask
 covers the quantity, which then loses its title and colour bar; a face
 mask is named after the title of the quantity.
+
+The {\bf field line} section ({\tt Field line}, at the right of
+{\tt Chords}; Final state and Run movies, also without a quantity
+plotted) follows one magnetic field line at a time, with the unit vector
+along $B$ of {\tt b2fgmtry} ({\tt cvEb}, or {\tt bb} along the $x$
+direction of the cell corners {\tt crx}, {\tt cry} of a classical {\tt
+b2fgmtry}) interpolated on a regular $(R, Z)$ grid over the B2.5 grid,
+integrated in poloidal steps of 4\,mm (at most 5\,cm along the line)
+and kept on the flux surface of its start by the $\psi$ of the grid
+vertices (else that of {\tt rzpsi.dat}). With {\tt Pick start} on (at
+first), a click on the B2.5 grid (a drag still pans the plot) traces the
+field line through the point, first anticlockwise in the 2D plot: on a
+closed flux surface one poloidal turn back to the point, else both ways
+to where the line leaves the grid (a target, or the edge of the grid).
+It is drawn as its projection on the poloidal plane, with a dot at the
+point and a square at each end with the length to it, in one colour or
+in a colour map of the parallel length, the poloidal length or the
+toroidal turns from where it starts anticlockwise ({\tt Colour}; the
+colour, or the colour map, the width and the line style under it), with
+a horizontal colour bar in the section. The section gives the
+connection length and, to each end (against and along $B$), its length,
+the target it ends on and the toroidal turns; for a closed line, the
+length and toroidal turns of the poloidal turn ($q$). With a quantity
+plotted (as for the chords: the plasma quantity, else the magnitude of
+the vector one), its profile along the line, anticlockwise (x axis: the
+parallel length, the poloidal length or the toroidal turns; a dotted
+line at the start), its integral and average along the line, {\tt Save
+plot} and {\tt Export}, the colour bar under it. {\tt Clear} removes the
+line. The line is that of both views: in the 3D view it is a helix
+(one poloidal turn on a closed surface) with a ball at the start, from
+the cut face at the start of the sector, or picked there with a click on
+a cut face (the point of the poloidal plane under the cursor; a drag
+still pans), then shown in the 2D plot too.
 
 Export:
 \begin{itemize}

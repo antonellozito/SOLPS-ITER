@@ -14,10 +14,11 @@ from .. import theme
 from ..catalog import Quantity
 from ..model import split_unit
 from ..plot import shapes
-from ..plot.overlays import structure
+from ..plot.overlays import smoothed_strip, structure
+from ..tools.wallprofile import marks
 from ..plot.scalar import node_values
 from ..plot.styles import PlotStyle, cmap_for, norm_for
-from ..tools import births, revolve, vector3d as v3
+from ..tools import births, fieldlines, revolve, vector3d as v3
 from ..tools.tracers import Field
 from ...b2plot import labels
 
@@ -30,6 +31,7 @@ class Snapshot:
     wall_key: object = None
     vector_key: object = None
     chords_key: object = None
+    magnetic_key: object = None
     layers: dict = field(default_factory=dict)
     outer: list = field(default_factory=list)       # vessel, outer loops
     vessel: list = field(default_factory=list)      # other vessel loops
@@ -47,6 +49,7 @@ class Snapshot:
     wall: dict = None
     vector: dict = None
     chords: list = field(default_factory=list)  # (number, end, end, look)
+    magnetic: dict = None       # field line, directions
     lines: dict = field(default_factory=dict)   # tracer births: polylines
     centre: tuple = (1.0, 0.0)
     box: tuple = (0.0, 1.0, -1.0, 1.0)  # R, Z of the 2D plot at the start
@@ -244,9 +247,11 @@ class Data3D(QtCore.QObject):
         s.background = background()
         st = plot.layer_styles
         s.layers = {k: {"visible": bool(v.visible),
-                        "color": mc.to_rgb(v.color)} for k, v in st.items()}
-        layer_key = tuple(sorted((k, v["visible"], v["color"])
-                                 for k, v in s.layers.items()))
+                        "color": mc.to_rgb(v.color), "width": float(v.width),
+                        "ring": float(getattr(v, "ring", 2.0))}
+                    for k, v in st.items()}
+        layer_key = tuple(sorted((k, v["visible"], v["color"], v["width"],
+                                  v["ring"]) for k, v in s.layers.items()))
         self._geometry(run, plot, s)
         s.machine_key = (id(run), layer_key)
         self._plasma(tab, s)
@@ -260,7 +265,21 @@ class Data3D(QtCore.QObject):
                        for k in births.LINES}
             s.vector_key = s.vector_key + (drawn,)
         self._chords(tab, s)
+        s.magnetic, s.magnetic_key = self._magnetic(tab)
         return s
+
+    @staticmethod
+    def _magnetic(tab):
+        """The field line of the 3D view (tools/fieldtool), the directions
+        (their layer shown): a dict and its key."""
+        run, plot = tab.run, tab.plot
+        line = tab.tools.fieldline.for_3d()
+        st = plot.layer_styles["directions"]
+        d = fieldlines.directions(run) if st.visible else None
+        out = dict(line=line, directions=d, dstyle=st)
+        key = (id(run), None if line is None else (id(line[0]),) + tuple(
+            line[1:3]) + (line[3],), repr(st), d is not None)
+        return out, key
 
     @staticmethod
     def _chords(tab, s):
@@ -384,6 +403,7 @@ class Data3D(QtCore.QObject):
         s.plasma_key = (id(f), repr(st), hash(plot.mask.tobytes()), band)
 
     def _wall(self, tab, s):
+        import matplotlib.colors as mc
         pair = tab._wall_pair()
         if pair is None:
             return
@@ -397,18 +417,28 @@ class Data3D(QtCore.QObject):
             v = np.where(v > 0, v, np.nan)
         if not len(v) or not np.isfinite(v).any():
             return
+        seg = np.asarray(seg, float).reshape(-1, 4)[:len(v)]
+        colours = tab.wall_profile.mark_colours()   # midplanes, strike
+        sep = mc.to_rgb(tab.plot.layer_styles["separatrices"].color)
+        points = [(p, mc.to_rgb(colours[n]) if n in colours else sep)
+                  for _, n, p, _ in marks(tab.run, seg)] if \
+            tab.wall_profile.show_marks() else []       # points
+        if getattr(o, "smooth", False) and len(v) > 1:  # as in 2D
+            seg, v = smoothed_strip(seg, v)
         pst = replace(PlotStyle(), cmap=o.cmap, reverse=o.reverse,
                       scale=o.scale, auto=o.auto, vmin=o.vmin, vmax=o.vmax)
         norm = norm_for(v, pst)
-        seg = np.asarray(seg, float).reshape(-1, 4)[:len(v)]
         n = _inward(tab.plot, seg)
         s.wall = dict(segments=seg, normals=n, lifts=_lifts(
             seg, n, structure(tab.run), WALL_LIFT), values=v,
                       cmap=cmap_for(pst, norm),
                       clim=(float(norm.vmin), float(norm.vmax)),
                       log=o.scale == "log",
-                      label=labels.any_to_plain(data.label or label or ""))
-        s.wall_key = (id(data), repr(o))
+                      label=labels.any_to_plain(data.label or label or ""),
+                      marks=points)
+        s.wall_key = (id(data), repr(o), tuple(
+            sorted(s.layers["separatrices"].items())), tuple(
+                sorted(colours.items())), len(points))
 
     def _vector(self, tab, s):
         if tab.vector_wanted is None or tab.vector_data is None or \
@@ -436,14 +466,17 @@ class Data3D(QtCore.QObject):
         s.vector = dict(field=f, cmap=cmap_for(style),
                         range=None if style.auto else (style.vmin,
                                                        style.vmax),
+                        log=style.scale == "log",   # the colour scale
                         label="Tracers: " + name + (
                             " (%s)" % labels.any_to_plain(unit) if unit
                             else ""))
         s.vector_key = (key, style.cmap, style.reverse, style.bw,
-                        style.auto, style.vmin, style.vmax)
+                        style.auto, style.vmin, style.vmax, style.scale)
 
     def _grid(self, tab, v, col):
-        """The vector with its toroidal component, gridded in (R, Z)."""
+        """The vector with its toroidal component, gridded in (R, Z); the
+        toroidal component along the angle of the 3D view (anticlockwise
+        seen from above), the opposite of that of B2.5 and EIRENE."""
         plot = tab.plot
         pos, u, w, tri, nu, nw = plot._vector_data(v, col)
         how = v3.rule(self.q)
@@ -470,6 +503,7 @@ class Data3D(QtCore.QObject):
                 rv = None if ratio.vertex is None else np.asarray(
                     ratio.vertex, float)[0]
                 nt = v3.toroidal(how, nt, nodes(r, rv))
+            nt = -nt        # B2.5 and EIRENE: clockwise seen from above
         box = (float(pos[:, 0].min()), float(pos[:, 0].max()),
                float(pos[:, 1].min()), float(pos[:, 1].max()))
         xs, ys, fields = v3.resample(tri, (nu, nw, nt), box)

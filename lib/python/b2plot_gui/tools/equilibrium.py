@@ -176,7 +176,11 @@ MAPS = (("pitch", "Magnetic pitch"),
         ("fexp", "Poloidal flux expansion relative to the nearest midplane"),
         ("qsafety", "Safety factor"),
         ("shear", "Magnetic shear (m^{-1})"))
-WALL = ("graze", "Grazing angle on the wall (deg)")     # a wall strip
+# wall strips: the grazing angle, the connection lengths of the flux
+# tubes that end on each wall face (as the inspector gives them)
+WALLS = (("graze", "Field lines grazing angle (deg)"),
+         ("lparwall", "Parallel wall to wall connection length (m)"),
+         ("lpolwall", "Poloidal wall to wall connection length (m)"))
 MIDPLANES = ("iimp", "iomp")    # b2plot masks of the midplane cells
 
 
@@ -287,7 +291,8 @@ def field(run, geo, name, ops=()):
 def wall_faces(geo):
     """The wall and target faces of the B2.5 grid (0-based faces between a
     cell of an open flux tube and a guard cell) with their grazing angle
-    (deg) and their segments (n, 4: R, Z of the two vertices)."""
+    (deg), their segments (n, 4: R, Z of the two vertices) and their
+    cells (0-based)."""
     ncv, nfc = len(geo.get("cvX")), len(geo.get("fcS"))
     nci = geo.scalar("nCi")
     cells, q, fb = geo.table("fcCv", nfc), geo.table("fcQalf", nfc), \
@@ -309,7 +314,35 @@ def wall_faces(geo):
         fb[0][f], fb[1][f]) / fb[3][f] * np.abs(q[0][f]), 1.0)))
     x, y = geo.get("vxX"), geo.get("vxY")
     a, b = fv[0][f] - 1, fv[1][f] - 1
-    return f, angle, np.column_stack((x[a], y[a], x[b], y[b]))
+    order, flip = _chained(a, b)        # in order along the wall
+    a, b = np.where(flip, b[order], a[order]), np.where(flip, a[order],
+                                                       b[order])
+    f, angle = f[order], angle[order]
+    return f, angle, np.column_stack((x[a], y[a], x[b], y[b])), inner[f]
+
+
+def _chained(a, b):
+    """Order of the faces (vertices a to b) along the pieces of wall they
+    make (each piece from one of its ends, the faces next to each other
+    sharing a vertex) and which ones run backwards (flip)."""
+    at = {}
+    for k, (p, q) in enumerate(zip(a, b)):
+        at.setdefault(p, []).append(k)
+        at.setdefault(q, []).append(k)
+    left, order, flip = set(range(len(a))), [], []
+    ends = [k for k, (p, q) in enumerate(zip(a, b))
+            if len(at[p]) == 1 or len(at[q]) == 1]
+    while left:
+        k = next((e for e in ends if e in left), min(left))
+        v = a[k] if len(at[a[k]]) == 1 or not len(at[b[k]]) == 1 else b[k]
+        while k is not None:
+            left.discard(k)
+            back = b[k] == v
+            order.append(k)
+            flip.append(back)
+            v = a[k] if back else b[k]          # the far end
+            k = next((j for j in at[v] if j in left), None)
+    return np.array(order, int), np.array(flip, bool)
 
 
 def chain_closed(geo, t, nfc):
@@ -323,9 +356,14 @@ def chain_closed(geo, t, nfc):
     return bool(faces.size) and not (counts == 1).any()
 
 
-def wall_field(geo):
-    """The grazing angle on the B2.5 wall and target faces as a wall
-    Field, drawn as a strip along those faces."""
-    _, angle, seg = wall_faces(geo)
-    return Field(name=WALL[0], label=WALL[1], location="wall", columns=[""],
-                 values=angle[None, :], segments=seg)
+def wall_field(geo, run, name):
+    """The wall quantity name of WALLS on the B2.5 wall and target faces
+    as a wall Field, drawn as a strip along those faces: the grazing
+    angle, or the wall to wall length of the flux tube of the cell of
+    each face (lpar, lpol of maps)."""
+    _, angle, seg, cells = wall_faces(geo)
+    label = dict(WALLS)[name]
+    values = angle if name == "graze" else \
+        maps(run, geo)[name[:4]][cells]
+    return Field(name=name, label=label, location="wall", columns=[""],
+                 values=np.asarray(values, float)[None, :], segments=seg)

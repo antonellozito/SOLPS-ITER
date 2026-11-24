@@ -159,14 +159,16 @@ class LayersPanel(QtWidgets.QGroupBox):
             width = SizeChooser(st.width, MARKER_SIZES, "Marker size (pt)",
                                 {"xpoints": "x"}.get(key, "o")) \
                 if key in NO_STYLE else WidthChooser(st.width)
-            style = style_combo(st.style)
+            style = style_combo(st.style) if key not in NO_STYLE else \
+                WidthChooser(st.ring)       # the ring of the 3D view
+            if key in NO_STYLE:
+                style.setToolTip("Width of the ring around the axis in the "
+                                 "3D view")
             for w in (width, style):        # narrow: the glyph is enough
                 _narrow(w)
-            if key in NO_STYLE:
-                style.setEnabled(False)
             row = dict(check=check, color=color, width=width, style=style,
                        alpha=alpha, levels=None, rho=None,
-                       fill_style=None, fill=None, base=st)
+                       fill_style=None, fill=None, species=None, base=st)
             for c, w in enumerate((check, color, width, style)):
                 grid.addWidget(w, r, c)
             r += 1
@@ -210,6 +212,20 @@ class LayersPanel(QtWidgets.QGroupBox):
                     lambda k=key: self._emit(k))
                 rho.currentIndexChanged.connect(
                     lambda *_, k=key: self._emit(k))
+            if key == "stagnation":     # the species of ua
+                species = QtWidgets.QComboBox()
+                species.setToolTip("Species of the parallel velocity ua "
+                                   "(an ion at first)")
+                _narrow(species)
+                label = QtWidgets.QLabel("    species")
+                label.setProperty("muted", True)
+                grid.addWidget(label, r, 0)
+                grid.addWidget(species, r, 1, 1, 3)
+                r += 1
+                row.update(species=species)
+                species.currentIndexChanged.connect(
+                    lambda *_, k=key: self._emit(k))
+            check.toggled.connect(lambda *_: self._enable())
             check.toggled.connect(lambda *_, k=key: self._emit(k))
             color.changed.connect(lambda *_, k=key: self._emit(k))
             width.valueChanged.connect(lambda *_, k=key: self._emit(k))
@@ -223,15 +239,32 @@ class LayersPanel(QtWidgets.QGroupBox):
         st = replace(row["base"], visible=row["check"].isChecked(),
                      color=row["color"].color(),
                      width=row["width"].value(),
-                     style=row["style"].currentData(),
                      alpha=row["alpha"].value())
+        if key in NO_STYLE:             # the width of the 3D ring
+            st = replace(st, ring=row["style"].value())
+        else:
+            st = replace(st, style=row["style"].currentData())
         if row["levels"] is not None:
             st = replace(st, levels=row["levels"].text(),
                          rho=bool(row["rho"].currentData()))
         if row["fill"] is not None:
             st = replace(st, fill_style=row["fill_style"].currentData(),
                          fill=row["fill"].color())
+        if row["species"] is not None and row["species"].count():
+            st = replace(st, species=row["species"].currentIndex())
         return st
+
+    def set_species(self, names, current):
+        """The species of the stagnation surface (current chosen; the one
+        chosen before kept when the names are the same)."""
+        box = self.rows["stagnation"]["species"]
+        if [box.itemText(i) for i in range(box.count())] == list(names):
+            return
+        box.blockSignals(True)
+        box.clear()
+        box.addItems(list(names))
+        box.setCurrentIndex(current)
+        box.blockSignals(False)
 
     def styles(self):
         return {key: self.style(key) for key in self.rows}
@@ -239,6 +272,12 @@ class LayersPanel(QtWidgets.QGroupBox):
     def set_available(self, available):
         """Disable the layers the run does not have (e.g. no EIRENE)."""
         self._available = set(available)
+        self._enable()
+
+    def set_3d(self, on):
+        """The 3D view shown: the widths of the rings of the X- and
+        O-points active."""
+        self._in3d = bool(on)
         self._enable()
 
     def set_blocked(self, keys, why=""):
@@ -250,13 +289,17 @@ class LayersPanel(QtWidgets.QGroupBox):
     def _enable(self):
         available = getattr(self, "_available", set(self.rows))
         blocked = getattr(self, "_blocked", set())
+        in3d = getattr(self, "_in3d", False)
         for key, row in self.rows.items():
             on = key in available and key not in blocked
-            for w in ("check", "color", "width", "style", "alpha",
-                      "fill_style", "fill"):
+            row["check"].setEnabled(on)
+            shown = on and row["check"].isChecked()     # its options
+            for w in ("color", "width", "alpha", "fill_style", "fill",
+                      "levels", "rho", "species"):
                 if row[w] is not None:
-                    row[w].setEnabled(on and not (key in NO_STYLE and
-                                                  w == "style"))
+                    row[w].setEnabled(shown)
+            row["style"].setEnabled(shown and (key not in NO_STYLE or
+                                               in3d))
             row["check"].setToolTip(
                 "" if on else self._why if key in blocked else
                 MISSING.get(key, "Not available in this run"))

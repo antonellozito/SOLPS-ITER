@@ -94,6 +94,19 @@ def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0), col=None):
             vals[0] * dz / norm - vals[1] * dr / norm, l)
 
 
+def at_points(plot, data, r, z, col=None):
+    """The quantity at the points (R, Z) as the profiles interpolate it
+    (the magnitude of a vector), NaN outside the cells shown."""
+    tri, comps = _grid(plot, data, col)
+    finder = plot.run.geometry.trifinder(tri) if \
+        data.location == "cells" else None
+    vals = [np.ma.filled(mtri.LinearTriInterpolator(
+        tri, c, trifinder=finder)(np.asarray(r, float),
+                                  np.asarray(z, float)), np.nan)
+            for c in comps]
+    return vals[0] if len(vals) == 1 else np.hypot(*vals)
+
+
 def chord_ends(r, z):
     """R, Z and toroidal angle (degrees) of the two ends of a straight
     chord in space from its (R, Z) at equal steps along it (as b2plot sends

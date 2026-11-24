@@ -10,16 +10,18 @@ from ..plot.styles import KINDS_FLAT, KINDS_VECTOR, PlotStyle
 from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
 from .options import LabelsBox, LevelsBox, RegionsMenu
 from .overlays import OverlayOptions, OverlaySection
-from .plotopts import (ArrowsBox, ColourBox, LinesBox, MaskBox, StreamBox,
+from .plotopts import (ArrowsBox, ColourBox, LinesBox, MaskBox, SplitBox,
+                       StreamBox,
                        TextureBox, WallBox)
 from .species import ALL, SUM, SpeciesMenu
 from .timebox import TimeBox
+from .view3d import TracersBox
 
 KIND_TEXT = {"patch": "Patch", "contourf": "Filled contour",
              "contour": "Contour lines", "quiver": "Quiver",
              "stream": "Streamlines", "quiverstream": "Quiver + streamlines",
              "texture": "Flow texture",
-             "quivertexture": "Quiver + flow texture"}
+             "quivertexture": "Quiver + flow texture", "tracers": "Tracers"}
 TREE_ROWS = 11                      # rows of the plasma quantity tree
 MOVIE_ROWS = 7.5                    # Run movies: its 8 groups, closed
 LEVELS = {"contourf": 100, "contour": 20}   # contour levels at first
@@ -184,7 +186,7 @@ class QuantityPanel(QtWidgets.QWidget):
             menu.changed.connect(self._changed)
         self.species = self.plasma_species.combo    # of the plasma plot
 
-        row = QtWidgets.QHBoxLayout()   # the three sections
+        row = QtWidgets.QHBoxLayout()   # the four sections
         self.overlay_button = QtWidgets.QPushButton("Overlay")
         self.overlay_button.setToolTip("Contour lines of a second quantity "
                                        "over the plasma plot (not with "
@@ -193,13 +195,18 @@ class QuantityPanel(QtWidgets.QWidget):
         self.chords_button.setToolTip("Profiles of the quantity shown along "
                                       "chords drawn on the plot or typed, "
                                       "their integrals and averages")
+        self.field_button = QtWidgets.QPushButton("Field line")
+        self.field_button.setToolTip("The magnetic field line through a "
+                                     "point picked on the plot, its "
+                                     "connection lengths and the profile of "
+                                     "the quantity shown along it")
         self.stats_button = QtWidgets.QPushButton("Statistics")
         self.stats_button.setToolTip("Volume integral, average, minimum, "
                                      "maximum and histogram of the quantity "
                                      "shown over the cells shown, a box or "
                                      "a polygon")
-        for b in (self.chords_button, self.overlay_button,
-                  self.stats_button):
+        for b in (self.chords_button, self.field_button,
+                  self.overlay_button, self.stats_button):
             b.setCheckable(True)
             b.setProperty("bold", True)
             row.addWidget(b, 2)
@@ -221,8 +228,8 @@ class QuantityPanel(QtWidgets.QWidget):
         self.kind_combo.currentIndexChanged.connect(self._kind_chosen)
         self.vector_kind = QtWidgets.QComboBox()
         self.vector_kind.setToolTip("Arrows, streamlines, flow texture, "
-                                    "or arrows over streamlines or the "
-                                    "flow texture")
+                                    "arrows over streamlines or the flow "
+                                    "texture, or tracers")
         for k in KINDS_VECTOR:
             self.vector_kind.addItem(KIND_TEXT[k], k)
         self.vector_kind.currentIndexChanged.connect(self._kind_chosen)
@@ -243,6 +250,12 @@ class QuantityPanel(QtWidgets.QWidget):
         kinds.addWidget(label)
         kinds.addWidget(self.vector_kind, 1)
         self.vector_box.layout().insertLayout(0, kinds)
+        self.split = SplitBox()         # a vector as its components
+        self.split.hide()
+        self.vector_box.layout().insertWidget(1, self.split)
+        self.split.changed.connect(self._changed)
+        for w in (self.split.on, self.split.geo):
+            w.toggled.connect(lambda *_: self._kind_changed(emit=False))
         self.only_2d += [label, self.vector_kind]
         self.vector_regions = RegionsMenu("vector")
         self.vector_box.layout().addWidget(self.vector_regions)
@@ -261,9 +274,11 @@ class QuantityPanel(QtWidgets.QWidget):
         self.streams = StreamBox()
         self.streams.seed_line.connect(self.seed_line)
         self.texture = TextureBox()
+        self.tracers = TracersBox(in3d=False)
+        self.tracers.draw2d.connect(self.seed_line)
         for box in (self.colour, self.levels_box, self.lines, self.arrows,
-                    self.streams, self.texture, self.plasma_regions,
-                    self.vector_regions):
+                    self.streams, self.texture, self.tracers,
+                    self.plasma_regions, self.vector_regions):
             box.changed.connect(self._changed)
         self.overlay = OverlayOptions()
         for box in self.overlay.parts():
@@ -274,7 +289,7 @@ class QuantityPanel(QtWidgets.QWidget):
         # the graphic options, placed in the right column by the 2D tab
         self.style_boxes = (self.colour, self.contour_box, self.vector_box,
                             self.arrows, self.streams, self.texture,
-                            self.wall_box) + \
+                            self.tracers, self.wall_box) + \
             self.overlay.boxes()        # above the layers
         self.lower_boxes = (self.labels_box,)
         self._levels_of = dict(LEVELS)  # the number of each plot type
@@ -618,13 +633,23 @@ class QuantityPanel(QtWidgets.QWidget):
         self.lines.fill_lines.setVisible(kind == "contourf")
         self.lines.mono.setVisible(kind == "contour")   # filled: no use
         self.vector_box.setVisible(vector)
-        self.arrows.setVisible(vector and vkind in ("quiver",
-                                                    "quiverstream",
-                                                    "quivertexture"))
+        self.split.setVisible(vector and not self.in3d)
+        self.split.allow(vkind == "quiver")     # arrows only
+        split = vector and bool(self.split.mode())
+        self.vector_kind.setEnabled(not split)
+        b, a = self.vector_box, self.arrows     # options without effect
+        for w in (b.cmap, b.reverse, b.scale, b.auto, a.normalize,
+                  a.by_magnitude, a.arrow_color):
+            w.setEnabled(not split)
+        for w in (b.vmin, b.vmax):
+            w.setEnabled(not split and not b.auto.isChecked())
+        self.arrows.setVisible(vector and vkind in (
+            "quiver", "quiverstream", "quivertexture"))
         self.streams.setVisible(vector and vkind in ("stream",
                                                      "quiverstream"))
         self.texture.setVisible(vector and vkind in ("texture",
                                                      "quivertexture"))
+        self.tracers.setVisible(vector and vkind == "tracers")
         self.wall_box.setVisible(wall)
         self.plasma_regions.setVisible(source in ("matrix", "equilibrium"))
         self.vector_regions.setVisible(vsource == "vector")  # B2.5 cells
@@ -637,7 +662,7 @@ class QuantityPanel(QtWidgets.QWidget):
                                     and not mask)
         if self.in3d:                   # the boxes of the 2D plot alone
             for box in (self.arrows, self.streams, self.texture,
-                        self.contour_box, self.labels_box) + \
+                        self.tracers, self.contour_box, self.labels_box) + \
                     self.overlay.boxes():
                 box.setVisible(False)
         self.labels_box.setVisible(not self.in3d)
@@ -676,10 +701,19 @@ class QuantityPanel(QtWidgets.QWidget):
         """The PlotStyle of the vector plot (species column column)."""
         fields = {}
         for box in (self.vector_box, self.arrows, self.streams,
-                    self.texture, self.vector_regions):
+                    self.texture, self.tracers, self.vector_regions,
+                    self.split):
             fields.update(box.style_fields())
+        if self.in3d:
+            fields["split"] = ""
         return PlotStyle(kind=self.vector_kind_name(), column=column,
                          **fields)
+
+    def set_split_parts(self, parts):
+        """The physical components of the vector quantity [(name, text,
+        colour, zero)], or None: none offered."""
+        self.split.set_parts(parts)
+        self._kind_changed(emit=False)
 
     def set_vector_range(self, lo, hi):
         self.vector_box.set_range(lo, hi)

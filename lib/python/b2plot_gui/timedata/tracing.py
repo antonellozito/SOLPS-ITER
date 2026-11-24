@@ -657,7 +657,8 @@ class RunTracing:
                                         for name, c in each],
             box, self.page.show_all.isChecked(), item.title(species) + (
                 ", " + AREA_TEXT[area] if areas else ""), item.unit)
-        part.view.set_figure(draw, header, rows, kind=kind, name=item.label)
+        part.view.set_figure(draw, header, rows, kind=kind, name=item.label,
+                             space=True)
         part.show_plot(True, box.time_text())
 
     def _looks(self, f, name, n):
@@ -856,5 +857,5 @@ class RunTracing:
             box, self.page.show_all.isChecked(),
             "%s, chord %d" % (title, k), item.unit,
             extra={"phi": gaps(chord.phi)})
-        view.set_figure(draw, header, rows, kind=kind,
+        view.set_figure(draw, header, rows, kind=kind, space=True,
                         name="%s_chord_%d" % (item.name, k))

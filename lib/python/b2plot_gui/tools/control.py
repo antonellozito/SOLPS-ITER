@@ -3,10 +3,10 @@ inspector in its window, the chords and the statistics in their sections
 of the quantity column (both follow the quantity, species or frame
 plotted: the chords the plasma or the vector quantity, the statistics the
 plasma quantity; the statistics of the cells shown follow the view), the
-seed
-line of the streamlines. The chords stay in memory when their section is
-closed; they are drawn on the plot (a dot at the start, an arrow at the
-end, the number) while it is open. With the movies, Show all draws the
+seed line of the streamlines, the field line (its section). The
+chords stay in memory when their section is closed; they are drawn on
+the plot (a dot at the start, an arrow at the end, the number) while it
+is open. With the movies, Show all draws the
 profiles and sums of every frame (loaded in the background, two requests
 at a time, only the profiles and sums kept)."""
 
@@ -18,6 +18,7 @@ from ..model import split_unit
 from ..scaling import squeezable
 from . import chordplots, inspect, measure
 from .base import MouseTools
+from .fieldtool import FieldLineTool
 from .figure import frame_lines
 from .results import ResultsPanel
 from ..catalog import CHORD_POINTS
@@ -52,6 +53,7 @@ class Tools:
         for w in (self.chords_section, self.stats_section):
             w.hide()
             squeezable(w)
+        self.fieldline = FieldLineTool(self)
         self.bar.done.connect(self._done)
         self.bar.hint.connect(tab.status)
         self.bar.changed.connect(self._modes)
@@ -114,16 +116,19 @@ class Tools:
 
     # ------------------------------------------------------------ sections
     def open_section(self, which):
-        """The chords, the overlay, the statistics or none in the quantity
-        column."""
+        """The chords, the field line, the overlay, the statistics or none
+        in the quantity column."""
         self.section = which
         self.chords_section.setVisible(which == "chords")
         self.stats_section.setVisible(which == "stats")
+        if self.fieldline.open != (which == "fieldline"):
+            self.fieldline.set_open(which == "fieldline")
         q = self.tab.quantity
         q.overlay_section.setVisible(which == "overlay")
         for b, key in ((q.chords_button, "chords"), (q.stats_button,
                                                      "stats"),
-                       (q.overlay_button, "overlay")):
+                       (q.overlay_button, "overlay"),
+                       (q.field_button, "fieldline")):
             b.blockSignals(True)
             b.setChecked(which == key)
             b.blockSignals(False)
@@ -150,6 +155,7 @@ class Tools:
             b.blockSignals(True)
             b.setChecked(self.bar.mode == mode)
             b.blockSignals(False)
+        self.fieldline.modes()
         last = self.stats_last
         if self.section == "stats" and last is not None and \
                 last[0] != "shown" and not self.bar.points:
@@ -180,6 +186,8 @@ class Tools:
                             q.wall_species)):
             key += (id(data), None if data is None else
                     tab._columns(data, menu))
+        if self.section == "fieldline":    # also once the plot is drawn
+            self.fieldline.show()
         if key == self.shown:
             return
         self.shown = key
@@ -208,6 +216,9 @@ class Tools:
         if self.section == "stats":
             sec = self.stats_section
             return [sec.view], [sec.heading, sec.text], sec
+        if self.section == "fieldline":
+            sec = self.fieldline.section
+            return [sec.view], [sec.conn, sec.text], sec
         return [], [], None
 
     def snapshot(self):
@@ -234,7 +245,8 @@ class Tools:
     def hold(self, on):
         """The open section not painted (on) while a frame of the movie is
         drawn into an image, or painted again."""
-        for sec in (self.chords_section, self.stats_section):
+        for sec in (self.chords_section, self.stats_section,
+                    self.fieldline.section):
             sec.setUpdatesEnabled(not on)
 
     def view_changed(self):
@@ -259,6 +271,7 @@ class Tools:
     def apply_theme(self):
         """The chords on the plot and the figures in the theme."""
         self.bar.apply_theme()
+        self.fieldline.apply_theme()
         self._chord_artists()
         for view in [t.view for t in self.chords_section.chords] + [
                 self.chords_section.sums, self.chords_section.trace,
@@ -271,6 +284,10 @@ class Tools:
         if mode == "seeds":             # the ends of the seed line
             tab.quantity.set_seeds([tuple(p) for p in pts])
             tab.status.emit("Seed line set")
+            return
+        if mode == "fieldline":
+            self.bar._draw([])
+            self.fieldline.picked2d(*pts[0])
             return
         if tab.run is None or mode == "line" and self._measured() is None \
                 or mode in ("box", "polygon") and not tab._current():
@@ -498,7 +515,8 @@ class Tools:
         header, rows = res["header"], res["rows"]
         if res.get("frames"):           # the values of every frame too
             header, rows = self._frame_rows(res)
-        view.set_figure(res["draw"], header, rows, kind="frames" if
+        view.set_figure(res["draw"], header, rows, space=True,
+                        kind="frames" if
                         res.get("frames") else "line",
                         name="chord_%d_%s" % (k + 1, res["what"]))
 

@@ -34,9 +34,10 @@ def _names(*words):
 def _single_null(upper):
     w, e = ("outer", "inner") if upper else ("inner", "outer")
     W, E = w.capitalize(), e.capitalize()
+    tw, te = ("OU", "IU") if upper else ("IL", "OL")    # the targets
     return (_names("Core", "SOL", W + " divertor", E + " divertor"),
-            _names(W + " target", "Entrance to %s divertor" % w,
-                   "Entrance to %s divertor" % e, E + " target",
+            _names(tw + " target", "Entrance to %s divertor" % w,
+                   "Entrance to %s divertor" % e, te + " target",
                    "Connection between core sides",
                    "Connection between divertor sides",
                    W + " PFR wall boundary", "Core boundary",
@@ -47,14 +48,14 @@ def _single_null(upper):
 
 
 def _double_null(ddn):
-    face = _names("Lower inner divertor target",
+    face = _names("IL target",
                   "Entrance to lower inner divertor",
                   "Entrance to upper inner divertor",
-                  "Upper inner divertor target",
-                  "Upper outer divertor target",
+                  "IU target",
+                  "OU target",
                   "Entrance to upper outer divertor",
                   "Entrance to lower outer divertor",
-                  "Lower outer divertor target",
+                  "OL target",
                   "Connection between lower inner and lower outer core",
                   "Connection between upper inner and upper outer PFR",
                   "Connection between upper outer and upper inner core",

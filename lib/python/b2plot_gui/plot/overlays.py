@@ -9,13 +9,16 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection, PathCollection, \
     PolyCollection
 from matplotlib.markers import MarkerStyle
-from matplotlib.transforms import IdentityTransform
+from matplotlib.transforms import IdentityTransform, offset_copy
 
 from .. import theme
-from . import shapes
+from . import magnetic, shapes
+from ..tools import flow, smooth
 from .scalar import node_values
 from .styles import FILL_ZORDER, HATCH, ZORDER, PlotStyle, cmap_for, \
     norm_for
+
+MAGNETIC = ("directions", "stagnation")    # drawn again for a new style
 
 
 def structure(run):
@@ -72,6 +75,35 @@ def _wall_joints(ax, seg, v, norm, cmap, width):
     return joints
 
 
+SUB = 4                         # pieces of each wall element smoothed
+
+
+def smoothed_strip(seg, v):
+    """The wall elements seg each cut in SUB pieces, with the values of
+    the smoothed profile along the wall (tools/smooth; the pieces of the
+    wall apart smoothed apart, elements without a value kept so)."""
+    from ..tools.wallprofile import along
+    x, gaps = along(seg)
+    length = np.hypot(seg[:, 2] - seg[:, 0], seg[:, 3] - seg[:, 1])
+    t = (np.arange(SUB) + 0.5) / SUB
+    pos = x[:, None] + (t[None, :] - 0.5) * length[:, None]
+    out = np.full((len(v), SUB), np.nan)
+    edges = np.r_[0, np.flatnonzero(gaps), len(v)]
+    for a, b in zip(edges[:-1], edges[1:]):
+        sx, sy = smooth.smooth(x[a:b], v[a:b])
+        ok = np.isfinite(sx) & np.isfinite(sy)
+        if ok.sum() >= 2:
+            out[a:b] = np.interp(pos[a:b], sx[ok], sy[ok])
+        elif ok.any():
+            out[a:b] = v[a:b, None]
+    out[~np.isfinite(v)] = np.nan
+    k = np.arange(SUB + 1) / SUB
+    p0, p1 = seg[:, None, :2], seg[:, None, 2:]
+    pts = p0 + k[None, :, None] * (p1 - p0)         # (n, SUB + 1, 2)
+    sub = np.concatenate((pts[:, :-1], pts[:, 1:]), axis=2)
+    return sub.reshape(-1, 4), out.ravel()
+
+
 class LayerMixin:
     """Layers and overlay quantities of Plot2D."""
 
@@ -112,6 +144,13 @@ class LayerMixin:
             art, = self.ax.plot([r], [z], ls="none", marker="o")
         elif key == "flux" and st.visible and run.psimap is not None:
             art = self._flux_surfaces(st)
+        elif key == "directions":
+            art = magnetic.direction_artists(self.ax, run, st)
+        elif key == "stagnation":       # ua of the source shown (Flow)
+            ua = getattr(run, "stagnation_ua", None)
+            art = flow.artists(self.ax, run, ua, flow.column(ua, st.species),
+                               (st.color, st.width, st.style)) \
+                if st.visible and ua is not None else []
         if isinstance(art, (LineCollection, PolyCollection)):
             self.ax.add_collection(art, autolim=False)
         elif key == "structure" and art is not None:    # lines and fill
@@ -129,6 +168,8 @@ class LayerMixin:
         v = wall_values(data, o.columns)[:len(seg)]
         if o.scale == "log":
             v = np.where(v > 0, v, np.nan)
+        if getattr(o, "smooth", False) and len(v) > 1:
+            seg, v = smoothed_strip(np.asarray(seg, float)[:len(v)], v)
         if not len(v) or not np.isfinite(v).any():
             return None
         st = replace(PlotStyle(), cmap=o.cmap, reverse=o.reverse,
@@ -153,6 +194,37 @@ class LayerMixin:
                                label)
         return out
 
+    def _wall_marks(self, data, width):
+        """The midplanes and strike points on the wall (the marks of the
+        wall profile, tools/wallprofile) as diamonds in the colour of the
+        separatrices, just outside the wall strip (width in points): moved
+        away from the plasma by half the strip and half the diamond, in
+        points (whatever the zoom); with Show midplanes and strikepoints only
+        (show_marks)."""
+        from ..tools.wallprofile import marks
+        from ..plot3d.data import _inward
+        seg = np.asarray(wall_segments(self.run, data), float)
+        seg = seg[:len(data.values[0])]
+        found = marks(self.run, seg) if getattr(self, "show_marks",
+                                                False) else []
+        if not found:
+            return []
+        normals = _inward(self, seg)
+        sep = self.layer_styles["separatrices"].color
+        colours = getattr(self, "mark_colours", {})     # of the profile
+        ms, out = 6.0, []
+        for _, name, (r, z), k in found:
+            colour = theme.rgb(colours.get(name, sep))
+            shift = -(0.5 * width + 0.5 * ms + 0.5) * normals[k]
+            tr = offset_copy(self.ax.transData, fig=self.ax.figure,
+                             x=shift[0], y=shift[1], units="points")
+            out += self.ax.plot([r], [z], ls="none", marker="D", ms=ms,
+                                mfc=colour, mec=theme.axes_bg(), mew=0.8,
+                                zorder=5.25, transform=tr)
+        for a, (_, name, _, _) in zip(out, found):
+            a.wall_mark = name not in colours   # follows the separatrices
+        return out
+
     def _flux_surfaces(self, st):
         """The flux surfaces at the levels of st, on the B2.5 grid only."""
         lines = shapes.flux_lines(self.run, st)
@@ -160,7 +232,7 @@ class LayerMixin:
 
     def _restyle(self, key):
         art, st = self.layer_artists.get(key), self.layer_styles[key]
-        if art is None:
+        if art is None or key in MAGNETIC:      # styled when built
             return
         if key == "structure":
             art[0].set(edgecolor=theme.rgb(st.color), facecolor="none",
@@ -193,13 +265,17 @@ class LayerMixin:
         self.layer_styles[key] = replace(style)
         if self.run is None:
             return
-        rebuild = key == "flux" and (
+        rebuild = key in MAGNETIC or key == "flux" and (
             style.visible != old.visible or style.levels != old.levels
             or style.rho != old.rho or key not in self.layer_artists)
         if rebuild:
             self._build_layer(key)
         else:
             self._restyle(key)
+        if key == "separatrices":       # the marks of the wall quantity
+            for a in self.wall_artists:
+                if getattr(a, "wall_mark", False):
+                    a.set_markerfacecolor(theme.rgb(style.color))
 
     def _overlay_lines(self, data, st, label=None):
         """Contour lines of the overlay quantity (PlotStyle st: levels,

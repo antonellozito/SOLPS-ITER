@@ -70,6 +70,7 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin,
         self.vector_mappable = None
         self.vectors = None         # (data, style) of the vector plot
         self.vector_mask = None     # its cells shown (its own regions)
+        self.tracers2d = None       # its tracers (kept on zoom and pan)
         self.mask = None            # the cells shown of the plasma plot
         self.data = None
         self.style = PlotStyle()
@@ -162,6 +163,9 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin,
         self.wall_artists, self.wall_mappable = [], None
         self.vector_artists, self.vector_mappable = [], None
         self.vectors = self.wall_data = None
+        if self.tracers2d is not None:
+            self.tracers2d.detach()
+        self.tracers2d = None
         self.label_artists = []
         self.ax.cla()
         self._reset_axes()
@@ -229,8 +233,11 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin,
         if arts is not None:
             self.wall_artists, self.wall_mappable = arts, arts[0]
             self.wall_data = data
+            self.wall_artists += self._wall_marks(data, style.width)
 
     def clear_vectors(self):
+        if self.tracers2d is not None:  # attached again if still plotted
+            self.tracers2d.detach()
         for a in self.vector_artists:
             try:
                 a.remove()
@@ -240,17 +247,18 @@ class Plot2D(ScalarMixin, VectorMixin, LayerMixin, TextMixin, MaskMixin,
         self.vectors = None
         self._drop_vector_bar()
 
-    def set_vectors(self, data, style, unit=None):
+    def set_vectors(self, data, style, unit=None, parts=None):
         """A vector quantity (PlotStyle style: kind, arrows, streamlines,
         colour by magnitude with its own colour bar) over the plasma
-        field, or alone; None: no vector plot."""
+        field, or alone, or its parts (tools/splits.combine) as arrows of
+        their own; None: no vector plot."""
         self.clear_vectors()
         if data is None or self.run is None:
             return
         self.vector_mask = self._cell_mask(style, None)
         n0, field = len(self.field_artists), self.mappable
         self.mappable = None
-        self._vectors(data, style)
+        self._vectors(data, style, parts)
         self.vector_artists = self.field_artists[n0:]
         self.vectors = (data, style)
         del self.field_artists[n0:]

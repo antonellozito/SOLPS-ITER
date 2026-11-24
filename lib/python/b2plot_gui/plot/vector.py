@@ -1,6 +1,6 @@
 """Vector fields: arrows, streamlines (the field resampled on a regular
 grid for streamplot) and the flow texture, alone or arrows over either,
-following zoom and pan."""
+following zoom and pan; tracers (plot/tracers2d)."""
 
 import inspect
 
@@ -8,11 +8,24 @@ import numpy as np
 import matplotlib.tri as mtri
 from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
+from matplotlib.legend import Legend
+from matplotlib.lines import Line2D
 
 from .scalar import node_values
 from .. import theme
 from ..tools import births, lic
 from .styles import cmap_for, norm_for
+from .tracers2d import Tracers2D
+
+PART_COLOURS = ("#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd",
+                "#8c564b", "#e377c2", "#17becf", "#bcbd22", "#7f7f7f",
+                "#393b79", "#637939")       # the parts of a split total
+
+
+def split_colour(k, name):
+    """Colour of part k of a split total (the rest in black)."""
+    return "#000000" if name == "rest" else PART_COLOURS[k %
+                                                         len(PART_COLOURS)]
 
 STREAM_GRID = 400
 NUM_ARROWS = "num_arrows" in inspect.signature(Axes.streamplot).parameters
@@ -95,6 +108,51 @@ class VectorMixin:
         self.field_artists.append(q)
         return q
 
+    def _split(self, pos, u, w, index, parts, st, box):
+        """The components [(name, label, vr, vz, zero)] of the vector (u,
+        w at pos; index: where pos is in the arrays of the components) as
+        arrows of their own colour at the places of the arrows of the
+        vector, on its length scale (its 98th percentile the arrow length,
+        longer ones capped), those switched off (st.split_off) and the zero
+        ones left out; their legend in the plot."""
+        mag = np.hypot(u, w)
+        x0, x1, y0, y1 = box
+        keep = np.flatnonzero((mag > 0) & (pos[:, 0] >= x0) &
+                              (pos[:, 0] <= x1) & (pos[:, 1] >= y0) &
+                              (pos[:, 1] <= y1))
+        keep = keep[::int(st.every)] if int(st.every) > 0 else \
+            _spread(pos[keep], keep, box)
+        if not keep.size:
+            return
+        length = st.arrow_length or 0.025 * (x1 - x0)
+        ref = max(float(np.percentile(mag[keep], ARROW_PERCENTILE)), 1e-300)
+        c, cells = pos[keep], index[keep]
+        handles = []
+        for k, (name, text, vr, vz, zero) in enumerate(parts):
+            if zero or name in (st.split_off or ()):
+                continue
+            pu, pw = vr[cells], vz[cells]
+            m = np.hypot(pu, pw)
+            ok = np.isfinite(m) & (m > 0)
+            if not ok.any():
+                continue
+            scale = length / ref * np.minimum(m[ok], ARROW_CAP * ref) / m[ok]
+            colour = theme.rgb(split_colour(k, name))
+            q = self.ax.quiver(c[ok, 0], c[ok, 1], pu[ok] * scale,
+                               pw[ok] * scale, color=colour, angles="xy",
+                               scale_units="xy", scale=1.0,
+                               width=0.0022 * st.arrow_width, zorder=5.0)
+            self.field_artists.append(q)
+            handles.append(Line2D([], [], color=colour, linewidth=2.0,
+                                  label=text))
+        if handles:                     # a legend of its own
+            leg = Legend(self.ax, handles, [h.get_label() for h in handles],
+                         loc="upper right", fontsize="x-small",
+                         framealpha=0.85)
+            leg.set_zorder(6.0)
+            self.ax.add_artist(leg)
+            self.field_artists.append(leg)
+
     def vector_box(self):
         """Current view, limited to the extent of the data (arrows and
         streamlines follow zoom and pan)."""
@@ -103,10 +161,15 @@ class VectorMixin:
         box = (max(x0, f[0]), min(x1, f[1]), max(y0, f[2]), min(y1, f[3]))
         return box if box[1] > box[0] and box[3] > box[2] else f
 
-    def _vectors(self, v, st):
+    def _vectors(self, v, st, parts=None):
         col = self._column(v, st)
         pos, u, w, tri, nu, nw = self._vector_data(v, col)
         box = self.vector_box()
+        if parts:                       # split into its components
+            index = np.arange(len(pos)) if v.location == "triangles" else \
+                self.run.geometry.cells[np.flatnonzero(self.vector_mask)] - 1
+            self._split(pos, u, w, index, parts, st, box)
+            return
         q = None
         if st.kind in ("quiver", "quiverstream", "quivertexture"):
             q = self._quiver(pos, u, w, st, box,
@@ -118,6 +181,27 @@ class VectorMixin:
         if st.kind in ("texture", "quivertexture"):    # the arrow colours
             self._texture(tri, nu, nw, st, box, None if self.mappable is
                           None else self.mappable.norm)
+        if st.kind == "tracers":
+            self._tracers(tri, nu, nw, st)
+
+    def _tracers(self, tri, nu, nw, st):
+        """The tracers over the extent of the data: the same ones again
+        for the same field and options (a zoom or pan), else new ones."""
+        key = (hash(np.asarray(nu).tobytes()), hash(np.asarray(nw).tobytes()),
+               st.tr_n, st.tr_tail, st.tr_size, st.tr_speed, st.tr_log,
+               st.tr_born, st.tr_fade, tuple(map(tuple, st.seeds or ())),
+               st.cmap, st.reverse, st.bw, st.scale,
+               None if st.auto else (st.vmin, st.vmax), theme.is_dark())
+        t = self.tracers2d
+        if t is None or t.key != key:
+            if t is not None:
+                t.detach()
+            t = self.tracers2d = Tracers2D(self, key, tri, nu, nw, st,
+                                           self.full_extent(), cmap_for(st))
+        art = t.attach()
+        self.field_artists += art
+        if t.heads is not None and st.color_by_magnitude:
+            self.mappable = t.heads
 
     def _texture(self, tri, nu, nw, st, box, norm=None):
         """The flow texture over the view: the field resampled on a grid
