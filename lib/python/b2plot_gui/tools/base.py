@@ -1,9 +1,10 @@
 """Mouse modes of the 2D plot: inspect a cell (its button here), draw a
 chord, a box or a polygon (started from the sections of the chords and
 the statistics) or the seed line of the streamlines (from the streamline
-options). The shape drawn goes out with the signal done; Escape drops
-the points clicked so far; a polygon closes with a click near its first
-corner."""
+options), the start of a field line (from the Field line section). The
+shape drawn goes out with the signal done;
+Escape drops the points clicked so far; a polygon closes with a click
+near its first corner."""
 
 import numpy as np
 from matplotlib.lines import Line2D
@@ -17,13 +18,16 @@ MODES = (
      "the value shown there and the geometry of the cell and the "
      "triangle"),
     )
-HIDDEN = ("seeds", "line", "box", "polygon")    # modes without a button
-POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2}
+HIDDEN = ("seeds", "line", "box", "polygon", "fieldline")  # no button
+CLICKED = ("fieldline",)        # a click, a drag pans the plot
+POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2, "fieldline": 1}
 GOLD = "#e8b500"                    # the cell under the mouse (Inspect)
 HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
          "box": "Click two corners of the box", "polygon": "Click the "
          "corners of the polygon, then the first one again",
-         "seeds": "Click the start and the end of the seed line"}
+         "seeds": "Click the start and the end of the seed line",
+         "fieldline": "Click a point of the B2.5 grid: the field line "
+         "through it"}
 
 
 class MouseTools(QtWidgets.QWidget):
@@ -39,6 +43,7 @@ class MouseTools(QtWidgets.QWidget):
         super().__init__(parent)
         self.canvas, self.plot, self.toolbar = canvas, plot, toolbar
         self.mode, self.points, self.shape = None, [], None
+        self.down = None                # field line: the press (a click)
         self.hot, self.hot_key = None, None     # cell outline (Inspect)
         row = QtWidgets.QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
@@ -53,6 +58,7 @@ class MouseTools(QtWidgets.QWidget):
             row.addWidget(b)
             self.buttons[key] = b
         canvas.mpl_connect("button_press_event", self._press)
+        canvas.mpl_connect("button_release_event", self._release)
         canvas.mpl_connect("motion_notify_event", self._move)
         canvas.mpl_connect("key_press_event", self._key)
 
@@ -89,6 +95,9 @@ class MouseTools(QtWidgets.QWidget):
         if self.mode is None or event.inaxes is not self.plot.ax or \
                 event.button != 1 or str(self.toolbar.mode):
             return
+        if self.mode in CLICKED:        # on the release, if not dragged
+            self.down = (event.x, event.y, event.xdata, event.ydata)
+            return
         if self.mode == "polygon" and (event.dblclick or self._near_first(
                 event)):
             if len(self.points) >= 3:
@@ -99,6 +108,16 @@ class MouseTools(QtWidgets.QWidget):
             self._finish(np.array(self.points))
         else:
             self._draw(self.points)
+
+    def _release(self, event):
+        """A click (not a drag, which pans the plot) of a mode of
+        CLICKED: its point."""
+        down, self.down = self.down, None
+        if down is None or self.mode not in CLICKED or event.button != 1:
+            return
+        if np.hypot(event.x - down[0], event.y - down[1]) <= \
+                4.0 * self.canvas.device_pixel_ratio:
+            self._finish(np.array([down[2:]]))
 
     def _move(self, event):
         if self.mode == "inspect" and not str(self.toolbar.mode):

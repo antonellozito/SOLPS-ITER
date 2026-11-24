@@ -309,17 +309,20 @@ class GroupsBox(_Box):
         return tuple(w.value() for w in self.rho)
 
 
+N_2D = 1000                     # tracers at first on the 2D plot
+
+
 class TracersBox(_Box):
     """The tracers of the vector quantity: how many, the length of their
     tails, their size, their speed (true or log-compressed), where they
     are born (the line to draw on the 3D view: draw, on the 2D plot:
-    draw2d), whether they live
-    shorter where the magnitude is smaller, paused."""
+    draw2d), whether they live shorter where the magnitude is smaller,
+    paused; in3d False: those of the 2D plot (the line drawn there)."""
 
     draw = Signal(bool)                 # the line clicked on the 3D view
     draw2d = Signal(bool)               # on the 2D plot
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, in3d=True):
         super().__init__("Tracers", parent)
         form = left_form(self)
         self.n = _ispin(100, 20000, 500, 5000, "Number of tracers")
@@ -381,6 +384,15 @@ class TracersBox(_Box):
         form.addRow(_row(self.fade, self.log, self.pause))
         self._watch((self.born,), (self.log, self.fade),
                     (self.n, self.tail, self.size, self.speed), ())
+        if not in3d:                    # the line drawn on the 2D plot
+            self.n.setValue(N_2D)
+            self.line.hide()
+            self.line2d.setText("Draw line")
+            self.line2d.setToolTip("Click the two ends of the line on the "
+                                   "plot (click again to cancel); the seed "
+                                   "line of the streamlines too")
+            self.speed.setToolTip("Speed of the tracers (the fastest cross "
+                                  "a quarter of the view in a second)")
 
     def drawing(self, on, in2d=False):
         """Draw line (In 2D) shows whether the line is being drawn on the
@@ -395,6 +407,10 @@ class TracersBox(_Box):
                     size=self.size.value(), speed=self.speed.value(),
                     log=self.log.isChecked(), born=self.born.currentData(),
                     fade=self.fade.isChecked())
+
+    def style_fields(self):
+        """The options as fields of a PlotStyle (2D tracers)."""
+        return {"tr_" + k: v for k, v in self.options().items()}
 
 
 class RenderBox(_Box):

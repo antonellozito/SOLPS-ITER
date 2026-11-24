@@ -7,7 +7,7 @@ from ..plot.styles import WallStyle
 from ..plot.vector import NUM_ARROWS
 from ..scaling import Number
 from ..tools import births
-from ...qt import QtWidgets, Signal
+from ...qt import QtCore, QtGui, QtWidgets, Signal
 from .glyphs import CmapChooser, LineStyleChooser, WidthChooser
 from .layers import ColorButton, left_form, spin, style_combo
 
@@ -428,3 +428,123 @@ class MaskBox(_Box):
 
     def style_fields(self):
         return dict(mask=self.colour.color())
+
+
+def _narrow_text(w):
+    """A check box that never widens its column (its text cut where the
+    column is narrow, whole in its tooltip)."""
+    w.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                    QtWidgets.QSizePolicy.Fixed)
+    w.setMinimumWidth(40)
+    if not w.toolTip():
+        w.setToolTip(w.text())
+
+
+class SplitBox(_Part):
+    """A vector drawn as its components, one split at a time (arrows
+    only): its physical components (the parts b2plot gives, for the total
+    fluxes; each shown or not, a check box in the colour of its arrows)
+    or its poloidal and radial components (horizontal and vertical for
+    the EIRENE vectors)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(0, 4, 0, 2)
+        lay.setSpacing(8)               # the two splits well apart
+        self.on = QtWidgets.QCheckBox("Split into physical components")
+        self.on.setToolTip("Arrows of each physical component of the total "
+                           "flux (the parts b2plot gives), in colours of "
+                           "their own, on the length scale of the total; "
+                           "the rest (total minus the components) too when "
+                           "they do not add up to it")
+        self.geo = QtWidgets.QCheckBox("Split into poloidal/radial "
+                                       "components")
+        self.geo.setToolTip("Arrows of the poloidal and the radial "
+                            "component, on the length scale of the vector")
+        for w in (self.on, self.geo):    # a row each
+            w.setMinimumHeight(w.sizeHint().height())
+            _narrow_text(w)
+            lay.addWidget(w)
+        self.list = QtWidgets.QWidget()     # a check box per component
+        self.rows = QtWidgets.QVBoxLayout(self.list)
+        self.rows.setContentsMargins(18, 0, 0, 0)
+        self.rows.setSpacing(5)
+        lay.addWidget(self.list)
+        self.list.hide()
+        self.on.toggled.connect(lambda on: self._exclusive(self.geo, on))
+        self.geo.toggled.connect(lambda on: self._exclusive(self.on, on))
+        self.names, self.boxes = [], []
+
+    def _exclusive(self, other, on):
+        if on and other.isChecked():
+            other.blockSignals(True)
+            other.setChecked(False)
+            other.blockSignals(False)
+        self._shown()
+        self._emit()
+
+    def _shown(self, *_):
+        self.list.setVisible(self.on.isChecked() and bool(self.names))
+
+    def set_cartesian(self, on):
+        """Horizontal and vertical components (EIRENE vectors) instead of
+        poloidal and radial ones."""
+        self.geo.setText("Split into horizontal/vertical components" if on
+                         else "Split into poloidal/radial components")
+        self.geo.setToolTip(self.geo.text())
+
+    def set_parts(self, parts):
+        """[(name, text, colour, zero)] of the physical components (the
+        ticks of those listed before kept); [] or None: none offered."""
+        off = set(self.split_off())
+        names = [n for n, _, _, _ in parts or ()]
+        if parts and names == self.names:
+            for b, (_, text, _, zero) in zip(self.boxes, parts):
+                b.setText(text + (" (zero)" if zero else ""))
+                if zero:
+                    b.blockSignals(True)
+                    b.setChecked(False)
+                    b.blockSignals(False)
+                b.setEnabled(not zero)
+            return
+        for b in self.boxes:
+            b.deleteLater()
+        self.boxes, self.names = [], names
+        for name, text, colour, zero in parts or ():
+            b = QtWidgets.QCheckBox(text + (" (zero)" if zero else ""))
+            _narrow_text(b)
+            pix = QtGui.QPixmap(12, 12)
+            pix.fill(QtGui.QColor(colour))
+            b.setIcon(QtGui.QIcon(pix))
+            b.setChecked(name not in off and not zero)
+            b.setEnabled(not zero)
+            b.name = name
+            b.toggled.connect(self._emit)
+            self.rows.addWidget(b)
+            self.boxes.append(b)
+        self.on.setVisible(bool(self.names))
+        if not self.names and self.on.isChecked():
+            self.on.setChecked(False)
+        self._shown()
+
+    def split_off(self):
+        return [b.name for b in self.boxes if not b.isChecked()]
+
+    def mode(self):
+        """"physical", "geometric" or "" (no split)."""
+        return "physical" if self.on.isChecked() and self.names else \
+            "geometric" if self.geo.isChecked() else ""
+
+    def allow(self, on):
+        """The splits offered (quiver) or not (unticked, greyed out)."""
+        for w in (self.on, self.geo):
+            if not on and w.isChecked():
+                w.blockSignals(True)
+                w.setChecked(False)
+                w.blockSignals(False)
+            w.setEnabled(on)
+        self._shown()
+
+    def style_fields(self):
+        return dict(split=self.mode(), split_off=tuple(self.split_off()))

@@ -48,11 +48,21 @@ class Field:
                            / span, 0.05, 1.5)
         return np.clip(mag / self.v98, 0.0, 1.5)
 
-    def sample(self, n, rng, zlim=(None, None), weight=0.0, lines=None):
-        """n random points (R, Z) where the field is defined (between the
-        heights zlim, None: no limit): along the polylines lines if given,
-        else over the field, their density as the magnitude to the power
-        weight (0: even, 1: in proportion to it; capped at v98)."""
+    def at_least(self, r, z, floor):
+        """Where the magnitude at the points is at least floor."""
+        if not floor > 0:
+            return np.ones(np.shape(r), bool)
+        vr, vz, vp = self.at(r, z)
+        with np.errstate(invalid="ignore"):
+            return np.sqrt(vr * vr + vz * vz + vp * vp) >= floor
+
+    def sample(self, n, rng, zlim=(None, None), weight=0.0, lines=None,
+               floor=0.0):
+        """n random points (R, Z) where the field is defined and its
+        magnitude is at least floor (between the heights zlim, None: no
+        limit): along the polylines lines if given, else over the field,
+        their density as the magnitude to the power weight (0: even, 1: in
+        proportion to it; capped at v98)."""
         out = np.zeros((0, 2))
         z0 = self.ys[0] if zlim[0] is None else max(self.ys[0], zlim[0])
         z1 = self.ys[-1] if zlim[1] is None else min(self.ys[-1], zlim[1])
@@ -70,7 +80,7 @@ class Field:
                 z = rng.uniform(z0, z1, 4 * n + 16)
             vr, vz, vp = self.at(r, z)
             m = np.sqrt(vr * vr + vz * vz + vp * vp)
-            ok = np.isfinite(m) & (m > 0)
+            ok = np.isfinite(m) & (m > 0) & (m >= floor)
             if weight > 0:              # kept as likely as (|v|/v98)^weight
                 w = (np.minimum(np.where(ok, m, 0.0), self.v98) /
                      self.v98) ** weight
@@ -81,17 +91,30 @@ class Field:
         return out[:n]
 
 
+def colour_range(f, given, log):
+    """Colour range of the tracers of Field f: given, else up to the 98th
+    percentile of the speed, from its lowest shown (log) or zero."""
+    lo, hi = given if given is not None else (
+        f.vmin if log else 0.0, f.v98)
+    if log:
+        hi = hi if hi > 0 else 1.0
+        lo = lo if 0 < lo < hi else hi * 1e-3
+    return (float(lo), float(hi) if hi > lo else float(lo) + 1.0)
+
+
 class Tracers:
     """Points moving with the flow over the sector [phi0, phi1] (between
     the heights zlim), each with a tail of its last positions, born more
     where the magnitude is larger (weight) or along lines, and ageing
     faster where it is smaller (fade); a point leaving the field, the
-    sector or the heights, or at the end of its life, starts again at a
-    random place."""
+    sector or the heights, entering where the magnitude is below floor,
+    or at the end of its life, starts again at a random place (never
+    where the magnitude is below floor; hidden while there is no such
+    place)."""
 
     def __init__(self, field, n, tail, phi0, phi1, rng=None,
                  zlim=(None, None), weight=0.0, fade=0.0, lines=None,
-                 vref=1.0, log=True):
+                 vref=1.0, log=True, floor=0.0):
         self.field, self.n, self.tail = field, n, max(int(tail), 2)
         self.phi0, self.phi1 = phi0, phi1
         self.zlim = zlim                # heights kept (vertical cut)
@@ -99,6 +122,7 @@ class Tracers:
         self.fade = fade                # die sooner where |v| is smaller
         self.lines = lines              # flowing through these polylines
         self.vref, self.log = vref, log  # the speeds shown (step)
+        self.floor = floor or 0.0       # no tracer where |v| is below it
         self.wrap = abs(phi1 - phi0) >= 2.0 * np.pi - 1e-9
         self.rng = rng or np.random.default_rng(1)
         self.r, self.z = np.zeros(n), np.zeros(n)
@@ -112,8 +136,11 @@ class Tracers:
         if not len(idx):
             return
         p = self.field.sample(len(idx), self.rng, self.zlim, self.weight,
-                              self.lines)
-        if len(p) < len(idx):           # no field: keep them where they are
+                              self.lines, self.floor)
+        if len(p) < len(idx):           # nowhere to go: hidden, tried again
+            lost = idx[len(p):]
+            self.r[lost] = self.z[lost] = np.nan
+            self.hist[:, lost, :] = np.nan
             idx = idx[:len(p)]
         self.r[idx], self.z[idx] = p[:, 0], p[:, 1]
         self.phi[idx] = self.rng.uniform(self.phi0, self.phi1, len(idx))
@@ -178,6 +205,7 @@ class Tracers:
             nr, nz, nturn, _, ok = self._move(r, z, turn, -h)
             if not self.wrap:
                 ok &= np.abs(nturn) <= width
+            ok &= self.field.at_least(nr, nz, self.floor)
             if lo is not None:
                 ok &= nz >= lo
             if hi is not None:
@@ -206,6 +234,8 @@ class Tracers:
         else:
             out = ~ok | (self.phi < self.phi0) | (self.phi > self.phi1)
         out |= self.age > self.life
+        if self.floor > 0:              # entered where |v| is too small
+            out |= ~self.field.at_least(self.r, self.z, self.floor)
         lo, hi = self.zlim
         if lo is not None:
             out |= self.z < lo

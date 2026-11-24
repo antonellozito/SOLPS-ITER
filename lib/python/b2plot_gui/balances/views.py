@@ -121,6 +121,7 @@ class PlotView(QtCore.QObject):
         self.panel, self.items, self.legend, self.hot = None, [], None, None
         self.pinned = None              # key of the line kept glowing
         self._drag = None
+        self.box = scaling.ZoomBox(self.canvas, self.ax)
         self.canvas.mpl_connect("motion_notify_event", self._motion)
         self.canvas.mpl_connect("button_press_event", self._press)
         self.canvas.mpl_connect("button_release_event", self._release)
@@ -257,7 +258,8 @@ class PlotView(QtCore.QObject):
         return hit
 
     def _motion(self, event):
-        if self._drag is not None and self._pan(event):
+        if self.box.motion(event) or self._drag is not None and \
+                self._pan(event):
             return
         i = self._hit(event)
         self._set(i)
@@ -315,8 +317,9 @@ class PlotView(QtCore.QObject):
 
     def _press(self, event):
         if event.button == 3 and self.home is not None:
-            self._look(event)
-            return
+            if not self.box.press(event):   # in the axes: a zoom box or,
+                self._look(event)           # a click, the look; else (the
+            return                          # legend) the look
         if event.button != 1 or self.home is None:
             return
         self._drag = dict(x=event.x, y=event.y, hit=self._hit(event),
@@ -371,6 +374,16 @@ class PlotView(QtCore.QObject):
         return True
 
     def _release(self, event):
+        if event.button == 3 and self.box.start is not None:
+            lims = self.box.release(event)  # right: a box, else the look
+            if lims is None:
+                self._look(event)
+                return
+            self.ax.set_xlim(lims[0])
+            self.ax.set_ylim(lims[1])
+            self.canvas.draw_idle()
+            self.group.zoom(self.side, lims[0], self)
+            return
         d, self._drag = self._drag, None
         if d is None or event.button != 1:
             return

@@ -19,8 +19,15 @@ from ..tools import births
 
 NEED = (("pyvista", "0.43"), ("pyvistaqt", "0.11"))
 FOLLOW_MS = 120                 # the scene after the 2D plot settles
-GRIDS = ("grid", "eirene")      # layers not drawn in 3D
+GRIDS = ("grid", "eirene", "stagnation")    # layers not drawn in 3D
 SECTOR_MS = 600                 # a new sector after its spin boxes settle
+
+
+def _magnetic(snap):
+    """The magnetic part of a Snapshot when it draws something."""
+    m = snap.magnetic
+    return m if m is not None and (
+        m["line"] is not None or m["directions"] is not None) else None
 
 
 class Mode3D(QtCore.QObject):
@@ -113,6 +120,7 @@ class Mode3D(QtCore.QObject):
         if self.view is not None:
             self.view.setVisible(on and not self.drawing)
         tab.masks.setVisible(not on)
+        tab.layers.set_3d(on)
         tab.layers.set_blocked(GRIDS if on else (), "Not drawn in the 3D "
                                "view")
         tab.quantity.set_3d(on)
@@ -248,7 +256,8 @@ class Mode3D(QtCore.QObject):
         for g, part in (("Plasma quantity", snap.plasma),
                         ("Wall quantity", snap.wall),
                         ("Tracers", snap.vector),
-                        ("Chords", snap.chords or None)):
+                        ("Chords", snap.chords or None),
+                        ("Magnetic field", _magnetic(snap))):
             if part is not None:
                 shown.add(g)
         self.options.groups.show_groups(shown, snap.plasma is not None and

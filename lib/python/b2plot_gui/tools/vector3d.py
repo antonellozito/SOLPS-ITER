@@ -7,8 +7,11 @@ Toroidal component: EIRENE vectors have it (their z label); B2.5 ones
 are reconstructed from their poloidal component, along the field line
 (toroidal = poloidal * B_tor / B_pol) or, for drifts and anomalous
 transport, perpendicular to it within the flux surface (toroidal =
--poloidal * B_pol / B_tor), the radial component having none. bx and bz
-of b2plot are signed (poloidal field along x, toroidal field)."""
+-poloidal * B_pol / B_tor), the radial component having none. The
+poloidal component of a B2.5 vector is along the poloidal field (x along
+B_pol, as the arrows of b2plot and the velocity given to EIRENE), so
+B_pol is |B_pol| here; B_tor is signed (bz: along the Cartesian Z of the
+EIRENE vectors)."""
 
 import re
 
@@ -35,7 +38,9 @@ def rule(q):
     return ACROSS if _ACROSS.search(p) else ALONG
 
 
-RATIO = "bz bx m/"               # B_tor / B_pol, signed, final state
+# B_tor / |B_pol|: bz / bb / pit (pit = |B_pol| / |B|), final state; not bx,
+# which carries signmf (the sense of B_pol around the O-point)
+RATIO = "bz bb m/ pit m/"
 
 
 def component_tokens(q, how):

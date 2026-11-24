@@ -14,6 +14,7 @@ from matplotlib.figure import Figure
 from . import catalog, presets, runstate, scaling, theme
 from .plot.canvas import Plot2D
 from .plot.styles import LAYERS
+from .plot.vector import split_colour
 from .model import split_unit
 from ..qt import NavigationToolbar2QT, QtCore, QtWidgets, Qt, Signal
 from .panels.layers import (CELL_MASKS, MASKS, LayersPanel, MasksPanel,
@@ -27,7 +28,8 @@ from .panels.species import ALL, SUM, chosen_columns, column_names
 from .panels.timebox import BALANCES, PAGES, TRACING
 from .output.actions import TabOutput
 from .output.movie import MovieFrames
-from .tools import cellfiles, equilibrium, inspect, regions
+from .tools import cellfiles, equilibrium, inspect, regions, splits
+from .tools.flow import Flow
 from .tools.control import Tools
 from .tools.wallprofile import WallProfile
 from .balances.picker import BalanceTool
@@ -115,9 +117,17 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.tools = Tools(self)
         self.tools.bar.changed.connect(lambda: self.quantity.streams.waiting(
             self.tools.bar.mode == "seeds"))
+        self.tools.bar.changed.connect(lambda: self.quantity.tracers.drawing(
+            self.tools.bar.mode == "seeds", in2d=True))
+        self.quantity.tracers.pause.toggled.connect(
+            lambda on: self.plot.tracers2d is not None and
+            self.plot.tracers2d.set_paused(on))
         self.quantity.sections.addWidget(self.tools.chords_section)
         self.quantity.sections.addWidget(self.tools.stats_section)
+        self.quantity.sections.addWidget(self.tools.fieldline.section)
         self.wall_profile = WallProfile(self.settings)  # under all
+        self.wall_profile.smooth_changed.connect(self._wall_smoothed)
+        self.wall_profile.marks_changed.connect(self._wall_smoothed)
         self.wall_profile.hide()
         self.quantity.main_part.layout().addWidget(self.wall_profile)
         self.quantity.chords_button.toggled.connect(
@@ -126,6 +136,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             lambda on: self.tools.open_section("stats" if on else None))
         self.quantity.overlay_button.toggled.connect(
             lambda on: self.tools.open_section("overlay" if on else None))
+        self.quantity.field_button.toggled.connect(
+            lambda on: self.tools.open_section("fieldline" if on else None))
         self.balance = BalanceTool(self)
         self.tracing = RunTracing(self)
         self.tools.bar.changed.connect(
@@ -140,6 +152,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.masks = MasksPanel()
         self.mask_keys = []             # the masks drawn
         self.masks.changed.connect(self._masks_changed)
+        self.flow = Flow(self)          # ua of the stagnation surface
         right = QtWidgets.QWidget()     # how the plot looks
         rl = QtWidgets.QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -225,6 +238,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
 
     def _layer_changed(self, key, style):
         self.plot.set_layer(key, style)
+        if key == "stagnation":
+            self.flow.update()
         self.mode3d.follow()
         self.settings.setValue("layers2d", json.dumps(
             {k: dict(s.__dict__) for k, s in self.layers.styles().items()}))
@@ -235,6 +250,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.mode3d.reset()             # its data belong to the run before
         self.run, self.data, self.wanted, self.odata = run, None, None, {}
         self.vector_wanted = self.vector_data = None
+        self.split_data, self.split_asked = {}, set()   # parts of a total
         self.wall_wanted = self.wall_data = self.overlay_wanted = None
         for kind in ("vector", "wall", "overlay"):
             self.quantity.unselect_extra(kind)
@@ -250,6 +266,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         for signal in ("xlim_changed", "ylim_changed"):   # after set_run
             self.plot.ax.callbacks.connect(signal, self._lims_changed)
         self._set_available()
+        self.tools.fieldline.reset()
+        self.flow.set_run()
         self.translate = catalog.translator(run.catalog)
         stale = movies_of_state(run)
         kind, why = run.state
@@ -342,9 +360,9 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         geometry = any(cellfiles.find(self.run.rundir, n)
                        for n in cellfiles.GEOMETRY)
         maps = equilibrium.MAPS if geometry else ()
-        walls = catalog.wall_quantities(self.run.catalog) + ([
-            catalog.Quantity(*equilibrium.WALL, "Geometry", "eqwall")]
-            if geometry else [])
+        walls = catalog.wall_quantities(self.run.catalog, [
+            catalog.Quantity(n, text, "Geometry", "eqwall")
+            for n, text in equilibrium.WALLS] if geometry else [])
         self.final_quantities = derived + catalog.quantities(
             self.run.catalog, maps)
         self.movie_quantities = catalog.movie_quantities(
@@ -399,6 +417,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         Balances: its volume), with the quantities of its source."""
         old, new = self._tab, self.time_box.source.currentIndex()
         self._tab = new
+        self.flow.follow()
         if old not in PAGES:
             self._tab_plot[old] = tuple(q.name if q else None for q in (
                 self.wanted, self.vector_wanted, self.wall_wanted,
@@ -494,6 +513,57 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         return (v, self.quantity.vector_style(col),
                 self._bar_label(self.vector_wanted, self.vector_data))
 
+    def _offer_split(self):
+        """The parts of the vector quantity in its options (none: no
+        split offered)."""
+        q = self.vector_wanted
+        plist = splits.parts_of(q, self.movie_quantities if
+                                self.time_box.movie() else
+                                self.final_quantities) if q else None
+        self.quantity.set_split_parts(None if not plist else [
+            (p.name, splits.label(p), split_colour(k, p.name), False)
+            for k, p in enumerate(plist)])
+        self.quantity.split.set_cartesian(
+            q is not None and q.source == "evector")
+
+    def _split_parts(self, args, ask=True):
+        """The components of the vector plot args when a split is on: the
+        poloidal and radial (horizontal and vertical) ones, or the
+        physical ones (tools/splits.combine) once all of them are here
+        (asked for once, ask); else None."""
+        if args is None or not args[1].split:
+            return None
+        if args[1].split == "geometric":
+            return splits.geometric(self, args[0], args[1].column)
+        q = self.vector_wanted
+        plist = splits.parts_of(q, self.movie_quantities if
+                                self.time_box.movie() else
+                                self.final_quantities)
+        if not plist:
+            return None
+        source = self._source(q)
+        missing = [p for p in plist
+                   if (p.name, source) not in self.split_data]
+        if missing:
+            if ask:
+                for p in missing:
+                    if (p.name, source) not in self.split_asked:
+                        self.split_asked.add((p.name, source))
+                        self.request.emit(("split", p, (), source))
+                self.status.emit("Loading the %d parts of %s" %
+                                 (len(missing), q.name))
+            return None
+        got = [(p, self.split_data[(p.name, source)]) for p in plist
+               if self.split_data[(p.name, source)] is not None]
+        parts = splits.combine(self, args[0], args[1].column, got)
+        if all(z for _, _, _, _, z in parts):
+            self.status.emit("Every part of %s is zero in this run"
+                             % q.name)
+        self.quantity.split.set_parts(
+            [(n, t, split_colour(k, n), z)
+             for k, (n, t, _, _, z) in enumerate(parts)])
+        return parts
+
     def summed_vector(self, v):
         """(vector data v with the species chosen summed, its column);
         the frames of the chords too."""
@@ -513,14 +583,25 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         args = self._vector_args()
         if self.run is None or args is None and self.vector_wanted:
             return False
+        parts = self._split_parts(args)
         try:
-            self.plot.set_vectors(*args or (None, None))
+            self.plot.set_vectors(*args or (None, None), parts=parts)
         except Exception as err:     # a bad option must not end the GUI
             self.status.emit("Cannot draw %s: %s" % (args[0].name, err))
             return False
         m = self.plot.vector_mappable
         if m is not None:
             self.quantity.set_vector_range(m.norm.vmin, m.norm.vmax)
+        t = self.plot.tracers2d
+        if t is not None and args is not None and \
+                args[1].kind == "tracers":
+            t.set_paused(self.quantity.tracers.pause.isChecked())
+            if not t.valid:
+                self.status.emit(
+                    "No tracers: draw the line first (Draw line)" if
+                    args[1].tr_born == "line" else "No tracers: %s is zero "
+                    "everywhere or has no line to be born on" %
+                    args[0].name)
         self.mode3d.follow()
         self.tools.data_changed()       # the chords and the inspector
         self.canvas.draw_idle()
@@ -550,7 +631,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             geo = inspect.files(self.run)[0]
             if geo is not None:
                 self.deliver(("wall", q, (), None),
-                             equilibrium.wall_field(geo))
+                             equilibrium.wall_field(geo, self.run, q.name))
             return
         self.request.emit(("wall", q, (), self._source(q)))
 
@@ -592,9 +673,18 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         shown, or None."""
         if self.wall_wanted is None or self.wall_data is None:
             return None
-        return (self.wall_data, self.quantity.wall_box.wall_style(
+        style = replace(self.quantity.wall_box.wall_style(
             self._columns(self.wall_data, self.quantity.wall_species)),
-            self._bar_label(self.wall_wanted, self.wall_data))
+            smooth=self.wall_profile.smoothed())    # its profile smoothed
+        return (self.wall_data, style,
+                self._bar_label(self.wall_wanted, self.wall_data))
+
+    def _wall_smoothed(self):
+        """Smooth of the wall profile or the colour of a mark there: the
+        wall strip and its marks again, 2D and 3D."""
+        self._draw_wall()
+        self.mode3d.follow()
+        self.canvas.draw_idle()
 
     def _draw_wall(self):
         """The wall plot (or none), apart from the plasma plot."""
@@ -604,6 +694,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if w is None or self.wall_wanted is None:
             self.plot.set_wall(None, None)
         else:
+            self.plot.mark_colours = self.wall_profile.mark_colours()
+            self.plot.show_marks = self.wall_profile.show_marks()
             self.plot.set_wall(*self._wall_pair())
             m = self.plot.wall_mappable
             if m is not None:
@@ -751,10 +843,23 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         if role == "balance":
             self.balance.deliver_rc(data)
             return
+        if role == "flow":              # ua of the stagnation surface
+            self.flow.deliver(q, data, source)
+            return
+        if role == "split":             # a part of the vector quantity
+            self.split_data[(q.name, source)] = data
+            if data is None:
+                self.status.emit("b2plot returned no data for %s. %s"
+                                 % (q.name, tail))
+            if self.vector_wanted is not None and self._split_parts(
+                    self._vector_args(), ask=False) is not None:
+                self._draw_vectors()
+            return
         if role == "vector":
             if data is not None and q is self.vector_wanted and \
                     source == self._source(q):
                 self.vector_data = data
+                self._offer_split()
                 self._species_menus()
                 self.redraw()
             elif data is None:
@@ -812,6 +917,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
                      if a is not None and (not isinstance(a, list) or a)}
         if self.run.psimap is not None:
             available.add("flux")
+        available.update(("directions", "stagnation"))  # built when asked
         self.layers.set_available(available)
 
     def _species(self):
@@ -916,6 +1022,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         what changes is drawn again (Plot2D.fast_draw)."""
         self._moving = True
         self._fetch()
+        self.flow.follow()
 
     def redraw(self):
         """The plots again; after a move of the slider, by repainting only
@@ -990,6 +1097,8 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.chords_button.setEnabled(chords)
         self.quantity.stats_button.setEnabled(stats)
         self.quantity.overlay_button.setEnabled(overlay)
+        self.quantity.field_button.setEnabled(self.run is not None)
+        self.tools.fieldline.switched()
         self._set_plotted()             # the overlay options or not
         section = self.tools.section
         if section == "chords" and not chords or \
@@ -1053,12 +1162,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.hover.setText(READOUT)
 
     def _pan_start(self, event):
-        """A left press on the plot, with no tool and no Zoom on, starts a
-        pan: the view follows the mouse and never leaves the limits."""
+        """A left press on the plot, with no tool (but the field line
+        picking, by a click) and no Zoom on, starts a pan: the view follows
+        the mouse and never leaves the limits."""
         if event.button != 1 or event.inaxes is not self.plot.ax or \
                 self.run is None or str(self.toolbar.mode) or \
-                self.tools.bar.mode is not None or event.dblclick or \
-                self.balance.grabs(event):
+                self.tools.bar.mode not in (None, "fieldline") or \
+                event.dblclick or self.balance.grabs(event):
             return
         box = self.plot.ax.get_window_extent()
         x0, x1, y0, y1 = self.plot.get_view()

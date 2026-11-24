@@ -15,6 +15,7 @@ import numpy as np
 from matplotlib import colormaps, colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
+from matplotlib.patches import Patch
 from matplotlib.ticker import LogFormatterSciNotation
 
 from .. import theme
@@ -25,6 +26,7 @@ from ..panels.layers import ColorButton
 from ..panels.plotarea import ScaledCanvas
 from ..scaling import Navigator, Number, squeezable
 from ...qt import QtCore, QtGui, QtWidgets
+from . import smooth
 
 PLOT_ASPECT = 0.75                  # height / width of the plot box (4:3)
 # room around the plot box in font sizes (the texts of the figure are as
@@ -40,6 +42,8 @@ FAMILY = {"frames": "line", "sumframes": "sums"}   # of all the frames
 FRAMES_CMAP = "viridis"             # colours along the frames at first
 OTHER = 0.2                         # width, marker size: frames not shown
 OTHER_ALPHA = 0.6                   # opacity of their lines
+STACK_ALPHA = 0.6                   # bands of stacked parts
+WRAP = 20                           # longer names of bands: two rows
 ALL_WIDTH = 0.5                     # profiles of all the frames at first
 NOW_COLOURS = ("#000000", "#000000")    # the profile shown at first (|v|,
 NOW_STYLES = ("-", "--")                # v·n), thick
@@ -148,6 +152,20 @@ class LogLabels(LogFormatterSciNotation):
         return r"$\times\mathdefault{10^{%d}}$" % e0 if e0 == e1 else ""
 
 
+def _smooth(ln, box):
+    """The line drawn smoothed (box ticked; ln.smooth_to if given, e.g.
+    the sum of the parts smoothed) or as computed (its values kept in
+    ln.raw)."""
+    on = box is not None and box.isChecked()
+    if not hasattr(ln, "raw"):
+        ln.raw = (np.asarray(ln.get_xdata(), float),
+                  np.asarray(ln.get_ydata(), float))
+    if on != getattr(ln, "smoothed", False):
+        ln.set_data(*((getattr(ln, "smooth_to", None) or
+                       smooth.smooth(*ln.raw)) if on else ln.raw))
+        ln.smoothed = on
+
+
 class FigureOptions(QtWidgets.QGroupBox):
     """Options of the small figure: a row per curve (colour, style, width,
     markers) or the bars of a histogram (colour, bins), then the axes
@@ -166,12 +184,15 @@ class FigureOptions(QtWidgets.QGroupBox):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
         self.grid = QtWidgets.QGridLayout()     # the curves or the bars
-        self.grid.setColumnStretch(5, 1)
+        self.grid.setColumnStretch(6, 1)
         axes = QtWidgets.QGridLayout()          # the axes, compact
         axes.setColumnStretch(6, 1)
         lay.addLayout(self.grid)
         lay.addLayout(axes)
-        self.curves = []                # (name, colour, style, width, marker)
+        self.curves = []        # (name, colour, style, width, marker,
+        #                         smooth: a check box on a profile or None)
+        self.space = False      # the figure is a profile along a line
+        self.rows_space = False
         self.bars = ColorButton(HIST)
         self.bars.changed.connect(lambda *_: changed())
         self.bins = QtWidgets.QSpinBox()
@@ -217,6 +238,7 @@ class FigureOptions(QtWidgets.QGroupBox):
         axes.addWidget(self.xaxis, 2, 1, 1, 3)
         self.kind = None
         self.xaxes = True               # the x axis menu with the lines
+        self.keep_limits = False        # limits kept for other curves
         self.picked = None              # the x axis chosen in the menu
 
     def allow(self, keys):
@@ -259,8 +281,10 @@ class FigureOptions(QtWidgets.QGroupBox):
                 "All profiles" if one else "All " + name,
                 "Current profile" if one else "Current " + name)]
             lines = [ln for ln in lines for _ in (0, 1)]
-        if kind == self.kind and names == [c[0] for c in self.curves]:
+        if kind == self.kind and names == [c[0] for c in self.curves] \
+                and self.space == self.rows_space:
             return
+        self.rows_space = self.space
         keep = FAMILY.get(self.kind, self.kind) == base and names == [
             c[0] for c in self.curves]
         self.kind = kind
@@ -290,15 +314,30 @@ class FigureOptions(QtWidgets.QGroupBox):
                 kind == "frames" else ln.get_linestyle()
             width = NOW_WIDTH if now else ALL_WIDTH if every and \
                 kind == "frames" else ln.get_linewidth()
+            smooth = None
+            if self.space and line and not every and \
+                    len(ln.get_xdata()) >= 5 and \
+                    not getattr(ln, "stacked", False):  # bands: as computed
+                smooth = QtWidgets.QCheckBox("Smooth")
+                smooth.setToolTip("A moderate smoothing spline through the "
+                                  "profile (peaks and holes kept; the "
+                                  "values exported are those computed)")
+                smooth.toggled.connect(lambda *_: self.changed())
             row = (name, colour,
                    LineStyleChooser(style, with_none=True) if line else None,
                    WidthChooser(width) if line else None,
                    None if every and kind == "frames" else
-                   MarkerChooser(str(ln.get_marker())))
-            for w in row[2:]:
+                   MarkerChooser(str(ln.get_marker())), smooth)
+            for w in row[2:5]:
                 if w is not None:
                     w.currentIndexChanged.connect(lambda *_: self.changed())
-            self.grid.addWidget(QtWidgets.QLabel(name), r, 0)
+            text = name                 # a long part of a stack: two rows
+            if getattr(ln, "stacked", False) and len(name) > WRAP and \
+                    " " in name:
+                k = min((i for i, c in enumerate(name) if c == " "),
+                        key=lambda i: abs(i - len(name) // 2))
+                text = name[:k] + "\n" + name[k + 1:]
+            self.grid.addWidget(QtWidgets.QLabel(text), r, 0)
             for c, w in enumerate([w for w in row[1:] if w is not None], 1):
                 self.grid.addWidget(w, r, c)
             self.curves.append(row)
@@ -309,7 +348,7 @@ class FigureOptions(QtWidgets.QGroupBox):
         for i in range(self.grid.count()):
             self.grid.itemAt(i).widget().show()
         squeezable(self)                # new rows never widen the column
-        for e in self.limits if not keep else ():
+        for e in self.limits if not (keep or self.keep_limits) else ():
             e.clear()
         for w in (self.xaxis_label, self.xaxis):
             w.setVisible(base == "line" and self.xaxes)
@@ -324,8 +363,8 @@ class FigureOptions(QtWidgets.QGroupBox):
                 ts = getattr(lc, "frames", None)
                 if ts is None:
                     continue
-                _, cmap, style, width, _ = self.curves[min(
-                    2 * lc.curve, len(self.curves) - 2)]
+                _, cmap, style, width = self.curves[min(
+                    2 * lc.curve, len(self.curves) - 2)][:4]
                 lc.set_color(colormaps[cmap.name()](ts))
                 lc.set_alpha(OTHER_ALPHA)
                 lc.set_visible(style.currentData() != "None")
@@ -334,8 +373,9 @@ class FigureOptions(QtWidgets.QGroupBox):
                 lc.set_linewidth(width.value())
                 lc.set_zorder(2.0)
             for ln in main_lines(lines):
-                _, colour, style, width, marker = self.curves[min(
+                _, colour, style, width, marker, smooth = self.curves[min(
                     2 * getattr(ln, "curve", 0) + 1, len(self.curves) - 1)]
+                _smooth(ln, smooth)
                 ln.set_gid(colour.color())
                 ln.set_linestyle(style.currentData())
                 ln.set_linewidth(width.value())
@@ -349,7 +389,7 @@ class FigureOptions(QtWidgets.QGroupBox):
                 t, shown = getattr(ln, "frame", (1.0, True))
                 row = self.curves[min(getattr(ln, "curve", 0),
                                       len(self.curves) - 1)]
-                _, cmap, style, width, marker = row
+                _, cmap, style, width, marker = row[:5]
                 f = 1.0 if shown else OTHER
                 ln.set_gid(mcolors.to_hex(colormaps[cmap.name()](t)))
                 if style is not None:
@@ -361,12 +401,18 @@ class FigureOptions(QtWidgets.QGroupBox):
                              OTHER_ALPHA)
                 ln.set_zorder(2.5 if shown else 2.0)
             lines = []
-        for (_, colour, style, width, marker), ln in zip(self.curves, lines):
+        for (_, colour, style, width, marker, smooth), ln in zip(
+                self.curves, lines):
+            _smooth(ln, smooth)
             ln.set_gid(colour.color())
             if style is not None:
                 ln.set_linestyle(style.currentData())
                 ln.set_linewidth(width.value())
             ln.set_marker(marker.currentData())
+        for t in list(ax.texts) + list(ax.collections):  # names of lines,
+            ln = getattr(t, "line", None)       # bands of stacked parts:
+            if ln is not None:                  # their colour
+                t.set_gid(ln.get_gid())
         if self.kind == "hist":
             for p in ax.patches:
                 p.set_gid(self.bars.color())
@@ -458,6 +504,7 @@ class FigureView(QtWidgets.QWidget):
         self.ax = self.figure.add_subplot(111)
         self.nav = Navigator(self.canvas, self.ax)
         self.background = None  # all but the profile shown (blitted over)
+        self.space = False      # a profile along a line (Smooth offered)
         self.drawn = None       # key of the draw on the axes
         self.stale = False      # set while hidden: drawn once shown
         self.logx = False
@@ -500,7 +547,7 @@ class FigureView(QtWidgets.QWidget):
             self.apply_theme()
 
     def set_figure(self, draw, header, rows, kind="line", logx=False,
-                   name="plot"):
+                   name="plot", space=None):
         """draw(ax, options) makes the figure (kind "line": curves,
         "hist": a histogram, at first on a logarithmic axis with logx);
         rows are what Export writes, name the file name offered. Not drawn
@@ -515,6 +562,8 @@ class FigureView(QtWidgets.QWidget):
             not self.stale
         self.draw, self.header, self.rows, self.name = draw, list(header), \
             list(rows), name
+        if space is not None:           # a profile along a line: Smooth
+            self.space = self.options.space = bool(space)
         self.kind, self.logx = kind, logx
         if not self.updatesEnabled():
             return
@@ -555,7 +604,9 @@ class FigureView(QtWidgets.QWidget):
         if not lines or len(lines) != len(curves):
             return False
         for ln, (x, y) in zip(lines, curves):
-            ln.set_data(x, y)
+            ln.raw = (np.asarray(x, float), np.asarray(y, float))
+            ln.set_data(*(smooth.smooth(x, y) if getattr(ln, "smoothed",
+                                                          False) else (x, y)))
         if self.background is None:
             self.canvas.draw_idle()
             return True
@@ -604,6 +655,12 @@ class FigureView(QtWidgets.QWidget):
         for spine in ax.spines.values():
             spine.set_color(color)
         lines = list(ax.lines)
+        for t in ax.texts:              # names of lines: the colour of theirs
+            if getattr(t, "line", None) is not None and t.get_gid():
+                t.set_color(theme.rgb(t.get_gid()))
+        for c in ax.collections:        # bands of stacked parts: theirs
+            if getattr(c, "line", None) is not None and c.get_gid():
+                c.set_facecolor(theme.rgb(c.get_gid()))
         for a in lines + list(ax.patches):     # gid: the colour chosen
             line = a in lines
             if a.get_gid() is None:
@@ -612,7 +669,13 @@ class FigureView(QtWidgets.QWidget):
             (a.set_color if line else a.set_facecolor)(theme.rgb(a.get_gid()))
         legend = ax.get_legend()
         if legend is not None:           # again, with the new line colours
-            legend = ax.legend(fontsize="small")
+            stack = getattr(ax, "stack", None)  # (total, its bands)
+            legend = ax.legend(handles=stack and [stack[0]] + [
+                Patch(facecolor=ln.get_color(), alpha=STACK_ALPHA,
+                      label=ln.get_label()) for ln in stack[1]],
+                fontsize="xx-small" if stack else "small",
+                ncol=2 if stack and len(stack[1]) > 4 else 1,
+                framealpha=0.6 if stack else None)
             legend.get_frame().set_facecolor(theme.figure_bg())
             for t in legend.get_texts():
                 t.set_color(color)

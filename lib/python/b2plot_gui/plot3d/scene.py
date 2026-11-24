@@ -6,7 +6,8 @@ X- and O-points, grids and midplanes on the cut faces), the plasma quantity
 on the cut faces, the separatrices and flux surfaces as transparent shells
 painted with the plasma quantity along them, with their lines on the cut
 faces, the wall quantity on the wall elements turned around the axis, the
-vector quantity as tracers, the chords. Each actor belongs to a group
+vector quantity as tracers, the chords, the traced field lines and the
+directions of B and of the plasma current. Each actor belongs to a group
 whose opacity multiplies its own; a part is built again only when its data
 or the sector change."""
 
@@ -15,11 +16,12 @@ import textwrap
 import numpy as np
 
 import pyvista as pv
+from matplotlib import colors as mcolors
 
 from . import GROUPS, meshes
-from ..tools import revolve
-from ..tools import births
-from ..tools.tracers import FADE, Tracers
+from ..plot.styles import LAYERS
+from ..tools import births, fieldlines, revolve
+from ..tools.tracers import FADE, Tracers, colour_range
 
 STRUCTURE = (0.62, 0.64, 0.68)
 CAP = (0.50, 0.52, 0.56)
@@ -27,6 +29,17 @@ VESSEL = (0.70, 0.74, 0.80)
 PLANE_OFFSET = np.radians(0.035)        # cut planes just outside the sector
 LINE_OFFSET = np.radians(0.055)         # lines on them, over the quantity
 FLUX_WIDTH, SEP_WIDTH = 1.85, 3.0       # their widths (pixels)
+RING_PX = 1.5                   # X-, O-point rings: pixels per point
+MARK_SIZE = 0.006               # wall marks: half diamond (machine sizes)
+
+
+def line_width(lay, key):
+    """Width (pixels) of the lines of the separatrices or the flux
+    surfaces: their layer width (points) on the scale of these widths for
+    the default layer widths."""
+    base = {"separatrices": SEP_WIDTH, "flux": FLUX_WIDTH}[key]
+    return base * lay[key].get("width", LAYERS[key][1].width) / \
+        LAYERS[key][1].width
 SHELL_RHO = (0.2, 0.4, 0.6, 0.8, 1.0, 1.015, 1.03, 1.045, 1.06, 1.075,
              1.09, 1.105)               # shell opacity against rho_p
 SHELL_OPACITY = (0.40, 0.36, 0.32, 0.28, 0.24, 0.22, 0.20, 0.18, 0.16,
@@ -102,7 +115,8 @@ class Scene3D:
         self.factor[group] = f
         for a, g, base in self.actors.values():
             if g == group:
-                a.GetProperty().SetOpacity(base * f)
+                (a.GetTextProperty() if hasattr(a, "GetTextProperty")
+                 else a.GetProperty()).SetOpacity(base * f)
 
     def bar(self, title):
         """The colour bar of the quantity shown, at the right."""
@@ -131,7 +145,9 @@ class Scene3D:
                  self._cut),
                 ("wall", snap.wall_key, self._wall),
                 ("vector", snap.vector_key, self._vector),
-                ("chords", snap.chords_key, self._chords)):
+                ("chords", snap.chords_key, self._chords),
+                ("magnetic", (snap.magnetic_key, snap.flux_key),
+                 self._magnetic)):
             if self.keys.get(part) != key:
                 self.keys[part] = key
                 build(snap, p0, p1)
@@ -182,7 +198,8 @@ class Scene3D:
                 for k, (r, z) in enumerate(getattr(s, key)):
                     self.add("m:%s%d" % (key, k), meshes.ring(r, z, p0, p1),
                              "Structure", 1.0, color=lay[key]["color"],
-                             line_width=3.0, render_lines_as_tubes=True)
+                             line_width=RING_PX * lay[key]["ring"],
+                             render_lines_as_tubes=True)
         for key in ("midplanes", "grid", "eirene"):
             seg = getattr(s, key)
             if lay[key]["visible"] and seg is not None and len(seg):
@@ -208,8 +225,10 @@ class Scene3D:
         outer = max(shown) if shown else None
         spec = dict(smooth_shading=self.smooth, specular=0.6,
                     specular_power=18.0, ambient=0.2, diffuse=0.8)
-        for key, lines, width in (("separatrices", s.separatrices, SEP_WIDTH),
-                                  ("flux", s.flux, FLUX_WIDTH)):
+        for key, lines, width in (
+                ("separatrices", s.separatrices,
+                 line_width(lay, "separatrices")),
+                ("flux", s.flux, line_width(lay, "flux"))):
             if not lay[key]["visible"] or not lines:
                 continue
             values = [q["at"](ln[:, 0], ln[:, 1]) if q else None
@@ -304,9 +323,10 @@ class Scene3D:
                              cmap=q["cmap"], clim=q["clim"],
                              log_scale=q["log"], nan_color=s.background,
                              lighting=False, offset=True)
-            for key, lines, width in (("separatrices", s.separatrices,
-                                       SEP_WIDTH), ("flux", s.flux,
-                                                    FLUX_WIDTH)):
+            for key, lines, width in (
+                    ("separatrices", s.separatrices,
+                     line_width(lay, "separatrices")),
+                    ("flux", s.flux, line_width(lay, "flux"))):
                 if not lay[key]["visible"] or not lines:
                     continue
                 radii, values = [], []
@@ -345,20 +365,37 @@ class Scene3D:
             scalar_bar_args=self.bar(q["label"]))
         if a is not None:
             _offset(a, -6.0, -60.0)     # wins over the surfaces it lies on
+        sep = s.layers["separatrices"]  # midplanes, strike points: on the
+        d = MARK_SIZE * s.size          # cut faces, over the quantity there
+        for k, ((r, z), colour) in enumerate(q.get("marks", ())):
+            for j, phi in enumerate(self._planes(p0, p1, 1.5 * LINE_OFFSET)):
+                corners = revolve.on_plane([(r + d, z), (r, z + d), (r - d, z),
+                                            (r, z - d)], phi)
+                self.add("w:mark%d_%d" % (k, j), pv.PolyData(
+                    corners, faces=[4, 0, 1, 2, 3]), "Wall quantity", 1.0,
+                    color=colour, lighting=False)
+                self.add("w:markedge%d_%d" % (k, j), meshes.polylines(
+                    [np.vstack((corners, corners[:1]))]), "Wall quantity",
+                    1.0, color=s.background[:3], line_width=1.5)
 
     def _chords(self, s, p0, p1):
         """The chords: straight lines between their ends (an end on a cut
         face moved in front of the plasma quantity there), a ball at the
-        start, a cone at the end, the number beyond it."""
+        start, a cone at the end, the number beyond it (out of the sector
+        for an end on a cut face: in front of the plasma quantity)."""
         self.remove_part("c:")
         h = 0.025 * s.size
         for k, a, b, (colour, width, _, number) in s.chords:
-            ends = []
+            ends, out = [], None     # out of the sector at the end
             for r, z, phi in (a, b):
                 if abs(phi - p0) < 1e-9:
+                    out = np.array([np.sin(p0), -np.cos(p0), 0.0])
                     phi = p0 - 2.0 * PLANE_OFFSET
                 elif abs(phi - p1) < 1e-9:
+                    out = np.array([-np.sin(p1), np.cos(p1), 0.0])
                     phi = p1 + 2.0 * PLANE_OFFSET
+                else:
+                    out = None
                 ends.append(np.array(revolve.on_plane([(r, z)], phi)[0]))
             d = ends[1] - ends[0]
             length = float(np.linalg.norm(d))
@@ -377,12 +414,102 @@ class Scene3D:
                                         radius=0.3 * h, resolution=16),
                      "Chords", 1.0, color=colour)
             if number:
-                a = self.pl.add_point_labels(
-                    (ends[1] + 0.8 * h * d)[None], ["%d" % k],
-                    text_color=colour, font_size=14, show_points=False,
-                    shape=None, always_visible=True, name=c + "number",
-                    render=False)
-                self.actors[c + "number"] = (a, "Chords", 1.0)
+                self._text(c + "number", ends[1] + 0.8 * h * (
+                    d if out is None else out), "%d" % k, colour, "Chords")
+
+    def _magnetic(self, s, p0, p1):
+        """The field line picked in 3D as a helix (in its colour, or in
+        its colour map of the parallel or poloidal length or the toroidal
+        turns from where it starts, anticlockwise in the 2D plot), a ball
+        at the point picked; rings at the O-point with cones along the
+        plasma current and, above it, along the toroidal field, cones of
+        the poloidal field on a circle around it in front of the first cut
+        face."""
+        self.remove_part("g:")
+        m = s.magnetic
+        if m is None:
+            return
+        h = 0.02 * s.size
+        if m["line"] is not None:
+            line, phi0, look, by = m["line"]
+            pts, k0 = line.anticlockwise()
+            mesh = meshes.polylines([fieldlines.to_3d(pts, phi0)])
+            kw = dict(color=look[0])
+            if by is not None:
+                mesh.point_data["v"] = fieldlines.along(pts)[by]
+                kw = dict(scalars="v", cmap=look[3])
+            self.add("g:line", mesh, "Magnetic field", 1.0,
+                     line_width=1.5 + 1.5 * look[1],
+                     render_lines_as_tubes=True, **kw)
+            self.add("g:start", pv.PolyData(fieldlines.to_3d(
+                pts[k0:k0 + 1], phi0)), "Magnetic field", 1.0,
+                color=look[0], point_size=6.0 + 3.0 * look[1],
+                render_points_as_spheres=True)
+        d, dst = m["directions"], m["dstyle"]
+        if d is not None:
+            self._directions(d, dst, h, p0, p1)
+
+    def _directions(self, d, st, h, p0, p1):
+        (r0, z0), rr = d["hole"]
+        rr = max(rr, 0.05)
+        phis = np.linspace(p0, p1, 9)[1:-1] if not revolve.full(p0, p1) \
+            else np.linspace(0.0, 2.0 * np.pi, 9)[:-1]
+        for name, z, sign, label in (("ip", z0, d["ip"], "I_p"),
+                                     ("bt", z0 + 0.5 * rr, d["btor"],
+                                      "B_tor")):
+            self.add("g:%s_ring" % name, meshes.ring(r0, z, p0, p1),
+                     "Magnetic field", st.alpha, color=st.color,
+                     line_width=1.5 + 1.5 * st.width,
+                     render_lines_as_tubes=True)
+            for k, phi in enumerate(phis):     # +: clockwise from above
+                c = np.array([r0 * np.cos(phi), r0 * np.sin(phi), z])
+                t = -sign * np.array([-np.sin(phi), np.cos(phi), 0.0])
+                self.add("g:%s%d" % (name, k), pv.Cone(
+                    center=c, direction=t, height=1.5 * h, radius=0.5 * h,
+                    resolution=16), "Magnetic field", st.alpha,
+                    color=st.color)
+            self._text("g:%s_label" % name, revolve.on_plane(
+                [(r0, z + 0.25 * rr)], phis[len(phis) // 2])[0], label,
+                st.color, "Magnetic field")
+        a = np.linspace(0.0, 2.0 * np.pi, 7)[:-1]
+        sense = -1.0 if d["bpol_clockwise"] else 1.0
+        phi = p0 - 2.0 * LINE_OFFSET            # in front of the cut face
+        t = np.linspace(0.0, 2.0 * np.pi, 73)
+        self.add("g:bp_circle", meshes.polylines([revolve.on_plane(
+            np.column_stack((r0 + 0.65 * rr * np.cos(t),
+                             z0 + 0.65 * rr * np.sin(t))), phi)]),
+            "Magnetic field", st.alpha, color=st.color,
+            line_width=1.5 + 1.5 * st.width, render_lines_as_tubes=True)
+        for k, t in enumerate(a):
+            rz = (r0 + 0.65 * rr * np.cos(t), z0 + 0.65 * rr * np.sin(t))
+            drz = sense * np.array([-np.sin(t), np.cos(t)])
+            c = revolve.on_plane([rz], phi)[0]
+            v = np.array([drz[0] * np.cos(phi), drz[0] * np.sin(phi),
+                          drz[1]])
+            self.add("g:bp%d" % k, pv.Cone(center=c, direction=v,
+                                           height=1.5 * h, radius=0.5 * h,
+                                           resolution=16),
+                     "Magnetic field", st.alpha, color=st.color)
+        self._text("g:bp_label", revolve.on_plane([(r0, z0 + 0.8 * rr)],
+                                                  phi)[0], "B_pol", st.color,
+                   "Magnetic field")
+
+    def _text(self, name, point, text, colour, group):
+        """text facing the screen at the point (x, y, z), hidden where
+        something is in front of it (depth tested), in group."""
+        from vtkmodules.vtkRenderingCore import vtkBillboardTextActor3D
+        self.remove(name)
+        a = vtkBillboardTextActor3D()
+        a.SetInput(text)
+        a.SetPosition(*np.asarray(point, float))
+        tp = a.GetTextProperty()
+        tp.SetColor(*mcolors.to_rgb(colour))
+        tp.SetFontSize(14)
+        tp.SetJustificationToCentered()
+        tp.SetVerticalJustificationToCentered()
+        tp.SetOpacity(self.factor[group])
+        self.pl.add_actor(a, name=name, reset_camera=False, render=False)
+        self.actors[name] = (a, group, 1.0)
 
     # ---------------------------------------------------------- tracers
     def _vector(self, s, p0, p1):
@@ -393,7 +520,7 @@ class Scene3D:
             return
         o = self.tracer_opts
         f = v["field"]
-        self.clim = self._clim(f, v["range"], o["log"])
+        self.clim = self._clim(f, v["range"], v["log"])
         lines = s.lines.get(o["born"]) if o["born"] in births.LINES \
             else None
         if o["born"] in births.LINES and not lines:
@@ -402,7 +529,8 @@ class Scene3D:
                                     self.rng, self.zcut,
                                     births.weight(o["born"]),
                                     FADE if o["fade"] else 0.0, lines,
-                                    self.vref(), o["log"])
+                                    self.vref(), o["log"],
+                                    v["range"][0] if v["range"] else 0.0)
         tr.warm_up(self.vref(), o["log"])     # no transient on screen
         n, t = tr.n, tr.tail
         idx = (np.arange(t)[None, :] * n + np.arange(n)[:, None])
@@ -416,7 +544,7 @@ class Scene3D:
                  rgb=True, render_lines_as_tubes=True,
                  line_width=2.5 * size)
         self.add("t:heads", self.heads, "Tracers", 1.0, scalars="speed",
-                 cmap=v["cmap"], clim=self.clim, log_scale=o["log"],
+                 cmap=v["cmap"], clim=self.clim, log_scale=v["log"],
                  render_points_as_spheres=True, point_size=7.0 * size,
                  show_scalar_bar=True,
                  scalar_bar_args=self.bar(v["label"]))
@@ -427,20 +555,13 @@ class Scene3D:
 
     @staticmethod
     def _clim(f, given, log):
-        """Colour range of the tracers: given, else up to the 98th
-        percentile of the speed, from its lowest shown (log) or zero."""
-        lo, hi = given if given is not None else (
-            f.vmin if log else 0.0, f.v98)
-        if log:
-            hi = hi if hi > 0 else 1.0
-            lo = lo if 0 < lo < hi else hi * 1e-3
-        return (float(lo), float(hi) if hi > lo else float(lo) + 1.0)
+        return colour_range(f, given, log)
 
     def _tail_colours(self):
         v, tr = self.snap.vector, self.tracers
         lo, hi = self.clim
         m = np.clip(np.where(np.isfinite(tr.mag), tr.mag, lo), lo, hi)
-        x = np.log(m / lo) / np.log(hi / lo) if self.tracer_opts["log"] \
+        x = np.log(m / lo) / np.log(hi / lo) if v["log"] \
             else (m - lo) / (hi - lo)
         base = np.asarray(v["cmap"](x))[:, :3]
         c = tr.colors(base, np.asarray(self.snap.background)[:3])

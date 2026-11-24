@@ -567,21 +567,25 @@ WALL_GROUPS = [       # groups of the wall labels of b2plot, in this order
 # order within the groups (the others as listed by b2plot)
 WALL_ORDER = {"Plasma fluxes": WALL_FLUXES, "Neutrals fluxes": WALL_NEUTRALS,
               DEPOSITED: tuple(n for n, _ in WALL_DEPOSITED),
-              SURFACE: WALL_FIRST}
+              SURFACE: WALL_FIRST,
+              "Geometry": ("graze", "lparwall", "lpolwall")}  # GUI ones
 WALL_OTHER = "Other wall quantities"
 # material data and state of the plate model (bulk material, coating,
 # deposited layers, temperatures and evaporation), the index masks of
 # the wall elements and layers (iwlt, iswlt, ...), the radiation
 # enhanced sublimation, the monolayer erosion and deposition, the
-# chemical sputtering factor, the sticking coefficient and the layer
-# fractions
+# chemical sputtering factor, the sticking coefficient, the layer
+# fractions, the ends, sides, neighbours and indices of the elements, the
+# parts of the wall fluxes (drawn stacked in the wall profile)
 WALL_HIDDEN_RE = re.compile(
     r"kappa\w*|tgdns|cp_b\d|bbdyemis|vapprs\w*|sublheat|ckapp\w*|ctgdns|"
     r"c_cp_b\d|coathick|plathick|l(kappa|rho|cp|emis|thick|depth)|"
     r"cooltemp|"
-    r"vaprtemp|time|qevap|qrad|thermev|i(s)?w\w*")
+    r"vaprtemp|time|qevap|qrad|thermev|i(s)?w\w*|"
+    r"w(na|mo|he|hi|ch)\w+")
 WALL_HIDDEN = {"sputres", "ero_ml", "depo_ml", "erel", "stckcoef",
-               "sputfrac"}
+               "sputfrac", "r1", "r2", "z1", "z2", "north", "south", "west",
+               "east", "nseg", "ibnd", "imapx", "imapy"}
 
 
 def _wall_group(name):
@@ -589,9 +593,9 @@ def _wall_group(name):
         pattern, name)), WALL_OTHER)
 
 
-def wall_quantities(categories):
-    """Quantities of the wall stack (b2plot wall labels) in their groups,
-    in the order of WALL_GROUPS."""
+def wall_quantities(categories, extra=()):
+    """Quantities of the wall stack (b2plot wall labels) and extra ones
+    in their groups, in the order of WALL_GROUPS."""
     order = [g for g, _ in WALL_GROUPS] + [WALL_OTHER]
     out = [Quantity(n.strip(), describe.WALL.get(n.strip()) or d.strip()
                     or n.strip(), _wall_group(n.strip()), "wall")
@@ -600,7 +604,7 @@ def wall_quantities(categories):
            not WALL_HIDDEN_RE.fullmatch(n.strip())]
     names = {q.name for q in out}
     out += [Quantity(n, text, DEPOSITED, "wall") for n, text in WALL_DEPOSITED
-            if n in names and _wall_group(n) != DEPOSITED]
+            if n in names and _wall_group(n) != DEPOSITED] + list(extra)
 
     def key(q):
         within = WALL_ORDER.get(q.group, ())

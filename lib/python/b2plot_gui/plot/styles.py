@@ -11,7 +11,7 @@ from .. import theme
 
 KINDS_FLAT = ("patch", "contourf", "contour")   # on the R, Z axes
 KINDS_VECTOR = ("quiver", "stream", "quiverstream", "texture",
-                "quivertexture")
+                "quivertexture", "tracers")
 
 
 @dataclass
@@ -25,6 +25,10 @@ class LayerStyle:
     rho: bool = False
     fill_style: str = "empty"   # structure: closed parts "full", hatched
     fill: str = ""              # ("pattern") or not filled, this colour
+    species: int = -1           # stagnation surface: column of ua (-1:
+    #                             the first ion)
+    ring: float = 2.0           # X- and O-points: width of their rings
+    #                             around the axis in the 3D view (points)
 
 
 LAYERS = {
@@ -41,11 +45,16 @@ LAYERS = {
                         "0.90 0.95 1.00 1.02 1.04 1.06", rho=True)),
     "midplanes": ("Midplanes", LayerStyle(False, "#2ca02c", 1.5, "--")),
     "targets": ("Targets", LayerStyle(False, "#ff7f0e", 2.0)),
+    "directions": ("Field directions", LayerStyle(False, "#000000",
+                                                  1.2)),
+    "stagnation": ("Stagnation surf.", LayerStyle(False, "#000000", 1.5,
+                                                  "--")),
 }
 LAYER_KEYS = tuple(LAYERS)
 ZORDER = {"grid": 3.0, "eirene": 3.1, "flux": 3.2,
           "structure": 3.45, "separatrices": 3.5, "midplanes": 3.52,
-          "targets": 3.55, "opoints": 3.6, "xpoints": 3.6}
+          "targets": 3.55, "opoints": 3.6, "xpoints": 3.6,
+          "directions": 5.35, "stagnation": 5.6}
 FILL_ZORDER = 3.38              # the filled parts of the structure
 HATCH = "////"                  # their pattern
 DIVERGING = ("twilight", "Spectral", "coolwarm", "bwr", "seismic", "berlin",
@@ -94,6 +103,15 @@ class PlotStyle:
     tex_contrast: float = 1.0
     tex_alpha: float = 1.0      # opacity over the plasma plot
     tex_magnitude: bool = True  # coloured by the magnitude, else grey
+    tr_n: int = 1000            # tracers (as in the 3D view): how many,
+    tr_tail: int = 10           # positions in their tails, their size,
+    tr_size: float = 1.5        # their speed, log-compressed speeds,
+    tr_speed: float = 1.0       # where they are born, shorter lives
+    tr_log: bool = True         # where weaker
+    tr_born: str = "quantity"
+    tr_fade: bool = True
+    split: str = ""             # drawn as its "physical" components or
+    split_off: tuple = ()       # its "geometric" ones; those not drawn
     level_mode: str = "number"  # number, step, list, proportion (b2plot)
     level_step: float = 0.0
     level_list: str = ""
@@ -134,6 +152,7 @@ class WallStyle:
     vmin: float = 0.0
     vmax: float = 1.0
     colorbar: bool = True
+    smooth: bool = False        # colours from the values smoothed
 
 
 def norm_for(values, style):

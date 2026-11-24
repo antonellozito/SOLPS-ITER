@@ -56,11 +56,13 @@ class B2Time(NcFile):
         super().__init__(path)
         self.times = self.array(self.nc["timesa"])
         self.sides = ("Western", "Eastern")     # inner, outer once known
+        self.codes = self.sides                 # IL, OL, IU, OU
         self.lines = {}                 # place -> (n, 2) cell centres
 
     def set_geometry(self, geometry):
         """The cell centres of the lists of the profiles (B2.5 grid of the
-        plot); the inner target: the one of smaller mean R."""
+        plot); the inner target: the one of smaller mean R, a lower one
+        below the middle of the core."""
         row = {int(c): i for i, c in enumerate(geometry.cells)}
         self.lines = {}
         for group, place, ds, cells in PROFILES.values():
@@ -74,16 +76,22 @@ class B2Time(NcFile):
         if np.all(np.isfinite(r)) and r[0] != r[1]:
             self.sides = ("inner", "outer") if r[0] < r[1] else \
                 ("outer", "inner")
+            core = geometry.centres[np.asarray(geometry.region) == 1]
+            z = np.nanmean((core if len(core) else geometry.centres)[:, 1])
+            self.codes = tuple(s[0].upper() + (
+                "L" if np.nanmean(self.lines[p][:, 1]) < z else "U")
+                for s, p in zip(self.sides, ("target_w", "target_e")))
 
     def side_text(self, text):
-        """{W}, {E}, {w}, {e} and the Western and Eastern edges of the
-        long names as the inner and outer targets, where known."""
+        """{W}, {E}, {w}, {e} (the targets) and the Western and Eastern
+        edges of the long names as the targets IL, OL, IU, OU, where
+        known."""
         w, e = self.sides
-        text = text.format(W=w[0].upper() + w[1:], E=e[0].upper() + e[1:],
-                           w=w, e=e)
+        cw, ce = self.codes
+        text = text.format(W=cw, E=ce, w=cw, e=ce)
         if w != "Western":
-            text = text.replace("Western edge", w + " target").replace(
-                "Eastern edge", e + " target").replace(
+            text = text.replace("Western edge", cw + " target").replace(
+                "Eastern edge", ce + " target").replace(
                 "Western", w).replace("Eastern", e)
         return text
 

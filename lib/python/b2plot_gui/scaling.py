@@ -256,14 +256,67 @@ def zoomed(lim, at, f, home):
     return (lo + shift, hi + shift)
 
 
+class ZoomBox:
+    """A zoom box dragged with the right button on the axes ax of a
+    canvas: a rubber band from the press to the mouse (inside the axes);
+    on release its limits, (x, y) in data, or None for a click (moved less
+    than DRAG)."""
+
+    def __init__(self, canvas, ax):
+        self.canvas, self.ax, self.start = canvas, ax, None
+        self.band = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle,
+                                          canvas)
+
+    def _inside(self, event):
+        b = self.ax.bbox
+        return (min(max(event.x, b.x0), b.x1), min(max(event.y, b.y0), b.y1))
+
+    def _widget(self, p):
+        dpr = getattr(self.canvas, "device_pixel_ratio", 1.0) or 1.0
+        return QtCore.QPoint(round(p[0] / dpr),
+                             round(self.canvas.height() - p[1] / dpr))
+
+    def press(self, event):
+        """True when a box starts (right button on the axes)."""
+        if event.button != 3 or event.inaxes is not self.ax:
+            return False
+        self.start = self._inside(event)
+        return True
+
+    def motion(self, event):
+        """True while a box is dragged (the rubber band follows)."""
+        if self.start is None:
+            return False
+        p = self._inside(event)
+        if np.hypot(p[0] - self.start[0], p[1] - self.start[1]) >= DRAG:
+            self.band.setGeometry(QtCore.QRect(
+                self._widget(self.start), self._widget(p)).normalized())
+            self.band.show()
+        return True
+
+    def release(self, event):
+        """(xlim, ylim) of the box, None for a click or no box."""
+        if self.start is None or event.button != 3:
+            return None
+        p, q, self.start = self.start, self._inside(event), None
+        self.band.hide()
+        if abs(q[0] - p[0]) < DRAG or abs(q[1] - p[1]) < DRAG:
+            return None
+        inv = self.ax.transData.inverted()
+        (x0, y0), (x1, y1) = inv.transform([p, q])
+        return (min(x0, x1), max(x0, x1)), (min(y0, y1), max(y0, y1))
+
+
 class Navigator:
-    """Wheel zoom around the mouse (15 % a step) and drag with the left
-    button on one axes of a canvas, never out of home (the whole plot,
-    set by set_home after each drawing); moved() after each change."""
+    """Wheel zoom around the mouse (15 % a step), drag with the left
+    button and a zoom box with the right one on one axes of a canvas,
+    never out of home (the whole plot, set by set_home after each
+    drawing); moved() after each change."""
 
     def __init__(self, canvas, ax, moved=None):
         self.canvas, self.ax, self.moved = canvas, ax, moved
         self.home, self._drag = None, None
+        self.box = ZoomBox(canvas, ax)
         canvas.mpl_connect("scroll_event", self._scroll)
         canvas.mpl_connect("button_press_event", self._press)
         canvas.mpl_connect("motion_notify_event", self._motion)
@@ -299,13 +352,15 @@ class Navigator:
         return zoomed(lim, at, f, home)
 
     def _press(self, event):
+        if self.home is not None and self.box.press(event):
+            return
         if event.button == 1 and event.inaxes is self.ax and \
                 self.home is not None:
             self._drag = (event.x, event.y, self.ax.get_xlim(),
                           self.ax.get_ylim(), False)
 
     def _motion(self, event):
-        if self._drag is None:
+        if self.box.motion(event) or self._drag is None:
             return
         x0, y0, xlim, ylim, moved = self._drag
         dx, dy = event.x - x0, event.y - y0
@@ -329,6 +384,9 @@ class Navigator:
         self._set(*lims)
 
     def _release(self, event):
+        lims = self.box.release(event)
+        if lims is not None:
+            self._set(*lims)
         if self._drag is not None and self._drag[4]:
             self.canvas.unsetCursor()
         self._drag = None
