@@ -58,6 +58,15 @@ def opengl_works():
     return _GL
 
 
+def remote_display():
+    """Whether the X display is on another machine (ssh -X or -Y: a host
+    before the colon of DISPLAY), whose OpenGL a window here cannot use
+    for the 3D view."""
+    host = os.environ.get("DISPLAY", "").partition(":")[0]
+    return QtWidgets.QApplication.platformName() == "xcb" and \
+        host not in ("", "unix")
+
+
 def opengl_composition(window):
     """Before window is first shown: the OpenGL format of the 3D view
     (desktop OpenGL 3.2 core, as pyvistaqt asks for) made the default and

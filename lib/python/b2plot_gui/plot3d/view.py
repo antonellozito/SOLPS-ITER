@@ -7,6 +7,7 @@ vertical and horizontal angles, moved with the mouse and the keys
 (plot3d/navigate), the rendering options and the tracers moved by a
 timer."""
 
+import os
 import time
 
 import numpy as np
@@ -29,13 +30,17 @@ class View3D(QtWidgets.QWidget):
 
     orientation = Signal(float, float)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, image=False):
         super().__init__(parent)
+        if image:                       # no OpenGL window here (a remote X
+            os.environ.setdefault(      # display): EGL off screen
+                "VTK_DEFAULT_OPENGL_WINDOW", "vtkEGLRenderWindow")
         import pyvista as pv
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        self.headless = QtWidgets.QApplication.platformName() in (
-            "offscreen", "minimal")
+        self.batch = QtWidgets.QApplication.platformName() in (
+            "offscreen", "minimal")     # no window at all: no animation
+        self.headless = self.batch or image
         if self.headless:               # no OpenGL in the window: an image
             self.pl = pv.Plotter(off_screen=True, window_size=(900, 700))
             self.pl.show(auto_close=False)  # renders from now on
@@ -44,6 +49,8 @@ class View3D(QtWidgets.QWidget):
             self.image.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
                                      QtWidgets.QSizePolicy.Ignored)
             lay.addWidget(self.image)
+            if image:                   # the mouse on the image
+                self.navigator = Navigator(self, self.image)
         else:
             from pyvistaqt import QtInteractor
             self.pl = QtInteractor(self, auto_update=False)
@@ -282,7 +289,7 @@ class View3D(QtWidgets.QWidget):
     def _animate(self):
         """The timer runs while there are tracers, not paused, shown."""
         on = self.scene.tracers is not None and not self.paused and \
-            self.isVisible() and not self.headless
+            self.isVisible() and not self.batch
         if on and not self.timer.isActive():
             self._last = None
             self.timer.start()
