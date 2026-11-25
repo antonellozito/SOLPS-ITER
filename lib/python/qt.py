@@ -17,6 +17,47 @@ from matplotlib.backends.backend_qtagg import (  # noqa: E402,F401
 PYSIDE6_VERSION = PySide6.__version__
 
 
+def _gl_format():
+    """The OpenGL format of the 3D view: desktop OpenGL 3.2 core, as
+    pyvistaqt asks for."""
+    F = QtGui.QSurfaceFormat
+    fmt = F()
+    fmt.setRenderableType(F.RenderableType.OpenGL)
+    fmt.setProfile(F.OpenGLContextProfile.CoreProfile)
+    fmt.setVersion(3, 2)
+    fmt.setSwapBehavior(F.SwapBehavior.DoubleBuffer)
+    for size in (fmt.setRedBufferSize, fmt.setGreenBufferSize,
+                 fmt.setBlueBufferSize, fmt.setDepthBufferSize,
+                 fmt.setAlphaBufferSize):
+        size(8)
+    fmt.setStencilBufferSize(0)
+    fmt.setSamples(0)               # anti-aliasing is done by VTK
+    return fmt
+
+
+_GL = None
+
+
+def opengl_works():
+    """Whether the display gives a context of the format of the 3D view
+    (on an offscreen surface, apart from every window; tried once): not
+    over a remote X display or a software renderer without OpenGL 3.2."""
+    global _GL
+    if _GL is None:
+        ctx = QtGui.QOpenGLContext()
+        ctx.setFormat(_gl_format())
+        surface = QtGui.QOffscreenSurface()
+        surface.setFormat(_gl_format())
+        surface.create()
+        ok = ctx.create() and surface.isValid() and ctx.makeCurrent(surface)
+        if ok:
+            f = ctx.format()
+            ok = (f.majorVersion(), f.minorVersion()) >= (3, 2)
+            ctx.doneCurrent()
+        _GL = bool(ok)
+    return _GL
+
+
 def opengl_composition(window):
     """Before window is first shown: the OpenGL format of the 3D view
     (desktop OpenGL 3.2 core, as pyvistaqt asks for) made the default and
@@ -34,17 +75,6 @@ def opengl_composition(window):
     if not (old.renderableType() == F.RenderableType.OpenGL and
             old.profile() == F.OpenGLContextProfile.CoreProfile and
             (old.majorVersion(), old.minorVersion()) >= (3, 2)):
-        fmt = F()
-        fmt.setRenderableType(F.RenderableType.OpenGL)
-        fmt.setProfile(F.OpenGLContextProfile.CoreProfile)
-        fmt.setVersion(3, 2)
-        fmt.setSwapBehavior(F.SwapBehavior.DoubleBuffer)
-        for size in (fmt.setRedBufferSize, fmt.setGreenBufferSize,
-                     fmt.setBlueBufferSize, fmt.setDepthBufferSize,
-                     fmt.setAlphaBufferSize):
-            size(8)
-        fmt.setStencilBufferSize(0)
-        fmt.setSamples(0)           # anti-aliasing is done by VTK
-        F.setDefaultFormat(fmt)
+        F.setDefaultFormat(_gl_format())
     QOpenGLWidget(window).hide()
     return True

@@ -7,10 +7,11 @@ plasma, vector and wall quantities at a time, the last one chosen."""
 
 import importlib.util
 import os
+import sys
 
 import numpy as np
 
-from ...qt import QtCore, QtWidgets, opengl_composition
+from ...qt import QtCore, QtWidgets, opengl_composition, opengl_works
 from .. import theme
 from ..panels.layers import left_form
 from ..panels.view3d import Options3D
@@ -45,10 +46,13 @@ class Mode3D(QtCore.QObject):
         self.menu.currentIndexChanged.connect(lambda *_: self.apply())
         self.box = QtWidgets.QGroupBox("Plot")
         left_form(self.box).addRow("View", self.menu)
-        if importlib.util.find_spec("pyvistaqt") is not None and \
+        if sys.platform == "darwin" and \
+                importlib.util.find_spec("pyvistaqt") is not None and \
                 QtWidgets.QApplication.platformName() not in ("offscreen",
                                                               "minimal"):
-            opengl_composition(tab)     # no flash when the view comes
+            opengl_composition(tab)     # no flash when the view comes (on
+        #                                 other systems when it first comes,
+        #                                 if the display has OpenGL 3.2)
         self.options = Options3D()
         self.options.hide()
         self.data = Data3D(self)
@@ -170,7 +174,15 @@ class Mode3D(QtCore.QObject):
         from ... import requirements
         missing = requirements.problems(False, list(NEED))
         err = None
-        if not missing:
+        window = QtWidgets.QApplication.platformName() not in (
+            "offscreen", "minimal")
+        if not missing and window and sys.platform != "darwin":
+            if opengl_works():          # the window made for it now
+                opengl_composition(self.tab)
+            else:
+                err = "no OpenGL 3.2 on this display (e.g. a remote X " \
+                    "display); the 2D plot works as before"
+        if not missing and err is None:
             try:
                 from .view import View3D
                 self.view = View3D()
