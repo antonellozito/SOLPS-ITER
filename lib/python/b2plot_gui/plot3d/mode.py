@@ -11,7 +11,8 @@ import sys
 
 import numpy as np
 
-from ...qt import QtCore, QtWidgets, opengl_composition, opengl_works
+from ...qt import QtCore, QtWidgets, opengl_composition, opengl_works, \
+    remote_display
 from .. import theme
 from ..panels.layers import left_form
 from ..panels.view3d import Options3D
@@ -176,16 +177,15 @@ class Mode3D(QtCore.QObject):
         err = None
         window = QtWidgets.QApplication.platformName() not in (
             "offscreen", "minimal")
+        image = False                   # drawn off screen, shown as images
         if not missing and window and sys.platform != "darwin":
-            if opengl_works():          # the window made for it now
+            image = remote_display() or not opengl_works()
+            if not image:               # the window made for it now
                 opengl_composition(self.tab)
-            else:
-                err = "no OpenGL 3.2 on this display (e.g. a remote X " \
-                    "display); the 2D plot works as before"
-        if not missing and err is None:
+        if not missing:
             try:
                 from .view import View3D
-                self.view = View3D()
+                self.view = View3D(image=image)
             except Exception as e:      # no OpenGL, a broken VTK
                 err = str(e)
         if self.view is None:
@@ -197,6 +197,10 @@ class Mode3D(QtCore.QObject):
             self.menu.setCurrentIndex(0)
             self.menu.blockSignals(False)
             return False
+        if image:
+            self.tab.status.emit("3D view: no OpenGL window on this display "
+                                 "(e.g. ssh -X), drawn off screen and shown "
+                                 "as images (slower)")
         self.tab.centre_layout.addWidget(self.view, 1)
         self.view.orientation.connect(self.options.view.show_angles)
         o = self.options
