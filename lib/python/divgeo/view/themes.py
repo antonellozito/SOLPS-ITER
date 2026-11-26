@@ -1,11 +1,11 @@
 """Themes of the Python interface (Window > Theme; the Motif DivGeo has
 none):
-- "light" and "dark": the light and dark theme of the b2plot GUI on every
+- "light" and "dark": the light and dark theme of b2viewer on every
   window; the drawing area and the distribution graph on a white or dark
   background, the colours of the resources turned into the plotting
   colours of Python (the matplotlib tab colours, lightened in the dark
   theme; greys keep their contrast with the background);
-- "classic": the widgets in the light theme of the b2plot GUI, the menu
+- "classic": the widgets in the light theme of b2viewer, the menu
   bar, the command row and the status line in the background colour of
   the resources, every drawing in the colours of the resources, as the
   Motif DivGeo draws.
@@ -21,7 +21,7 @@ import weakref
 import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ...b2plot_gui import theme as b2theme
+from ...b2viewer import theme as b2theme
 from ..core import resources
 from . import modes
 
@@ -35,7 +35,7 @@ TAB = ((0, 0xd62728), (30, 0xff7f0e), (60, 0xbcbd22), (120, 0x2ca02c),
 BACKGROUND = {name: int(b2theme.COLORS[key]["control"][1:], 16)
               for name, key in (("light", "Light"), ("dark", "Dark"))}
 # the closed parts of the elements (all closed polygons but the outermost):
-# the fill of the closed parts of the structure in the b2plot GUI, its
+# the fill of the closed parts of the structure in b2viewer, its
 # light colour and the dark display colour of it
 STRUCTURE_FILL = 0xe0e0e0
 
@@ -59,7 +59,7 @@ _TEXT_CACHE = {}
 
 
 class Style(b2theme._Indicators):
-    """The style of the b2plot GUI, without underlined mnemonics."""
+    """The style of b2viewer, without underlined mnemonics."""
 
     def styleHint(self, hint, option=None, widget=None, data=None):
         if hint == QtWidgets.QStyle.SH_UnderlineShortcut:
@@ -69,7 +69,7 @@ class Style(b2theme._Indicators):
 
 def install_style(app):
     """Style on the style of the platform (once), in place of the
-    indicators of the b2plot GUI."""
+    indicators of b2viewer."""
     style = app.style()
     if style is not None and not isinstance(style, Style):
         app.setStyle(Style(style.name()))

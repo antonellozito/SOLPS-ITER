@@ -12,7 +12,7 @@ import sys
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ...b2plot_gui import scaling
+from ...b2viewer import scaling
 from ..core import api, lib as corelib, options, prefs, resources
 from ..dialogs import boxes, version
 from ..view import raster, records, themes
@@ -60,7 +60,7 @@ class Application:
         self.canvas_size = None
         self.wid = 0
         self.help_window = None
-        # the look of the b2plot GUI: its check boxes and radio buttons,
+        # the look of b2viewer: its check boxes and radio buttons,
         # its wheel guard; the style and stylesheet of the theme of the
         # start
         start = (self.app_resource("theme", "Theme") or "light").strip()

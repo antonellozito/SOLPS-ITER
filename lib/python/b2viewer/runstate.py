@@ -185,7 +185,7 @@ def view_folder(rundir, kind):
     (baserun) beside it. remove_view removes it."""
     rundir = os.path.abspath(rundir)
     parent = os.path.dirname(rundir)
-    base = tempfile.mkdtemp(prefix="b2plot-view-")
+    base = tempfile.mkdtemp(prefix="b2viewer-view-")
     for name in os.listdir(parent):
         if os.path.join(parent, name) != rundir:
             os.symlink(os.path.join(parent, name), os.path.join(base, name))
@@ -212,5 +212,5 @@ def view_folder(rundir, kind):
 def remove_view(run):
     """Remove a folder of view_folder (only links and b2plot files)."""
     base = os.path.dirname(run)
-    if os.path.basename(base).startswith("b2plot-view-"):
+    if os.path.basename(base).startswith("b2viewer-view-"):
         shutil.rmtree(base, ignore_errors=True)

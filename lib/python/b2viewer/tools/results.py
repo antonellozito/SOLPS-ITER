@@ -18,7 +18,7 @@ class ResultsPanel(Scaled, QtWidgets.QWidget):
 
     def __init__(self, settings, parent=None):
         super().__init__(parent, Qt.Tool)
-        self.setWindowTitle("b2plot — results")
+        self.setWindowTitle("b2viewer — results")
         self.settings = settings
         self.placed = False
         self.sized = False

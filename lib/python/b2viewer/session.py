@@ -1,6 +1,6 @@
 """The SOLPS-ITER session of the GUI: which folders are run directories,
 and the runs opened in the session. A session starts with each source of
-setup.csh (or setup.ksh), which sets SOLPS_SESSION; every b2plot_gui
+setup.csh (or setup.ksh), which sets SOLPS_SESSION; every b2viewer
 started from it shares one list of runs, kept in a file of the temporary
 folder. Without SOLPS_SESSION the list is that of the window only."""
 
@@ -75,7 +75,7 @@ class Recent:
         self.path = None
         if sid:
             folder = os.path.join(tempfile.gettempdir(),
-                                  "b2plot_gui-" + getpass.getuser())
+                                  "b2viewer-" + getpass.getuser())
             self.path = os.path.join(
                 folder, "runs-" + re.sub(r"[^\w.-]", "_", sid))
 

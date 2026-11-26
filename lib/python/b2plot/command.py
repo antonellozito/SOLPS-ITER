@@ -1,6 +1,6 @@
 """The b2plot part of the package entry (__main__.py): checks of the
 command line, of the Python and of the B2.5 build, --info and -n, then
-b2plot, b2run or carre.exe with the Python graphics; b2plot_gui starts from
+b2plot, b2run or carre.exe with the Python graphics; b2viewer starts from
 the same checks.
 
 Any Python 3 syntax up to the requirements check, so that an old

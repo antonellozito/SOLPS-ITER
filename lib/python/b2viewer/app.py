@@ -1,4 +1,4 @@
-"""Main window of the b2plot GUI: run line with the run commands and
+"""Main window of b2viewer: run line with the run commands and
 the theme switch, the 2D view, status bar.
 
 One b2pl.exe per open run serves the data (data.Run); a QTimer
@@ -303,7 +303,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._run_commands()
         self.recent_runs.add(path)
         self.runline.set(session.shown(path))
-        self.setWindowTitle("b2plot \u2014 " + path)
+        self.setWindowTitle("b2viewer \u2014 " + path)
         self._status("Reading the run with b2plot\u2026")
         self._timer.start()
 
@@ -415,7 +415,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _error(self, text, details):
         box = QtWidgets.QMessageBox(self)
         box.setIcon(QtWidgets.QMessageBox.Warning)
-        box.setWindowTitle("b2plot")
+        box.setWindowTitle("b2viewer")
         box.setText(text)
         box.setDetailedText(details)
         box.open()
@@ -506,8 +506,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
 def main(args):
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(
-        ["b2plot_gui"])
-    app.setApplicationName("b2plot_gui")
+        ["b2viewer"])
+    app.setApplicationName("b2viewer")
     app.setWindowIcon(QtGui.QIcon(LOGO))        # the icon of the program
     win = MainWindow(args)
     win.show()
