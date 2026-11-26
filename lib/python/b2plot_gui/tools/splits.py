@@ -51,6 +51,10 @@ WALL_SPLITS = {
     "walldep": ("wallhflx", "wallrad", "ewldt", "-ewldrp"),
 }
 WALL_TEXTS = {"ewldrp": "Energy released by recycled ions"}   # shorter
+# the EIRENE wall quantities split by stratum (b2plot wstrat), the strata
+# of one birth place together (balances/neutrals.py)
+BY_STRATUM = ("wldna", "wldnm", "wldra", "wldrm", "ewlda", "ewldm", "ewldt",
+              "ewldrp", "wldpa", "wldpm", "wldspta", "wldsptm")
 REST = "rest"                   # name of the rest
 REST_MIN = 1e-4                 # drawn above this rms fraction of the total
 ZERO = 1e-6                     # a part this small (of the total) is zero

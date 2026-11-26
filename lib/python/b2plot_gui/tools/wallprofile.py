@@ -312,11 +312,15 @@ class WallProfile(QtWidgets.QGroupBox):
         self.asked = None               # the run asked for the areas
         self.tab, self.asked_parts, self.failed = None, set(), None
         self.split = QtWidgets.QCheckBox("Components")
-        self.split.setToolTip("The flux as its parts (those of the arrows "
-                              "split into physical components) stacked "
-                              "along the wall, positive ones upwards and "
+        self.tip = ("The quantity as its parts stacked along the "
+                              "B2.5 wall, positive ones upwards and "
                               "negative ones downwards, the total over "
-                              "them")
+                              "them: a plasma wall flux as the parts of the "
+                              "arrows split into physical components, an "
+                              "EIRENE wall flux by the place its neutrals "
+                              "were born (the strata, as in the Neutrals "
+                              "tab of Balances)")
+        self.split.setToolTip(self.tip)
         self.split.toggled.connect(lambda *_: self.tab is not None and
                                    self.follow(self.tab))
         row = QtWidgets.QHBoxLayout()
@@ -369,9 +373,18 @@ class WallProfile(QtWidgets.QGroupBox):
         seg = wall_segments(run, w)
         colour = tab.plot.layer_styles["separatrices"].color
         values = wall_values(w, cols)
-        self.split.setVisible(q.name in splits.WALL_SPLITS)
+        split = q.name in splits.WALL_SPLITS or q.name in splits.BY_STRATUM
+        self.split.setVisible(split)
+        if q.name in splits.BY_STRATUM:     # the strata need balance.nc
+            o = tab.balance.neutrals.get()
+            split = o is not None and not o.why
+        self.split.setEnabled(split)
+        self.split.setToolTip(self.tip if split else
+                              "Needs the balance.nc of the state with the "
+                              "EIRENE tallies by stratum (for the strata of "
+                              "each birth place)")
         parts = self._parts(tab, q, w, cols, values) if \
-            self.split.isChecked() and q.name in splits.WALL_SPLITS else None
+            self.split.isChecked() and split else None
         near = np.asarray(seg, float)[:len(area)]
         quantity = (q.name, tuple(cols))    # another: y limits automatic
         if quantity != self.quantity:
@@ -386,35 +399,62 @@ class WallProfile(QtWidgets.QGroupBox):
                           self.shown.isChecked() else [], colour, parts,
                           target_spans(run, near))
 
+    @staticmethod
+    def _wanted(tab, q):
+        """[(name, label, b2plot fields summed, sign)] of the parts of q:
+        the wall fluxes of WALL_SPLITS, or for an EIRENE wall quantity
+        the birth places of the Neutrals tab, each the sum of its strata
+        (wstrat); None without those (no balance.nc of the state)."""
+        run = tab.run
+        if q.name in splits.WALL_SPLITS:
+            return [(n, splits.wall_label(run, n), [n.lstrip("-")],
+                     -1.0 if n.startswith("-") else 1.0)
+                    for n in splits.WALL_SPLITS[q.name]]
+        o = tab.balance.neutrals.get()
+        if o is None or o.why:
+            return None
+        return [(r.name, r.name, ["%d wstrat %s" % (k + 1, q.name)
+                                  for k in r.strata], 1.0)
+                for r in o.sources if r.kind != "sputtered"]
+
     def _parts(self, tab, q, w, cols, total):
-        """[(name, label, values)] of the parts of the wall flux q (w, the
-        columns cols, total its values) and the rest, once all arrived
+        """[(name, label, values)] of the parts of the wall quantity q (w,
+        the columns cols, total its values) and the rest, once all arrived
         (asked for once per run), else None (said once when b2plot has
         not got them)."""
         run, out, waiting = tab.run, [], False
-        for name in splits.WALL_SPLITS[q.name]:
-            label = name.lstrip("-")
-            key = ("wfield", label, (), None)
-            d = run.cache.get(key)
-            if d is None:
-                waiting = True
-                if any(r.key == key for r in run.pending):
-                    continue
-                if (id(run), label) not in self.asked_parts:
-                    self.asked_parts.add((id(run), label))
-                    tab.request.emit(("tools", catalog.Quantity(
-                        label, label, "", "wall"), (), None))
-                    continue
-                if self.failed is not run:
-                    self.failed = run
-                    tab.status.emit("No wall label %s in b2plot: the "
-                                    "components need B2.5 built with "
-                                    "them" % label)
-                return None
-            v = np.asarray(wall_values(d, cols if len(d.columns) == len(
-                w.columns) else range(len(d.columns))), float)[:len(total)]
-            out.append((name, splits.wall_label(run, name),
-                        -v if name.startswith("-") else v))
+        wanted = self._wanted(tab, q)
+        if wanted is None:
+            if self.failed is not run:
+                self.failed = run
+                tab.status.emit("Components by birth place need the "
+                                "balance.nc of the state (the strata)")
+            return None
+        for name, text, fields, sign in wanted:
+            v = 0.0
+            for label in fields:
+                key = ("wfield", label, (), None)
+                d = run.cache.get(key)
+                if d is None:
+                    waiting = True
+                    if any(r.key == key for r in run.pending):
+                        continue
+                    if (id(run), label) not in self.asked_parts:
+                        self.asked_parts.add((id(run), label))
+                        tab.request.emit(("tools", catalog.Quantity(
+                            label, label, "", "wall"), (), None))
+                        continue
+                    if self.failed is not run:
+                        self.failed = run
+                        tab.status.emit("No wall label %s in b2plot: the "
+                                        "components need B2.5 built with "
+                                        "them" % label)
+                    return None
+                v = v + np.asarray(wall_values(d, cols if len(
+                    d.columns) == len(w.columns) else range(len(
+                        d.columns))), float)[:len(total)]
+            if not waiting:
+                out.append((name, text, sign * np.asarray(v, float)))
         return None if waiting else splits.wall_parts(total, out)
 
     def show_profile(self, key, name, unit, values, seg, area, what,

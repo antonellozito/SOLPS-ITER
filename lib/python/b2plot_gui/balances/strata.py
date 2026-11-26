@@ -1,7 +1,8 @@
 """The EIRENE strata of b2.neutrals.parameters for the legends and the 2D
 plot: kind of each stratum (crcstra: recycling, gas puff, volume
 recombination, time-dependent) and the boundary faces of the recycling
-ones (kind A: the faces with rcstart <= fcLbl <= rcend, as B2.5 reads it;
+ones (kind A: the faces with rcstart <= fcLbl <= rcend, fcLbl of either
+sign but not zero, as B2.5 build_boundary_list reads it;
 kinds N, S, E, W: the guard cells b2plot labels with the stratum, rc)."""
 
 import numpy as np
@@ -54,8 +55,9 @@ class Strata:
         code = self.kinds[k][:1]
         if code == "A":
             lbl = grid.fcLbl
-            return np.flatnonzero((lbl >= self.start[k]) &
-                                  (lbl <= self.end[k]) & (lbl > 0))
+            return np.flatnonzero((lbl >= min(self.start[k], self.end[k])) &
+                                  (lbl <= max(self.start[k], self.end[k])) &
+                                  (lbl != 0))   # labels of either sign
         if rc is None:
             return np.zeros(0, int)
         same = [j for j in range(k + 1) if self.kinds[j] == self.kinds[k]

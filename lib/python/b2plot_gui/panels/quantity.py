@@ -628,8 +628,8 @@ class QuantityPanel(QtWidgets.QWidget):
             else ""
         for box in self.overlay.boxes():
             box.setVisible(overlay)
-        self.overlay.regions.setVisible(osource in ("matrix",
-                                                    "equilibrium"))
+        self.overlay.regions.setVisible(osource in ("matrix", "equilibrium",
+                                                    "neutrals"))
         self.lines.fill_lines.setVisible(kind == "contourf")
         self.lines.mono.setVisible(kind == "contour")   # filled: no use
         self.vector_box.setVisible(vector)
@@ -651,7 +651,8 @@ class QuantityPanel(QtWidgets.QWidget):
                                                      "quivertexture"))
         self.tracers.setVisible(vector and vkind == "tracers")
         self.wall_box.setVisible(wall)
-        self.plasma_regions.setVisible(source in ("matrix", "equilibrium"))
+        self.plasma_regions.setVisible(source in ("matrix", "equilibrium",
+                                                  "neutrals"))
         self.vector_regions.setVisible(vsource == "vector")  # B2.5 cells
         mask = self.is_mask()
         self.mask_box.setVisible(mask)

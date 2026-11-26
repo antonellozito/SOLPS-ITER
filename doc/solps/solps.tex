@@ -19183,6 +19183,7 @@ at the edge of the computational domain.
     wldrm \index{b2plot, wldrm}     & Backscattered flux of each EIRENE molecule species on the EIRENE wall, one value per EIRENE surface (see below) $(m^{-2}.s^{-1})$ \\
     wldspta \index{b2plot, wldspta} & Sputtered atoms of each species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wldsptm \index{b2plot, wldsptm} & Sputtered molecules of each species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
+    wstrat \index{b2plot, wstrat}   & With the number of a stratum before it ({\tt 12 wstrat wldna}): the next EIRENE wall quantity of that stratum only ({\bf wldna}, {\bf wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf ewldt}, {\bf ewldrp}, {\bf wldpa}, {\bf wldpm}, {\bf wldspta}, {\bf wldsptm}); on the faces of the B2.5 wall elements that EIRENE resolves, the resolved value times the share of the stratum in the total of its surface (of its incident particles for an energy flux without energies by stratum), so that the strata add up to the quantity \\
     wlpump \index{b2plot, wlpump}   & Pumped flux of each EIRENE atom, molecule and test ion species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wmocvsa \index{b2plot, wmocvsa} & Wall viscous momentum flux {\em fmo\_cvsa} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
     wmoflua \index{b2plot, wmoflua} & Wall convected momentum flux {\em fmo\_flua} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
@@ -19881,9 +19882,15 @@ The {\bf quantity panel} (left):
   {\bf wallhflx} {\bf wallfhe}, {\bf wallfhi}, {\bf wallfhn},
   {\bf wallfhp}, {\bf wallfhm}, {\bf wallfnt} and {\bf wallfkt}, for
   {\bf walldep} {\bf wallhflx}, {\bf wallrad}, {\bf ewldt} and
-  $-${\bf ewldrp}; a rest (total minus the parts) as one more band when
-  it is not negligible (the particle flux with drifts); Export writes
-  the parts as well)
+  $-${\bf ewldrp}; for the EIRENE wall quantities {\bf wldna}, {\bf
+  wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf
+  ewldt}, {\bf ewldrp}, {\bf wldpa}, {\bf wldpm}, {\bf wldspta} and
+  {\bf wldsptm} the place where the neutrals were born, the strata of
+  each birth place of the Neutrals tab of Balances together (b2plot
+  {\bf wstrat}; it needs the {\tt balance.nc} of the state, for the
+  strata), on the B2.5 wall elements; a rest (total minus the parts) as
+  one more band when it is not negligible (the particle flux with
+  drifts); Export writes the parts as well)
   on the
   B2.5 wall elements (an EIRENE wall
   quantity on those of its elements), with its integral and average over
@@ -20152,9 +20159,14 @@ of the run when the view ray meets it first, else on the visible
 surface, the first one marked by a red ball; or with {\tt In 2D} on the
 2D plot, shown in place of the 3D view until the two ends are clicked;
 choosing the drawn line without one starts {\tt Draw line}), whether they fade
-away sooner where the magnitude is smaller ({\tt fade}, on at first: ageing faster by the square root of its 98th percentile over
-it, at most 20 times), the speeds true or log-compressed (the colours
-follow the scale of the {\tt Vector plot options}), paused or not; the tracers are shown from the start
+away sooner where the magnitude is smaller ({\tt fade}, on at first: ageing faster by the square root of one over
+the level of the magnitude, at most 20 times), the speeds true or
+log-compressed (the colours follow the scale of the {\tt Vector plot
+options}, and so do the births and the fading: the level is the
+magnitude over its 98th percentile on a linear scale, its logarithm
+from the bottom of the colour bar to the 98th percentile on a log one,
+the density of births as the square root of the level, but on the line
+drawn), paused or not; the tracers are shown from the start
 as they move later on (run through their longest lifetime first); {\tt Rendering}, the quality of the anti-aliasing (no,
 low: FXAA, medium: MSAA, high: SSAA, at first; MSAA while the vessel or
 the structure is made transparent), smooth shading ({\tt smooth}),
@@ -20264,8 +20276,9 @@ The {\bf Balances} tab, right of {\tt Run movies} and only with a
 {\tt balance.nc} written with the {\tt b2fstate} and {\tt b2fplasma} of
 the run (within ten minutes of them), shows the final state on the plot
 and, in the quantity column instead of the quantities, the buttons
-{\tt Parallel fluxes} and {\tt Radial fluxes}, then the balance of the
-volume picked. The volume is drawn and picked only in this tab.
+{\tt Parallel fluxes}, {\tt Radial fluxes} and {\tt Neutrals},
+then the balance of the volume picked (or the neutrals balance). The
+volume is drawn and picked only in this tab.
 
 The {\bf parallel balance} ({\tt Parallel fluxes}) computes the
 balances of the scripts of {\tt scripts/Balance} in a volume picked on
@@ -20341,6 +20354,75 @@ contact area of the inner or outer surface): the total radial balance
 of the tubes, the total poloidal balance (per slice) the flux in through
 the inner surface, out through the outer surface and the sources, with
 the poloidal transport among them.
+
+The {\bf neutrals} ({\tt Neutrals}) show the particles of the EIRENE
+neutrals of the element chosen in two tables. The birth places are the
+strata of {\tt b2.neutrals.parameters}, those of one name together: a
+recycling stratum is named as most of its boundary faces (with an upper
+and a lower divertor {\tt Inner lower target}, {\tt Outer lower target},
+{\tt Inner upper target}, {\tt Outer upper target}, {\tt Lower PFR wall}
+and {\tt Upper PFR wall}, the rest {\tt Inner main chamber wall} and {\tt
+Outer main chamber wall}; with one divertor {\tt Inner target}, {\tt
+Outer target}, {\tt PFR wall}, the rest {\tt Main chamber wall}; all the
+faces of a private flux region together; {\tt Core boundary}), the
+others by their kind ({\tt Gas puff}, {\tt Volume recombination}).
+
+The {\bf ionisation} table, from {\tt balance.nc} alone and exact: in
+each volume region ({\tt cvReg}: {\tt Core}, {\tt SOL}, the divertors,
+\ldots; five columns fit, more scroll sideways under the row names) and
+in {\tt Total}, the particles of the element the plasma gets from the
+neutrals of each birth place (the EIRENE tallies by stratum, {\tt
+eirene\_mc\_papl/pmpl/pipl\_sna\_bal}; a neutral keeps its stratum
+through charge exchange and dissociation) and, as {\tt Sputtered}, from
+the strata of the other elements (the particles they sputter); the last
+row the total. {\tt Process} chooses the collisions: atoms, molecules
+(negative where D$^+$ charge-exchanges with D$_2$), molecular ions, or
+all of them; {\tt Values} gives percent of all the ionisation, of each
+source, or atoms per second (a molecule counts its atoms).
+
+The {\bf balance} table, of all the neutrals of the element, in atoms per
+second and in percent of the sources: the sources (positive) {\tt
+Recycled at} each birth place (the atoms and molecules released by the
+plasma ions of its strata, {\tt fort.44} {\tt wldpa}, {\tt wldpm}),
+{\tt Gas puff} ({\tt userfluxparm}, the atoms EIRENE launches also for a
+D$_2$ puff, shared over the elements by {\tt gpfc}), {\tt Volume
+recombination} (the plasma sink of its strata, {\tt
+eirene\_mc\_pppl\_sna\_bal}) and {\tt Sputtered at} each place where some
+is ({\tt wldspta}, {\tt wldsptm}; a non-default standard surface by its
+faces, the EIRENE additional surfaces as the vessel); the sinks
+(negative) {\tt Ionised in} each region, {\tt Absorbed by} each
+non-default standard surface (in contact with the plasma, named by its
+faces), {\tt Pumping surface} 1, 2, \ldots{} (additional surfaces whose
+recycling coefficient is below one) and {\tt Deposited on the vessel}
+(additional surfaces that keep the element though they recycle the
+others, e.g.\ tungsten), only those where EIRENE absorbs some of the
+element ({\tt wlpump}; molecules and test ions count by their atoms,
+{\tt mlcmp}). The last row, {\tt Residual}, is sources minus sinks; the
+line under the table gives it in percent of the sources and its likely
+cause ({\tt balance.nc} averaged over the time steps of the run, {\tt
+balance\_average}, while {\tt fort.44} holds the last EIRENE call;
+particles ionised outside the B2.5 grid; a puff set at run time).
+
+Thicker lines separate the groups of rows, cells are coloured by their
+size (blue sources, orange sinks), {\tt Export} writes both tables as
+CSV. Nothing is plotted, glows or is outlined until it is clicked: a
+number of the ionisation table puts the source per volume of its
+neutrals on the plot (in the total row under a region: all the neutrals
+in that region only), and so does a row of the balance table: a birth
+place its source, an {\tt Ionised in} row all the neutrals in its region
+only, the other rows (sputtered, sinks, residual) none; a row of either
+table also makes its surfaces glow (the faces of a birth place, the EIRENE surfaces
+of a sputtering or sink row; the gas puff a diamond at the middle of each
+EIRENE source surface of the element, from {\tt eirene.input.json}); a
+column of the ionisation table, an {\tt Ionised in} row or a region of
+the plot outlines the whole region; an empty cell or an empty place of
+the section takes the map away; {\tt Draw region} adds a region drawn on
+the plot as a polygon (the cells whose centres are inside) as one more
+column of the ionisation table. The source per volume of each birth
+place, of the sputtered particles and of all the neutrals, the elements
+as species, are Final state quantities in the group {\tt Particle sources
+by neutral origin} (for chords, profiles and the 3D view); they need the
+{\tt balance.nc} of the state.
 
 The {\bf layers panel} (right), one line per layer (shown, colour
 with its opacity, width or marker size, line style), shows and styles

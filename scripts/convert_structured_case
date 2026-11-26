@@ -16,7 +16,8 @@
 #   boundary and neutrals stencils are converted by b2us; the midplane
 #   segments found by b2us are added to b2.user.parameters.
 # run directories: b2fstate (as b2fstati), the boundary, neutrals and feedback
-#   parameter files, fort.1 (EIRENE input), fort.33-35 and the history files
+#   parameter files, fort.1 (EIRENE input; a standalone run with an empty
+#   fort.1 is converted without EIRENE input), fort.33-35 and the history files
 #   b2time.nc, b2batch.nc, b2tallies.nc, b2movies.nc and eirenemovies.nc are
 #   converted by b2us (with the midplane columns of the structured run,
 #   b2mwti_jxa and b2mwti_jxi, unless b2mn.dat sets b2us_auto_midplane_det,
@@ -66,7 +67,7 @@ while [ $# -gt 0 ]; do
     case $opt in
       m) mode=mpi; np=$OPTARG ;;
       t) mode=omp; np=$OPTARG ;;
-      h) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      h) sed -n '2,56p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
       *) die "unknown option (see -h)" ;;
     esac
   done
@@ -335,8 +336,16 @@ for r in $runs; do
   elif [ -f "$sb/b2.user.parameters" ]; then
     cp "$sb/b2.user.parameters" "$c/"
   fi
-  if [ -f "$sr/fort.1" ]; then
+  # ..EIRENE input: the run's fort.1, else the baserun input.dat; a standalone
+  #   run without its own EIRENE input (empty fort.1) is converted without one,
+  #   since its neutrals parameters need not match the EIRENE input of the
+  #   baserun (runs/Makefile links the baserun input.dat when there is none)
+  noeir=0
+  if [ -s "$sr/fort.1" ]; then
     cp "$sr/fort.1" "$c/input.dat"
+  elif grep -q "^'b2mndr_eirene'[[:space:]]*'0'" "$sr/b2mn.dat"; then
+    noeir=1
+    echo "$r: standalone run (b2mndr_eirene 0) without its own EIRENE input: converted without input.dat"
   elif [ -f "$sb/input.dat" ]; then
     cp "$sb/input.dat" "$c/"
   fi
@@ -347,7 +356,9 @@ for r in $runs; do
   for h in $hist; do [ -f "$sr/$h.nc" ] && ln -s "$sr/$h.nc" "$c/$h.nc"; done
   sleep 1
   if [ -s "$sr/b2fstate" ]; then cp "$sr/b2fstate" "$c/b2fstati"; else cp "$sr/b2fstati" "$c/b2fstati"; fi
+  [ $noeir = 1 ] && [ -e "$work/baserun/input.dat" ] && mv "$work/baserun/input.dat" "$work/baserun/input.dat.hold"
   run_b2us
+  [ -e "$work/baserun/input.dat.hold" ] && mv "$work/baserun/input.dat.hold" "$work/baserun/input.dat"
   rsync -a "${ropts[@]}" "$sr/" "$dr/" || die "copy of $sr failed"
   for t in $old_trc; do
     [ -f "$sr/tracing/$t.trc" ] && \
@@ -364,7 +375,8 @@ for r in $runs; do
   for p in boundary neutrals feedback_control feedback_save; do
     [ -f "$c/b2us.$p.parameters" ] && cp "$c/b2us.$p.parameters" "$dr/b2.$p.parameters"
   done
-  [ -f "$sr/fort.1" ] && [ -f "$c/input.dat.us" ] && cp "$c/input.dat.us" "$dr/fort.1"
+  [ -s "$sr/fort.1" ] && [ -f "$c/input.dat.us" ] && cp "$c/input.dat.us" "$dr/fort.1"
+  [ -f "$sr/fort.1" ] && [ ! -s "$sr/fort.1" ] && : > "$dr/fort.1"
   [ -f "$sr/fort.33" ] && [ -f "$c/triangle.coordinates" ] && cp "$c/triangle.coordinates" "$dr/fort.33"
   [ -f "$sr/fort.34" ] && [ -f "$c/triangle.elements" ] && cp "$c/triangle.elements" "$dr/fort.34"
   [ -f "$sr/fort.35" ] && [ -f "$c/triangle.neighbors" ] && cp "$c/triangle.neighbors" "$dr/fort.35"
