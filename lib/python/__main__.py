@@ -2,7 +2,7 @@
 python $SOLPSTOP/lib/python OPTIONS:
 
     --run-plot NAME ARGS   the run plot scripts scripts/NAME.py (run_plots)
-    --gui ...              b2plot_gui (b2plot_gui, on the checks of b2plot)
+    --gui ...              b2viewer (b2viewer, on the checks of b2plot)
     anything else          b2plot, b2run (b2pl, b2yg ... b2yr) and carre2
                            (carre.exe) with the Python graphics (b2plot)
 
@@ -44,7 +44,7 @@ def main(argv=None):
     if isinstance(args, int):
         return args
     if args.gui:
-        from solpspy.b2plot_gui import app
+        from solpspy.b2viewer import app
         return app.main(args)
     return command.run(args)
 

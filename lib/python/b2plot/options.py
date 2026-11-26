@@ -11,7 +11,7 @@ DESCRIPTION = """\
 Python graphics of b2plot and of the B2 post-processors. In a B2.5 build
 with the Python graphics (the default), b2plot and b2run start it for the
 programs b2pl and b2yg ... b2yr, carre2 for carre.exe of Carre2, and
-b2plot_gui starts it with --gui. As
+b2viewer starts it with --gui. As
 for the NCAR program, the b2plot commands come from stdin: typed at a
 terminal, each line is run at once; piped or redirected, all of them. All
 values are computed by the Fortran b2plot (b2pl.exe)."""
@@ -35,7 +35,7 @@ def name(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if any(os.path.basename(w) == CARRE + ".exe" for w in argv):
         return "carre2"
-    return "b2plot_gui" if "--gui" in argv else "b2plot"
+    return "b2viewer" if "--gui" in argv else "b2plot"
 
 
 def parser(prog="b2plot"):
@@ -46,7 +46,7 @@ def parser(prog="b2plot"):
                     help="b2pl (b2plot, default) or a B2 post-processor "
                     "(%s)" % ", ".join(PROGRAMS))
     ap.add_argument("--gui", action="store_true",
-                    help="open the GUI on the run directory (b2plot_gui)")
+                    help="open the GUI on the run directory (b2viewer)")
     ap.add_argument("--exec", nargs=argparse.REMAINDER, metavar="COMMAND",
                     help="used by the run targets: run the rest of the "
                     "line (the executable with its prefix, such as time or "

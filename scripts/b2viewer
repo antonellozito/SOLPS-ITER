@@ -1,6 +1,6 @@
 #! /bin/tcsh -f
 
-# Opens the b2plot GUI on the run directory (anywhere else the window
+# Opens b2viewer on the run directory (anywhere else the window
 # opens empty, a run is chosen with Open run): needs a B2.5 build with the
 # Python graphics (the default, not USE_NCAR) and the SOLPS-ITER Python
 
@@ -13,8 +13,8 @@ set opts=()
 
 argloop:
   if ("X${1}X" == "X-hX") then
-    echo 'Usage: b2plot_gui [OPTIONS]'
-    echo 'Opens the b2plot GUI on the run directory; started anywhere else,'
+    echo 'Usage: b2viewer [OPTIONS]'
+    echo 'Opens b2viewer on the run directory; started anywhere else,'
     echo 'the window opens empty and Open run chooses a run.'
     echo ' '
     echo 'Optional arguments:'
@@ -43,7 +43,7 @@ argloop:
     goto argloop
   endif
   if ($#argv != 0) then
-    echo "b2plot_gui: unknown argument $1 (b2plot_gui -h lists the options)"
+    echo "b2viewer: unknown argument $1 (b2viewer -h lists the options)"
     exit 1
   endif
 
@@ -54,7 +54,7 @@ else
 endif
 $py -c "import sys" >& /dev/null
 if ($status != 0) then
-  echo "b2plot_gui: $py not found: the b2plot GUI needs the SOLPS-ITER Python, see install_python"
+  echo "b2viewer: $py not found: b2viewer needs the SOLPS-ITER Python, see install_python"
   exit 2
 endif
 exec $py $SOLPSTOP/lib/python --gui $opts:q

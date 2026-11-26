@@ -13,7 +13,7 @@ import traceback
 
 from PySide6 import QtWidgets
 
-from ...b2plot_gui import scaling
+from ...b2viewer import scaling
 from ...divgeo.core import resources
 from ...divgeo.view import themes
 from ..core import api, lib as corelib, options
@@ -56,7 +56,7 @@ class Application:
                        api.VIEWPROC(self._unsaved),
                        api.EXITPROC(self.exit))
         self.dll.SetPyProcs(*self._procs)
-        # the look of the b2plot GUI, in the theme of the resource theme
+        # the look of b2viewer, in the theme of the resource theme
         qt = QtWidgets.QApplication.instance()
         themes.install_style(qt)
         scaling.guard_wheel(qt)

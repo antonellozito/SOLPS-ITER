@@ -21,7 +21,7 @@ class Composer(Scaled, QtWidgets.QWidget):
 
     def __init__(self, settings, parent=None):
         super().__init__(parent, Qt.Window)
-        self.setWindowTitle("b2plot — page composer")
+        self.setWindowTitle("b2viewer — page composer")
         self.settings = settings
         self.snaps = []
         self.values = {}

@@ -1,5 +1,5 @@
 """Interpreter and module check of the Python tools of SOLPS-ITER (b2plot,
-b2plot_gui, the run plot scripts, DivGeo, AMDS; no fallbacks), the Python they
+b2viewer, the run plot scripts, DivGeo, AMDS; no fallbacks), the Python they
 run with and the Qt libraries of its windows.
 
 Runs on any Python 3 (no f-strings, standard library only), so that the

@@ -1461,10 +1461,10 @@ The number of scripts developed for various {\bf SOLPS} versions is very large. 
 \item Job submission scripts
  \begin{description}
   \item[b2plot]\index{b2plot} Shortcut to \btwoplotns, with the graphics of the {\tt B2.5} build (Section~\ref{sec:b2plotpy}). A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run \btwoplot without coupling to {\tt Eirene} data. A {\tt -h} option prints a help description.
-  \item[b2plot\_gui]\index{b2plot\_gui} Opens the \btwoplot GUI on the run directory (Section~\ref{sec:b2plotpy}); needs the Python graphics of {\tt B2.5}. The {\tt -d}, {\tt -h} and {\tt -s} options are those of {\tt b2plot}.
   \item[b2run]\index{b2run}\index{b2co}\index{b2fstate} Shortcut to the {\tt Makefile} launching {\tt B2.5}. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to run {\tt B2.5} in standalone mode. A {\tt -m} option allows to run with MPI options. When {\tt SOLPS\_MPIRUN} is defined, its value replaces the MPI launcher executable while preserving the options supplied with {\tt -m}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -t \#} option allows to request an OpenMP run with \# threads. A {\tt -b} option can be used when invoking the {\tt b2co} program to obtain a provisional {\tt b2fstate} file while the main code is running. A {\tt -tgt}, {\tt -hess\_tgt}, or {\tt -adj} option allows to request a standalone run with tangent, Hessian tangent on tangent, or adjoint AD derivatives, respectively. A {\tt -opt\_tgt} or {\tt -opt\_adj} option allows to request a standalone optimization with tangent or adjoint AD derivatives, respectively. A {\tt -h} option prints a help description. (See \ref{b2run} for fuller details)
   \item[b2run\_hgw\_cluster]\index{b2run\_hgw\_clus} Shortcut to the {\tt Makefile} launching {\tt B2.5} for the IPP--Greifswald cluster. A {\tt -n} option allows for dry-run tests.
   \item[b2sxdr]\index{b2sxdr} Shortcut to the \SOLPSfour to \SOLPSfive converter. A {\tt -n} option allows for dry-run tests. A {\tt -d} option allows to run within the chosen debugger. A {\tt -s} option allows to specify that the run to convert was not coupled to {\tt Eirene}. A {\tt -o} option adds any other desired run options. The options can be grouped together inside quotes or given individually with multiple {\tt -o} instances. A {\tt -h} option prints a help description.
+  \item[b2viewer]\index{b2viewer} Opens the GUI {\tt b2viewer} on the run directory (Section~\ref{sec:b2plotpy}); needs the Python graphics of {\tt B2.5}. The {\tt -d}, {\tt -h} and {\tt -s} options are those of {\tt b2plot}.
   \item[convert\_from\_solps4.3 \#1]\index{convert\_from\_solps4.3} Converts run number \#1 from {\tt DEVICE} from the SOLPS4.3 ITER archive to a \SOLPSITER run in directory {\tt \$\{SOLPSTOP\}/runs/\$\{DEVICE\}/\#1} .
   \item[csd3submit]\index{csd3submit} Command file to launch runs on the CCFE CSD3 cluster. See Section~\ref{b2run} for details.
   \item[cumulussubmit]\index{cumulussubmit} Command file to launch runs on the CCFE Cumulus cluster. See Section~\ref{b2run} for details.
@@ -19574,7 +19574,7 @@ If the user wants to use the heat transfer model for the monoblock and/or the re
 
 
 \section{Python graphics}
-\label{sec:b2plotpy}\index{Python graphics}\index{USE\_NCAR}\index{b2plot\_gui}
+\label{sec:b2plotpy}\index{Python graphics}\index{USE\_NCAR}\index{b2viewer}
 
 \btwoplot and the B2 post-processors {\tt b2yg}, {\tt b2yi}, {\tt b2ym},
 {\tt b2yn}, {\tt b2yp}, {\tt b2yq} and {\tt b2yr} were written for
@@ -19590,7 +19590,7 @@ With {\tt USE\_NCAR} set (any value), {\tt B2.5} builds the original
 {\tt USE\_NCAR} relinks the programs at the next {\tt make}. The build
 folder holds a stamp file ({\tt .graphics\_python} or
 {\tt .graphics\_ncar}) from which {\tt b2plot}, {\tt b2run} and
-{\tt b2plot\_gui} know which graphics were built. {\tt USE\_NCAR} must be
+{\tt b2viewer} know which graphics were built. {\tt USE\_NCAR} must be
 set before {\tt setup.csh} is sourced (for instance in
 {\tt \$\{SOLPSTOP\}/SETUP/setup.csh.\$\{HOST\_NAME\}.\allowbreak\$\{COMPILER\}.pre}),
 since the {\bf LINUX} and {\bf DARWIN} setup files define the {\tt NCAR}
@@ -19625,9 +19625,9 @@ runs \btwoplot through {\tt b2plot} and also writes the pages to the
 {\tt -o} file ({\tt .pdf} or {\tt .ps} with all pages, numbered
 {\tt .png}, {\tt .svg} or {\tt .eps}); {\tt -h} lists all its options.
 
-\subsection{The GUI}
+\subsection{The GUI: b2viewer}
 
-{\tt b2plot\_gui}, started in a run directory (options {\tt -s}, {\tt -d}
+{\tt b2viewer}, started in a run directory (options {\tt -s}, {\tt -d}
 and {\tt -h} as for {\tt b2plot}), opens a window
 without any command input: everything is chosen with lists, buttons and
 toggles; there is no menu bar. Started in any other folder of the
@@ -22263,7 +22263,7 @@ seven stacks and the label of the top of the matrix stack.
 
 \subsection{Data channel to the Python graphics}\label{sec:b2plotpydata}
 
-These commands send data to the \btwoplot GUI (\ref{sec:b2plotpy}) as
+These commands send data to {\tt b2viewer} (\ref{sec:b2plotpy}) as
 binary messages on the named pipe given by {\tt B2PLOT\_PY\_FIFO}. They
 exist in every \btwoplot executable; without {\tt B2PLOT\_PY\_FIFO} the
 commands that only send data do nothing, while those that drop fields
