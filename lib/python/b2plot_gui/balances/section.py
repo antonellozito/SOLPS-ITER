@@ -14,7 +14,8 @@ from .views import Output, PlotView, SpeciesBox, shrinkable
 
 HINT = ("Parallel fluxes: pick the upstream and the downstream surface of a "
         "volume on the plot. Radial fluxes: pick its inner and outer flux "
-        "surface.")
+        "surface. Neutrals: where the neutrals giving the plasma its "
+        "particles were born, by region.")
 
 
 def combo(items, tip):

@@ -530,7 +530,8 @@ class Scene3D:
                                     births.weight(o["born"]),
                                     FADE if o["fade"] else 0.0, lines,
                                     self.vref(), o["log"],
-                                    v["range"][0] if v["range"] else 0.0)
+                                    v["range"][0] if v["range"] else 0.0,
+                                    self.clim[0] if v["log"] else None)
         tr.warm_up(self.vref(), o["log"])     # no transient on screen
         n, t = tr.n, tr.tail
         idx = (np.arange(t)[None, :] * n + np.arange(n)[:, None])

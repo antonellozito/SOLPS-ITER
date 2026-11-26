@@ -364,7 +364,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             catalog.Quantity(n, text, "Geometry", "eqwall")
             for n, text in equilibrium.WALLS] if geometry else [])
         self.final_quantities = derived + catalog.quantities(
-            self.run.catalog, maps)
+            self.run.catalog, maps, self.balance.neutrals.quantities())
         self.movie_quantities = catalog.movie_quantities(
             self.run.movies, derived, self.translate)
         quantities = self.movie_quantities if self.time_box.movie() else \
@@ -752,10 +752,12 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             ops = self.quantity.ops(q, overlay=True)
             if self._loaded(role, q):
                 continue
-            if q.source == "equilibrium":   # computed here, as the maps
+            if q.source in ("equilibrium", "neutrals"):     # computed here
                 geo = inspect.files(self.run)[0]
                 try:
-                    data = equilibrium.field(self.run, geo, q.name, ops)
+                    data = self.balance.neutrals.field(q.name, ops) if \
+                        q.source == "neutrals" else \
+                        equilibrium.field(self.run, geo, q.name, ops)
                 except Exception as err:    # e.g. midplanes not asked
                     data = None
                     self.status.emit("Overlay of %s: %s" % (q.name, err))
@@ -767,6 +769,14 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.redraw()
         elif self.wanted.source == "equilibrium":
             self._equilibrium()
+        elif self.wanted.source == "neutrals":  # from balance.nc
+            q, ops = self.wanted, self.quantity.ops(self.wanted)
+            data = self.balance.neutrals.field(q.name, ops)
+            if data is None:
+                self.status.emit("%s: no EIRENE tallies by stratum in "
+                                 "balance.nc" % q.description)
+            else:
+                self.deliver(("main", q, ops, None), data)
         else:
             self.request.emit(("main", self.wanted,
                                self.quantity.ops(self.wanted),

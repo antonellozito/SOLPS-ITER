@@ -10,7 +10,7 @@ TAIL_FADE = 0.85        # tail colour at its end, towards the background
 LIFE = (2.0, 6.0)       # lifetime of a tracer (s), at random between
 FRAME = 0.033           # a frame of the animation (s)
 AGING_MAX = 20.0        # where the magnitude is small: at most this faster
-FADE = 0.5              # faster as v98/|v| to this power (fading on)
+FADE = 0.5              # faster as 1/level to this power (fading on)
 UP_STEP = 0.2           # steps back up the flow, placing a tracer (s)
 
 
@@ -48,6 +48,18 @@ class Field:
                            / span, 0.05, 1.5)
         return np.clip(mag / self.v98, 0.0, 1.5)
 
+    def level(self, mag, low=None):
+        """Place of the magnitude on the colour scale, 0 to 1 (1 from v98
+        up): |v|/v98 on a linear scale (low None), log(|v|/low)/
+        log(v98/low) on a log one, low the bottom of the colour bar."""
+        mag = np.where(np.isfinite(mag), mag, 0.0)
+        if low is None:
+            return np.clip(mag / self.v98, 0.0, 1.0)
+        if not 0 < low < self.v98:
+            return np.where(mag >= low, 1.0, 0.0)
+        return np.clip(np.log(np.maximum(mag, low) / low) /
+                       np.log(self.v98 / low), 0.0, 1.0)
+
     def at_least(self, r, z, floor):
         """Where the magnitude at the points is at least floor."""
         if not floor > 0:
@@ -57,12 +69,13 @@ class Field:
             return np.sqrt(vr * vr + vz * vz + vp * vp) >= floor
 
     def sample(self, n, rng, zlim=(None, None), weight=0.0, lines=None,
-               floor=0.0):
+               floor=0.0, low=None):
         """n random points (R, Z) where the field is defined and its
         magnitude is at least floor (between the heights zlim, None: no
         limit): along the polylines lines if given, else over the field,
-        their density as the magnitude to the power weight (0: even, 1: in
-        proportion to it; capped at v98)."""
+        their density as the level of the magnitude on the colour scale
+        (low, see level) to the power weight (0: even, 1: in proportion
+        to it)."""
         out = np.zeros((0, 2))
         z0 = self.ys[0] if zlim[0] is None else max(self.ys[0], zlim[0])
         z1 = self.ys[-1] if zlim[1] is None else min(self.ys[-1], zlim[1])
@@ -81,9 +94,8 @@ class Field:
             vr, vz, vp = self.at(r, z)
             m = np.sqrt(vr * vr + vz * vz + vp * vp)
             ok = np.isfinite(m) & (m > 0) & (m >= floor)
-            if weight > 0:              # kept as likely as (|v|/v98)^weight
-                w = (np.minimum(np.where(ok, m, 0.0), self.v98) /
-                     self.v98) ** weight
+            if weight > 0:              # kept as likely as level^weight
+                w = self.level(np.where(ok, m, 0.0), low) ** weight
                 ok &= rng.random(len(m)) < w
             out = np.vstack((out, np.column_stack((r[ok], z[ok]))))
             if len(out) >= n:
@@ -106,7 +118,8 @@ class Tracers:
     """Points moving with the flow over the sector [phi0, phi1] (between
     the heights zlim), each with a tail of its last positions, born more
     where the magnitude is larger (weight) or along lines, and ageing
-    faster where it is smaller (fade); a point leaving the field, the
+    faster where it is smaller (fade), both by its level on the colour
+    scale (low: log from there, None: linear; Field.level); a point leaving the field, the
     sector or the heights, entering where the magnitude is below floor,
     or at the end of its life, starts again at a random place (never
     where the magnitude is below floor; hidden while there is no such
@@ -114,7 +127,7 @@ class Tracers:
 
     def __init__(self, field, n, tail, phi0, phi1, rng=None,
                  zlim=(None, None), weight=0.0, fade=0.0, lines=None,
-                 vref=1.0, log=True, floor=0.0):
+                 vref=1.0, log=True, floor=0.0, low=None):
         self.field, self.n, self.tail = field, n, max(int(tail), 2)
         self.phi0, self.phi1 = phi0, phi1
         self.zlim = zlim                # heights kept (vertical cut)
@@ -123,6 +136,7 @@ class Tracers:
         self.lines = lines              # flowing through these polylines
         self.vref, self.log = vref, log  # the speeds shown (step)
         self.floor = floor or 0.0       # no tracer where |v| is below it
+        self.low = low                  # the colour scale: log from low
         self.wrap = abs(phi1 - phi0) >= 2.0 * np.pi - 1e-9
         self.rng = rng or np.random.default_rng(1)
         self.r, self.z = np.zeros(n), np.zeros(n)
@@ -136,7 +150,7 @@ class Tracers:
         if not len(idx):
             return
         p = self.field.sample(len(idx), self.rng, self.zlim, self.weight,
-                              self.lines, self.floor)
+                              self.lines, self.floor, self.low)
         if len(p) < len(idx):           # nowhere to go: hidden, tried again
             lost = idx[len(p):]
             self.r[lost] = self.z[lost] = np.nan
@@ -161,13 +175,13 @@ class Tracers:
         return vr / m, vz / m, vp / m, np.where(ok, mag, 0.0), ok
 
     def _aging(self, mag):
-        """How much faster a tracer ages: (v98/|v|) to the power fade, from
-        1 (|v| at least v98) to AGING_MAX."""
+        """How much faster a tracer ages: one over the level of |v| on the
+        colour scale to the power fade, from 1 (|v| at least v98) to
+        AGING_MAX."""
         if self.fade <= 0:
             return 1.0
-        v98 = self.field.v98
-        ratio = v98 / np.maximum(np.nan_to_num(mag), 1e-12 * v98)
-        return np.clip(ratio ** self.fade, 1.0, AGING_MAX)
+        s = np.maximum(self.field.level(mag, self.low), 1e-12)
+        return np.clip(s ** -self.fade, 1.0, AGING_MAX)
 
     def warm_up(self, vref, log):
         """Moved frame by frame for the longest lifetime: shown from the

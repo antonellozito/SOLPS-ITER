@@ -3,7 +3,8 @@ volume (picking.py: its two surfaces, the surfaces nearest to the mouse
 or the end faces of the flux tubes when the mouse is near them; dragging
 its surfaces and its limits), the volume drawn filled with its surfaces,
 the glowing segments of a recycling stratum; and the balance section of
-the Balances tab (section.py)."""
+the Balances tab (section.py); the Neutrals balance next to them
+(neutralpage.py)."""
 
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
@@ -66,7 +67,10 @@ class BalanceTool:
         c.mpl_connect("button_release_event", self._release)
         c.mpl_connect("key_press_event", self._key)
         self.shown = False              # the Balances tab open
-        self.page = BalancePage(list(self.buttons.values()))
+        from .neutralpage import NeutralsTool
+        self.neutrals = NeutralsTool(self)
+        self.page = BalancePage(list(self.buttons.values()) +
+                                [self.neutrals.button])
         self.set_run(None)
 
     @property
@@ -100,6 +104,7 @@ class BalanceTool:
             b.setChecked(False)
             b.setEnabled(self.path is not None)
             b.setToolTip(KINDS[key].tip if self.path else why)
+        self.neutrals.set_run(run, self.path, why)
 
     @property
     def name(self):
@@ -141,7 +146,8 @@ class BalanceTool:
 
     def _clicked(self, kind):
         """A balance button: picking a volume of that kind (the volume of
-        the other kind and its balance go)."""
+        the other kind and its balance go, the Neutrals balance too)."""
+        self.neutrals.close()
         if self._picking() and self.kind == kind:
             self.cancel()
             return
@@ -415,6 +421,7 @@ class BalanceTool:
         self.shown = on
         if not on:
             self.cancel()
+        self.neutrals.set_shown(on)
         for artists in self.artists.values():
             for a in artists:
                 a.set_visible(on)
@@ -566,3 +573,4 @@ class BalanceTool:
             self.highlight_stratum(stratum)
         if self.section is not None:
             self.section.apply_theme()
+        self.neutrals.apply_theme()

@@ -51,15 +51,16 @@ class Tracers2D:
         if not self.valid:
             return
         log = bool(st.tr_log)
+        clog = st.scale == "log"        # the colour scale of the options
+        lo, hi = colour_range(field, None if st.auto else
+                              (st.vmin, st.vmax), clog)
         self.tr = Tracers(field, int(st.tr_n), int(st.tr_tail), 0.0, 0.0,
                           np.random.default_rng(7), (None, None),
                           births.weight(born), FADE if st.tr_fade else 0.0,
                           lines, self.vref(), log,
-                          0.0 if st.auto else max(float(st.vmin), 0.0))
+                          0.0 if st.auto else max(float(st.vmin), 0.0),
+                          lo if clog else None)
         self.tr.warm_up(self.vref(), log)
-        clog = st.scale == "log"        # the colour scale of the options
-        lo, hi = colour_range(field, None if st.auto else
-                              (st.vmin, st.vmax), clog)
         self.norm = LogNorm(lo, hi) if clog else Normalize(lo, hi)
         self.cmap = cmap
         size = float(st.tr_size)

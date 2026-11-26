@@ -101,7 +101,8 @@ ORDER = [DERIVED, "Plasma densities", "Plasma velocities",
          "Plasma state", "Particle fluxes", "Momentum fluxes",
          "Total energy fluxes", "Electron heat fluxes",
          "Ion heat fluxes", "Current fluxes", "Plasma fluxes",
-         "Particle sources", "Momentum sources", "Electron energy sources",
+         "Particle sources", "Particle sources by neutral origin",
+         "Momentum sources", "Electron energy sources",
          "Ion energy sources", "Charge sources",
          "Sources and sinks", "Neutrals state", NEUTRAL_VELOCITIES,
          "Neutrals fluxes", "Neutrals radiation", NEUTRALS, EQUILIBRIUM,
@@ -302,7 +303,8 @@ class Quantity:
     description: str
     group: str
     source: str                 # "matrix", "eirene", "vector", "evector",
-    #                             "equilibrium" (computed by the GUI)
+    #                             "equilibrium", "neutrals" (computed by
+    #                             the GUI)
     poloidal: str = ""
     radial: str = ""
     movie: int = 0              # 1 b2movies.nc, 2 eirenemovies.nc
@@ -485,10 +487,11 @@ def _species_order(name):
     return _SPECIES.sub(key, name)
 
 
-def quantities(categories, maps=()):
-    """List of Quantity from the categories of the CATALOG message, and
-    the 2D maps of the derived equilibrium quantities (name, label: the
-    GUI computes them from the geometry files, source "equilibrium")."""
+def quantities(categories, maps=(), extra=()):
+    """List of Quantity from the categories of the CATALOG message, the
+    2D maps of the derived equilibrium quantities (name, label: the GUI
+    computes them from the geometry files, source "equilibrium") and extra
+    ones (the neutral sources by origin, source "neutrals")."""
     cats = dict(categories)
     matrix = [e for e in cats.get("Matrix quantities", []) if e[0].strip()]
     eirene = [e for e in cats.get("Eirene quantities", []) if e[0].strip()]
@@ -527,7 +530,7 @@ def quantities(categories, maps=()):
     names = {n for n, _ in maps}
     out = [q for q in out if not (q.name == "pit" and "pitch" in names)]
     out += [Quantity(n, d, EQUILIBRIUM, "equilibrium") for n, d in maps
-            if n not in HIDDEN]
+            if n not in HIDDEN] + list(extra)
     out.sort(key=lambda q: (ORDER.index(q.group), within(q)))  # maps too
     return out
 

@@ -281,6 +281,8 @@ class Tools:
 
     def _done(self, mode, pts):
         tab = self.tab
+        if mode == "polygon" and tab.balance.neutrals.take(pts):
+            return                      # Draw region of the Neutrals balance
         if mode == "seeds":             # the ends of the seed line
             tab.quantity.set_seeds([tuple(p) for p in pts])
             tab.status.emit("Seed line set")
