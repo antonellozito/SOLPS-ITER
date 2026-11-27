@@ -22683,7 +22683,12 @@ direction by an amount of $\langle z_{shift} \rangle$ metres.
 
 \subsubsection{$<$filename$>$ $<$H123$>$ $<$reac$>$ $<$crc$>$ amju}\index{b2plot, amju}\label{sec:amju}
 Computes a reaction rate as per the {\tt Eirene} specification. Consult the
-{\tt Eirene} manual for details.
+{\tt Eirene} manual for details. The centimetres of the file become metres: the
+rate coefficients (H.2 to H.4) in m$^3$/s, the energy weighted ones (H.8
+to H.10) in eV\,m$^3$/s, the cross sections (H.1) in m$^2$, the momentum
+weighted ones (H.5 to H.7) times $10^{-6}$; the other data of H.11 and
+H.12 (mostly dimensionless ratios, e.g.\ reduced population coefficients)
+as the file gives them.
 The data file is the one {\tt Eirene} reads: the path of its {\tt CFILE} card
 in the {\tt Eirene} input of the run, without one the file of that name in the run.
 {\bf amjuel} is an alias for {\bf amju}.
