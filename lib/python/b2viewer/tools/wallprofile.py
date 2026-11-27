@@ -375,14 +375,19 @@ class WallProfile(QtWidgets.QGroupBox):
         values = wall_values(w, cols)
         split = q.name in splits.WALL_SPLITS or q.name in splits.BY_STRATUM
         self.split.setVisible(split)
+        why = ""
         if q.name in splits.BY_STRATUM:     # the strata need balance.nc
             o = tab.balance.neutrals.get()
             split = o is not None and not o.why
+            why = "Needs the balance.nc of the state with the EIRENE " \
+                  "tallies by stratum (for the strata of each birth place)"
+            if split and q.name in splits.BY_STRATUM_NEW and \
+                    not o.by_stratum():
+                split = False
+                why = "Needs a fort.44 with the fields by stratum (EIRENE " \
+                      "from version 20261126)"
         self.split.setEnabled(split)
-        self.split.setToolTip(self.tip if split else
-                              "Needs the balance.nc of the state with the "
-                              "EIRENE tallies by stratum (for the strata of "
-                              "each birth place)")
+        self.split.setToolTip(self.tip if split else why)
         parts = self._parts(tab, q, w, cols, values) if \
             self.split.isChecked() and split else None
         near = np.asarray(seg, float)[:len(area)]

@@ -614,6 +614,8 @@ WALL = {
     'ewldea': 'Energy re-emitted by backscattered atoms (W.m^{-2})',
     'ewldem': 'Energy re-emitted by backscattered molecules (W.m^{-2})',
     'ewldt': 'Net neutral energy load (W.m^{-2})',
+    'ewldk': 'Net kinetic energy load of the neutrals (W.m^{-2})',
+    'ewldp': 'Potential energy of molecules formed at the wall (W.m^{-2})',
     'wldpa': 'Atoms released by backscattered and thermally re-emitted '
              'ions (m^{-2}.s^{-1})',
     'wldpm': 'Molecules released by backscattered and thermally '

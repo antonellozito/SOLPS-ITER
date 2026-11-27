@@ -167,11 +167,13 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         ll.addWidget(self.time_box.source)
         fixed = QtWidgets.QWidget()     # over the scrolling too: the rows of
         fl = QtWidgets.QVBoxLayout(fixed)   # the movies, the tabs and rows
-        fl.setContentsMargins(0, 0, 6, 0)   # of the Run tracing page
+        fl.setContentsMargins(0, 0, 6, 0)   # of the Run tracing page, the
+        #                                     tabs of the Balances page
         fl.setSpacing(0)
         self.quantity.layout().removeWidget(self.time_box)
         fl.addWidget(self.time_box)
         fl.addWidget(self.tracing.page.header)
+        fl.addWidget(self.balance.page.header)
         ll.addWidget(fixed)
         self.left_column = left         # the balance extensions start right
         self.quantity_area = _scrolled(self.quantity)   # of it

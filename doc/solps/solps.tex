@@ -5206,6 +5206,19 @@ The data blocks are:
   \item[edenm\_int\_b2] Integral energy carried by molecules over the {\tt B2.5} computational grid ($J$), dimension ({\tt NMOL}, {\tt 0:NSTRA})
   \item[edeni\_int\_b2] Integral energy carried by test ions over the {\tt B2.5} computational grid ($J$), dimension ({\tt NION}, {\tt 0:NSTRA})
   \item[erecrad] Radiation rate due to volume recombination of plasma ions ($W$), dimension ({\tt NCV},{\tt NPLS}), from version 20261122 on
+  \item[wldra\_res] Flux of reflected atoms from surface segment ($particles.m^{-2}.s^{-1}$), dimension ({\tt NATM}, {\tt NCL}), from version 20261126 on, as all the fields below
+  \item[wldrm\_res] Flux of reflected molecules from surface segment ($particles.m^{-2}.s^{-1}$), dimension ({\tt NMOL}, {\tt NCL})
+  \item[wldpa\_res] Net flux of atoms emitted from surface segment ($particles.m^{-2}.s^{-1}$), dimension ({\tt NATM}, {\tt NCL})
+  \item[wldpm\_res] Net flux of molecules emitted from surface segment ($particles.m^{-2}.s^{-1}$), dimension ({\tt NMOL}, {\tt NCL})
+  \item[ewldea(0)] Energy flux carried by emitted atoms from surface ($W$), total over strata, dimension ({\tt NATM}, {\tt NLIM}+{\tt NSTS})
+  \item[ewldem(0)] Energy flux carried by emitted molecules from surface ($W$), total over strata, dimension ({\tt NMOL}, {\tt NLIM}+{\tt NSTS})
+  \item[ewldmr(0)] Energy flux due to recombination of atoms and atomic ions into molecules on surface ($W$), total over strata, dimension ({\tt NMOL}, {\tt NLIM}+{\tt NSTS})
+  \item[For each stratum $i=1,nstra$] The resolved and the surface data of the stratum alone, with the units and dimensions of their totals:
+  \begin{description}
+    \item[\ldots\_res(i)] The data resolved on the surface segments, in this order: wldna\_res(i), wldnm\_res(i), ewlda\_res(i), ewldm\_res(i), ewldea\_res(i), ewldem\_res(i), ewldrp\_res(i), ewldmr\_res(i), wldspt\_res(i), wldspta\_res(i), wldsptm\_res(i), wlpump\_res(A,i), wlpump\_res(M,i), wlpump\_res(I,i), ewldt\_res(i), wldra\_res(i), wldrm\_res(i), wldpa\_res(i), wldpm\_res(i)
+    \item[ewldea(i), \ldots] The data on the surfaces, after those, in this order: ewldea(i), ewldem(i), ewldmr(i), wlpump(A,i), wlpump(M,i), wlpump(I,i)
+  \end{description}
+  The resolved fields are written only when there are resolved segments. As all the tallies of {\tt fort.44}, the data of a stratum are those of its full source strength, not scaled by its recycling coefficient. {\tt fort.44} holds the last EIRENE call; when {\tt B2.5} averages the EIRENE calls ({\em eirene\_averaging\_multiple\_calls}, {\em eirene\_underrelax}), the copies it saves ({\tt fort.44.nnnn}) hold the average, of the data of each stratum as of the totals, so that the strata always add up to the totals.
 \end{description}
 \end{sloppypar}
 
@@ -19069,9 +19082,11 @@ at the edge of the computational domain.
     ero\_ml \index{b2plot, ero\_ml} & Monolayer erosion $(monolayers)$ \\
     erosion \index{b2plot, erosion} & Gross erosion $(particles)$ \\
     ewlda \index{b2plot, ewlda}     & Incident energy flux of each EIRENE atom species on the EIRENE wall (see below) $(W.m^{-2})$ \\
-    ewldea \index{b2plot, ewldea}   & Energy re-emitted by the backscattered atoms of each species on the EIRENE wall, zero on the additional surfaces (see below) $(W.m^{-2})$ \\
-    ewldem \index{b2plot, ewldem}   & Energy re-emitted by the backscattered molecules of each species on the EIRENE wall, zero on the additional surfaces (see below) $(W.m^{-2})$ \\
+    ewldea \index{b2plot, ewldea}   & Energy re-emitted by the backscattered atoms of each species on the EIRENE wall, zero on the additional surfaces before version 20261126 of {\tt fort.44} (see below) $(W.m^{-2})$ \\
+    ewldem \index{b2plot, ewldem}   & Energy re-emitted by the backscattered molecules of each species on the EIRENE wall, zero on the additional surfaces before version 20261126 of {\tt fort.44} (see below) $(W.m^{-2})$ \\
+    ewldk \index{b2plot, ewldk}     & Net kinetic energy load of the neutrals, the kinetic part of {\bf ewldt} (EIRENE {\em wldnek}; on the resolved segments {\em ewldt\_res} $-$ {\em ewldmr\_res}), on the EIRENE wall (see below) $(W.m^{-2})$ \\
     ewldm \index{b2plot, ewldm}     & Incident energy flux of each EIRENE molecule species on the EIRENE wall (see below) $(W.m^{-2})$ \\
+    ewldp \index{b2plot, ewldp}     & Potential energy of the molecules formed at the wall, the potential part of {\bf ewldt} (EIRENE {\em wldnep}; on the resolved segments {\em ewldmr\_res}), on the EIRENE wall (see below) $(W.m^{-2})$ \\
     ewldrp \index{b2plot, ewldrp}   & Energy released by backscattered and thermally re-emitted ions (EIRENE {\em wldpeb}) on the EIRENE wall (see below) $(W.m^{-2})$ \\
     ewldt \index{b2plot, ewldt}     & Net neutral energy load, the kinetic and potential energy brought by the neutrals (EIRENE {\em wldnek} + {\em wldnep}), on the EIRENE wall (see below) $(W.m^{-2})$ \\
     ibnd \index{b2plot, ibnd}       & Wall element number \\
@@ -19177,13 +19192,13 @@ at the edge of the computational domain.
     whivzh \index{b2plot, whivzh} & Wall Zhdanov viscous ion heat flux {\em fhi\_vzh}, positive out of the plasma, per face area $(W.m^{-2})$ \\
     wldna \index{b2plot, wldna}     & Incident flux of each EIRENE atom species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wldnm \index{b2plot, wldnm}     & Incident flux of each EIRENE molecule species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
-    wldpa \index{b2plot, wldpa}     & Atoms of each species released by backscattered and thermally re-emitted ions on the EIRENE wall, one value per EIRENE surface (see below) $(m^{-2}.s^{-1})$ \\
-    wldpm \index{b2plot, wldpm}     & Molecules of each species released by backscattered and thermally re-emitted ions on the EIRENE wall, one value per EIRENE surface (see below) $(m^{-2}.s^{-1})$ \\
-    wldra \index{b2plot, wldra}     & Backscattered flux of each EIRENE atom species on the EIRENE wall, one value per EIRENE surface (see below) $(m^{-2}.s^{-1})$ \\
-    wldrm \index{b2plot, wldrm}     & Backscattered flux of each EIRENE molecule species on the EIRENE wall, one value per EIRENE surface (see below) $(m^{-2}.s^{-1})$ \\
+    wldpa \index{b2plot, wldpa}     & Atoms of each species released by backscattered and thermally re-emitted ions on the EIRENE wall, one value per EIRENE surface before version 20261126 of {\tt fort.44} (see below) $(m^{-2}.s^{-1})$ \\
+    wldpm \index{b2plot, wldpm}     & Molecules of each species released by backscattered and thermally re-emitted ions on the EIRENE wall, one value per EIRENE surface before version 20261126 of {\tt fort.44} (see below) $(m^{-2}.s^{-1})$ \\
+    wldra \index{b2plot, wldra}     & Backscattered flux of each EIRENE atom species on the EIRENE wall, one value per EIRENE surface before version 20261126 of {\tt fort.44} (see below) $(m^{-2}.s^{-1})$ \\
+    wldrm \index{b2plot, wldrm}     & Backscattered flux of each EIRENE molecule species on the EIRENE wall, one value per EIRENE surface before version 20261126 of {\tt fort.44} (see below) $(m^{-2}.s^{-1})$ \\
     wldspta \index{b2plot, wldspta} & Sputtered atoms of each species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wldsptm \index{b2plot, wldsptm} & Sputtered molecules of each species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
-    wstrat \index{b2plot, wstrat}   & With the number of a stratum before it ({\tt 12 wstrat wldna}): the next EIRENE wall quantity of that stratum only ({\bf wldna}, {\bf wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf ewldt}, {\bf ewldrp}, {\bf wldpa}, {\bf wldpm}, {\bf wldspta}, {\bf wldsptm}); on the faces of the B2.5 wall elements that EIRENE resolves, the resolved value times the share of the stratum in the total of its surface (of its incident particles for an energy flux without energies by stratum), so that the strata add up to the quantity \\
+    wstrat \index{b2plot, wstrat}   & With the number of a stratum before it ({\tt 12 wstrat wldna}): the next EIRENE wall quantity of that stratum only ({\bf wldna}, {\bf wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf ewldt}, {\bf ewldk}, {\bf ewldp}, {\bf ewldrp}, {\bf wldpa}, {\bf wldpm}, {\bf wldspta}, {\bf wldsptm}, and with version 20261126 of {\tt fort.44} or later {\bf ewldea}, {\bf ewldem}, {\bf wlpump}); with version 20261126 of {\tt fort.44} or later the values of the stratum, before on the faces of the B2.5 wall elements that EIRENE resolves the resolved value times the share of the stratum in the total of its surface (of its incident particles for an energy flux without energies by stratum), so that the strata add up to the quantity \\
     wlpump \index{b2plot, wlpump}   & Pumped flux of each EIRENE atom, molecule and test ion species on the EIRENE wall (see below) $(m^{-2}.s^{-1})$ \\
     wmocvsa \index{b2plot, wmocvsa} & Wall viscous momentum flux {\em fmo\_cvsa} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
     wmoflua \index{b2plot, wmoflua} & Wall convected momentum flux {\em fmo\_flua} of each species, positive out of the plasma, per face area $(N.m^{-2})$ \\
@@ -19204,7 +19219,7 @@ at the edge of the computational domain.
 
 For a run without the {\tt B2.5} wall model ({\em b2stbr\_sput\_dst} negative), \btwoplot estimates the wall interaction from the plasma of the run, with the data and functions of the wall model: the physical sputtering yield and energy yield ({\bf sput}, {\bf sput2}), the reflection of particles and energy ({\bf backscat}, {\bf backscae}), and, for carbon walls, the chemical sputtering ({\bf sputchem}) and the radiation enhanced sublimation ({\bf sputres}). Every incident species counts with weight one, without prompt redeposition; the incident energy is that of {\bf ei}, the angle of incidence that of the TRIM data column {\em b2stbr\_sput\_phys\_col} (default 3, $30^\circ$ from the normal). The material and the surface temperature ({\bf walltemp}) of each wall element are those of its EIRENE surface ({\tt eirene.input.json} and {\tt fort.35}): the non-default standard surface of its face if that is a wall, otherwise the first wall met along the outward normal of the face. A run with the wall model shows the values it saved. For every run, the mean implantation depth ({\bf impdepth}) is interpolated in the TRIM range tables ({\tt trim.data/range.data}) at the same incident energy and angle, weighted with the constituents of the element; it is zero below the energies of a table, its last value above them, and zero for materials without a table.
 
-The EIRENE wall quantities ({\bf wldna}, {\bf wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf ewldea}, {\bf ewldem}, {\bf ewldt}, {\bf wldpa}, {\bf wldpm}, {\bf ewldrp}, {\bf wldspta}, {\bf wldsptm}, {\bf wlpump}) are the surface tallies of EIRENE ({\tt fort.44}) as flux densities on the elements of the EIRENE wall: the {\tt B2.5} wall elements (the same faces, so that EIRENE and {\tt B2.5} wall quantities match element by element), then the other faces of the non-default standard surfaces of EIRENE (the core boundary), then the additional surfaces of EIRENE (additional surfaces with the same ends share one element, with their totals summed). The {\tt B2.5} wall quantities are given on the first elements only. A face of a standard surface takes the value of its segment in the resolved tallies of EIRENE; the quantities EIRENE does not resolve ({\bf wldra}, {\bf wldrm}, {\bf wldpa}, {\bf wldpm}) and the additional surfaces take the total of their EIRENE surface, summed over the strata, over its area. On the additional surfaces, the incident energy fluxes ({\bf ewlda}, {\bf ewldm}) are the sums over the strata of the flux times its mean energy, and the energy re-emitted by backscattered particles ({\bf ewldea}, {\bf ewldem}) is zero, since EIRENE gives it on the resolved segments only. In the net deposited energy flux {\bf walldep}, {\bf wallhflx} is the energy brought by the plasma, {\bf wallrad} that of the radiation, {\bf ewldt} that brought by the neutrals, and {\bf ewldrp} the energy the neutrals released by the recycling ions take back from the wall.
+The EIRENE wall quantities ({\bf wldna}, {\bf wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf ewldea}, {\bf ewldem}, {\bf ewldt}, {\bf ewldk}, {\bf ewldp}, {\bf wldpa}, {\bf wldpm}, {\bf ewldrp}, {\bf wldspta}, {\bf wldsptm}, {\bf wlpump}) are the surface tallies of EIRENE ({\tt fort.44}) as flux densities on the elements of the EIRENE wall: the {\tt B2.5} wall elements (the same faces, so that EIRENE and {\tt B2.5} wall quantities match element by element), then the other faces of the non-default standard surfaces of EIRENE (the core boundary), then the additional surfaces of EIRENE (additional surfaces with the same ends share one element, with their totals summed). The {\tt B2.5} wall quantities are given on the first elements only. A face of a standard surface takes the value of its segment in the resolved tallies of EIRENE; the quantities EIRENE resolves only from version 20261126 of {\tt fort.44} on ({\bf wldra}, {\bf wldrm}, {\bf wldpa}, {\bf wldpm}) and the additional surfaces take the total of their EIRENE surface, summed over the strata, over its area. On the additional surfaces, the incident energy fluxes ({\bf ewlda}, {\bf ewldm}) are the sums over the strata of the flux times its mean energy, and the energy re-emitted by backscattered particles ({\bf ewldea}, {\bf ewldem}) is zero before version 20261126 of {\tt fort.44}, which gives it on the surfaces. EIRENE runs every stratum with its full source strength, while {\tt B2.5} keeps the fraction of its recycling coefficient ({\em recyceir} of the stratum, or with {\em eirene\_use\_recyceir} 0 {\em recyc} of the first ion of the element of the species): every value of a stratum is multiplied by it. With version 20261126 of {\tt fort.44} or later every value is the sum over the strata of its values by stratum; before, a resolved segment holds the sum over the strata, split among them by the shares of the strata in the total of its surface, and the quantities without values by stratum ({\bf ewldea}, {\bf ewldem}, {\bf wlpump}) are scaled only if all the strata have the same coefficient. In the net deposited energy flux {\bf walldep}, {\bf wallhflx} is the energy brought by the plasma, {\bf wallrad} that of the radiation, {\bf ewldt} that brought by the neutrals, and {\bf ewldrp} the energy the neutrals released by the recycling ions take back from the wall.
 
 Note that the {\bf nseg} command requires an integer
 argument $\langle${\tt iseg}$\rangle$. If $\langle${\tt iseg}$\rangle = 0$, the arrays will contain the wall segment
@@ -19829,9 +19844,11 @@ The {\bf quantity panel} (left):
   fluxes}; {\tt Neutrals fluxes}, the EIRENE wall quantities;
   {\tt Deposited energy fluxes}, the net deposited energy flux
   ({\bf walldep}) and its terms, the plasma energy load ({\bf wallhflx}),
-  the radiation heat load ({\bf wallrad}), the neutrals energy load
-  ({\bf ewldt}) and the energy released by recycled ions ({\bf ewldrp}),
-  the last three also in their own groups; {\tt Surface coefficients};
+  the radiation heat load ({\bf wallrad}), the neutrals energy load as
+  its two parts, the kinetic energy load ({\bf ewldk}) and the
+  potential energy of the molecules formed at the wall ({\bf ewldp}),
+  and the energy released by recycled ions ({\bf ewldrp}), the last four
+  also in their own groups; {\tt Surface coefficients};
   {\tt Geometry}. A wall quantity is drawn as a strip along the wall
   (an EIRENE wall quantity along the elements of the EIRENE wall), with a
   plasma quantity or alone. The {\tt Geometry} group starts with three
@@ -19881,11 +19898,13 @@ The {\bf quantity panel} (left):
   {\bf wna*}, {\bf wmo*}, {\bf whe*}, {\bf whi*}, {\bf wch*}), for
   {\bf wallhflx} {\bf wallfhe}, {\bf wallfhi}, {\bf wallfhn},
   {\bf wallfhp}, {\bf wallfhm}, {\bf wallfnt} and {\bf wallfkt}, for
-  {\bf walldep} {\bf wallhflx}, {\bf wallrad}, {\bf ewldt} and
-  $-${\bf ewldrp}; for the EIRENE wall quantities {\bf wldna}, {\bf
+  {\bf walldep} {\bf wallhflx}, {\bf wallrad}, {\bf ewldk}, {\bf ewldp}
+  and $-${\bf ewldrp}; for the EIRENE wall quantities {\bf wldna}, {\bf
   wldnm}, {\bf wldra}, {\bf wldrm}, {\bf ewlda}, {\bf ewldm}, {\bf
-  ewldt}, {\bf ewldrp}, {\bf wldpa}, {\bf wldpm}, {\bf wldspta} and
-  {\bf wldsptm} the place where the neutrals were born, the strata of
+  ewldk}, {\bf ewldp}, {\bf ewldrp}, {\bf wldpa}, {\bf wldpm}, {\bf
+  wldspta}, {\bf wldsptm} and, with a {\tt fort.44} of version 20261126
+  or later, {\bf ewldea}, {\bf ewldem} and {\bf wlpump} the place where
+  the neutrals were born, the strata of
   each birth place of the Neutrals tab of Balances together (b2plot
   {\bf wstrat}; it needs the {\tt balance.nc} of the state, for the
   strata), on the B2.5 wall elements; a rest (total minus the parts) as
@@ -20275,10 +20294,18 @@ streamline options.
 The {\bf Balances} tab, right of {\tt Run movies} and only with a
 {\tt balance.nc} written with the {\tt b2fstate} and {\tt b2fplasma} of
 the run (within ten minutes of them), shows the final state on the plot
-and, in the quantity column instead of the quantities, the buttons
-{\tt Parallel fluxes}, {\tt Radial fluxes} and {\tt Neutrals},
-then the balance of the volume picked (or the neutrals balance). The
-volume is drawn and picked only in this tab.
+and, in the quantity column instead of the quantities, three tabs over
+the column (as those of {\tt Run tracing}), {\tt Parallel fluxes},
+{\tt Radial fluxes} and {\tt Neutrals}: the first two show their
+options at once and start picking a volume on the plot (when none of
+their kind is picked; clicking the tab shown again picks another volume,
+and again cancels, as {\tt Escape}), the plots of its balance coming
+once it is picked; {\tt Neutrals} shows the neutrals balance. Each
+tab keeps what it shows (its volume and balance, the Neutrals tables and
+their choices) while another tab or another main tab is shown, and shows
+it again when it comes back; {\tt Clear} (left of {\tt Save plots}) drops
+the volume and the plots of its tab, keeps its options and picks a new
+volume. The volume is drawn and picked only in this tab.
 
 The {\bf parallel balance} ({\tt Parallel fluxes}) computes the
 balances of the scripts of {\tt scripts/Balance} in a volume picked on
@@ -20295,7 +20322,7 @@ quantity), with its upstream surface and its downstream surface and walls
 drawn, and its two sides (yellow; a yellow dot where the two surfaces
 meet); either surface can be dragged along
 the flux tubes, and either side across them to narrow the volume within
-its region. The column then has the quantity (particles,
+its region. The column has the quantity (particles,
 momentum and force (the momentum balance per ion, with the viscous
 fluxes as forces) of the species checked, total pressure, electron, ion and total
 heat, total energy, potential; in a coupled run the species B2.5 does not
@@ -20304,7 +20331,7 @@ solve are greyed out), the area type and end, the radial coordinate
 along the upstream surface), the poloidal distance, the residuals, the
 grid lines (on at first) and a logarithmic $y$ axis (values that are not
 positive left out), the last two for every balance plot, each with its
-label, and under them, in two sections, the total radial
+label, and under them, once a volume is picked, in two sections, the total radial
 balance (per flux tube: upstream and downstream flux, sources) and the
 total poloidal balance (per slice of the volume, radially integrated,
 along the flux tube next to the separatrix), each with its equation over
@@ -20356,7 +20383,8 @@ the inner surface, out through the outer surface and the sources, with
 the poloidal transport among them.
 
 The {\bf neutrals} ({\tt Neutrals}) show the particles of the EIRENE
-neutrals of the element chosen in two tables. The birth places are the
+neutrals of the element chosen in two tables, three with a {\tt fort.44}
+of version 20261126 or later. The birth places are the
 strata of {\tt b2.neutrals.parameters}, those of one name together: a
 recycling stratum is named as most of its boundary faces (with an upper
 and a lower divertor {\tt Inner lower target}, {\tt Outer lower target},
@@ -20365,7 +20393,9 @@ and {\tt Upper PFR wall}, the rest {\tt Inner main chamber wall} and {\tt
 Outer main chamber wall}; with one divertor {\tt Inner target}, {\tt
 Outer target}, {\tt PFR wall}, the rest {\tt Main chamber wall}; all the
 faces of a private flux region together; {\tt Core boundary}), the
-others by their kind ({\tt Gas puff}, {\tt Volume recombination}).
+others by their kind ({\tt Gas puff}, {\tt Volume recombination}); the
+gas puffs of an element are numbered ({\tt Gas puff 1}, {\tt Gas puff 2},
+\ldots{}, one per stratum, in their order) when it has more than one.
 
 The {\bf ionisation} table, from {\tt balance.nc} alone and exact: in
 each volume region ({\tt cvReg}: {\tt Core}, {\tt SOL}, the divertors,
@@ -20392,33 +20422,58 @@ is ({\tt wldspta}, {\tt wldsptm}; a non-default standard surface by its
 faces, the EIRENE additional surfaces as the vessel); the sinks
 (negative) {\tt Ionised in} each region, {\tt Absorbed by} each
 non-default standard surface (in contact with the plasma, named by its
-faces), {\tt Pumping surface} 1, 2, \ldots{} (additional surfaces whose
+faces), {\tt Pumping surface} (numbered 1, 2, \ldots{} when there are
+several; additional surfaces whose
 recycling coefficient is below one) and {\tt Deposited on the vessel}
 (additional surfaces that keep the element though they recycle the
 others, e.g.\ tungsten), only those where EIRENE absorbs some of the
 element ({\tt wlpump}; molecules and test ions count by their atoms,
-{\tt mlcmp}). The last row, {\tt Residual}, is sources minus sinks; the
-line under the table gives it in percent of the sources and its likely
-cause ({\tt balance.nc} averaged over the time steps of the run, {\tt
-balance\_average}, while {\tt fort.44} holds the last EIRENE call;
-particles ionised outside the B2.5 grid; a puff set at run time).
+{\tt mlcmp}). EIRENE runs every stratum with its full source strength,
+while {\tt B2.5} keeps the fraction of its recycling coefficient ({\em
+recyceir} of the stratum, or with {\em eirene\_use\_recyceir} 0 in {\tt
+b2mn.dat} {\em recyc} of the first ion of the element): the recycled,
+puffed and sputtered particles of a stratum and its absorbed and pumped
+ones are scaled by it ({\tt balance.nc} holds the scaled sources). The
+absorbed and pumped particles are given by stratum from version 20261126
+of {\tt fort.44} ({\tt wlpump(A,$i$)}, \ldots); before, only summed over
+the strata, they are scaled only if all the strata of the element have
+the same coefficient. The last row, {\tt Residual}, is sources minus
+sinks; the line under the table gives it in percent of the sources and
+its likely cause ({\tt balance.nc} averaged over the time steps of the
+run, {\tt balance\_average}, while {\tt fort.44} holds the last EIRENE
+call; particles ionised outside the B2.5 grid; a puff set at run time;
+absorbed and pumped particles not scaled).
+
+The {\bf fate} table, with a {\tt fort.44} of version 20261126 or later
+(the absorbed and pumped particles by stratum): what the neutrals of each
+birth place of the element become, from its strata (and, as {\tt
+Sputtered}, from the strata of the other elements), in atoms per second
+or in percent of all the neutrals launched and sputtered or of those of
+each row ({\tt Values}): {\tt Launched} (the source of the birth place, as in the
+balance table), {\tt Sputtered} (the particles of the element sputtered
+in these strata), {\tt Ionised} (in the regions of the B2.5 grid), each
+sink of the balance table where some is absorbed, and {\tt Residual}
+(launched and sputtered minus the sinks); the last row the total.
 
 Thicker lines separate the groups of rows, cells are coloured by their
-size (blue sources, orange sinks), {\tt Export} writes both tables as
+size (blue sources, orange sinks), {\tt Export} writes the tables as
 CSV. Nothing is plotted, glows or is outlined until it is clicked: a
 number of the ionisation table puts the source per volume of its
 neutrals on the plot (in the total row under a region: all the neutrals
 in that region only), and so does a row of the balance table: a birth
 place its source, an {\tt Ionised in} row all the neutrals in its region
-only, the other rows (sputtered, sinks, residual) none; a row of either
-table also makes its surfaces glow (the faces of a birth place, the EIRENE surfaces
+only, the other rows (sputtered, sinks, residual) none, and so does a
+number of {\tt Ionised} of the fate table: the source of its birth
+place; a row of any table also makes its surfaces glow (the faces of a birth place, the EIRENE surfaces
 of a sputtering or sink row; the gas puff a diamond at the middle of each
 EIRENE source surface of the element, from {\tt eirene.input.json}); a
-column of the ionisation table, an {\tt Ionised in} row or a region of
-the plot outlines the whole region; an empty cell or an empty place of
-the section takes the map away; {\tt Draw region} adds a region drawn on
-the plot as a polygon (the cells whose centres are inside) as one more
-column of the ionisation table. The source per volume of each birth
+column of the ionisation table or an {\tt Ionised in} row outlines the
+whole region (only these: a click on the plot outlines nothing); the
+cell, row or column clicked is framed in its table; an empty cell or an
+empty place of the section takes the map away; {\tt Draw region}
+(highlighted while drawing, a click again cancels) adds a region drawn
+on the plot as a polygon (the cells whose centres are inside) as one
+more column of the ionisation table. The source per volume of each birth
 place, of the sputtered particles and of all the neutrals, the elements
 as species, are Final state quantities in the group {\tt Particle sources
 by neutral origin} (for chords, profiles and the 3D view); they need the

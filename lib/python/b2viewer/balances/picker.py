@@ -1,4 +1,4 @@
-"""Parallel and radial balance on the 2D plot: the buttons, picking a
+"""Parallel and radial balance on the 2D plot: the tabs, picking a
 volume (picking.py: its two surfaces, the surfaces nearest to the mouse
 or the end faces of the flux tubes when the mouse is near them; dragging
 its surfaces and its limits), the volume drawn filled with its surfaces,
@@ -30,14 +30,6 @@ class BalanceTool:
     def __init__(self, tab):
         self.tab = tab
         self.settings = tab.settings
-        self.buttons = {}
-        for kind in KINDS.values():
-            b = QtWidgets.QPushButton(kind.button)
-            b.setCheckable(True)
-            b.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                            QtWidgets.QSizePolicy.Fixed)
-            b.clicked.connect(lambda on, k=kind.key: self._clicked(k))
-            self.buttons[kind.key] = b
         self.kind = "parallel"
         self.pickings = {k: P(self) for k, P in PICKINGS.items()}
         self.run = None
@@ -54,6 +46,8 @@ class BalanceTool:
         self.corners = {}               # side without faces -> its point
         self.candidate = None
         self.section = None             # the balance of the volume
+        self.saved = {}                 # kind -> its volume and section
+        #                                 while another tab is shown
         self.cache = {}                 # face -> Surface
         self._terms = {}
         self.stratum = None
@@ -69,8 +63,12 @@ class BalanceTool:
         self.shown = False              # the Balances tab open
         from .neutralpage import NeutralsTool
         self.neutrals = NeutralsTool(self)
-        self.page = BalancePage(list(self.buttons.values()) +
-                                [self.neutrals.button])
+        self.page = BalancePage([(k.key, (k.button, k.tip))
+                                 for k in KINDS.values()] +
+                                [("neutrals", ("Neutrals", ""))])
+        self.page.tabs.tabBarClicked.connect(self._tab_clicked)
+        self.page.tabs.currentChanged.connect(
+            lambda i: self._activate(self.page.keys[i]))
         self.set_run(None)
 
     @property
@@ -82,6 +80,9 @@ class BalanceTool:
     def set_run(self, run):
         """A new run (or reload): nothing picked; the buttons only with a
         balance.nc of this state of the run."""
+        for st in self.saved.values():
+            self.page.drop(st["section"])
+        self.saved = {}
         self._set_section(None)
         self._clear()
         self.run, self.mode = run, None
@@ -100,11 +101,12 @@ class BalanceTool:
         else:
             self.path, why = ncfile.status(run.rundir)
         self.why = why                  # no balance.nc of this state
-        for key, b in self.buttons.items():
-            b.setChecked(False)
-            b.setEnabled(self.path is not None)
-            b.setToolTip(KINDS[key].tip if self.path else why)
         self.neutrals.set_run(run, self.path, why)
+        for i, key in enumerate(self.page.keys):
+            self.page.tabs.setTabToolTip(
+                i, self.neutrals.tip if key == "neutrals"
+                else KINDS[key].tip if self.path else why)
+        self._activate(self.page.key())
 
     @property
     def name(self):
@@ -144,37 +146,108 @@ class BalanceTool:
         """True while the two surfaces are being clicked."""
         return self.mode in self.picking.picks
 
+    def _activate(self, key):
+        """The tab of key shown: Neutrals its tables, Parallel fluxes or
+        Radial fluxes its options and, without a volume of its kind, the
+        picking of one (only while the Balances tab is open)."""
+        if not self.shown:
+            return
+        if self.path is None:
+            self.page.show(None)
+            self.page.hint.setText(self.why)
+            return
+        if key == "neutrals":
+            self.cancel()
+            self._leave()
+            why = self.neutrals.open()
+            if why:                     # in the status bar and the tab
+                self.page.show(None)
+                self.page.hint.setText(why)
+            return
+        self.neutrals.hide()
+        if key != self.kind or self.section is None:
+            if key != self.kind:
+                self.cancel()
+                self._leave()
+            self._enter(key)
+        if self.section is not None and (self.vol is not None or
+                                         self._picking()):
+            self.page.show(self.section)    # as it was left
+            self._draw_volume()
+            return
+        self._clicked(key)
+
+    def _leave(self):
+        """Another tab: the volume and the section of the kind kept (the
+        section hidden, the volume off the plot)."""
+        if self.section is None and self.vol is None:
+            return
+        self.saved[self.kind] = dict(
+            vol=self.vol, span=self.span, sides=self.sides,
+            corners=self.corners, section=self.section, xzoom=self.xzoom)
+        self.section, self.vol, self.mode, self.stratum = None, None, \
+            None, None
+        self.span, self.sides, self.corners = None, ([], [], []), {}
+        self.page.show(None)
+        self._clear()
+
+    def _enter(self, kind):
+        """The kind of the tab shown, with its volume and section if it
+        had them."""
+        self.kind = kind
+        st = self.saved.pop(kind, None)
+        if st is not None:
+            self.vol, self.span, self.sides, self.corners = st["vol"], \
+                st["span"], st["sides"], st["corners"]
+            self.section, self.xzoom = st["section"], st["xzoom"]
+
+    def clear_volume(self):
+        """Clear: the volume of the kind and its balance go (the options
+        stay), a new one picked."""
+        self.cancel()
+        self.vol, self.stratum = None, None
+        self.span, self.sides, self.corners = None, ([], [], []), {}
+        self.picking.reset()
+        self._clear()
+        if self.section is not None:
+            self.section.close_all()
+            self.section.result = None
+            self.section.refresh()      # no volume: the hint, no plots
+        self._clicked(self.kind)
+
+    def _tab_clicked(self, i):
+        """The tab shown clicked again: Parallel or Radial fluxes picks
+        another volume (picking: cancelled)."""
+        key = self.page.keys[i]
+        if i == self.page.tabs.currentIndex() and key != "neutrals" and \
+                self.shown and self.path is not None:
+            self._clicked(key)
+
     def _clicked(self, kind):
-        """A balance button: picking a volume of that kind (the volume of
-        the other kind and its balance go, the Neutrals balance too)."""
-        self.neutrals.close()
+        """Picking a volume of that kind (the volume picked before stays
+        until the new one is; those of the other tabs kept); picking it
+        already: cancelled."""
+        self.neutrals.hide()
         if self._picking() and self.kind == kind:
             self.cancel()
             return
         if not self._load():
-            self._buttons()
             return
         if kind != self.kind:
             self.cancel()
-            self.closed()
-            self.kind = kind
+            self._leave()
+            self._enter(kind)
+        self._ensure_section()          # its options from the start
+        self.page.show(self.section)
         self.tab.tools.bar.set_mode(None)
         self.tab.commands._mode("zoom", False)
         self.mode = self.picking.picks[0]
         self.picking.begin()
-        self._buttons()
         for key in ("in", "out", "fill", "sides", "corners"):
             self._remove(key)           # back if cancelled
         self.tab.canvas.draw_idle()
         self.status("%s: click the %s surface (Escape cancels)" % (
             self.name, self.picking.first_name))
-
-    def _buttons(self):
-        """The button of the kind being picked or shown pressed, the other
-        not."""
-        on = self._picking() or self.section is not None
-        for key, b in self.buttons.items():
-            b.setChecked(on and self.kind == key)
 
     def cancel(self):
         """Picking stopped; the volume picked before stays."""
@@ -183,7 +256,6 @@ class BalanceTool:
             self._draw_candidate([])
             self._draw_volume()
             self.status("%s: picking cancelled" % self.name)
-        self._buttons()
 
     def busy(self):
         return self.mode is not None
@@ -269,7 +341,6 @@ class BalanceTool:
                 self.status(p.chosen_text())
             elif p.complete(self.candidate):
                 self.mode = None
-                self._buttons()
                 self._open()
         elif self.mode is None and self.vol is not None:
             which = self._grab(event)
@@ -385,13 +456,18 @@ class BalanceTool:
                     and v.panel.xlabel == label:     # the same x axis
                 v.set_x(xlim)
 
-    def _open(self):
-        """The balance of the volume picked in the Balances tab."""
+    def _ensure_section(self):
+        """The section of the kind (its options; the plots once a volume
+        is picked)."""
         if self.section is None:
             tab = self.tab
             self._set_section(BalanceSection(self, tab, tab.left_column,
                                              tab.quantity_area))
             self.section.set_file(self.bf, self.run.psimap is not None)
+
+    def _open(self):
+        """The balance of the volume picked in the Balances tab."""
+        self._ensure_section()
         self.section.refresh()
 
     def _refresh(self):
@@ -400,20 +476,12 @@ class BalanceTool:
             self.section.refresh()
 
     def _set_section(self, section):
+        """The section of the kind (None: the one there goes)."""
+        if section is None and self.section is not None:
+            self.page.drop(self.section)
         self.section = section
-        self.page.set_section(section)
-        self._buttons()
-
-    def closed(self):
-        """The volume and its balance go."""
-        self._set_section(None)
-        self.vol = None
-        self.span, self.sides, self.corners = None, ([], [], []), {}
-        for p in self.pickings.values():
-            p.reset()
-        self.mode = None
-        self._buttons()
-        self._clear()
+        if section is not None:
+            self.page.show(section)
 
     def set_shown(self, on):
         """The Balances tab open or not: the volume drawn only with it,
@@ -426,13 +494,14 @@ class BalanceTool:
             for a in artists:
                 a.set_visible(on)
         self.tab.canvas.draw_idle()
+        self._activate(self.page.key())
 
     # ---------------------------------------------------------- drawing
     def _remove(self, key):
         for a in self.artists.pop(key, []):
             try:
                 a.remove()
-            except ValueError:
+            except (ValueError, NotImplementedError):   # already gone
                 pass
 
     def _clear(self):

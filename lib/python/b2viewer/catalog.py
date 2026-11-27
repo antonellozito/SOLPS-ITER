@@ -544,15 +544,17 @@ WALL_FLUXES = ("wallflux", "wallfne", "wallfmo", "wallhflx", "wallfhe",
 # the core boundary and the additional surfaces), per element area, in
 # this order
 WALL_NEUTRALS = ("wldna", "wldnm", "wldra", "wldrm", "ewlda", "ewldm",
-                 "ewldea", "ewldem", "ewldt", "wldpa", "wldpm", "ewldrp",
-                 "wldspta", "wldsptm", "wlpump")
+                 "ewldea", "ewldem", "ewldk", "ewldp", "wldpa", "wldpm",
+                 "ewldrp", "wldspta", "wldsptm", "wlpump")
 # the net deposited energy flux and its terms in this order, with their
 # texts in this group (the terms of other groups are listed there too)
 DEPOSITED = "Deposited energy fluxes"
 WALL_DEPOSITED = (("walldep", "Net deposited energy flux (W.m^{-2})"),
                   ("wallhflx", "Plasma energy load (W.m^{-2})"),
                   ("wallrad", "Radiation heat load (W.m^{-2})"),
-                  ("ewldt", "Neutrals energy load (W.m^{-2})"),
+                  ("ewldk", "Neutrals kinetic energy load (W.m^{-2})"),
+                  ("ewldp", "Potential energy of molecules formed at the "
+                   "wall (W.m^{-2})"),
                   ("ewldrp", "Energy released by recycled ions (W.m^{-2})"))
 # first of their group, in this order: the surface temperature and the
 # incident energy the yields use
@@ -588,7 +590,9 @@ WALL_HIDDEN_RE = re.compile(
     r"w(na|mo|he|hi|ch)\w+")
 WALL_HIDDEN = {"sputres", "ero_ml", "depo_ml", "erel", "stckcoef",
                "sputfrac", "r1", "r2", "z1", "z2", "north", "south", "west",
-               "east", "nseg", "ibnd", "imapx", "imapy"}
+               "east", "nseg", "ibnd", "imapx", "imapy",
+               "ewldt",         # shown as its parts, ewldk and ewldp
+               "wstrat"}        # applies to the next quantity (splits)
 
 
 def _wall_group(name):
