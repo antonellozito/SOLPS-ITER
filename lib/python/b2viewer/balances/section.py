@@ -1,21 +1,26 @@
-"""The Balances tab of the quantity column: the buttons Parallel fluxes and
-Radial fluxes, then the balance of the volume picked: its options, then
-the radial balance and the poloidal balance in two sections, each with its
-explanation over the plot and the comparison of the residuals under it. A
-click on a line opens its decomposition right of the column, level with
-its plot (extension.py)."""
+"""The Balances tab of the quantity column: the tabs Parallel fluxes,
+Radial fluxes and Neutrals over the column, then the balance of the
+volume picked: its options (from the start), then, once a volume is
+picked, the radial balance and the poloidal balance in two sections, each
+with its explanation over the plot and the comparison of the residuals
+under it. A click on a line opens its decomposition right of the column,
+level with its plot (extension.py)."""
 
-from ...qt import QtWidgets, Qt
+from ...qt import QtCore, QtWidgets, Qt
 from ..scaling import squeezable
 from . import calc, plots, terms
 from .extension import Extension
 from .kinds import KINDS
 from .views import Output, PlotView, SpeciesBox, shrinkable
 
-HINT = ("Parallel fluxes: pick the upstream and the downstream surface of a "
-        "volume on the plot. Radial fluxes: pick its inner and outer flux "
-        "surface. Neutrals: where the neutrals giving the plasma its "
-        "particles were born, by region.")
+HINTS = {"parallel": "Click the upstream and then the downstream surface "
+         "of a volume on the plot: its balance comes here (click the tab "
+         "again to pick another volume, Escape cancels).",
+         "radial": "Click the inner and then the outer flux surface of a "
+         "volume on the plot: its balance comes here (click the tab again "
+         "to pick another volume, Escape cancels).",
+         "neutrals": "Where the neutrals giving the plasma its particles "
+         "were born, by region, and what they become."}
 
 
 def combo(items, tip):
@@ -27,37 +32,67 @@ def combo(items, tip):
 
 
 class BalancePage(QtWidgets.QWidget):
-    """The page of the Balances tab: the buttons of the controller (the
-    one of the balance shown pressed), a hint until a volume is picked,
-    then its section."""
+    """The page of the Balances tab: the tabs (keys, (text, tip)) in its
+    header (over the scrolled column, as the Run tracing tabs), a hint
+    while the tab shows no section, then its section (the sections of the
+    other tabs kept hidden)."""
 
-    def __init__(self, buttons, parent=None):
+    def __init__(self, tabs, parent=None):
         super().__init__(parent)
-        row = QtWidgets.QHBoxLayout()
-        for b in buttons:
-            b.setProperty("bold", True)
-            row.addWidget(b, 1)
-        self.hint = QtWidgets.QLabel(HINT)
+        self.keys = [k for k, _ in tabs]
+        self.tabs = QtWidgets.QTabBar()
+        self.tabs.setExpanding(True)
+        self.tabs.setDrawBase(True)
+        for i, (_, (text, tip)) in enumerate(tabs):
+            self.tabs.addTab(text)
+            self.tabs.setTabToolTip(i, tip)
+        self.header = QtWidgets.QWidget()   # placed by the 2D tab
+        hl = QtWidgets.QVBoxLayout(self.header)
+        hl.setContentsMargins(0, 0, 0, 6)
+        hl.addWidget(self.tabs)
+        self.hint = QtWidgets.QLabel(HINTS[self.keys[0]])
         self.hint.setWordWrap(True)
         self.hint.setProperty("muted", True)
         shrinkable(self.hint)
         self.lay = QtWidgets.QVBoxLayout(self)
         self.lay.setContentsMargins(0, 0, 0, 0)
-        self.lay.addLayout(row)
         self.lay.addWidget(self.hint)
-        self.section = None
+        self.section = None             # the one shown
+        self.sections = []              # all, shown or kept
 
-    def set_section(self, section):
-        """The section shown (None: the hint)."""
-        if self.section is not None:
-            self.section.dispose()
-            self.lay.removeWidget(self.section)
-            self.section.hide()
-            self.section.deleteLater()
-        self.section = section
-        if section is not None:
+    def key(self):
+        """The tab shown: "parallel", "radial" or "neutrals"."""
+        return self.keys[max(self.tabs.currentIndex(), 0)]
+
+    def show_tab(self, key):
+        """The tab of key shown (no signal)."""
+        self.tabs.blockSignals(True)
+        self.tabs.setCurrentIndex(self.keys.index(key))
+        self.tabs.blockSignals(False)
+        self.hint.setText(HINTS[key])
+
+    def show(self, section):
+        """The section shown (None: the hint), the others kept hidden."""
+        if section is not None and section not in self.sections:
             self.lay.addWidget(section)
+            self.sections.append(section)
+        for s in self.sections:
+            s.setVisible(s is section)
+        self.section = section
+        self.hint.setText(HINTS[self.key()])
         self.hint.setVisible(section is None)
+
+    def drop(self, section):
+        """A section goes for good (its extensions with it)."""
+        if section is None or section not in self.sections:
+            return
+        section.dispose()
+        self.lay.removeWidget(section)
+        section.hide()
+        section.deleteLater()
+        self.sections.remove(section)
+        if self.section is section:
+            self.show(None)
 
 
 class Row(QtWidgets.QWidget):
@@ -109,6 +144,9 @@ class BalanceSection(Output, QtWidgets.QWidget):
         self.logy = QtWidgets.QCheckBox("log y")
         self.logy.setToolTip("Logarithmic y axis in every balance plot "
                              "(values that are not positive left out)")
+        clear = QtWidgets.QPushButton("Clear")
+        clear.setToolTip("The volume and its balance go; pick a new one")
+        clear.clicked.connect(lambda *_: controller.clear_volume())
         save = QtWidgets.QPushButton("Save plots…")
         save.setToolTip("Both plots as png, jpg, eps, pdf or svg")
         save.clicked.connect(lambda *_: self.save_plots())
@@ -116,7 +154,7 @@ class BalanceSection(Output, QtWidgets.QWidget):
         export.setToolTip("The values of both plots: CSV, text, netCDF or "
                           "HDF5")
         export.clicked.connect(lambda *_: self.export_data())
-        self.buttons = (save, export)
+        self.buttons = (clear, save, export)
         top = QtWidgets.QGridLayout()   # two choices a row, each label
         pairs = [("Quantity", self.quantity), ("Species", self.species),
                  ("Area type", self.areatype), ("Area at", self.areaend),
@@ -134,10 +172,9 @@ class BalanceSection(Output, QtWidgets.QWidget):
         last = QtWidgets.QHBoxLayout()
         for w in (self.residuals, self.grid, self.logy):
             last.addWidget(w)
-        last.addStretch(1)
-        for w in self.buttons:          # they shrink rather than widen it
-            w.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                            QtWidgets.QSizePolicy.Fixed)
+        for w in self.buttons:          # the rest of the row; they shrink
+            w.setSizePolicy(QtWidgets.QSizePolicy.Ignored,  # rather than
+                            QtWidgets.QSizePolicy.Fixed)    # widen it
             w.setMinimumWidth(w.fontMetrics().horizontalAdvance("Save…"))
             last.addWidget(w, 1)
         top.addLayout(last, len(pairs) // 2, 0, 1, 4)
@@ -149,9 +186,15 @@ class BalanceSection(Output, QtWidgets.QWidget):
         self.notes.setWordWrap(True)
         self.notes.setProperty("muted", True)
         shrinkable(self.notes)
+        self.waiting = QtWidgets.QLabel(HINTS[self.kind])
+        self.waiting.setWordWrap(True)
+        self.waiting.setProperty("muted", True)
+        shrinkable(self.waiting)
+        self.boxes = []                 # the plots: once a volume is picked
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 6, 0, 0)
         lay.addLayout(top)
+        lay.addWidget(self.waiting)
         for name, title, view in (("radial", "Radial balance", self.radial),
                                   ("poloidal", "Poloidal balance",
                                    self.poloidal)):
@@ -162,7 +205,9 @@ class BalanceSection(Output, QtWidgets.QWidget):
             self.extensions[name] = Extension(self, row, host, column, area)
             view.clicked.connect(lambda key, n=name: self._open(n, key))
             lay.addWidget(box)
+            self.boxes.append(box)
         lay.addWidget(self.notes)
+        self._plots(False)
         squeezable(self)                # the menus shrink, never the column
         self.quantity.currentIndexChanged.connect(self._quantity)
         for w in (self.areatype, self.areaend, self.coord, self.distance):
@@ -170,6 +215,22 @@ class BalanceSection(Output, QtWidgets.QWidget):
         self.species.changed.connect(self._changed)
         for w in (self.residuals, self.grid, self.logy):
             w.toggled.connect(lambda *_: self.draw())
+
+    def _plots(self, on):
+        """The plots (a volume picked) or the hint; plots just shown fitted
+        to the column once it is laid out (hidden, they had no width)."""
+        shown = self.boxes[0].isVisibleTo(self)
+        for box in self.boxes:
+            box.setVisible(on)
+        self.waiting.setVisible(not on)
+        if not on:
+            self.notes.setVisible(False)
+        elif not shown:
+            QtCore.QTimer.singleShot(0, self._fit_plots)
+
+    def _fit_plots(self):
+        for v in self.views():
+            v._resized()
 
     def views(self):
         return [self.radial, self.poloidal]
@@ -229,7 +290,9 @@ class BalanceSection(Output, QtWidgets.QWidget):
         plots opened from it follow."""
         c = self.controller
         if c.vol is None:
+            self._plots(False)
             return
+        self._plots(True)
         QtWidgets.QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             q = self.quantity.currentData()

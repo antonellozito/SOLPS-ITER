@@ -26,7 +26,21 @@ time steps of the run while fort.44 holds the last EIRENE call,
 ionisation outside the B2.5 grid).
 
 Molecules and test ions count by their atoms (mlcmp of
-b2.neutrals.parameters, the test ion as its molecule)."""
+b2.neutrals.parameters, the test ion as its molecule).
+
+EIRENE runs every stratum with its full source strength, B2.5 keeps the
+fraction of its recycling coefficient (b2mod_eirene): the fort.44 tallies
+and the puff of a stratum are scaled by it (recyceir of the stratum, or
+with eirene_use_recyceir 0 in b2mn.dat recyc of the first ion of the
+element; balance.nc holds the scaled sources). fort.44 gives the absorbed
+and pumped fluxes by stratum from 20261126 (wlpump(A,k), ...), before only
+summed over the strata: then scaled where all the strata of the element
+have the same coefficient, else as EIRENE gives them.
+
+The fate (with the pumped fluxes by stratum): what the neutrals of each
+birth place become, the strata of the birth place (or, Sputtered, of the
+other elements) by stratum: launched, sputtered in these strata, ionised,
+absorbed, pumped, deposited, the residual."""
 
 import json
 import os
@@ -119,6 +133,26 @@ def _values(nl, key):
             for v in nl.get(key, [])]
 
 
+def _sequence(nl, key):
+    """Values of a namelist entry, repeats (r*c) expanded."""
+    out = []
+    for v in nl.get(key, []):
+        m = re.fullmatch(r"(\d+)\*(.+)", str(v))
+        n, text = (int(m.group(1)), m.group(2)) if m else (1, str(v))
+        out += [float(text.replace("d", "e").replace("D", "E"))] * n
+    return out
+
+
+def b2mn_int(rundir, name, default):
+    """Integer value of name in b2mn.dat (the last one given, as B2.5
+    reads it), default without it."""
+    path = cellfiles.find(rundir, "b2mn.dat")
+    text = open(path).read() if path else ""
+    found = re.findall(r"^\s*'%s'\s+'\s*(-?\d+)\s*'" % re.escape(name),
+                       text, re.M)
+    return int(found[-1]) if found else default
+
+
 class Origin:
     """The neutrals balance of the run (balance.nc at path, fort.44 and the
     strata of the run)."""
@@ -144,6 +178,9 @@ class Origin:
         if self.f44 is not None and self.f44.nstra != bf.nstra:
             self.f44 = None             # not the strata of balance.nc
         self.places = self._places()
+        self.coef = self._coefficients()
+        self.unscaled = set()           # elements whose absorbed and pumped
+        #                                 fluxes could not be scaled
         self.drawn = None               # cells of the drawn region
         self._cache = {}
         self.regions = self._regions()
@@ -206,6 +243,64 @@ class Origin:
                 out[int(f)] = "Main chamber wall"
         return out
 
+    def _coefficients(self):
+        """(atoms of fort.44, strata) the recycling coefficient B2.5 keeps
+        of each stratum for the atoms of each element: recyceir of the
+        stratum, or with eirene_use_recyceir 0 recyc of the first ion of
+        the element (the species of one element and mass in a row; the
+        next species for a duplicate atomic species, eb2atcr), as
+        b2mod_eirene scales the sources; 1 where there is none."""
+        f, ns = self.f44, self.bf.nstra
+        c = np.ones((f.natm if f is not None else 0, ns))
+        if f is None:
+            return c
+        if b2mn_int(self.run.rundir, "eirene_use_recyceir", 1) > 0:
+            for key in self.nl:
+                m = re.fullmatch(r"recyceir(?:\((\d+)\))?", key)
+                if m is None:
+                    continue
+                k0 = int(m.group(1)) - 1 if m.group(1) else 0
+                for n, v in enumerate(_sequence(self.nl, key)):
+                    if 0 <= k0 + n < ns:
+                        c[:, k0 + n] = v
+            return c
+        el = [element(n) for n in self.bf.species]
+        za = self.bf.raw("za").astype(float)
+        am = self.bf.raw("am").astype(float)
+        nsp = len(el)
+        seq, j = [], 0                  # b2espcr: the element sequences
+        for i in range(nsp):
+            if i == 0 or el[i] != el[i - 1] or abs(am[i] - am[i - 1]) >= \
+                    1e-3:
+                j += 1
+            seq.append(j)
+        recyc = np.array([[1.0 if za[i] != 0 and el[i] != "C" else 0.0] *
+                          ns for i in range(nsp)])    # defaults of B2.5
+        for key in self.nl:
+            m = re.fullmatch(r"recyc(?:\((\d+),(\d+)\))?", key)
+            if m is None:
+                continue
+            i0, k0 = (int(m.group(1)), int(m.group(2)) - 1) if \
+                m.group(1) else (0, 0)
+            for n, v in enumerate(_sequence(self.nl, key)):
+                if 0 <= i0 + n < nsp and 0 <= k0 < ns:
+                    recyc[i0 + n, k0] = v
+        first = {}
+        for i in range(nsp):
+            first.setdefault(seq[i], i)
+        given = [int(v) for v in _sequence(self.nl, "eb2atcr")]
+        for ia in range(f.natm):
+            ref = next((i for i in range(nsp) if za[i] != 0 and
+                        seq[i] == ia + 1), None)
+            if ref is None:             # a duplicate atomic species
+                j = given[ia] if ia < len(given) else first.get(ia + 1, -1)
+                if 0 <= j and j + 1 < nsp and za[j] < za[j + 1] and \
+                        el[j] == el[j + 1] and abs(am[j] - am[j + 1]) < 1e-2:
+                    ref = j + 1
+            if ref is not None:
+                c[ia] = recyc[ref]
+        return c
+
     def _name(self, faces, fallback):
         """The name most of the faces have."""
         names = [self.places[int(f)] for f in faces if int(f) in
@@ -254,6 +349,9 @@ class Origin:
         """(sources, sinks) as Rows."""
         st = Strata(self.run.rundir)
         births = {}
+        owner = self._strata_elements()     # puffs numbered by element
+        puffs = [k for k in range(self.bf.nstra) if k < len(st.kinds) and
+                 KINDS.get(st.kinds[k][:1], ("", ""))[1] == "puff"]
         for k in range(self.bf.nstra):
             code = st.kinds[k][:1] if k < len(st.kinds) else ""
             faces = []
@@ -267,6 +365,9 @@ class Origin:
                 kind = "recycling"
             elif code in KINDS:
                 name, kind = KINDS[code]
+                same = [j for j in puffs if owner[j] == owner[k]]
+                if kind == "puff" and len(same) > 1:
+                    name = "%s %d" % (name, same.index(k) + 1)
             elif code in ("N", "S", "E", "W"):
                 name, kind = "Stratum %d (%s boundary)" % (k + 1, code), \
                     "recycling"
@@ -317,6 +418,8 @@ class Origin:
                 row = absorbed.setdefault(key, Row(key, "absorbed"))
                 row.faces += list(map(int, faces))
                 row.surfaces.append(int(s))
+        if len(sinks) == 1:                     # one pump: no number
+            sinks[0].name = "Pumping surface"
         return sources, list(absorbed.values()) + sinks + (
             [deposit] if deposit.surfaces else [])
 
@@ -353,6 +456,40 @@ class Origin:
             sput[:, ia], pump[:, ia] = self._element_surfaces(ia)
         return sput, pump
 
+    def by_stratum(self):
+        """Whether fort.44 has the absorbed and pumped fluxes by stratum."""
+        return self.f44 is not None and self.f44.has("wlpump(A,1)")
+
+    def _stratum_surfaces(self, ia, k):
+        """(sputtered, absorbed) by surface of the atoms of fort.44 atom ia
+        (molecules and test ions by their atoms of ia) in stratum k
+        (0-based), scaled by its recycling coefficient; absorbed None
+        without the pumped fluxes by stratum."""
+        key = ("surfk", ia, k)
+        if key in self._cache:
+            return self._cache[key]
+        f = self.f44
+        _, mols, ions = self._atoms(f.atoms[ia].strip())
+        c = self.coef[ia, k]
+        sput = np.zeros(f.nsurf)
+        if f.has("wldspta(%d)" % (k + 1)):
+            sput += f.by_surface("wldspta(%d)" % (k + 1), f.natm)[:, ia]
+        if mols and f.has("wldsptm(%d)" % (k + 1)):
+            sm = f.by_surface("wldsptm(%d)" % (k + 1), f.nmol)
+            sput += sum(w * sm[:, im] for im, w in mols.items())
+        pump = None
+        if self.by_stratum():
+            pump = f.by_species("wlpump(A,%d)" % (k + 1), f.natm)[:, ia].copy()
+            if mols and f.has("wlpump(M,%d)" % (k + 1)):
+                pm = f.by_species("wlpump(M,%d)" % (k + 1), f.nmol)
+                pump += sum(w * pm[:, im] for im, w in mols.items())
+            if ions and f.has("wlpump(I,%d)" % (k + 1)):
+                pi = f.by_species("wlpump(I,%d)" % (k + 1), f.nion)
+                pump += sum(w * pi[:, ii] for ii, w in ions.items())
+            pump *= c
+        self._cache[key] = (c * sput, pump)
+        return self._cache[key]
+
     def _element_surfaces(self, ia):
         """(sputtered, absorbed) by surface of the atoms of fort.44 atom
         ia (molecules and test ions by their atoms of ia)."""
@@ -360,14 +497,22 @@ class Origin:
         if key in self._cache:
             return self._cache[key]
         f = self.f44
+        if self.by_stratum():           # exact: by stratum
+            parts = [self._stratum_surfaces(ia, k) for k in range(f.nstra)]
+            self._cache[key] = (sum(p[0] for p in parts),
+                                sum(p[1] for p in parts))
+            return self._cache[key]
         _, mols, ions = self._atoms(f.atoms[ia].strip())
+        c = self.coef[ia]
         sput = np.zeros(f.nsurf)
         for k in range(1, f.nstra + 1):
             if f.has("wldspta(%d)" % k):
-                sput += f.by_surface("wldspta(%d)" % k, f.natm)[:, ia]
+                sput += c[k - 1] * f.by_surface("wldspta(%d)" % k,
+                                                f.natm)[:, ia]
             if mols and f.has("wldsptm(%d)" % k):
                 sm = f.by_surface("wldsptm(%d)" % k, f.nmol)
-                sput += sum(w * sm[:, im] for im, w in mols.items())
+                sput += c[k - 1] * sum(w * sm[:, im]
+                                       for im, w in mols.items())
         pump = np.zeros(f.nsurf)
         if f.has("wlpump(A)"):
             pump += f.by_species("wlpump(A)", f.natm)[:, ia]
@@ -377,6 +522,10 @@ class Origin:
         if ions and f.has("wlpump(I)"):
             pi = f.by_species("wlpump(I)", f.nion)
             pump += sum(w * pi[:, ii] for ii, w in ions.items())
+        if (c == c[0]).all():           # summed over the strata in fort.44
+            pump *= c[0]
+        elif pump.any():
+            self.unscaled.add(f.atoms[ia].strip().lower())
         self._cache[key] = (sput, pump)
         return sput, pump
 
@@ -477,17 +626,19 @@ class Origin:
             mine = [k for k in r.strata if owner[k] in (None, el)]
             if r.kind == "recycling" and f is not None and ia is not None:
                 for k in mine:
-                    out[j] += f.by_surface("wldpa(%d)" % (k + 1),
-                                           f.natm)[:, ia].sum()
+                    n = f.by_surface("wldpa(%d)" % (k + 1),
+                                     f.natm)[:, ia].sum()
                     if mols:
                         pm = f.by_surface("wldpm(%d)" % (k + 1), f.nmol)
-                        out[j] += sum(w * pm[:, im].sum()
-                                      for im, w in mols.items())
+                        n += sum(w * pm[:, im].sum()
+                                 for im, w in mols.items())
+                    out[j] += self.coef[ia, k] * n
             elif r.kind == "puff" and ia is not None:
                 for k in mine:          # the atoms of the stratum, shared
                     g = _values(self.nl, "gpfc(1,%d)" % (k + 1))
                     if k < len(flux) and ia < len(g) and sum(g) > 0:
-                        out[j] += flux[k] * g[ia] / sum(g)
+                        out[j] += self.coef[ia, k] * flux[k] * g[ia] / \
+                            sum(g)
             elif r.kind == "recombination" and rec is not None:
                 out[j] = -rec[:, mine].sum() if mine else 0.0
             elif r.kind == "sputtered" and ia is not None:
@@ -534,8 +685,66 @@ class Origin:
         return {"rows": rows, "values": values, "sources": sources,
                 "missing": float(values.sum())}
 
-    def why_missing(self):
-        """Likely cause of a Not accounted row."""
+    def fate(self, el):
+        """The fate of the neutrals of el by birth place (None without the
+        pumped fluxes by stratum): rows the birth places with a stratum of
+        el, Sputtered (the strata of the other elements), those with a
+        value, and Total; columns Launched (the source, as the balance),
+        Sputtered (in these strata), Ionised (in the regions, as the
+        balance), the sinks of the balance, Residual: {"rows": [(name,
+        kind, Row, key of the ionisation)], "columns": names, "values":
+        (rows, columns) atoms per second}."""
+        if not self.by_stratum():
+            return None
+        ia, _, _ = self._atoms(el)
+        if ia is None:
+            return None
+        mine = self._mine(el)
+        rows = [(r.name, r.kind, r, str(j)) for j, r in
+                enumerate(self.sources) if r.kind != "sputtered" and
+                any(mine[k] for k in r.strata)]
+        if (~mine).any():
+            rows.append(("Sputtered", "sputtered", None, SPUTTERED))
+        rows.append(("Total", "total", None, TOTAL))
+        ion = self._by_strata(el)[self.cvreg > 0].sum(axis=0)
+        launched = self.launched(el)
+        parts = [self._stratum_surfaces(ia, k) for k in range(self.f44.nstra)]
+        lost = self.lost(el)
+        sinks = [j for j, r in enumerate(self.sinks) if lost[j]]
+        values = []
+        for name, kind, row, key in rows:
+            if key == TOTAL:
+                strata = list(range(self.f44.nstra))
+            elif key == SPUTTERED:
+                strata = [k for k in range(self.f44.nstra) if not mine[k]]
+            else:
+                strata = [k for k in self.sources[int(key)].strata if mine[k]]
+            if key == TOTAL:
+                src = sum(launched[j] for j, r in enumerate(self.sources)
+                          if r.kind != "sputtered")
+            elif key == SPUTTERED:
+                src = 0.0
+            else:
+                src = launched[int(key)]
+            sput = sum(parts[k][0].sum() for k in strata)
+            out = [ion[strata].sum()] + [
+                sum(parts[k][1][self.sinks[j].surfaces].sum()
+                    for k in strata) for j in sinks]
+            values.append([src, sput] + out + [src + sput - sum(out)])
+        keep = [i for i, v in enumerate(values) if i == len(values) - 1 or
+                any(values[i][:-1])]    # rows with a value, and Total
+        rows, values = [rows[i] for i in keep], [values[i] for i in keep]
+        return {"rows": rows, "columns": ["Launched", "Sputtered",
+                                          "Ionised"] +
+                [self.sinks[j].name for j in sinks] + ["Residual"],
+                "values": np.array(values, float)}
+
+    def why_missing(self, el=None):
+        """Likely cause of a Not accounted row (of element el)."""
+        if el is not None and el.lower() in self.unscaled:
+            return ("fort.44 gives the absorbed and pumped fluxes only "
+                    "summed over the strata, whose recycling coefficients "
+                    "differ: left as EIRENE gives them")
         b2mn = cellfiles.find(self.run.rundir, "b2mn.dat")
         text = open(b2mn).read() if b2mn else ""
         if re.search(r"'balance_average'\s+'1'", text):
