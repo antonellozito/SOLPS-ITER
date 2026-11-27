@@ -175,7 +175,7 @@ run_b2us() {
   other=$(grep -o '[A-Za-z0-9_]*\.exe' "$work/dryrun.log" | sort -u | grep -v '^b2us\.exe$')
   [ -z "$other" ] || die "the conversion would also run $other (check the timestamps), see $work/dryrun.log"
   (cd "$c" && $MAKE -f "$SOLPSTOP/runs/Makefile" b2us.prt) > "$work/b2us.log" 2>&1
-  grep -q "STOP b2us" "$work/b2us.log" || die "b2us failed, see $work/b2us.log"
+  grep -Eq "^ *(STOP )?b2us *$" "$work/b2us.log" || die "b2us failed, see $work/b2us.log"
 }
 # ..namelist body without the group line and the closing slash
 nml_body() {
