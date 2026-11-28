@@ -18,15 +18,18 @@ from ..model import split_unit
 from ..scaling import squeezable
 from . import chordplots, inspect, measure
 from .base import MouseTools
+from .cameratool import CameraTool
 from .fieldtool import FieldLineTool
 from .figure import frame_lines
 from .results import ResultsPanel
 from ..catalog import CHORD_POINTS
 from .sections import LOOK, ChordsSection, StatisticsSection
+from .spectrum import Spectrum
 
 VOLUMES = {"cells": ("field", "vol"), "triangles": ("efield", "triavol")}
 WHERE = {"shown": "the cells shown in the view", "box": "the box",
          "polygon": "the polygon"}
+CHORDS = ("chords", "spectrum")  # the sections of the chords
 XLABELS = {"R": "R (m)", "Z": "Z (m)", "rhop": r"$\rho_p$",
            "dssep": "distance from the separatrix along the line (m)"}
 
@@ -54,6 +57,17 @@ class Tools:
             w.hide()
             squeezable(w)
         self.fieldline = FieldLineTool(self)
+        self.camera = CameraTool(self)
+        self.spectrum = Spectrum(self)
+        self.chords_section.per_sr.toggled.connect(
+            lambda *_: self._chords_all())
+        for w in (self.chords_section.shapes, self.chords_section.continua):
+            w.toggled.connect(
+                lambda *_: self.section == "spectrum" and self._chords_all())
+        self.chords_section.instrument.valueChanged.connect(
+            lambda *_: self.section == "spectrum" and self._chords_all())
+        self.chords_section.which.currentIndexChanged.connect(
+            lambda *_: self.section == "spectrum" and self._chords_all())
         self.bar.done.connect(self._done)
         self.bar.hint.connect(tab.status)
         self.bar.changed.connect(self._modes)
@@ -61,7 +75,8 @@ class Tools:
             lambda on: on and self._load())
         self.last, self.waiting = None, False   # the inspector
         self.shown = None               # the data and column measured
-        self.section = None             # "chords", "stats" or None
+        self.section = None             # "chords", "spectrum", "stats",
+        #                                 "fieldline", "camera" or None
         self.source = "drawn"           # or "run": the *.chords files
         self.run_labels = []
         self.drawn, self.results, self.artists = [], [], []
@@ -119,16 +134,21 @@ class Tools:
         """The chords, the field line, the overlay, the statistics or none
         in the quantity column."""
         self.section = which
-        self.chords_section.setVisible(which == "chords")
+        self.chords_section.set_spectrum(which == "spectrum")
+        self.chords_section.setVisible(which in CHORDS)
         self.stats_section.setVisible(which == "stats")
         if self.fieldline.open != (which == "fieldline"):
             self.fieldline.set_open(which == "fieldline")
+        if self.camera.open != (which == "camera"):
+            self.camera.set_open(which == "camera")
         q = self.tab.quantity
         q.overlay_section.setVisible(which == "overlay")
         for b, key in ((q.chords_button, "chords"), (q.stats_button,
                                                      "stats"),
                        (q.overlay_button, "overlay"),
-                       (q.field_button, "fieldline")):
+                       (q.field_button, "fieldline"),
+                       (q.spectrum_button, "spectrum"),
+                       (q.camera_button, "camera")):
             b.blockSignals(True)
             b.setChecked(which == key)
             b.blockSignals(False)
@@ -140,7 +160,7 @@ class Tools:
             if self.stats_last is None:
                 self.stats_last = ("shown", None)
             self._statistics(*self.stats_last)
-        elif which == "chords":
+        elif which in CHORDS:
             item = self.chords_section.source.model().item(1)
             item.setEnabled(bool(self.run_chords()))    # with chord files
             self._chords_all()
@@ -156,6 +176,7 @@ class Tools:
             b.setChecked(self.bar.mode == mode)
             b.blockSignals(False)
         self.fieldline.modes()
+        self.camera.modes()
         last = self.stats_last
         if self.section == "stats" and last is not None and \
                 last[0] != "shown" and not self.bar.points:
@@ -194,7 +215,7 @@ class Tools:
         self._refresh()
 
     def _refresh(self):
-        if self.section == "chords":
+        if self.section in CHORDS:
             self._chords_all()
         elif self.section == "stats" and self.stats_last is not None:
             self._statistics(*self.stats_last)
@@ -204,7 +225,7 @@ class Tools:
     # ------------------------------------------------- frames of a movie
     def _shown_widgets(self):
         """The figures and texts of the open section."""
-        if self.section == "chords":
+        if self.section in CHORDS:
             sec = self.chords_section
             return ([t.view for t in sec.chords] + [
                 t.view_v for t in sec.chords if t.second.isVisible()] +
@@ -222,18 +243,19 @@ class Tools:
         return [], [], None
 
     def snapshot(self):
-        """What the open section shows (for an image of the movie)."""
+        """What the open section shows (for an image of the movie), and the
+        camera image of the frame while Export frames draws them."""
         views, texts, _ = self._shown_widgets()
         return (self.section,
                 [(v, v.draw, v.header, v.rows, getattr(v, "kind",
                                                        v.options.kind),
                   v.name) for v in views if v.draw is not None],
-                [(t, t.text()) for t in texts])
+                [(t, t.text()) for t in texts], self.camera.snapshot())
 
     def show_snapshot(self, snap):
         """The open section as it was for an image of the movie (the
         figures shown: a chord tab chosen meanwhile at the next image)."""
-        section, views, texts = snap
+        section, views, texts, _ = snap
         if section != self.section or section is None:
             return
         for v, draw, header, rows, kind, name in views:
@@ -272,6 +294,7 @@ class Tools:
         """The chords on the plot and the figures in the theme."""
         self.bar.apply_theme()
         self.fieldline.apply_theme()
+        self.camera.apply_theme()
         self._chord_artists()
         for view in [t.view for t in self.chords_section.chords] + [
                 self.chords_section.sums, self.chords_section.trace,
@@ -290,6 +313,9 @@ class Tools:
         if mode == "fieldline":
             self.bar._draw([])
             self.fieldline.picked2d(*pts[0])
+            return
+        if mode == "camera":
+            self.camera.picked(pts)
             return
         if tab.run is None or mode == "line" and self._measured() is None \
                 or mode in ("box", "polygon") and not tab._current():
@@ -448,7 +474,12 @@ class Tools:
         the chords on the plot (with Show all, every frame loaded)."""
         sec = self.chords_section
         tab = self.tab
-        m = self._measured() if self.section == "chords" else None
+        spectrum = self.section == "spectrum"
+        m = self._measured() if self.section in CHORDS else None
+        if spectrum and m is not None and m[0] is not self.tab.data:
+            m = None                    # the plasma quantity only
+        if spectrum:
+            self.spectrum.lines()
         sec.target.hide()               # both measured with both plotted
         self.each = self._species_curves(m)
         if self.each is not None:       # every species of the field, then
@@ -457,9 +488,10 @@ class Tools:
         self.results = [self._chord(c, m) if self.each is None else
                         self._chord_species(c, m, full) for c in
                         self.chords] if m else []
-        mo = self._other(m)             # both plotted: the vector one too
+        mo = None if spectrum else self._other(m)   # both plotted: the
+        #                                             vector one too
         other = [self._chord(c, mo) for c in self.chords] if mo else []
-        sec.show_all.setVisible(tab.time_box.movie())
+        sec.show_all.setVisible(tab.time_box.movie() and not spectrum)
         multi = self._species_curves(m) is not None
         if multi and self.show_all:     # Show all: one curve per chord only
             self.show_all = False
@@ -487,7 +519,10 @@ class Tools:
                                    if run and k < len(self.run_labels)
                                    else "")
             t.second.setVisible(bool(other))
-            if k < len(self.results):   # the plasma quantity first
+            if k < len(self.results) and spectrum:
+                self.spectrum.show(t, k, c, m, sec.per_sr.isChecked(),
+                                   sec.which.currentData() == "average")
+            elif k < len(self.results):     # the plasma quantity first
                 self._show_chord(t.view, t.text, self.results[k], k)
                 if other:
                     self._show_chord(t.view_v, t.text_v, other[k], k)
@@ -758,7 +793,7 @@ class Tools:
         if len(self.full) > 8:          # the latest only
             self.full = {}
         self.full[key] = data
-        if self.section == "chords":
+        if self.section in CHORDS:
             self._chords_all()
 
     def _chord_tab(self, *_):
@@ -959,7 +994,7 @@ class Tools:
                 a.remove()
         self.artists = []
         self.tab.mode3d.follow()        # the chords in 3D too
-        if self.section != "chords":
+        if self.section not in CHORDS:
             self.tab.canvas.draw_idle()
             return
         ax = self.tab.plot.ax

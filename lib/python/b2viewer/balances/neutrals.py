@@ -146,11 +146,7 @@ def _sequence(nl, key):
 def b2mn_int(rundir, name, default):
     """Integer value of name in b2mn.dat (the last one given, as B2.5
     reads it), default without it."""
-    path = cellfiles.find(rundir, "b2mn.dat")
-    text = open(path).read() if path else ""
-    found = re.findall(r"^\s*'%s'\s+'\s*(-?\d+)\s*'" % re.escape(name),
-                       text, re.M)
-    return int(found[-1]) if found else default
+    return int(cellfiles.b2mn(rundir, name, default))
 
 
 class Origin:
@@ -762,23 +758,6 @@ class Origin:
                 if r > 0]
 
     # ------------------------------------------------------------- maps
-    def quantities(self):
-        """The maps of the Final state: one per birth place, the sputtered
-        particles (if an element has some) and all the neutrals, the
-        elements as columns."""
-        if self.why or not self.elements:
-            return []
-        out = [Quantity(PREFIX + str(j), "Particle source from the neutrals "
-                        "%s (%s)" % (r.phrase, UNIT), GROUP, "neutrals")
-               for j, r in enumerate(self.sources) if r.kind != "sputtered"]
-        if any(self.cells(e, SPUTTERED).any() for e in self.elements
-               if (~self._mine(e)).any()):
-            out.append(Quantity(PREFIX + SPUTTERED, "Particle source from the "
-                                "sputtered neutrals (%s)" % UNIT, GROUP,
-                                "neutrals"))
-        return out + [Quantity(PREFIX + TOTAL, "Particle source from all the "
-                               "neutrals (%s)" % UNIT, GROUP, "neutrals")]
-
     def describe(self, key, el, process="all", region=None):
         """Quantity of the map of a source of the ionisation table (key of
         cells) of element el by process (the Neutrals tab), only in a

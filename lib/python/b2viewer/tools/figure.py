@@ -38,7 +38,8 @@ XAXES = (("distance along the line", "s"), ("R", "R"), ("Z", "Z"),
          ("ρₚ", "rhop"),
          ("distance from the separatrix", "dssep"))
 HIST = "#4c72b0"                    # bars of a histogram at first
-FAMILY = {"frames": "line", "sumframes": "sums"}   # of all the frames
+FAMILY = {"frames": "line", "sumframes": "sums",  # of all the frames
+          "spectrum": "line"}           # lines against the wavelength
 FRAMES_CMAP = "viridis"             # colours along the frames at first
 OTHER = 0.2                         # width, marker size: frames not shown
 OTHER_ALPHA = 0.6                   # opacity of their lines
@@ -351,7 +352,8 @@ class FigureOptions(QtWidgets.QGroupBox):
         for e in self.limits if not (keep or self.keep_limits) else ():
             e.clear()
         for w in (self.xaxis_label, self.xaxis):
-            w.setVisible(base == "line" and self.xaxes)
+            w.setVisible(base == "line" and self.xaxes and
+                         kind != "spectrum")
         for w in self.xrow + [self.show_grid]:  # sums: the y axis only
             w.setVisible(base != "sums")
 

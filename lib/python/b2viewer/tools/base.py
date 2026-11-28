@@ -18,16 +18,19 @@ MODES = (
      "the value shown there and the geometry of the cell and the "
      "triangle"),
     )
-HIDDEN = ("seeds", "line", "box", "polygon", "fieldline")  # no button
+HIDDEN = ("seeds", "line", "box", "polygon", "fieldline",
+          "camera")             # no button
 CLICKED = ("fieldline",)        # a click, a drag pans the plot
-POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2, "fieldline": 1}
+POINTS = {"inspect": 1, "line": 2, "box": 2, "seeds": 2, "fieldline": 1,
+          "camera": 2}
 GOLD = "#e8b500"                    # the cell under the mouse (Inspect)
 HINTS = {"inspect": "Click a cell", "line": "Click the two ends of the line",
          "box": "Click two corners of the box", "polygon": "Click the "
          "corners of the polygon, then the first one again",
          "seeds": "Click the start and the end of the seed line",
          "fieldline": "Click a point of the B2.5 grid: the field line "
-         "through it"}
+         "through it", "camera": "Click the camera position, then the "
+         "point it looks at"}
 
 
 class MouseTools(QtWidgets.QWidget):

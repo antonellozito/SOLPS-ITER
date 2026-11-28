@@ -191,6 +191,18 @@ def inside_segments(p0, p1, inside, n=4001):
 _NAME = re.compile(r"([A-Za-z_]\w*(?:\([^)]*\))?)\s*=")
 
 
+def b2mn(rundir, name, default):
+    """Value of name in b2mn.dat as a float (the last one given, as B2.5
+    reads it), default without it."""
+    path = find(rundir, "b2mn.dat")
+    text = open(path).read() if path else ""
+    found = re.findall(r"^\s*'%s'\s+'\s*([-+0-9.eEdD]+)\s*'" %
+                       re.escape(name), text, re.M)
+    if not found:
+        return default
+    return float(found[-1].replace("d", "e").replace("D", "E"))
+
+
 def namelist(path):
     """{name: [values as text]} of the variables of a Fortran namelist
     file (lower-case names, indexed ones such as enepar(1,1) with their

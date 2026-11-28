@@ -2,7 +2,8 @@
 content type (vector or raster), resolution, colour space (rgb, cmyk,
 gray) and export theme (light or dark). Vector output keeps the drawing;
 raster output is the figure rendered at the resolution, written as an
-image or wrapped in a PDF, EPS or SVG file."""
+image or wrapped in a PDF, EPS or SVG file; an image rendered elsewhere
+(the 3D view) is written the same way (save_image)."""
 
 import base64
 import io
@@ -29,11 +30,14 @@ def defaults(fmt="png"):
 
 
 class PrintDialog(Scaled, QtWidgets.QDialog):
-    """The options of Save plot; options() after Export."""
+    """The options of Save plot; options() after Export. vector False:
+    raster content only (an image rendered elsewhere)."""
 
-    def __init__(self, dark=False, parent=None, title="Save plot"):
+    def __init__(self, dark=False, parent=None, title="Save plot",
+                 vector=True):
         super().__init__(parent)
         self.setWindowTitle(title)
+        self.vector = vector
         d = defaults()
         lay = QtWidgets.QGridLayout(self)
         lay.setContentsMargins(18, 14, 18, 14)
@@ -71,7 +75,8 @@ class PrintDialog(Scaled, QtWidgets.QDialog):
     def _refresh(self, format_changed=False):
         """Choices allowed by the format."""
         fmt = self.format.currentText()
-        contents = ["vector", "raster"] if fmt in VECTOR else ["raster"]
+        contents = ["vector", "raster"] if fmt in VECTOR and self.vector \
+            else ["raster"]
         colors = ["rgb", "gray"] if fmt == "svg" else ["rgb", "cmyk", "gray"]
         content = contents[0] if format_changed else \
             self.content.currentText()
@@ -129,6 +134,26 @@ def save(figure, path, options):
                        facecolor=figure.get_facecolor())
         return note
     image, note = _raster(figure, fmt, color, dpi)
+    _write(image, path, fmt, dpi)
+    return note
+
+
+def save_image(image, path, options):
+    """Write an image rendered elsewhere (QImage, e.g. the 3D view) with
+    the options of the dialog: its colour space, the format (PDF, EPS and
+    SVG hold the image), the resolution; returns a note on what could not
+    be honoured, or ""."""
+    fmt, dpi = options["format"], int(options["dpi"])
+    image = QtGui.QImage(image)
+    per_m = int(round(dpi / 0.0254))
+    image.setDotsPerMeterX(per_m)
+    image.setDotsPerMeterY(per_m)
+    image, note = _colours(image, fmt, options["color"])
+    _write(image, path, fmt, dpi)
+    return note
+
+
+def _write(image, path, fmt, dpi):
     if fmt in ("png", "jpg"):
         if not image.save(path, "JPG" if fmt == "jpg" else "PNG"):
             raise OSError("cannot write %s" % path)
@@ -136,7 +161,6 @@ def save(figure, path, options):
         _svg_with_image(image, path)
     else:
         _wrapped(image, path, fmt, dpi)
-    return note
 
 
 def save_pages(figures, path, options):
@@ -179,7 +203,11 @@ def _raster(figure, fmt, color, dpi):
     buf = io.BytesIO()
     figure.savefig(buf, format="png", dpi=dpi,
                    facecolor=figure.get_facecolor())
-    image = QtGui.QImage.fromData(buf.getvalue())
+    return _colours(QtGui.QImage.fromData(buf.getvalue()), fmt, color)
+
+
+def _colours(image, fmt, color):
+    """The image in the colour space: (QImage, note)."""
     note = ""
     if color == "gray":
         image = image.convertToFormat(QtGui.QImage.Format_Grayscale8)

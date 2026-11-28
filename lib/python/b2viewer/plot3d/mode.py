@@ -5,6 +5,7 @@ the 2D plot alone hidden, the grid layers greyed out), the scene following
 what the tab shows (the 2D plot is still drawn, hidden): one of the
 plasma, vector and wall quantities at a time, the last one chosen."""
 
+import copy
 import importlib.util
 import os
 import sys
@@ -14,6 +15,7 @@ import numpy as np
 from ...qt import QtCore, QtWidgets, opengl_composition, opengl_works, \
     remote_display
 from .. import theme
+from ..output import printfig
 from ..panels.layers import left_form
 from ..panels.view3d import Options3D
 from .data import Data3D
@@ -23,6 +25,8 @@ NEED = (("pyvista", "0.43"), ("pyvistaqt", "0.11"))
 FOLLOW_MS = 120                 # the scene after the 2D plot settles
 GRIDS = ("grid", "eirene", "stagnation")    # layers not drawn in 3D
 SECTOR_MS = 600                 # a new sector after its spin boxes settle
+EXPORT_BACKGROUND = {False: (1.0, 1.0, 1.0),    # Save image: light theme,
+                     True: (0.149, 0.149, 0.149)}   # dark theme
 
 
 def _magnetic(snap):
@@ -377,17 +381,55 @@ class Mode3D(QtCore.QObject):
         return min(z), max(z)
 
     def _save(self):
-        if self.view is None:
+        """Save image: the options of Save plot (raster: the view is an
+        image), then the file."""
+        if self.view is None or self.view.scene.snap is None:
             return
-        path = self.tab._file("Save the 3D view", "view3d.png",
-                              "PNG image (*.png)")
-        if path is None:
+        tab = self.tab
+        dlg = printfig.PrintDialog(theme.is_dark(), tab, "Save image",
+                                   vector=False)
+        if dlg.exec() != QtWidgets.QDialog.Accepted:
             return
-        if not path.lower().endswith(".png"):
-            path += ".png"
+        options = dlg.options()
+        fmt = options["format"]
+        path = tab._file("Save image", "view3d." + fmt, printfig.FILTERS[fmt])
+        if path is not None:
+            self.save(printfig.with_suffix(path, fmt), options)
+
+    def save(self, path, options):
+        """The 3D view written to path with the options of Save plot
+        (format, resolution, colour space, theme); the path, or None."""
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
-            self.view.save(path)
+            note = printfig.save_image(self._image(options["dpi"], options.get(
+                "theme", theme.name().lower()) == "dark"), path, options)
         except (OSError, ValueError, RuntimeError) as err:
             self.tab.status.emit("Cannot save the 3D view: %s" % err)
-            return
-        self.tab.status.emit("3D view saved to %s" % os.path.abspath(path))
+            return None
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        self.tab.status.emit("3D view saved to %s%s" % (
+            os.path.abspath(path), " (%s)" % note if note else ""))
+        return path
+
+    def _image(self, dpi, dark):
+        """The view rendered for a file of dpi dots per inch: supersampled
+        anti-aliasing (as far as the view allows it), the background and
+        colour bars of the theme of the file (light: white), the camera
+        kept; the view as it was after."""
+        view = self.view
+        snap = view.scene.snap
+        sector = self.sector()
+        zcut = self.options.view.heights(*self._grid_heights())
+        export = copy.copy(snap)
+        export.background = EXPORT_BACKGROUND[dark]
+        aa = view.render_opts["aa"]
+        try:
+            view.render_opts["aa"] = "ssaa"
+            view._anti_aliasing()
+            view.show_snapshot(export, sector, dark, zcut)
+            return view.screenshot(dpi)
+        finally:
+            view.render_opts["aa"] = aa
+            view._anti_aliasing()
+            view.show_snapshot(snap, sector, theme.is_dark(), zcut)

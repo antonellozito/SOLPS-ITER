@@ -46,6 +46,27 @@ class Request:
             (self.per,) if self.per else ())
 
 
+# b2plot reads 500 characters per line: a word ending in the last one would
+# run into the first word of the next line
+LINE = 499
+
+
+def lines(text):
+    """Command text in lines b2plot reads whole: longer lines broken
+    between tokens (the stacks carry over from line to line)."""
+    out = []
+    for line in text.split("\n"):
+        cur = ""
+        for word in line.split():
+            if cur and len(cur) + 1 + len(word) > LINE:
+                out.append(cur)
+                cur = word
+            else:
+                cur = cur + " " + word if cur else word
+        out.append(cur)
+    return "\n".join(out)
+
+
 class Run:
     """One b2pl.exe serving the data of one run directory."""
 
@@ -89,7 +110,7 @@ class Run:
         req = Request(self.next_id, kind, name, tuple(ops), source=source,
                       per=tuple(per))
         self.pending.append(req)
-        self.backend.send(text + "%d sync\n" % req.ident)
+        self.backend.send(lines(text) + "%d sync\n" % req.ident)
         return req
 
     def _lookup(self, kind, name, ops, source=None, per=()):

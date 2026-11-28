@@ -5,7 +5,9 @@ start of the sector as the 2D plot shows the poloidal plane (R to the
 right, Z up, the same extent), turned around its focal point by the
 vertical and horizontal angles, moved with the mouse and the keys
 (plot3d/navigate), the rendering options and the tracers moved by a
-timer."""
+timer. While the camera of the Camera section is placed in it
+(look_through), a perspective camera at its position instead, its moves
+signalled (looked)."""
 
 import os
 import time
@@ -22,6 +24,7 @@ DISTANCE = 3.2                  # camera distance, in sizes of the scene
 MARGIN = 1.03                   # room around the scene fitted in the view
 TEXT = {False: (0.0, 0.0, 0.0), True: (0.93, 0.93, 0.93)}  # dark theme
 HARDWARE = ("Vessel", "Structure")  # made transparent: no SSAA (depth)
+EXPORT_DPI = 150.0              # Save image: the window size at this dpi
 
 
 class View3D(QtWidgets.QWidget):
@@ -29,6 +32,7 @@ class View3D(QtWidgets.QWidget):
     angles (vertical, horizontal) turned with the mouse."""
 
     orientation = Signal(float, float)
+    looked = Signal()                   # the perspective camera moved
 
     def __init__(self, parent=None, image=False):
         super().__init__(parent)
@@ -65,6 +69,7 @@ class View3D(QtWidgets.QWidget):
         self.pl.enable_parallel_projection()
         self.pl.enable_depth_peeling(number_of_peels=4, occlusion_ratio=0.12)
         self.angles = (0.0, 0.0)        # vertical, horizontal (degrees)
+        self.looking = False            # the perspective camera of a tool
         self.aa = None                  # anti-aliasing applied
         self.render_opts = dict(aa="ssaa", smooth=True, edl=False,
                                 ssao=False)
@@ -88,8 +93,10 @@ class View3D(QtWidgets.QWidget):
         self.pl.set_background(snap.background)
         moved = sector is not None and sector != self.scene.sector
         self.scene.update(snap, sector, zcut)
-        if moved or not self._fitted:
+        if (moved or not self._fitted) and not self.looking:
             self.restore()
+        elif self.looking:
+            self.pl.reset_camera_clipping_range()
         self._animate()
         self.render()
 
@@ -194,8 +201,40 @@ class View3D(QtWidgets.QWidget):
                              render=False)
         self.render()
 
-    def save(self, path, scale=2):
-        self.pl.screenshot(path, scale=scale)
+    def screenshot(self, dpi):
+        """The view as a QImage for a file of dpi dots per inch: rendered in
+        tiles at a whole multiple of the window (VTK enlarges the texts
+        with them; the line widths and point sizes of the scene enlarged
+        here), smoothly reduced to the window times dpi / EXPORT_DPI. The
+        window is never resized (on screen that changes what it shows)."""
+        k = max(1.0, float(dpi) / EXPORT_DPI)
+        n = int(np.ceil(k - 1e-9))
+        self._widths(n)
+        try:
+            img = np.ascontiguousarray(np.asarray(self.pl.screenshot(
+                return_img=True, scale=n))[..., :3])
+        finally:
+            self._widths(1.0 / n)
+            self.render()
+        h, w = img.shape[:2]
+        qi = QtGui.QImage(img.data, w, h, 3 * w,
+                          QtGui.QImage.Format_RGB888).copy()
+        size = (max(1, round(w * k / n)), max(1, round(h * k / n)))
+        if size != (w, h):
+            qi = qi.scaled(size[0], size[1], QtCore.Qt.IgnoreAspectRatio,
+                           QtCore.Qt.SmoothTransformation)
+        return qi
+
+    def _widths(self, f):
+        """The line widths and point sizes of the scene times f."""
+        if f == 1.0:
+            return
+        for a, _, _ in self.scene.actors.values():
+            if hasattr(a, "GetProperty") and not hasattr(a,
+                                                          "GetTextProperty"):
+                prop = a.GetProperty()
+                prop.SetLineWidth(prop.GetLineWidth() * f)
+                prop.SetPointSize(prop.GetPointSize() * f)
 
     # ----------------------------------------------------------- camera
     def _direction(self):
@@ -227,8 +266,45 @@ class View3D(QtWidgets.QWidget):
             cam.up = up
             self.pl.reset_camera_clipping_range()
         self.render()
+        if self.looking:
+            self.looked.emit()
 
     def restore_view(self):
+        if self.looking:
+            return
+        self.restore()
+        self.render()
+
+    def look_through(self, position, focal, up, view_angle):
+        """A perspective camera at position (x, y, z) looking at focal,
+        view up up, vertical view angle (degrees): the camera of the
+        Camera section seen in the 3D view."""
+        self.looking = True
+        self.pl.disable_parallel_projection()
+        self.pl.renderer.SetNearClippingPlaneTolerance(1e-4)
+        cam = self.pl.camera
+        cam.position = tuple(float(v) for v in position)
+        cam.focal_point = tuple(float(v) for v in focal)
+        cam.up = tuple(float(v) for v in up)
+        cam.view_angle = float(view_angle)
+        self.pl.reset_camera_clipping_range()
+        self.render()
+
+    def pose(self):
+        """Position, focal point, view up and vertical view angle of the
+        camera."""
+        cam = self.pl.camera
+        return (np.asarray(cam.position, float),
+                np.asarray(cam.focal_point, float),
+                np.asarray(cam.up, float), float(cam.view_angle))
+
+    def stop_looking(self):
+        """Back to the parallel projection, placed as at first."""
+        if not self.looking:
+            return
+        self.looking = False
+        self.pl.renderer.SetNearClippingPlaneTolerance(0.01)
+        self.pl.enable_parallel_projection()
         self.restore()
         self.render()
 

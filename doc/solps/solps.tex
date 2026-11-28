@@ -17981,6 +17981,7 @@ coordinate index.
     ebal     & \index{b2plot, ebal} Energy balance $(W)$ \\
     ebld     & \index{b2plot, ebld} Energy balance (-divergence of fluxes) $(W)$ \\
     ebls     & \index{b2plot, ebls} Energy balance (sources) $(W)$ \\
+    ebrm     & \index{b2plot, ebrm} Bremsstrahlung per ion of each charged species as {\tt Eirene} computes it (its {\em EIRENE\_BREMS} at the $T_e$ it gets, {\em eirene\_te\_min} to {\em eirene\_te\_max}, $n_e$ and the charge), which {\tt Eirene} takes out of the ADAS recombination power (PRB) of its bulk ions $(W)$ \\
     edissml  & \index{b2plot, edissml} Power to atoms due to molecule dissociation $(W)$ \\
     ehx      & \index{b2plot, ehx} {\em ehx} $(V)$ \\
     ehy      & \index{b2plot, ehy} {\em ehy} $(V)$ \\
@@ -18506,7 +18507,7 @@ are not met, an error is returned and no action is taken.
                                    &   &   &   &   &   &   &   &   & \hspace{1cm} magnetic flux ($\psi$) value \\
     nese \index{b2plot, nese}      & 0 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nese}  & Overwrite onto electron density array \\
     nspe, nspec \index{b2plot, nspe}\index{b2plot, nspec} & 3 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nspe}  & New spectrometer \\
-    npec    & 4 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nspe}  & Photon emission coefficients \\
+    npec    & 4 & 0 & 0 & 0 & 0 & 0 & 0 & \ref{sec:nspe}  & Photon emission or power coefficients \\
     over \index{b2plot, over}      & 0 & 0 & 0 & 2 & 0 & 0 & 0 & \ref{sec:over}  & Copy over second top element of \\
                                    &   &   &   &   &   &   &   &  & \hspace{1cm} matrix stack \\
     pne \index{b2plot, pne}        & 0 & 0 & 0 & 1 & 0 & 0 & 0 & \ref{sec:pne}   & Divide by electron density \\
@@ -19089,6 +19090,7 @@ at the edge of the computational domain.
     ewldp \index{b2plot, ewldp}     & Potential energy of the molecules formed at the wall, the potential part of {\bf ewldt} (EIRENE {\em wldnep}; on the resolved segments {\em ewldmr\_res}), on the EIRENE wall (see below) $(W.m^{-2})$ \\
     ewldrp \index{b2plot, ewldrp}   & Energy released by backscattered and thermally re-emitted ions (EIRENE {\em wldpeb}) on the EIRENE wall (see below) $(W.m^{-2})$ \\
     ewldt \index{b2plot, ewldt}     & Net neutral energy load, the kinetic and potential energy brought by the neutrals (EIRENE {\em wldnek} + {\em wldnep}), on the EIRENE wall (see below) $(W.m^{-2})$ \\
+    ewsurf \index{b2plot, ewsurf}   & {\tt Eirene} surface of each element of the EIRENE wall: 1 to {\em nlim} the additional surfaces, {\em nlim}$+i$ the non-default standard surface $i$, 0 none (their type, {\em ILIIN}, in {\em isrftype} of {\tt fort.44}) \\
     ibnd \index{b2plot, ibnd}       & Wall element number \\
     impdepth \index{b2plot, impdepth}  & Mean implantation depth of each incident species, the first moment of the depth distribution of the TRIM range tables at the incident energy {\bf ei} (see below) $(m)$ \\
     imapx \index{b2plot, imapx}     & Wall element {\em ix} position \\
@@ -20014,7 +20016,8 @@ How the plot looks is set in the right column, from the top:
   crowd, so that the density sets how many there are; or, how many the number beside the menu says (40 at
   first), along the main separatrix (the one at $\rho_p = 1$ with
   {\tt rzpsi.dat}), the midplanes or the targets in proportion to the
-  quantity, or at random along the line drawn with {\tt Draw seed line},
+  quantity, at random over the view, or at random along the line drawn
+  with {\tt Draw seed line},
   whole; the same places are drawn again for the same view. The flow
   texture is a line integral convolution of the poloidal flow over the
   view: white noise smeared along the flow lines, so that its streaks show
@@ -20128,7 +20131,18 @@ targets); the vector quantity as tracers, points moving with the flow in
 three dimensions with fading tails, coloured by the magnitude in the
 colour map of the {\tt Vector plot options} (automatic range up to the
 98th percentile, or the fixed one); for a flux (not a velocity) they show
-the direction of transport. EIRENE vectors have their toroidal ($z$)
+the direction of transport. In the 3D view the {\tt Plasma plot
+options}, {\tt Vector plot options} and {\tt Wall plot options} have the
+menu {\tt Colours}: {\tt colour map}, or {\tt transparency}: one colour
+(its button), fully transparent at the minimum of the range and opaque
+at its maximum, on the linear or logarithmic scale chosen (no value:
+transparent), for the plasma quantity on the cut faces (its borders
+around the axis are left out, they would close the plasma in shells
+hiding the rest), the flux surface shells, the wall strip and the
+tracers (their heads, and their tails fading out); the transparent
+surfaces are drawn unlit (the colour exactly the one chosen) and the
+transparent layers sorted exactly (depth peeling without the occlusion
+limit). EIRENE vectors have their toroidal ($z$)
 component; that of a B2.5 vector is reconstructed from its poloidal
 component, along the field line ($\times B_\phi/B_\theta$) or, for drifts
 and anomalous or turbulent transport, perpendicular to the field in the
@@ -20159,8 +20173,10 @@ them), the vertical and horizontal angles of the camera,
 turning the view around the point it looks at (zoom and pan kept;
 horizontal 0 faces the cut face at the start of the sector),
 {\tt Restore view} (the camera at those angles looking at the centre of
-that face, fitted as at first) and {\tt Save image} (PNG at twice the
-resolution of the screen);
+that face, fitted as at first) and {\tt Save image} (the options of
+{\tt Save plot}, raster: the view rendered at the resolution asked,
+supersampled, with the background and colour bars of the theme asked
+and the camera as on the screen; PDF, EPS and SVG hold the image);
 {\tt Opacity}, of each group of the view shown (vessel, structure, flux
 surfaces, plasma, wall quantity, tracers, chords, magnetic field), 2 to
 100\,\% of its
@@ -20169,7 +20185,8 @@ own, and, with a plasma quantity and {\tt rzpsi.dat}, {\tt min} and
 plasma quantity, which is cut along them (at first the range of
 $\rho_p$ of the B2.5 grid, the whole plot); {\tt Tracers}, their number (5000 at first), the length of their tails
 (10 positions), their size (1.5) and speed, where they are born ({\tt Born}, the places of the
-streamlines: in proportion to the quantity at first; along a line, they
+streamlines: in proportion to the quantity at first; at random, evenly
+over the volume (in the 2D plot over the plane); along a line, they
 start up the flow and pass the line later in their life, the path turned
 round the axis to start and pass it in the sector; the line drawn: its
 two ends clicked on the 3D view with {\tt Draw line}, each the point
@@ -20473,11 +20490,7 @@ cell, row or column clicked is framed in its table; an empty cell or an
 empty place of the section takes the map away; {\tt Draw region}
 (highlighted while drawing, a click again cancels) adds a region drawn
 on the plot as a polygon (the cells whose centres are inside) as one
-more column of the ionisation table. The source per volume of each birth
-place, of the sputtered particles and of all the neutrals, the elements
-as species, are Final state quantities in the group {\tt Particle sources
-by neutral origin} (for chords, profiles and the 3D view); they need the
-{\tt balance.nc} of the state.
+more column of the ionisation table.
 
 The {\bf layers panel} (right), one line per layer (shown, colour
 with its opacity, width or marker size, line style), shows and styles
@@ -20563,6 +20576,235 @@ line. The line is that of both views: in the 3D view it is a helix
 the cut face at the start of the sector, or picked there with a click on
 a cut face (the point of the poloidal plane under the cursor; a drag
 still pans), then shown in the 2D plot too.
+
+The {\bf spectrum} section ({\tt Spectrum}, between {\tt Field line}
+and {\tt Camera}; only with a quantity of {\tt Light emission} shown)
+has the chords of the {\tt Chords} section (drawn, typed or of the {\tt
+*.chords} files, the same tabs and the sums under them) and shows in the
+tab of each chord, instead of its profile, the spectrum along it: the
+line integral of each line of the quantity (each {\bf npec} window, the
+hydrogen lines of {\tt Eirene}) against the wavelength in \AA{} (at
+first from 0 and over the shortest wavelength range holding 99.9\,\% of
+the light of its lines, so that faint far lines, such as the far
+infrared hydrogen lines of {\tt adf15}, do not stretch it), with {\tt
+Line averages} under the tabs the averages, with {\tt per steradian} divided by
+$4\pi$; the text above the spectrum gives the total of its lines (the
+line integral of the quantity), {\tt Save plot} and {\tt Export} the
+spectrum. The lines of a quantity are asked from \btwoplot once per run
+(about 0.08\,s a line; the text counts them while they come).
+With {\tt Line shapes} each line has its shape along the chord, seen from
+its first end, and keeps its integral: each line is split by its emitters,
+the excitation of the atoms at the {\tt Eirene} atom temperature of the
+element ($\frac{2}{3}$\,{\bf edena}/{\bf pdena}), the excitation of the
+ions and every recombination and charge exchange (the emitter born from
+the ion above) at the ion temperature, the hydrogen atoms of the
+molecular parts of the {\tt Eirene} lines at assumed fragment energies
+(0.3\,eV from the molecules, 2\,eV from the molecular and negative ions
+and $\mathrm{H}_3^+$); at each point along the chord a Doppler Gaussian of
+that temperature and the mass of the element, a shift $\lambda v/c$ by
+the parallel velocity of the ion along the chord (its poloidal part and
+its toroidal part $u_a B_z/B$; none for atoms and fragments), the normal
+Zeeman triplet ($\pi$ unshifted, $\sigma$ at $\pm eB\lambda^2/(4\pi
+m_ec)$, $0.20$\,\AA\,T$^{-1}$ for Balmer $\alpha$, weights $\sin^2\theta/2$
+and $(1+\cos^2\theta)/4$ by the angle $\theta$ between the chord and
+$\mathbf{B}$; impurity multiplets as a normal triplet, their Land\'e factors
+not being in {\tt adf15}), for Balmer $\alpha$ and $\beta$ a Stark
+Lorentzian of the electron density (full widths 5.49\,\AA\,$(n_e/10^{23}
+\,\mathrm{m}^{-3})^{0.67965}$, the width at half area of Gigosos,
+Gonz\'alez and Cardeñoso 2003, and 48.0\,\AA\,$(n_e/10^{23}
+\,\mathrm{m}^{-3})^{0.68116}$ of Gigosos and Cardeñoso 1996; none for the
+other hydrogen lines), and the instrument function ({\tt instrument
+width}, a Gaussian); the Gaussians combined and the Lorentzian with them
+as a pseudo-Voigt profile (Thompson, Cox and Hastings, within 1\,\%).
+With {\tt Continua} the bremsstrahlung and recombination continua of all
+the ions are under the lines: free-free with the Gaunt factor of the Born
+approximation (at least 1), free-bound onto every level of the hydrogenic
+ion of the charge of the recombining ion (Kramers, Gaunt factor 1: the
+recombination edges, the Balmer edge at 364.6\,nm), from $n_e$, $T_e$ and
+the ion densities; the text gives their integrals over the range. The
+spectrum is then per \AA{} ({\tt Export}: the lines, the two continua and
+their sum at each wavelength).
+
+The {\bf camera} section ({\tt Camera}, at the right of
+{\tt Spectrum}) renders the quantity shown (as the chords: the plasma
+quantity, else the magnitude of the vector one) as a toroidally
+symmetric pinhole camera sees it: each pixel the line integral of the
+quantity along its ray, up to the first wall the ray meets, divided by
+$4\pi$ with {\tt Per steradian} (an emissivity radiated in all
+directions seen as a radiance), e.g. W\,m$^{-2}$\,sr$^{-1}$ for a
+radiated power density or photons\,m$^{-2}$\,s$^{-1}$\,sr$^{-1}$ for a
+line emission. The camera is its position and the point seen at the
+centre of the image ($R$, $Z$ and toroidal angle; {\tt Pick}: two clicks
+on the plot, the position and then that point, their angles as typed),
+the roll of the image about the line of sight (0: $Z$ up), the
+horizontal field of view and the pixels. With {\tt 3D view} the camera is
+placed in the 3D view (shown if it is not): the view becomes a
+perspective view through the camera, the image as high as the view; a
+drag turns the camera where it is (the scene following the cursor), the
+wheel moves it forwards and backwards (a tenth of its distance to the
+point it looks at a step), the arrow keys or W, A, S, D move it sideways,
+a drag with a modifier turns it around the visible point under the
+cursor, which it then looks at; the position, the point seen at the
+centre, the roll and the field of view follow it (as the boxes round
+them), and what is typed in them moves the view. Clicked again, or with
+the 2D plot shown, the 3D view is as before (parallel projection); the 3D
+view shows its sector only, the image the whole torus. The samples along
+the rays are
+{\tt Step} apart (2\,mm; the quantity as the profiles interpolate it,
+zero outside the B2.5 cells); with {\tt Rays per pixel} $n\times n$ rays
+spread evenly over each pixel, their integrals averaged (the distance to
+the wall and the wall element of the pixel centre). The wall is the EIRENE wall of the run
+(wall label {\bf ewsurf} and {\em isrftype} of {\tt fort.44}), each
+element turned into a cone, a cylinder or a plane annulus: the rays stop
+at the reflecting and absorbing surfaces ({\em ILIIN} 1 and 2), but
+the core boundary (the absorbing surface closed around the plasma), and
+cross the transparent ones ({\em ILIIN} 0 or below: the faces of the
+B2.5 grid that face the void, tally surfaces); a reflecting surface that
+{\tt Eirene} makes semi-transparent (the {\em TRANSP} of its surface
+model, else of its card, from the side crossed) lets them through,
+weighting what lies beyond. While the section is open the camera, the
+point it looks at and the rays of the corners and of the centre of the
+image (up to their wall) are drawn on the plot, and in the 3D view the
+same rays. Each {\tt Render} shows the image of the quantity shown in a
+new window (the others stay open): the colour scale as the plots have
+it (colour map, reversed, linear, logarithmic or symmetric logarithmic,
+the range automatic or typed), its colour bar as tall as the image with
+the unit inside, the wall edges seen (toroidal rings of the corners of
+the wall and cuts every 30$^\circ$), the value under the mouse and the
+distance to the wall; {\tt Save image} (the options of {\tt Save plot})
+and {\tt Export} (CSV or netCDF: per pixel the value, the distance to
+the wall and the wall element seen, with the camera). The menu {\tt
+Colours} of the window: {\tt colour map}; {\tt transparency} (one colour,
+transparent at the minimum, as in the 3D view) over the vessel as the
+camera sees it (the real walls of the EIRENE wall, where its rays stop,
+and the structure of the run, turned around the axis and rendered with
+the camera, lit from it); with a quantity of {\tt Light emission} (a
+rate density) {\tt true colour} and {\tt filtered camera}, else
+greyed out. Their
+options ({\tt Realistic view}, under the colour scale, always there so
+that the window keeps its size: greyed out with the other modes, and the
+options a mode does not use greyed out): the lines seen
+(all, a wavelength range, or an interference filter of centre and full
+width at half maximum with a Gaussian transmission; presets for usual
+lines, e.g.\ D-alpha 656.1\,nm, He\,I 587.6\,nm, N\,II 399.5\,nm, the
+visible 380 to 750\,nm), each line taken from the lines of the
+{\tt Spectrum} section (its vertex values through the geometry matrix
+of the image, weighted at the vertices, once per colour channel).
+{\tt true colour}: the light through the filter as the eye sees it (CIE
+1931 colour matching functions, a fit within 1\,\% of the tables; sRGB,
+the negative parts of colours outside its gamut cut, so that a line keeps
+the hue of its primary, e.g.\ Balmer $\alpha$ deep red;
+exposed so that the brightest 0.5\,\% of the pixels saturate, times
+{\tt brightness}); {\tt filtered camera}: the photons through the filter
+(photons\,m$^{-2}$\,s$^{-1}$\,sr$^{-1}$) with the colour map; with
+{\tt exposure and noise} the counts of a camera, the brightness per
+steradian times the aperture area (its diameter), the solid angle of the
+pixel (pinhole camera), the exposure and the quantum efficiency, with
+photon noise (Poisson), at most the full well (in true colour the
+brightness of each pixel from its counts over the full well, its hue from
+the light). A click on
+a pixel of a light quantity shows the spectrum along its rays in a window
+in the theme of the GUI (a stick per line in its own colour where
+visible, the filter shaded behind, the axes as those of the {\tt
+Spectrum} section; {\tt Save plot}, {\tt Export}); with {\tt Line
+shapes}, {\tt Continua} and {\tt instrument width} as in the {\tt
+Spectrum} section, along the central ray of the pixel up to the wall it
+sees, each line keeping the brightness of the pixel.
+The image is linear in the vertex values of the quantity (linear in the
+triangles of the cells): {\tt Export matrix} writes this geometry matrix
+as a netCDF file, per pixel the weight of each vertex (numbers from 1,
+as \btwoplotns; the image of any frame is the sum of weight times
+vertex value) and the path length of its rays in each B2.5 cell (the
+image of a quantity constant in each cell, as tomography takes it).
+{\tt Export frames} writes the images with the camera of the window of
+all positions of the slider of {\tt Run movies} (the quantity shown
+there; from the matrix) with their times (netCDF).
+
+The atomic rates, the radiation and the light of the run are groups of
+the plasma quantity tree ({\tt Atomic rates}, {\tt Radiation rates} and
+{\tt Light emission} below {\tt Charge sources}, {\tt Neutrals
+collisions rate (triangles)} below {\tt Neutrals (triangles)}), each
+quantity with its units (with an {\tt Output} menu those of the rate
+density or of the coefficient) and its choices (listed in the second
+column of the tree):
+once it is clicked, a box above the tool buttons has a menu for each
+choice, the menus that depend on those above filled again when they
+change (keeping the choice where it is offered), the plot following each
+choice (and the choices kept with the plot settings); a choice with
+nothing to offer for the run is named there. {\tt Output} is the {\tt
+Rate density} (per volume) or the {\tt Coefficient} (per the densities
+it multiplies; for one stage, line or reaction); {\tt All species} and
+{\tt all stages} of an element sum the stages (rate density only). The
+neutral stage takes the EIRENE atoms of the element on the B2.5 grid
+({\bf dab2}), the B2.5 fluid neutrals in a run without {\tt Eirene}; the
+hydrogen atoms of charge exchange likewise.
+\begin{itemize}
+\item {\tt Atomic rates}: {\tt Ionisation}, {\tt Recombination} and {\tt
+  Charge-exchange with H0} (ADAS) of a transition ($N^0\rightarrow
+  N^{+1}$, $N^{+1}\rightarrow N^0$, $N^{+1} + D^0 \rightarrow N^0 +
+  D^{+1}$); {\tt Ionisation}, {\tt Recombination}, {\tt Dissociation}
+  and {\tt Charge exchange} (Eirene): a reaction of AMJUEL and HYDHEL for
+  the species of the run (electron impact: H.4 at $T_e$ and $n_e$ as {\tt
+  Eirene} takes them, H.2; heavy particles: H.2 at $T_i$ times the
+  database mass over the ion mass, as {\tt Eirene}); m$^{-3}$\,s$^{-1}$
+  or m$^3$\,s$^{-1}$;
+\item {\tt Radiation rates}: {\tt Line radiation (ADAS)} (PLT, $n_e
+  n_z$), {\tt Recombination + bremsstrahlung radiation (ADAS)} (PRB,
+  recombination and
+  bremsstrahlung of the recombining ion, $n_e n_{z+1}$), {\tt
+  Charge-exchange radiation with H0 (ADAS)} (PRC, $n_{H^0} n_{z+1}$;
+  the PRC files are not part of the ADAS database of SOLPS: offered for
+  the elements whose files are added), each of a species or transition,
+  an element or all species; {\tt Total radiation (ADAS)}: their sum, of
+  a stage as B2.5 counts it (its PLT, PRB and PRC), an element or all
+  species; {\tt Neutrals radiation (Eirene)} of an EIRENE species (all
+  reactions or one) or of all species, from the reaction cards of {\tt
+  eirene\_physics\_model.input.json} as {\tt Eirene} tallies it (per
+  electron-impact event the electron energy loss less the energy given to
+  the heavy particles and the potential energy; recombination: the energy
+  rate, the ADAS ones less {\bf ebrm}), with the $T_e$ {\tt Eirene} gets
+  and its densities on the B2.5 grid (as {\bf neutrad}, {\bf molrad},
+  {\bf ionrad} and {\bf recrad} per EIRENE cell volume); {\tt Total
+  radiation (ADAS+Eirene)}: what the run radiates per volume, {\bf
+  b2ra} + {\bf b2br} of B2.5 and {\bf neutrad}, {\bf molrad}, {\bf
+  ionrad} and {\bf recrad} of {\tt Eirene} (W per cell) over the cell
+  volume, its volume integral the radiated power: of all species, an
+  element (its B2.5 species, its EIRENE atom, the recombination of its
+  ions), an EIRENE molecule or molecular ion; W\,m$^{-3}$ or
+  W\,m$^3$;
+\item {\tt Light emission}: {\tt Photon emission (ADAS)} and {\tt Power
+  coefficient (ADAS)} of the ADAS {\tt adf15} lines ({\bf npec}): of a
+  stage, one line (an {\bf npec} window holding that line and no other;
+  lines too close for a window of their own, within about 1\,\AA, taken
+  together) or {\tt Total} (all its lines), of an element or of all
+  species (all the lines
+  of the database), all processes or one (excitation, recombination,
+  charge exchange); photons\,m$^{-3}$\,s$^{-1}$ or m$^3$\,s$^{-1}$, the
+  power ($hc/\lambda$ of each line) W\,m$^{-3}$ or W\,m$^3$; {\tt
+  Hydrogenic photon emission (Eirene)} and {\tt Hydrogenic power
+  coefficient (Eirene)}: the six lines of the default emissivity model of
+  {\tt Eirene} (Balmer $\alpha$ to $\delta$, Lyman $\alpha$ and $\beta$)
+  or their {\tt Total}, all components or one (atoms, recombination,
+  molecules, molecular ions, negative ions, H$_3^+$ ions; the coefficient
+  of a component is per $n_e$ and its parent density, per $n_{H_2}^2$
+  for the H$_3^+$ ions), from the AMJUEL fits, each in its own range,
+  with the $T_e$ {\tt Eirene} gets (Balmer $\alpha$ as {\bf ahal} + {\bf
+  mhal} where $T_e \le 400$\,eV: {\tt Eirene} takes the 400\,eV upper
+  limit of H.12 2.0c for all the line fits, so its lines differ above);
+  {\tt Total photon emission (ADAS+Eirene)} and {\tt Total power
+  coefficient (ADAS+Eirene)}: all the light of all species or of an
+  element, every {\tt adf15} line with the six hydrogen lines of the
+  default emissivity model of {\tt Eirene} in place of the same lines of
+  the hydrogen {\tt adf15} file (each line once; without {\tt Eirene}
+  atoms the {\tt adf15} lines alone); photons\,m$^{-3}$\,s$^{-1}$ or
+  W\,m$^{-3}$;
+\item {\tt Neutrals collisions rate (triangles)}: {\tt Collisions
+  rate} (AMMONX, rate density or coefficient), {\tt Neutral viscosity},
+  {\tt Neutral diffusivity} and {\tt Neutral mean free path} of the
+  EIRENE neutrals.
+\end{itemize}
+The {\tt Calculator} button opens the derived quantities: an
+expression of quantities by their \btwoplot labels, with presets.
 
 Export:
 \begin{itemize}
@@ -22237,9 +22479,18 @@ Generates the spectral line emissivities according to the {\tt ADAS} database \c
 or {\tt \$\{SOLPSTOP\}/data.local/adas}, for species index $\langle${\tt is}$\rangle$, centered around wavelength $\langle${\tt lambda}$\rangle$ (in {\em \AA}),
 with width $\langle${\tt delta}$\rangle$ (in {\em \AA}).
 {\bf nspec} is an alias for {\bf nspe}.
-{\bf npec}\index{b2plot, npec}, with a fourth integer 1 or 2 after
-$\langle${\tt delta}$\rangle$, gives instead the excitation (1) or
-recombination (2) photon emission coefficient of these lines (m$^3$/s).
+{\bf npec}\index{b2plot, npec}, with a fourth integer 1, 2 or 3 after
+$\langle${\tt delta}$\rangle$, gives instead the excitation (1),
+recombination (2) or charge exchange (3) photon emission coefficient of
+these lines (m$^3$/s): the line emission is the excitation coefficient
+times $n_e$ and the density of stage $\langle${\tt is}$\rangle$, the
+recombination coefficient times $n_e$ and the density of the next stage,
+the charge exchange coefficient times the hydrogen atom density and the
+density of the next stage. The excitation coefficients are taken at
+no less than the lowest temperature of their data, the recombination
+and charge exchange coefficients at the cell temperature. With 4, 5 or
+6 the same coefficients as power (W\,m$^3$): each line of the window
+times its photon energy $hc/\lambda$.
 
 \subsubsection{$<$n,{\bf I}$>$ mvsk}\index{b2plot, mvsk}\label{sec:mvsk}
 Sets the movie skip factor to $\langle${\tt n}$\rangle$ (default is {\tt 1}).
@@ -22706,6 +22957,9 @@ form 'acd89'; without the year ('acd'), the year of each element is taken from {
 The matrix obtained contains then all the rates from these files, for all species in the run, extracted
 from the files stored in {\tt \$\{SOLPSTOP\}/modules/adas} or
 {\tt \$\{SOLPSTOP\}/data.local/adas}.
+The classes read are {\tt acd}, {\tt scd}, {\tt ccd}, {\tt prb}, {\tt prc}
+(charge exchange recombination radiation; its files are not part of the
+database and must be added), {\tt plt}, {\tt zcd}, {\tt ycd} and {\tt ecd}.
 
 \section{Examples}
 

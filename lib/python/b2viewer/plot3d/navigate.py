@@ -6,7 +6,12 @@ view around the visible point under the cursor (the vertical and
 horizontal angles follow, 180 degrees across the view), the arrow keys or
 W, A, S, D pan (0.3 heights of the view a second, twice as fast with
 shift, a quarter with control). While points are picked, a left click
-(not a drag, which still pans) gives the point under the cursor."""
+(not a drag, which still pans) gives the point under the cursor.
+With a perspective camera (the Camera section placed in the view): a
+left drag turns the camera where it is (the scene follows the cursor),
+the wheel moves it forwards and backwards, the keys move it in the plane
+of the screen, a drag with a modifier turns it around the visible point
+under the cursor, which it then looks at."""
 
 import numpy as np
 
@@ -26,8 +31,16 @@ KEYS = {Qt.Key_W: "up", Qt.Key_Up: "up", Qt.Key_S: "down",
 
 
 def _unit(v, fallback):
+    v = np.asarray(v, float)
     n = float(np.linalg.norm(v))
     return v / n if n > 1e-12 else np.asarray(fallback, float)
+
+
+def _rotate(v, axis, a):
+    """v turned by the angle a (radians) about axis (Rodrigues)."""
+    axis = _unit(axis, (0.0, 0.0, 1.0))
+    return v * np.cos(a) + np.cross(axis, v) * np.sin(a) + \
+        axis * np.dot(axis, v) * (1.0 - np.cos(a))
 
 
 class Navigator(QtCore.QObject):
@@ -60,6 +73,34 @@ class Navigator(QtCore.QObject):
     def _done(self):
         self.view.pl.reset_camera_clipping_range()
         self.view.render()
+        if self.view.looking:
+            self.view.looked.emit()
+
+    def _scale(self):
+        """Half the height of the view at the focal point."""
+        cam = self.cam
+        if not self.view.looking:
+            return float(cam.GetParallelScale())
+        f, p = (np.asarray(x, float) for x in (cam.GetFocalPoint(),
+                                                cam.GetPosition()))
+        return float(np.linalg.norm(f - p)) * np.tan(
+            np.radians(cam.GetViewAngle()) / 2.0)
+
+    def turn(self, dx, dy):
+        """The perspective camera turned where it is by a drag of dx, dy
+        pixels (the scene following the cursor): about Z, then about its
+        right."""
+        focal, pos, d, right, up = self._frame()
+        h = max(float(self.w.height()), 1.0)
+        k = np.radians(self.cam.GetViewAngle()) / h
+        dist = float(np.linalg.norm(focal - pos))
+        z = (0.0, 0.0, 1.0)
+        d2, u2 = _rotate(d, z, dx * k), _rotate(up, z, dx * k)
+        r2 = _unit(np.cross(d2, u2), right)
+        d3, u3 = _rotate(d2, r2, dy * k), _rotate(u2, r2, dy * k)
+        self.cam.SetFocalPoint(*(pos + dist * d3))
+        self.cam.SetViewUp(*u3)
+        self._done()
 
     # ----------------------------------------------------------- events
     def eventFilter(self, obj, event):
@@ -148,6 +189,9 @@ class Navigator(QtCore.QObject):
     def pan(self, dx, dy):
         """The camera moved in the plane of the screen by a drag of dx,
         dy pixels, the scene following the cursor."""
+        if self.view.looking:
+            self.turn(dx, dy)
+            return
         _, _, _, right, up = self._frame()
         w, h = max(float(self.w.width()), 1.0), max(float(self.w.height()),
                                                      1.0)
@@ -175,7 +219,15 @@ class Navigator(QtCore.QObject):
 
     def zoom_at(self, p, factor):
         """Zoom by factor, the point under the cursor (at the depth of the
-        focal point) staying where it is."""
+        focal point) staying where it is; a perspective camera moved
+        forwards (factor above 1) or backwards by (factor - 1) times its
+        distance to the focal point."""
+        if self.view.looking:
+            focal, pos, d, _, _ = self._frame()
+            self._shift((factor - 1.0) * float(np.linalg.norm(focal - pos))
+                        * d)
+            self._done()
+            return
         r = self.view.pl.renderer
         f = self.cam.GetFocalPoint()
         r.SetWorldPoint(f[0], f[1], f[2], 1.0)
@@ -252,13 +304,31 @@ class Navigator(QtCore.QObject):
         if not picker.Pick(x, y, 0.0, self.view.pl.renderer) or \
                 picker.GetCellId() < 0:
             return
+        if self.view.looking:           # it looks at it from where it is
+            self.cam.SetFocalPoint(*picker.GetPickPosition())
+            self.cam.OrthogonalizeViewUp()
+            self._done()
+            return
         self._shift(np.asarray(picker.GetPickPosition(), float) -
                     np.asarray(self.cam.GetFocalPoint(), float))
         self._done()
 
     def orbit(self, dx, dy):
         """The angles turned by a drag of dx, dy pixels (180 degrees
-        across the view)."""
+        across the view); a perspective camera moved around its focal
+        point the same way."""
+        if self.view.looking:
+            focal, pos, d, right, up = self._frame()
+            w, ht = max(float(self.w.width()), 1.0), max(
+                float(self.w.height()), 1.0)
+            a, b, z = -dx * np.pi / w, -dy * np.pi / ht, (0.0, 0.0, 1.0)
+            o, u = _rotate(pos - focal, z, a), _rotate(up, z, a)
+            r = _rotate(right, z, a)
+            o, u = _rotate(o, r, b), _rotate(u, r, b)
+            self.cam.SetPosition(*(focal + o))
+            self.cam.SetViewUp(*u)
+            self._done()
+            return
         v, h = self.view.angles
         w, ht = max(float(self.w.width()), 1.0), max(float(self.w.height()),
                                                      1.0)
@@ -290,7 +360,7 @@ class Navigator(QtCore.QObject):
         if n <= 1e-12:
             return
         a /= n
-        speed = 2.0 * float(self.cam.GetParallelScale()) * PAN_PER_SECOND
+        speed = 2.0 * self._scale() * PAN_PER_SECOND
         speed *= (SPRINT if "sprint" in roles else 1.0) * \
             (PRECISION if "precision" in roles else 1.0)
         _, _, _, right, up = self._frame()

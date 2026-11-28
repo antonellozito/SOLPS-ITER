@@ -324,7 +324,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # unit of the density in the label; the balances and the geometry
         # asked for the tools keep the values per cell
         per = q.per if role not in ("balance", "species", "eqdata",
-                                    "tools") else ()
+                                    "tools", "spectrum") else ()
         label = " '%s' glbl" % q.description.replace("'", "")
         if q.source in ("vector", "evector"):
             res = self.run.vector(q.poloidal, q.radial,
@@ -339,7 +339,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if isinstance(res, data.Request):
             self.waiting.setdefault(res.ident, []).append((self.tab2d, want))
             if role not in ("prefetch", "species", "tools", "eqdata",
-                            "balance", "frames", "allspecies"):
+                            "balance", "frames", "allspecies", "spectrum"):
                 self._status("Loading %s\u2026" % q.label)
         else:
             self.tab2d.deliver(want, res)

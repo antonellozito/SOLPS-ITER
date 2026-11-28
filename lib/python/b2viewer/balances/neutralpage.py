@@ -53,7 +53,7 @@ def _short(v):
 
 class NeutralsTool:
     """The Neutrals part of a BalanceTool (its tab): its section, the
-    Origin of the run (also the maps of the Final state)."""
+    Origin of the run (and the maps of its sources)."""
 
     def __init__(self, balance):
         self.balance, self.tab = balance, balance.tab
@@ -107,11 +107,6 @@ class NeutralsTool:
                                      "(%s)" % err)
                 self.path = None
         return self.origin
-
-    def quantities(self):
-        """The maps of the Final state."""
-        o = self.get()
-        return o.quantities() if o is not None else []
 
     def field(self, name, ops=()):
         o = self.get()

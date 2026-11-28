@@ -7,7 +7,7 @@ from ...qt import QtWidgets, Qt
 
 SKIP = {"search", "play", "slider", "tree", "info", "current", "partial",
         "base", "plasma_species", "vector_species", "wall_species",
-        "overlay_species"}
+        "overlay_species", "choices_box"}
 PANELS = __package__.rsplit(".", 1)[0] + ".panels"
 VALUES = (ColorButton, QtWidgets.QComboBox, QtWidgets.QAbstractButton,
           QtWidgets.QAbstractSpinBox, QtWidgets.QLineEdit,
@@ -85,7 +85,10 @@ def _values(obj):
 def capture(tab):
     """The plot settings of a Tab2D."""
     panel = tab.quantity
+    entry = panel.current is not None and panel.current.source == "entry"
     return {"quantity": tab.wanted.name if tab.wanted else None,
+            "entry": [panel.current.name, panel.choices_box.labels()] if
+            entry else None,
             "vector": tab.vector_wanted.name if tab.vector_wanted else None,
             "wall": tab.wall_wanted.name if tab.wall_wanted else None,
             "overlay": tab.overlay_wanted.name if tab.overlay_wanted
@@ -128,7 +131,10 @@ def restore(tab, st, view=True):
     for kind in extra:
         panel.select_extra(kind, st[kind])
     q = st.get("quantity")
-    ok = panel.select(q) if q else bool(extra) or panel.select("te")
+    if st.get("entry"):                 # a quantity with choices
+        ok = panel.select_entry(*st["entry"])
+    else:
+        ok = panel.select(q) if q else bool(extra) or panel.select("te")
     panel.set_kind(st.get("kind"))
     panel._kind_changed()
     if st.get("overlay"):               # over the plasma plot
