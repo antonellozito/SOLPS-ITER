@@ -6,8 +6,10 @@ from dataclasses import replace
 
 from .. import theme
 from ..catalog import FLAGS, GUARD, INTEGER
+from ..presets import ENTRY, ENTRY_PREFIX
 from ..plot.styles import KINDS_FLAT, KINDS_VECTOR, PlotStyle
 from ...qt import QtCore, QtGui, QtWidgets, Qt, Signal
+from .choices import ChoicesBox
 from .options import LabelsBox, LevelsBox, RegionsMenu
 from .overlays import OverlayOptions, OverlaySection
 from .plotopts import (ArrowsBox, ColourBox, LinesBox, MaskBox, SplitBox,
@@ -130,6 +132,10 @@ class QuantityPanel(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current = None             # the plasma quantity plotted
+        self.make_entry = None          # (entry, items) -> the Quantity of
+        #                                 a quantity with choices (the tab)
+        self.entry_species = None       # the species of its choices
+        self._entry_labels = ()         # its choices to restore
         self.vector_current = None      # the vector quantity plotted
         self.wall_current = None        # the wall quantity plotted
         self.overlay_current = None     # the quantity overlaid
@@ -186,7 +192,11 @@ class QuantityPanel(QtWidgets.QWidget):
             menu.changed.connect(self._changed)
         self.species = self.plasma_species.combo    # of the plasma plot
 
-        row = QtWidgets.QHBoxLayout()   # the four sections
+        self.choices_box = ChoicesBox()     # of a quantity with choices,
+        self.choices_box.changed.connect(self._choice)  # above the tools
+        self.choices_box.hide()
+        lay.addWidget(self.choices_box)
+        row = QtWidgets.QHBoxLayout()   # the six sections
         self.overlay_button = QtWidgets.QPushButton("Overlay")
         self.overlay_button.setToolTip("Contour lines of a second quantity "
                                        "over the plasma plot (not with "
@@ -200,12 +210,24 @@ class QuantityPanel(QtWidgets.QWidget):
                                      "point picked on the plot, its "
                                      "connection lengths and the profile of "
                                      "the quantity shown along it")
+        self.spectrum_button = QtWidgets.QPushButton("Spectrum")
+        self.spectrum_button.setToolTip("The spectrum of the light quantity "
+                                        "shown along chords drawn on the "
+                                        "plot, typed or of the *.chords "
+                                        "files: the line integral of each "
+                                        "of its lines against the "
+                                        "wavelength")
+        self.camera_button = QtWidgets.QPushButton("Camera")
+        self.camera_button.setToolTip("The image of the quantity shown seen "
+                                      "by a camera: its line integral along "
+                                      "the ray of each pixel up to the wall")
         self.stats_button = QtWidgets.QPushButton("Statistics")
         self.stats_button.setToolTip("Volume integral, average, minimum, "
                                      "maximum and histogram of the quantity "
                                      "shown over the cells shown, a box or "
                                      "a polygon")
         for b in (self.chords_button, self.field_button,
+                  self.spectrum_button, self.camera_button,
                   self.overlay_button, self.stats_button):
             b.setCheckable(True)
             b.setProperty("bold", True)
@@ -456,6 +478,11 @@ class QuantityPanel(QtWidgets.QWidget):
         if q is None or q is self.current:
             return
         self.current = q
+        if q.source == "entry":         # its menus, the choices restored
+            self.choices_box.set_entry(ENTRY[q.name[len(ENTRY_PREFIX):]],
+                                       self.entry_species,
+                                       self._entry_labels)
+        self._entry_labels = ()
         patch = self.is_mask(q) or bool(GUARD.fullmatch(q.name))
         self._fill_kinds(patch)
         self._kind_changed(emit=False)
@@ -470,13 +497,41 @@ class QuantityPanel(QtWidgets.QWidget):
 
     def wanted(self):
         """The current quantity as plotted: a mask with the argument of
-        the Mask box (name "1 ixeq")."""
+        the Mask box (name "1 ixeq"), a quantity with choices as chosen
+        (None while they are not known)."""
         q = self.current
+        if q is not None and q.source == "entry":
+            items = self.choices_box.items()
+            return None if items is None or self.make_entry is None else \
+                self.make_entry(ENTRY[q.name[len(ENTRY_PREFIX):]], items)
         if q is None or not INTEGER.fullmatch(q.name):
             return q
         n = self.mask_box.argument.value()
         return replace(q, name="%d %s" % (n, q.name),
                        description="%s, argument %d" % (q.description, n))
+
+    def _choice(self):
+        """A choice of the quantity with choices made: plotted as chosen."""
+        if self.current is not None and self.current.source == "entry":
+            self.quantity_chosen.emit(self.wanted())
+
+    def set_entry_species(self, species):
+        """The species of the run for the choices (again when the EIRENE
+        species arrive): the menus of the quantity shown filled again."""
+        self.entry_species = species
+        q = self.current
+        if q is not None and q.source == "entry":
+            self.choices_box.set_entry(ENTRY[q.name[len(ENTRY_PREFIX):]], species,
+                                       self.choices_box.labels())
+            self.quantity_chosen.emit(self.wanted())
+
+    def select_entry(self, name, labels):
+        """Select the quantity with choices of this name with the choices
+        labels (where offered)."""
+        self._entry_labels = tuple(labels)
+        ok = self.select(name)
+        self._entry_labels = ()
+        return ok
 
     def _argument(self, *_):
         if self.current is not None and INTEGER.fullmatch(self.current.name):
@@ -652,7 +707,8 @@ class QuantityPanel(QtWidgets.QWidget):
         self.tracers.setVisible(vector and vkind == "tracers")
         self.wall_box.setVisible(wall)
         self.plasma_regions.setVisible(source in ("matrix", "equilibrium",
-                                                  "neutrals"))
+                                                  "neutrals", "entry"))
+        self.choices_box.setVisible(source == "entry")
         self.vector_regions.setVisible(vsource == "vector")  # B2.5 cells
         mask = self.is_mask()
         self.mask_box.setVisible(mask)
@@ -669,6 +725,8 @@ class QuantityPanel(QtWidgets.QWidget):
         self.labels_box.setVisible(not self.in3d)
         for w in self.only_2d:
             w.setVisible(not self.in3d)
+        for box in (self.colour, self.vector_box, self.wall_box):
+            box.show_modes(self.in3d)   # transparency: the 3D view only
         if emit:
             self._changed()
 

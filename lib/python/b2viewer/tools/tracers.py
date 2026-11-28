@@ -69,13 +69,14 @@ class Field:
             return np.sqrt(vr * vr + vz * vz + vp * vp) >= floor
 
     def sample(self, n, rng, zlim=(None, None), weight=0.0, lines=None,
-               floor=0.0, low=None):
+               floor=0.0, low=None, volume=False):
         """n random points (R, Z) where the field is defined and its
         magnitude is at least floor (between the heights zlim, None: no
         limit): along the polylines lines if given, else over the field,
         their density as the level of the magnitude on the colour scale
         (low, see level) to the power weight (0: even, 1: in proportion
-        to it)."""
+        to it); with volume even over the volume turned around the axis
+        (as R)."""
         out = np.zeros((0, 2))
         z0 = self.ys[0] if zlim[0] is None else max(self.ys[0], zlim[0])
         z1 = self.ys[-1] if zlim[1] is None else min(self.ys[-1], zlim[1])
@@ -97,6 +98,8 @@ class Field:
             if weight > 0:              # kept as likely as level^weight
                 w = self.level(np.where(ok, m, 0.0), low) ** weight
                 ok &= rng.random(len(m)) < w
+            if volume and not lines:    # as likely as R: even in volume
+                ok &= rng.random(len(m)) * self.xs[-1] < r
             out = np.vstack((out, np.column_stack((r[ok], z[ok]))))
             if len(out) >= n:
                 break
@@ -127,7 +130,7 @@ class Tracers:
 
     def __init__(self, field, n, tail, phi0, phi1, rng=None,
                  zlim=(None, None), weight=0.0, fade=0.0, lines=None,
-                 vref=1.0, log=True, floor=0.0, low=None):
+                 vref=1.0, log=True, floor=0.0, low=None, volume=False):
         self.field, self.n, self.tail = field, n, max(int(tail), 2)
         self.phi0, self.phi1 = phi0, phi1
         self.zlim = zlim                # heights kept (vertical cut)
@@ -137,6 +140,7 @@ class Tracers:
         self.vref, self.log = vref, log  # the speeds shown (step)
         self.floor = floor or 0.0       # no tracer where |v| is below it
         self.low = low                  # the colour scale: log from low
+        self.volume = volume            # births even over the volume
         self.wrap = abs(phi1 - phi0) >= 2.0 * np.pi - 1e-9
         self.rng = rng or np.random.default_rng(1)
         self.r, self.z = np.zeros(n), np.zeros(n)
@@ -150,7 +154,8 @@ class Tracers:
         if not len(idx):
             return
         p = self.field.sample(len(idx), self.rng, self.zlim, self.weight,
-                              self.lines, self.floor, self.low)
+                              self.lines, self.floor, self.low,
+                              self.volume)
         if len(p) < len(idx):           # nowhere to go: hidden, tried again
             lost = idx[len(p):]
             self.r[lost] = self.z[lost] = np.nan
@@ -267,9 +272,10 @@ class Tracers:
         return np.column_stack((k.ravel(), (k + n).ravel()))
 
     def colors(self, base, background):
-        """Node colours of the tails: base (n, 3) at the head, fading
-        towards the background along the tail."""
+        """Node colours of the tails: base (n, k) at the head (k colour
+        components, or one: the opacity), fading towards the background
+        along the tail."""
         f = (np.arange(self.tail) / max(self.tail - 1, 1) * TAIL_FADE)[
             :, None, None]
         c = (1.0 - f) * base[None] + f * np.asarray(background)[None, None]
-        return c.reshape(-1, 3)
+        return c.reshape(-1, c.shape[-1])

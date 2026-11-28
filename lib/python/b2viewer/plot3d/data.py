@@ -17,7 +17,7 @@ from ..plot import shapes
 from ..plot.overlays import smoothed_strip, structure
 from ..tools.wallprofile import marks
 from ..plot.scalar import node_values
-from ..plot.styles import PlotStyle, cmap_for, norm_for
+from ..plot.styles import PlotStyle, cmap3d, norm_for
 from ..tools import births, fieldlines, revolve, vector3d as v3
 from ..tools.tracers import Field
 from ...b2plot import labels
@@ -286,7 +286,11 @@ class Data3D(QtCore.QObject):
         """The chords while their section is open: their ends (R, Z,
         toroidal angle in degrees) and looks."""
         tools = tab.tools
-        if tools.section != "chords":
+        if tools.section == "camera":   # its corner and centre rays
+            s.chords = tools.camera.chords3d()
+            s.chords_key = tuple(s.chords)
+            return
+        if tools.section not in ("chords", "spectrum"):
             return
         for k, (c, look) in enumerate(zip(tools.chords, tools._looks()), 1):
             r0, z0, f0, r1, z1, f1 = (float(x) for x in c)
@@ -373,7 +377,7 @@ class Data3D(QtCore.QObject):
             nodes = node_values(plot.run.trimesh, shown)
             finder = tri.get_trifinder()
         norm = norm_for(shown, st)
-        cmap = cmap_for(st, norm)
+        cmap = cmap3d(st, norm)
         log = st.scale == "log"
         if log:
             nodes = np.where(nodes > 0, nodes, np.nan)
@@ -398,7 +402,8 @@ class Data3D(QtCore.QObject):
         s.plasma = dict(plane=flat, borders=_borders(
                             plot, meshes.boundary(flat)),
                         cmap=cmap, clim=(float(norm.vmin), float(norm.vmax)),
-                        log=log, at=at, label=labels.any_to_plain(
+                        log=log, transparent=st.mode == "alpha", at=at,
+                        label=labels.any_to_plain(
                             f.label or f.name or ""))
         s.plasma_key = (id(f), repr(st), hash(plot.mask.tobytes()), band)
 
@@ -426,14 +431,15 @@ class Data3D(QtCore.QObject):
         if getattr(o, "smooth", False) and len(v) > 1:  # as in 2D
             seg, v = smoothed_strip(seg, v)
         pst = replace(PlotStyle(), cmap=o.cmap, reverse=o.reverse,
-                      scale=o.scale, auto=o.auto, vmin=o.vmin, vmax=o.vmax)
+                      scale=o.scale, auto=o.auto, vmin=o.vmin, vmax=o.vmax,
+                      mode=o.mode, mono=o.mono)
         norm = norm_for(v, pst)
         n = _inward(tab.plot, seg)
         s.wall = dict(segments=seg, normals=n, lifts=_lifts(
             seg, n, structure(tab.run), WALL_LIFT), values=v,
-                      cmap=cmap_for(pst, norm),
+                      cmap=cmap3d(pst, norm),
                       clim=(float(norm.vmin), float(norm.vmax)),
-                      log=o.scale == "log",
+                      log=o.scale == "log", transparent=o.mode == "alpha",
                       label=labels.any_to_plain(data.label or label or ""),
                       marks=points)
         s.wall_key = (id(data), repr(o), tuple(
@@ -463,14 +469,16 @@ class Data3D(QtCore.QObject):
             return
         unit = split_unit(self.q.description)[1] or ""
         name = labels.any_to_plain(split_unit(self.q.description)[0])
-        s.vector = dict(field=f, cmap=cmap_for(style),
+        s.vector = dict(field=f, cmap=cmap3d(style),
+                        transparent=style.mode == "alpha",
                         range=None if style.auto else (style.vmin,
                                                        style.vmax),
                         log=style.scale == "log",   # the colour scale
                         label="Tracers: " + name + (
                             " (%s)" % labels.any_to_plain(unit) if unit
                             else ""))
-        s.vector_key = (key, style.cmap, style.reverse, style.bw,
+        s.vector_key = (key, style.mode, style.mono, style.cmap,
+                        style.reverse, style.bw,
                         style.auto, style.vmin, style.vmax, style.scale)
 
     def _grid(self, tab, v, col):

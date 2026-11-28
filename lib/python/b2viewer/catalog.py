@@ -94,6 +94,7 @@ ZERO_RADIAL = {"ue": "ue pit m*", "ua": "ua pit m*", "fchp": "fchp"}
 # as the flux densities of the triangles, shown there
 NO_VECTOR = ("pfla", "pefa", "pflm", "pefm")
 DERIVED = "Derived quantities"
+NOT_LISTED = ("Sources and sinks",)     # groups left out of the lists
 EQUILIBRIUM = "Magnetic equilibrium"   # b2plot labels and derived maps
 CHORD_POINTS = 33               # points of each chord sent by guigeom
 ORDER = [DERIVED, "Plasma densities", "Plasma velocities",
@@ -101,8 +102,7 @@ ORDER = [DERIVED, "Plasma densities", "Plasma velocities",
          "Plasma state", "Particle fluxes", "Momentum fluxes",
          "Total energy fluxes", "Electron heat fluxes",
          "Ion heat fluxes", "Current fluxes", "Plasma fluxes",
-         "Particle sources", "Particle sources by neutral origin",
-         "Momentum sources", "Electron energy sources",
+         "Particle sources", "Momentum sources", "Electron energy sources",
          "Ion energy sources", "Charge sources",
          "Sources and sinks", "Neutrals state", NEUTRAL_VELOCITIES,
          "Neutrals fluxes", "Neutrals radiation", NEUTRALS, EQUILIBRIUM,
@@ -312,6 +312,8 @@ class Quantity:
     per: tuple = ()             # b2plot tokens of the density: dividing by
     #                             the cell volume or face area (vectors:
     #                             poloidal and radial component)
+    choices: tuple = ()         # a quantity with choices (presets.ENTRIES,
+    #                             source "entry"): the labels of its menus
 
     def __post_init__(self):
         self.description = describe.wording(self.description)
@@ -322,8 +324,10 @@ class Quantity:
 
     @property
     def label(self):
-        """What the lists show: the expression of a derived quantity."""
-        return self.expr or self.name
+        """What the lists show: the expression of a derived quantity, the
+        choices of a quantity with choices."""
+        return self.expr or (", ".join(self.choices).lower() if
+                             self.choices else self.name)
 
 
 def _group(name, description):
@@ -491,7 +495,7 @@ def quantities(categories, maps=(), extra=()):
     """List of Quantity from the categories of the CATALOG message, the
     2D maps of the derived equilibrium quantities (name, label: the GUI
     computes them from the geometry files, source "equilibrium") and extra
-    ones (the neutral sources by origin, source "neutrals")."""
+    ones; not those of the groups NOT_LISTED."""
     cats = dict(categories)
     matrix = [e for e in cats.get("Matrix quantities", []) if e[0].strip()]
     eirene = [e for e in cats.get("Eirene quantities", []) if e[0].strip()]
@@ -532,7 +536,7 @@ def quantities(categories, maps=(), extra=()):
     out += [Quantity(n, d, EQUILIBRIUM, "equilibrium") for n, d in maps
             if n not in HIDDEN] + list(extra)
     out.sort(key=lambda q: (ORDER.index(q.group), within(q)))  # maps too
-    return out
+    return [q for q in out if q.group not in NOT_LISTED]
 
 
 # wall fluxes of the plasma, on the boundary faces per face area, in the

@@ -207,8 +207,9 @@ class ViewBox(_Box):
                 ("Restore view", "The camera at the angles looking at "
                  "the cut face at the start of the sector, fitted in the "
                  "view", self.restore),
-                ("Save image", "The 3D view in a PNG file, at twice the "
-                 "resolution of the screen", self.save)):
+                ("Save image", "The 3D view as an image file: format, "
+                 "resolution, colour space and theme as Save plot (PDF, EPS "
+                 "and SVG hold the image), the camera kept", self.save)):
             b = QtWidgets.QPushButton(text)
             b.setToolTip(tip)
             b.clicked.connect(lambda *_, s=sig: s.emit())

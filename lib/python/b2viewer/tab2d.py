@@ -11,7 +11,8 @@ from dataclasses import replace
 import numpy as np
 from matplotlib.figure import Figure
 
-from . import catalog, presets, runstate, scaling, theme
+from . import catalog, emission, presets, runstate, scaling, theme
+from .expression import ExpressionError
 from .plot.canvas import Plot2D
 from .plot.styles import LAYERS
 from .plot.vector import split_colour
@@ -89,6 +90,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.toolbar.hide()             # PlotCommands does its work
 
         self.quantity = QuantityPanel()
+        self.quantity.make_entry = self._entry_quantity
         self.quantity.quantity_chosen.connect(self._chosen)
         self.quantity.vector_chosen.connect(self._vector_chosen)
         self.quantity.wall_chosen.connect(self._wall_chosen)
@@ -125,6 +127,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         self.quantity.sections.addWidget(self.tools.chords_section)
         self.quantity.sections.addWidget(self.tools.stats_section)
         self.quantity.sections.addWidget(self.tools.fieldline.section)
+        self.quantity.sections.addWidget(self.tools.camera.section)
         self.wall_profile = WallProfile(self.settings)  # under all
         self.wall_profile.smooth_changed.connect(self._wall_smoothed)
         self.wall_profile.marks_changed.connect(self._wall_smoothed)
@@ -138,6 +141,10 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             lambda on: self.tools.open_section("overlay" if on else None))
         self.quantity.field_button.toggled.connect(
             lambda on: self.tools.open_section("fieldline" if on else None))
+        self.quantity.camera_button.toggled.connect(
+            lambda on: self.tools.open_section("camera" if on else None))
+        self.quantity.spectrum_button.toggled.connect(
+            lambda on: self.tools.open_section("spectrum" if on else None))
         self.balance = BalanceTool(self)
         self.tracing = RunTracing(self)
         self.tools.bar.changed.connect(
@@ -269,6 +276,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self.plot.ax.callbacks.connect(signal, self._lims_changed)
         self._set_available()
         self.tools.fieldline.reset()
+        self.tools.camera.reset()
         self.flow.set_run()
         self.translate = catalog.translator(run.catalog)
         stale = movies_of_state(run)
@@ -345,12 +353,17 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         information, EIRENE atoms and molecules with their masses from
         b2plot (massa, massm)."""
         self.species = presets.Species((run.info or {}).get("species", []))
+        self.species.emission = emission.RunEmission(run.rundir, self.species)
+        self.quantity.set_entry_species(self.species)
         self.eirene_names = {}
         self.mp = next((float(v) for n, v, _ in dict(run.catalog).get(
             "Constants", []) if n.strip() == "mp"), 1.6726219e-27)
-        for q in self.final_quantities:
-            if q.name in MASSES:
-                self.request.emit(("species", q, (), None))
+        eirene = {n.strip() for n, _, _ in dict(run.catalog).get(
+            "Eirene quantities", [])}
+        for name in MASSES:         # hidden in the lists: asked directly
+            if name in eirene:
+                self.request.emit(("species", catalog.Quantity(
+                    name, name, "", "eirene"), (), None))
 
     def _set_quantities(self):
         """Quantities of the run (derived ones first), of the source shown
@@ -366,20 +379,61 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             catalog.Quantity(n, text, "Geometry", "eqwall")
             for n, text in equilibrium.WALLS] if geometry else [])
         self.final_quantities = derived + catalog.quantities(
-            self.run.catalog, maps, self.balance.neutrals.quantities())
+            self.run.catalog, maps)
         self.movie_quantities = catalog.movie_quantities(
             self.run.movies, derived, self.translate)
         quantities = self.movie_quantities if self.time_box.movie() else \
             self.final_quantities if self.time_box.final() else []
         vectors = [q for q in quantities if q.source in ("vector", "evector")]
-        self.quantity.set_quantities([q for q in quantities
-                                      if q not in vectors])
+        plasma = [q for q in quantities if q not in vectors]
+        if self.time_box.final():       # the quantities with choices
+            plasma = self._with_entries(plasma)
+        self.quantity.set_quantities(plasma)
         self.quantity.set_vector_quantities(vectors)
         self.quantity.set_wall_quantities(sorted(   # none in the movies
             walls, key=lambda q: [w.group for w in walls].index(q.group))
             if not self.time_box.movie() else [])
         self.quantity.set_overlay_quantities([q for q in quantities
                                               if q not in vectors])
+
+    @staticmethod
+    def _with_entries(quantities):
+        """The quantities with the groups of the quantities with choices,
+        each below its group of presets.PLACE (without it, below the
+        nearest group before it in catalog.ORDER), with their units."""
+        out, placed = list(quantities), {}
+        for group in dict.fromkeys(e.group for e in presets.ENTRIES):
+            new = [catalog.Quantity(presets.ENTRY_PREFIX + e.title,
+                                    "%s (%s)" % (e.title, e.units()),
+                                    e.group, "entry", choices=tuple(
+                                        label for label, _ in e.params))
+                   for e in presets.ENTRIES if e.group == group]
+            target = presets.PLACE[group]
+            present = {q.group for q in out}
+            anchor = next((g for g in reversed(catalog.ORDER[
+                :catalog.ORDER.index(target) + 1]) if g in present), target)
+            after = placed.setdefault(target, [anchor])
+            below = [i for i, q in enumerate(out) if q.group in after]
+            after.append(group)         # the next one below this one
+            at = below[-1] + 1 if below else len(out)
+            out[at:at] = new
+        return out
+
+    def _entry_quantity(self, entry, items):
+        """The quantity of an entry (presets.ENTRIES) with the items chosen
+        for its choices, as a derived quantity; None if its expression has
+        no translation (the reason in the status)."""
+        expr = entry.function(self.species, *items)
+        try:
+            tokens, kind = self.translate(expr)
+        except ExpressionError as err:
+            self.status.emit("%s: %s" % (entry.title, err))
+            return None
+        text = "%s: %s (%s)" % (entry.title, ", ".join(
+            self.species.label(k, x) for (_, k), x in zip(entry.params,
+                                                          items)),
+            entry.unit_of(items))
+        return catalog.Quantity(tokens, text, entry.group, kind, expr=expr)
 
     def _derived_specs(self):
         try:
@@ -393,7 +447,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             return
         specs = self._derived_specs()
         names = [q.name for q in self.final_quantities if not q.expr]
-        CalculatorDialog(specs, self.translate, names, self.species, text,
+        CalculatorDialog(specs, self.translate, names, text,
                          self).exec()
         self.settings.setValue("derived2d", json.dumps(specs))
         self._source_changed()
@@ -839,6 +893,12 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
         role, q, ops, source = want
         lines = [x.strip() for x in console.splitlines() if x.strip()]
         tail = " ".join(lines[-3:])
+        if role == "camera":            # the EIRENE surfaces of the wall
+            self.tools.camera.deliver(data)
+            return
+        if role == "spectrum":          # a line of the light shown
+            self.tools.spectrum.delivered(q, data)
+            return
         if role == "tools":
             self.tools.deliver(data)
             self.wall_profile.follow(self)  # the wall areas
@@ -903,6 +963,7 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             if kind != "i":         # test ions: not in the calculator
                 self.species.set_neutrals(kind, data.columns,
                                           data.values[:, 0] / self.mp)
+                self.quantity.set_entry_species(self.species)
             self.species_known.emit()
             return
         warn = [x for x in lines if any(w in x.lower() for w in WARNINGS)]
@@ -1106,14 +1167,18 @@ class Tab2D(TabOutput, QtWidgets.QWidget):
             self._vector_args() is not None
         overlay = plasma and self._overlay_allowed() and not self.mode3d.on()
         stats = plasma and not self.mode3d.on()
+        spectrum = plasma and self.tools.spectrum.allowed()
         self.quantity.chords_button.setEnabled(chords)
+        self.quantity.spectrum_button.setEnabled(spectrum)
         self.quantity.stats_button.setEnabled(stats)
         self.quantity.overlay_button.setEnabled(overlay)
         self.quantity.field_button.setEnabled(self.run is not None)
+        self.quantity.camera_button.setEnabled(self.run is not None)
         self.tools.fieldline.switched()
         self._set_plotted()             # the overlay options or not
         section = self.tools.section
         if section == "chords" and not chords or \
+                section == "spectrum" and not spectrum or \
                 section == "stats" and not stats or \
                 section == "overlay" and not overlay:
             self.tools.open_section(None)

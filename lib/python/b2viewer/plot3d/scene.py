@@ -44,10 +44,26 @@ SHELL_RHO = (0.2, 0.4, 0.6, 0.8, 1.0, 1.015, 1.03, 1.045, 1.06, 1.075,
              1.09, 1.105)               # shell opacity against rho_p
 SHELL_OPACITY = (0.40, 0.36, 0.32, 0.28, 0.24, 0.22, 0.20, 0.18, 0.16,
                  0.14, 0.12, 0.10)
+PEELS = (4, 0.12)               # depth peeling: peels, occlusion ratio
+PEELS_ALPHA = (24, 0.0)         # with a transparency mode: exact
 PICKED = ("m:solids", "m:caps", "m:walls", "m:targets", "p:", "w:")
 #                                 the opaque parts the view turns around
 BAR_PIXELS = 96                 # width of a colour bar with its labels
 BAR_TITLE = 13                  # characters per line of its title
+
+
+def _lit(q, spec):
+    """Shading of a surface of a quantity: spec, none in the transparency
+    mode (its colour exactly the one chosen, only its opacity varying)."""
+    return dict(lighting=False) if q is not None and \
+        q.get("transparent") else spec
+
+
+def _nan(q, colour):
+    """Where a quantity has no value: the colour given, transparent in
+    the transparency mode."""
+    return dict(nan_opacity=0.0) if q.get("transparent") else \
+        dict(nan_color=colour)
 
 
 def _offset(actor, factor=-3.0, units=-6.0):
@@ -95,6 +111,7 @@ class Scene3D:
             self.bars[name] = bar["title"]
             b = self.pl.scalar_bars[bar["title"]]
             b.SetBarRatio(0.25)
+            b.SetUseOpacity(True)       # the transparency mode as drawn
             b.SetTextPositionToPrecedeScalarBar()   # labels inside
         self.actors[name] = (a, group, opacity)
         return a
@@ -137,6 +154,11 @@ class Scene3D:
             self.zcut, self.keys = tuple(zcut), {}
         self.snap = snap
         p0, p1 = self.sector
+        alpha = any((getattr(snap, k) or {}).get("transparent") for k in
+                    ("plasma", "wall", "vector"))
+        if alpha != getattr(self, "alpha", None):  # the transparency mode:
+            self.alpha = alpha                     # layers sorted exactly
+            self.pl.enable_depth_peeling(*(PEELS_ALPHA if alpha else PEELS))
         for part, key, build in (
                 ("machine", snap.machine_key, self._machine),
                 ("plasma", snap.plasma_key, self._plasma),
@@ -223,8 +245,8 @@ class Scene3D:
         planes = self._planes(p0, p1, LINE_OFFSET)
         shown = [rho for rho, _ in s.flux] if lay["flux"]["visible"] else []
         outer = max(shown) if shown else None
-        spec = dict(smooth_shading=self.smooth, specular=0.6,
-                    specular_power=18.0, ambient=0.2, diffuse=0.8)
+        spec = _lit(q, dict(smooth_shading=self.smooth, specular=0.6,
+                            specular_power=18.0, ambient=0.2, diffuse=0.8))
         for key, lines, width in (
                 ("separatrices", s.separatrices,
                  line_width(lay, "separatrices")),
@@ -274,24 +296,28 @@ class Scene3D:
         """The plasma quantity on the cut faces, just outside the sector,
         interpolated between the nodes, unlit, and on its borders (outer,
         core boundary, the flux surfaces of its band of rho_p) turned
-        around the axis; opaque (no value: the background)."""
+        around the axis; opaque (no value: the background). In the
+        transparency mode only on the cut faces (its borders would close
+        the plasma in shells hiding them), no value transparent."""
         self.remove_part("p:")
         q = s.plasma
         if q is None:
             return
         kw = dict(scalars="values", cmap=q["cmap"], clim=q["clim"],
-                  log_scale=q["log"], nan_color=s.background)
+                  log_scale=q["log"], **_nan(q, s.background))
         for k, phi in enumerate(self._planes(p0, p1)):
             self.add("p:%d" % k, meshes.field(q["plane"], phi),
                      "Plasma quantity", 1.0, lighting=False,
                      smooth_shading=False, offset=True,
                      show_scalar_bar=k == 0,
                      scalar_bar_args=self.bar(q["label"]), **kw)
-        for k, border in enumerate(q["borders"]):
+        for k, border in enumerate(() if q.get("transparent") else
+                                   q["borders"]):   # transparency: closed
             self.add("p:border%d" % k, meshes.shell(*border, p0, p1),
-                     "Plasma quantity", 1.0, smooth_shading=self.smooth,
-                     specular=0.6, specular_power=18.0, ambient=0.2,
-                     diffuse=0.8, **kw)
+                     "Plasma quantity", 1.0, **_lit(q, dict(
+                         smooth_shading=self.smooth, specular=0.6,
+                         specular_power=18.0, ambient=0.2, diffuse=0.8)),
+                     **kw)
 
     def _cut(self, s, p0, p1):
         """On each height of the vertical cut: the closed parts of the
@@ -321,8 +347,8 @@ class Scene3D:
                     self.add(name + "plasma", meshes.annuli(rings, z, p0, p1),
                              "Plasma quantity", 1.0, scalars="values",
                              cmap=q["cmap"], clim=q["clim"],
-                             log_scale=q["log"], nan_color=s.background,
-                             lighting=False, offset=True)
+                             log_scale=q["log"], lighting=False,
+                             offset=True, **_nan(q, s.background))
             for key, lines, width in (
                     ("separatrices", s.separatrices,
                      line_width(lay, "separatrices")),
@@ -361,7 +387,7 @@ class Scene3D:
             q["segments"], q["values"], p0, p1, q["normals"], q["lifts"]),
             "Wall quantity", 1.0, scalars="values", cmap=q["cmap"],
             clim=q["clim"], log_scale=q["log"], lighting=False,
-            nan_color=STRUCTURE, show_scalar_bar=True,
+            show_scalar_bar=True, **_nan(q, STRUCTURE),
             scalar_bar_args=self.bar(q["label"]))
         if a is not None:
             _offset(a, -6.0, -60.0)     # wins over the surfaces it lies on
@@ -531,7 +557,8 @@ class Scene3D:
                                     FADE if o["fade"] else 0.0, lines,
                                     self.vref(), o["log"],
                                     v["range"][0] if v["range"] else 0.0,
-                                    self.clim[0] if v["log"] else None)
+                                    self.clim[0] if v["log"] else None,
+                                    volume=o["born"] == "random")
         tr.warm_up(self.vref(), o["log"])     # no transient on screen
         n, t = tr.n, tr.tail
         idx = (np.arange(t)[None, :] * n + np.arange(n)[:, None])
@@ -543,7 +570,7 @@ class Scene3D:
         size = float(o["size"])
         self.add("t:tails", self.tails, "Tracers", 1.0, scalars="rgb",
                  rgb=True, render_lines_as_tubes=True,
-                 line_width=2.5 * size)
+                 line_width=2.5 * size)   # rgba in the transparency mode
         self.add("t:heads", self.heads, "Tracers", 1.0, scalars="speed",
                  cmap=v["cmap"], clim=self.clim, log_scale=v["log"],
                  render_points_as_spheres=True, point_size=7.0 * size,
@@ -564,8 +591,12 @@ class Scene3D:
         m = np.clip(np.where(np.isfinite(tr.mag), tr.mag, lo), lo, hi)
         x = np.log(m / lo) / np.log(hi / lo) if v["log"] \
             else (m - lo) / (hi - lo)
-        base = np.asarray(v["cmap"](x))[:, :3]
-        c = tr.colors(base, np.asarray(self.snap.background)[:3])
+        rgba = np.asarray(v["cmap"](x))
+        if v.get("transparent"):        # one colour, fading out along the
+            c = tr.colors(rgba[:, :3], rgba[:, :3])     # tail
+            a = tr.colors(rgba[:, 3:], np.zeros(1))
+            return (np.clip(np.hstack((c, a)), 0, 1) * 255).astype(np.uint8)
+        c = tr.colors(rgba[:, :3], np.asarray(self.snap.background)[:3])
         return (np.clip(c, 0, 1) * 255).astype(np.uint8)
 
     def step(self, dt):

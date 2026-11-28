@@ -61,6 +61,33 @@ DIVERGING = ("twilight", "Spectral", "coolwarm", "bwr", "seismic", "berlin",
              "vanimo")          # centre colour at zero (centred)
 
 
+MONO = "#ff7a00"                # colour of the transparency mode
+
+
+def alpha_cmap(colour, n=256):
+    """One colour, from fully transparent at the bottom of the scale to
+    opaque at its top (the transparency mode of the 3D view and of the
+    camera)."""
+    from matplotlib.colors import to_rgb
+    rgba = np.ones((n, 4))
+    rgba[:, :3] = to_rgb(colour)
+    rgba[:, 3] = np.linspace(0.0, 1.0, n)
+    out = ListedColormap(rgba, name="alpha")
+    out.set_bad((0.0, 0.0, 0.0, 0.0))
+    out.set_under(rgba[0])
+    out.set_over(rgba[-1])
+    return out
+
+
+def cmap3d(style, norm=None):
+    """The colours of the 3D view: the colour map of the style, or in
+    its transparency mode its one colour from transparent (the minimum of
+    the range, on its linear or log scale) to opaque (the maximum)."""
+    if getattr(style, "mode", "map") == "alpha":
+        return alpha_cmap(style.mono)
+    return cmap_for(style, norm)
+
+
 @dataclass
 class PlotStyle:
     kind: str = "patch"
@@ -72,6 +99,8 @@ class PlotStyle:
     auto: bool = True
     vmin: float = 0.0
     vmax: float = 1.0
+    mode: str = "map"           # 3D view: colour map or "alpha": one
+    mono: str = MONO            # colour, transparent at the minimum
     levels: int = 20
     colorbar: bool = True
     edges: bool = False
@@ -153,6 +182,8 @@ class WallStyle:
     vmax: float = 1.0
     colorbar: bool = True
     smooth: bool = False        # colours from the values smoothed
+    mode: str = "map"           # 3D view, as PlotStyle
+    mono: str = MONO
 
 
 def norm_for(values, style):

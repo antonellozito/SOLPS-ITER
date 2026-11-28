@@ -1,7 +1,8 @@
 """Where the streamlines of the 2D plot start and the tracers of the 3D
 view are born: in proportion to the magnitude of the vector quantity (to
 the power WEIGHT), over the field or along a line of the run (the main
-separatrix, the midplanes, the targets); or at random along the line
+separatrix, the midplanes, the targets); at random over the field (evenly
+over the plane in 2D, over the volume in 3D); or at random along the line
 drawn in 2D."""
 
 import numpy as np
@@ -9,6 +10,7 @@ import numpy as np
 from . import revolve
 
 KINDS = (("proportional to the quantity", "quantity"),
+         ("at random", "random"),
          ("on the main separatrix", "separatrix"),
          ("on the midplanes", "midplanes"),
          ("on the targets", "targets"),
@@ -19,7 +21,7 @@ LINES = ("separatrix", "midplanes", "targets", "line")
 
 def weight(kind):
     """The power of the magnitude of the density of births of kind."""
-    return 0.0 if kind == "line" else WEIGHT
+    return 0.0 if kind in ("line", "random") else WEIGHT
 
 
 def lines(run, kind, drawn=()):

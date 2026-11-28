@@ -3,7 +3,7 @@ vector plot, with their plot types), contour lines, arrows and
 streamlines, each giving its part of the PlotStyle (style_fields); the
 options of the wall plot (WallStyle)."""
 
-from ..plot.styles import WallStyle
+from ..plot.styles import MONO, WallStyle
 from ..plot.vector import NUM_ARROWS
 from ..scaling import Number
 from ..tools import births
@@ -48,6 +48,9 @@ class _Part(_Watched, QtWidgets.QWidget):
     changed = Signal()
 
 
+MODES = (("colour map", "map"), ("transparency", "alpha"))
+
+
 class ColourBox(_Box):
     """Colormap (reversed or not), scale and range."""
 
@@ -82,8 +85,63 @@ class ColourBox(_Box):
         row.addWidget(self.vmin, 1)
         row.addWidget(self.vmax, 1)
         lay.addLayout(row)
-        self._watch((self.cmap, self.scale), (self.reverse,))
+        row = QtWidgets.QHBoxLayout()   # 3D view: colour map or one colour
+        self.mode = QtWidgets.QComboBox()   # transparent by the value
+        for text, key in MODES:
+            self.mode.addItem(text, key)
+        self.mode.setToolTip("Colours of the 3D view: the colour map, or "
+                             "transparency: one colour, fully transparent "
+                             "at the minimum of the range and opaque at its "
+                             "maximum (on the linear or log scale)")
+        self.mono = ColorButton(MONO)
+        self.mono.setToolTip("The colour of the transparency mode")
+        self.mode_label = QtWidgets.QLabel("Colours")
+        row.addWidget(self.mode_label)
+        row.addWidget(self.mode, 1)
+        row.addWidget(self.mono)
+        lay.addLayout(row)
+        self.mode_row = [self.mode_label, self.mode, self.mono]
+        self.modes_on = False
+        self.show_modes(False)
+        self._watch((self.cmap, self.scale, self.mode), (self.reverse,),
+                    (), (self.mono,))
+        self.mode.currentIndexChanged.connect(self._mode_chosen)
         self.auto.toggled.connect(self._auto_toggled)
+
+    def show_modes(self, on):
+        """The colour modes offered (3D view, camera) or not (2D plot)."""
+        self.modes_on = bool(on)
+        for w in self.mode_row:
+            w.setVisible(on)
+        self._mode_chosen()
+
+    def add_modes(self, modes):
+        """More colour modes ((text, key)), e.g. the realistic views of
+        the camera."""
+        for text, key in modes:
+            if self.mode.findData(key) < 0:
+                self.mode.addItem(text, key)
+
+    def set_modes(self, keys):
+        """Only the modes keys enabled (the others greyed out; the mode
+        chosen back to the colour map if it is one of them)."""
+        model = self.mode.model()
+        for i in range(self.mode.count()):
+            model.item(i).setEnabled(self.mode.itemData(i) in keys)
+        if self.mode.currentData() not in keys:
+            self.mode.setCurrentIndex(0)
+
+    def chosen_mode(self):
+        """The colour mode chosen, the colour map where none is offered."""
+        return self.mode.currentData() if self.modes_on else "map"
+
+    def _mode_chosen(self, *_):
+        """The colour of the transparency mode only with it, the colour
+        map only without it."""
+        mode = self.chosen_mode()
+        self.mono.setEnabled(mode == "alpha")
+        for w in (self.cmap, self.reverse):
+            w.setEnabled(mode == "map")
 
     def _auto_toggled(self, on):
         self.vmin.setEnabled(not on)
@@ -101,7 +159,8 @@ class ColourBox(_Box):
                     reverse=self.reverse.isChecked(),
                     scale=self.scale.currentText(), auto=self.auto.isChecked(),
                     vmin=_number(self.vmin.text(), 0.0),
-                    vmax=_number(self.vmax.text(), 1.0))
+                    vmax=_number(self.vmax.text(), 1.0),
+                    mode=self.chosen_mode(), mono=self.mono.color())
 
 
 STRIP_WIDTHS = (2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30)     # points
@@ -135,7 +194,8 @@ class WallBox(ColourBox):
                          style=self.strip_style.currentData(),
                          cmap=f["cmap"], reverse=f["reverse"],
                          scale=f["scale"],
-                         auto=f["auto"], vmin=f["vmin"], vmax=f["vmax"])
+                         auto=f["auto"], vmin=f["vmin"], vmax=f["vmax"],
+                         mode=f["mode"], mono=f["mono"])
 
 
 class LinesBox(_Part):

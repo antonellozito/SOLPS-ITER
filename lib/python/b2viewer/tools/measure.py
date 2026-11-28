@@ -64,14 +64,9 @@ def _grid(plot, data, col=None):
     return tri, [np.asarray(z, float) for z in comps]
 
 
-def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0), col=None):
-    """Samples along the straight line from (R, Z) p0 at the toroidal angle
-    phi[0] to p1 at phi[1] (degrees; the same angle: a line in the poloidal
-    plane, else a chord whose projection on it is curved): s along the
-    line, R, Z, phi, the values (|v| and the normal component v.n for
-    vectors, n to the right of the projection), and the length l along the
-    projection; NaN outside the cells shown. col: the column of data
-    (default: the one of the plasma plot)."""
+def _line(p0, p1, n, phi):
+    """s, R, Z, phi (degrees) and the length along the projection of n
+    points from p0 to p1 (profile)."""
     t = np.linspace(0.0, 1.0, n)
     a0, a1 = np.radians(np.asarray(phi, float))
     q0 = np.array([p0[0] * np.cos(a0), p0[0] * np.sin(a0), p0[1]], float)
@@ -81,6 +76,45 @@ def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0), col=None):
     ph = np.degrees(np.unwrap(np.arctan2(q[:, 1], q[:, 0])))
     s = t * float(np.linalg.norm(q1 - q0))
     l = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(r), np.diff(z)))))
+    return s, r, z, ph, l
+
+
+def chord_weights(plot, data, p0, p1, n=401, phi=(0.0, 0.0)):
+    """(nodes, weights, length inside): the integral along the line of
+    profile (line_sums) of a field of the cells as the sum of weights x
+    its vertex values at nodes, for any field with the cells of data."""
+    s, r, z, _, _ = _line(p0, p1, n, phi)
+    tri, _ = _grid(plot, data, 0)
+    finder = plot.run.geometry.trifinder(tri)
+    it = np.asarray(finder(r, z))
+    ok = it >= 0
+    both = ok[1:] & ok[:-1]
+    ds = np.diff(s) * both
+    w = np.zeros(n)
+    w[1:] += 0.5 * ds
+    w[:-1] += 0.5 * ds
+    k = np.flatnonzero(ok & (w > 0))
+    x, y, v = np.asarray(tri.x), np.asarray(tri.y), tri.triangles[it[k]]
+    x0, x1, x2 = x[v[:, 0]], x[v[:, 1]], x[v[:, 2]]
+    y0, y1, y2 = y[v[:, 0]], y[v[:, 1]], y[v[:, 2]]
+    det = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+    l0 = ((y1 - y2) * (r[k] - x2) + (x2 - x1) * (z[k] - y2)) / det
+    l1 = ((y2 - y0) * (r[k] - x2) + (x0 - x2) * (z[k] - y2)) / det
+    lam = np.stack((l0, l1, 1.0 - l0 - l1), axis=1) * w[k, None]
+    nodes, inv = np.unique(v.ravel(), return_inverse=True)
+    return nodes, np.bincount(inv, lam.ravel(), len(nodes)), \
+        float(ds.sum())
+
+
+def profile(plot, data, p0, p1, n=401, phi=(0.0, 0.0), col=None):
+    """Samples along the straight line from (R, Z) p0 at the toroidal angle
+    phi[0] to p1 at phi[1] (degrees; the same angle: a line in the poloidal
+    plane, else a chord whose projection on it is curved): s along the
+    line, R, Z, phi, the values (|v| and the normal component v.n for
+    vectors, n to the right of the projection), and the length l along the
+    projection; NaN outside the cells shown. col: the column of data
+    (default: the one of the plasma plot)."""
+    s, r, z, ph, l = _line(p0, p1, n, phi)
     tri, comps = _grid(plot, data, col)
     finder = plot.run.geometry.trifinder(tri) if \
         data.location == "cells" else None

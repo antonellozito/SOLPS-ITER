@@ -257,11 +257,43 @@ class ChordsSection(QtWidgets.QGroupBox):
                                  "along the frames")
         self.show_all.toggled.connect(lambda on: owner.set_show_all(on))
         self.show_all.hide()            # with the movies only
+        self.per_sr = QtWidgets.QCheckBox("per steradian")
+        self.per_sr.setToolTip("The spectrum and its total per steradian "
+                               "(the emission in all directions over 4π)")
+        self.per_sr.hide()              # with the spectrum only
+        self.shapes = QtWidgets.QCheckBox("Line shapes")
+        self.shapes.setToolTip(
+            "The lines with their shapes: Doppler broadening at the "
+            "temperature of their emitters, shift by the flow along the "
+            "chord (seen from its first end), Zeeman splitting, Stark "
+            "broadening of Balmer alpha and beta, the instrument width")
+        self.continua = QtWidgets.QCheckBox("Continua")
+        self.continua.setChecked(True)
+        self.continua.setToolTip("Bremsstrahlung and recombination "
+                                 "continua of all the ions under the lines")
+        self.instrument = QtWidgets.QDoubleSpinBox()
+        self.instrument.setRange(0.0, 10.0)
+        self.instrument.setDecimals(3)
+        self.instrument.setSingleStep(0.01)
+        self.instrument.setSuffix(" nm")
+        self.instrument.setToolTip("Full width at half maximum of the "
+                                   "instrument function (Gaussian)")
+        self.shape_row = QtWidgets.QWidget()   # with the spectrum only
+        row = QtWidgets.QHBoxLayout(self.shape_row)
+        row.setContentsMargins(0, 0, 0, 0)
+        for w in (self.shapes, self.continua,
+                  QtWidgets.QLabel("instrument width"), self.instrument):
+            row.addWidget(w)
+        row.addStretch(1)
+        self.shapes.toggled.connect(self._shape_states)
+        self._shape_states()
+        self.shape_row.hide()
         top = QtWidgets.QHBoxLayout()
         for w in (self.source, self.draw):
             top.addWidget(w)
         top.addStretch(1)
         top.addWidget(self.show_all)
+        top.addWidget(self.per_sr)
         top.addWidget(self.target)
         top.addWidget(close)
         self.tabs = QtWidgets.QTabWidget()
@@ -303,9 +335,27 @@ class ChordsSection(QtWidgets.QGroupBox):
         self.chords = []                # ChordTab
         lay = QtWidgets.QVBoxLayout(self)
         lay.addLayout(top)
+        lay.addWidget(self.shape_row)
         lay.addWidget(self.hint)
         lay.addWidget(self.tabs)
         lay.addWidget(self.board)
+
+    def set_spectrum(self, on):
+        """The section as Spectrum (the spectrum of each chord) or as
+        Chords."""
+        self.setTitle("Spectrum" if on else "Chords")
+        self.per_sr.setVisible(on)
+        self.shape_row.setVisible(on)
+        for t in self.chords:
+            t.view.options.keep_limits = False
+
+    def _shape_states(self, *_):
+        for w in (self.continua, self.instrument):
+            w.setEnabled(self.shapes.isChecked())
+
+    def shape_options(self):
+        """(instrument width nm, continua) of the line shapes."""
+        return (self.instrument.value(), self.continua.isChecked())
 
     def set_editable(self, on):
         """Chords drawn or typed (True) or those of the run (False)."""
